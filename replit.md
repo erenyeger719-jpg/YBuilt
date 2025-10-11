@@ -3,7 +3,7 @@
 ## Project Overview
 Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. Users enter a prompt and receive a complete website in 2-4 seconds. Features India-first payment integration with Razorpay.
 
-## Current State (MVP Complete + Library)
+## Current State (MVP Complete + Auth + Library)
 - ✅ Stunning glass-striped hero with diagonal backdrop
 - ✅ One-prompt AI generation with mock worker
 - ✅ Job queue system with real-time polling
@@ -12,22 +12,29 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 - ✅ Dark/light modes with low-gloss accessibility
 - ✅ Currency toggle (INR/USD)
 - ✅ Full accessibility (ARIA, keyboard nav, 4.5:1 contrast, prefers-reduced-motion)
-- ✅ Profile icon with accessible dropdown menu
-- ✅ Library page with black→red→blue diagonal stripes
+- ✅ Mock authentication system with localStorage tokens
+- ✅ Profile icon with user initials and accessible dropdown menu
+- ✅ Library page with forced black→red→blue diagonal theme
 - ✅ Library button in header navigation
+- ✅ User persistence across server restarts
 
 ## Recent Changes
-- **2025-01-11**: Added Library page with black→red→blue diagonal slash stripes (intentional color departure from monochrome per user request)
+- **2025-01-11**: Implemented complete mock auth system with localStorage JWT-like tokens
+- **2025-01-11**: Added user persistence with loadUsers() and saveUsers() methods
+- **2025-01-11**: Auto-create users on sign-in if they don't exist (mock mode convenience)
+- **2025-01-11**: Created SignInModal component with email/password fields and keyboard accessibility
+- **2025-01-11**: Updated ProfileIcon to display user initials (Avatar) when authenticated
+- **2025-01-11**: Redesigned Library page with forced theme system using black→red→light blue diagonal bands
+- **2025-01-11**: Added "Respect system theme" toggle for Library page with accessibility support
+- **2025-01-11**: Fixed critical persistence bug: users and credits now load from data/users.json on server startup
+- **2025-01-11**: Added POST /api/auth/signin, POST /api/auth/signup, GET /api/me endpoints
+- **2025-01-11**: Fixed Header.tsx nested <a> warning by restructuring Button with asChild
+- **2025-01-11**: Updated README with comprehensive auth and Library theme documentation
+- **2025-01-11**: Added Library page with black→red→blue diagonal slash stripes
 - **2025-01-11**: Added ProfileIcon component with accessible dropdown menu using shadcn primitives
 - **2025-01-11**: Added preview thumbnails for all 8 showcase cards with hover play button overlay
-- **2025-01-11**: Added Library button to header navigation
-- **2025-01-11**: Fixed webhook HMAC verification to use raw body before JSON parsing (express.raw middleware)
+- **2025-01-11**: Fixed webhook HMAC verification to use raw body before JSON parsing
 - **2025-01-11**: Removed all emoji from UI to comply with design guidelines
-- **2025-01-11**: Updated theme toggle logic to use explicit add/remove instead of toggle for better reliability
-- **2025-01-11**: Added diagonal striped glass backdrop to hero section with metallic text reflections
-- **2025-01-11**: Implemented complete AI generation flow with job queue and status polling
-- **2025-01-11**: Added Razorpay payment integration with webhook handling
-- **2025-01-11**: Created currency toggle and low-gloss accessibility mode
 
 ## User Preferences
 - Design aesthetic: X.AI × Epic Games (cinematic, tactile, restrained)
@@ -49,14 +56,18 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
   - `PreviewModal.tsx` - Full-screen iframe for generated sites
   - `PaymentButton.tsx` - Razorpay checkout integration
   - `CurrencyToggle.tsx` - INR/USD switching
-  - `ProfileIcon.tsx` - Circular profile button with accessible dropdown menu
+  - `ProfileIcon.tsx` - Circular profile button with user initials and accessible dropdown menu
+  - `SignInModal.tsx` - Auth modal with email/password fields and mode toggle
   
 - **Pages**:
   - `Studio.tsx` - Homepage with hero and showcase
-  - `Library.tsx` - User library with black→red→blue diagonal stripes, project grid, empty state
+  - `Library.tsx` - User library with forced black→red→blue diagonal theme, project grid, empty state, theme toggle
   
 - **Hooks**:
   - `useGeneration.ts` - Job creation, polling, status management
+  
+- **Services**:
+  - `mockAuth.ts` - Client-side auth service with localStorage token management
   
 - **Styling**:
   - Custom glass/gloss utilities in `index.css`
@@ -71,11 +82,17 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
   - `GET /api/razorpay_key` - Get payment key (mock mode aware)
   - `POST /webhooks/razorpay` - Payment webhook with HMAC verification
   - `GET /api/credits/:userId` - Fetch user credits
+  - `POST /api/auth/signin` - Sign in (auto-creates user in mock mode)
+  - `POST /api/auth/signup` - Create new account
+  - `GET /api/me` - Get current user metadata
   
 - **Storage** (`server/storage.ts`):
   - In-memory storage with file persistence
   - Job management (create, get, update status)
+  - User management (create, get by email, get by ID)
   - User credit tracking
+  - Loads users and jobs from JSON on startup
+  - Persists changes back to disk
   
 - **Queue** (`server/queue.ts`):
   - Simple in-memory job queue
@@ -140,7 +157,7 @@ All optional - app runs in mock mode without them:
 5. **Dark/Light Modes**: All components adapt correctly
 
 ## Known Issues
-- LSP warning about PromptInput import in Hero.tsx (TypeScript cache issue, app works correctly)
+- Console contains validateDOMNesting accessibility warnings (non-blocking, cosmetic)
 - Razorpay script loads on every mount (could be optimized)
 - Preview iframe occasionally shows 404 immediately after generation (timing issue with mock worker file writing)
 - Toast notifications are ephemeral and difficult to assert in automated tests
