@@ -3,15 +3,18 @@
 ## Project Overview
 Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. Users enter a prompt and receive a complete website in 2-4 seconds. Features India-first payment integration with Razorpay.
 
-## Current State (MVP Complete)
+## Current State (MVP Complete + Library)
 - ✅ Stunning glass-striped hero with diagonal backdrop
 - ✅ One-prompt AI generation with mock worker
 - ✅ Job queue system with real-time polling
 - ✅ Razorpay payment integration (mock mode)
-- ✅ 8 demo preview templates
+- ✅ 8 demo preview templates with thumbnails and hover overlay
 - ✅ Dark/light modes with low-gloss accessibility
 - ✅ Currency toggle (INR/USD)
-- ✅ Full accessibility (ARIA, keyboard nav, 4.5:1 contrast)
+- ✅ Full accessibility (ARIA, keyboard nav, 4.5:1 contrast, prefers-reduced-motion)
+- ✅ Profile icon with accessible dropdown menu
+- ✅ Library page with black→red→blue diagonal stripes
+- ✅ Library button in header navigation
 
 ## Recent Changes
 - **2025-01-11**: Added Library page with black→red→blue diagonal slash stripes (intentional color departure from monochrome per user request)
@@ -39,12 +42,18 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 ### Frontend (React + TypeScript + Vite)
 - **Components**:
   - `Hero.tsx` - Main hero with glass-striped backdrop and prompt input
-  - `Header.tsx` - Fixed header with logo, payment, currency, theme toggles
+  - `Header.tsx` - Fixed header with logo, Library button, payment, currency, theme toggles, profile icon
   - `PromptInput.tsx` - AI generation trigger with loading states
-  - `Showcase.tsx` - 8 preview cards with modal display
+  - `Showcase.tsx` - 8 preview cards with modal display and thumbnails
+  - `PreviewCard.tsx` - Individual preview card with hover play overlay
   - `PreviewModal.tsx` - Full-screen iframe for generated sites
   - `PaymentButton.tsx` - Razorpay checkout integration
   - `CurrencyToggle.tsx` - INR/USD switching
+  - `ProfileIcon.tsx` - Circular profile button with accessible dropdown menu
+  
+- **Pages**:
+  - `Studio.tsx` - Homepage with hero and showcase
+  - `Library.tsx` - User library with black→red→blue diagonal stripes, project grid, empty state
   
 - **Hooks**:
   - `useGeneration.ts` - Job creation, polling, status management

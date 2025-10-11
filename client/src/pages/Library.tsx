@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Sparkles, ExternalLink, Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
+import Header from "@/components/Header";
 
 interface Project {
   id: string;
@@ -21,7 +22,9 @@ export default function Library() {
   const hasProjects = projects.length > 0;
 
   return (
-    <div className="min-h-screen pt-16 relative overflow-hidden">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <div className="pt-16 relative overflow-hidden min-h-screen">
       {/* Black → Red → Blue Diagonal Slash Backdrop */}
       <div className="fixed inset-0 -z-10">
         {/* Black stripe */}
@@ -213,6 +216,7 @@ export default function Library() {
             </div>
           </motion.div>
         )}
+      </div>
       </div>
     </div>
   );

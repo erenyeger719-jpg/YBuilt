@@ -66,18 +66,19 @@ export default function Header() {
           
           <div className="flex items-center gap-2">
             <Link href="/library">
-              <a>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-2"
-                  data-testid="button-library"
-                  aria-label="Library"
-                >
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                data-testid="button-library"
+                aria-label="Library"
+                asChild
+              >
+                <a>
                   <Library className="h-4 w-4" />
                   <span className="hidden sm:inline">Library</span>
-                </Button>
-              </a>
+                </a>
+              </Button>
             </Link>
             <PaymentButton amount={amount} currency={currency} />
             <CurrencyToggle onCurrencyChange={setCurrency} />
