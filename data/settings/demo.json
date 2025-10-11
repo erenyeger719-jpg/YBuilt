@@ -1,18 +1,30 @@
 {
   "userId": "demo",
   "appearance": {
-    "theme": "dark",
-    "glassIntensity": 90,
+    "theme": "system",
+    "glassIntensity": 80,
+    "glossFinish": true,
     "parallaxIntensity": 20,
-    "motion": "normal",
+    "motion": "full",
     "lowPower": false,
-    "lowBandwidth": false
+    "lowBandwidth": false,
+    "fontFamily": "inter",
+    "fontSize": 16
   },
   "account": {
     "displayName": "",
+    "handle": "",
     "email": "user@example.com",
     "language": "en",
-    "locale": "en-US"
+    "locale": "en-US",
+    "timezone": "UTC",
+    "emailVerified": false
+  },
+  "workspace": {
+    "defaultVisibility": "public",
+    "defaultTemplate": "app",
+    "autoCreatePreview": true,
+    "storageRegion": "india"
   },
   "editor": {
     "template": "starter",
@@ -22,19 +34,28 @@
     "keybindings": "default",
     "tabSize": 2,
     "fontSize": 14,
-    "lineWrap": true
+    "lineWrap": true,
+    "lintOnSave": true,
+    "editorTheme": "dark"
   },
   "ai": {
     "model": "gpt-5-x",
     "temperature": 0.2,
     "autoRefine": true,
     "maxTokens": 4000,
+    "maxRuntime": 30,
     "computeTier": "balanced",
     "previewWatermark": true,
-    "defaultStyle": "monochrome"
+    "defaultStyle": "monochrome",
+    "safetyFilter": true,
+    "safetyLevel": "medium",
+    "promptTemplates": []
   },
   "security": {
     "twoFactor": false,
+    "twoFactorMethod": "authenticator",
+    "passwordlessLogin": false,
+    "sessions": [],
     "apiKeys": [],
     "sshKeys": []
   },
@@ -45,8 +66,20 @@
     "gitlab": {
       "connected": false
     },
+    "bitbucket": {
+      "connected": false
+    },
     "webhooks": [],
+    "analytics": true,
     "paymentGateway": "razorpay"
+  },
+  "organization": {
+    "name": "",
+    "domain": "",
+    "admins": [],
+    "projectQuota": 10,
+    "storageLimit": 5000,
+    "teamInvitePolicy": "admin-only"
   },
   "billing": {
     "plan": "free",

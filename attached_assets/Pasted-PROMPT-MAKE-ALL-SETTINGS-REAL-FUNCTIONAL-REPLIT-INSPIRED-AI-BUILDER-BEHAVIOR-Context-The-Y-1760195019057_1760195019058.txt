@@ -1,0 +1,264 @@
+PROMPT — MAKE ALL SETTINGS REAL & FUNCTIONAL (REPLIT-INSPIRED + AI BUILDER BEHAVIOR)
+
+Context: The YBUILT project currently lists settings categories but each opens a placeholder text. Replace placeholders with *real, working settings* (UI + backend + effects). Use Replit’s settings as inspiration (account, appearance, integrations, billing, security, editor defaults, workspace), but extend for AI-builder specifics (models, preview resolution, compute tiers, prompt templates). Each change must immediately affect the running client (reactive) and be persisted server-side (or in localStorage in MOCK_MODE). Provide clear API endpoints, persistence, and QA tests.
+
+GOAL
+- Implement full settings controls for these sections: Account, Appearance, Notifications, Workspace, Editor, AI & Models, Organization, Security, Integrations, Billing, Team, Data & Export.
+- For every control: define UI type, server endpoint, persisted schema, immediate platform effect, and QA check.
+- Provide MOCK_MODE fallbacks so everything works without external services.
+
+GENERAL TECH NOTES
+- Settings storage: `GET /api/settings` and `POST /api/settings` per-user; server stores `data/settings/{userId}.json`. In MOCK_MODE, also mirror to localStorage `ybuilt_settings`.
+- Client: settings UI components under `client/src/components/SettingsForm/*`. Loading and saving use a central SettingsContext (React) so changes propagate app-wide.
+- Apply changes immediately via Context + `useEffect`. E.g., changing theme updates CSS variables in `:root` or `document.body.dataset`.
+- All controls must have accessible labels, inline help text, and a small “preview” indicator where relevant (e.g., preview resolution shows quick thumbnail).
+- Provide audit logs: `data/settings-changes.log` with {userId, key, old, new, timestamp}.
+
+DELIVERABLE: A single patch that implements UI + server + persistence + mock flows + tests for all settings below.
+
+---
+
+SECTION-BY-SECTION SPEC (UI control → endpoint → effect → QA)
+
+1) ACCOUNT
+- Controls:
+  - Display name (text input)
+  - Public handle / project slug (text input, validation, unique)
+  - Email (read-only unless verify flow), Change email (send verification)
+  - Password change (current, new, confirm)
+  - Avatar upload (file input) — stores in `/public/avatars/{userId}.png`
+  - Locale & timezone (dropdown)
+  - Delete account (danger, confirm + export)
+- Backend:
+  - `GET /api/account` `POST /api/account` `POST /api/account/avatar` `POST /api/account/delete`
+- Effects:
+  - Display name & avatar update immediate across header/profile and preview meta.
+  - Email change sends verification link (simulate in MOCK_MODE: write flag `emailVerified:false` until simulated click).
+  - Delete account triggers export then delete if confirmed; revoke sessions.
+- QA:
+  - Update name -> header shows new name.
+  - Upload avatar -> profile icon updates instantly.
+  - Delete account -> data removed (or flagged) and app redirects to signup.
+
+2) APPEARANCE
+- Controls:
+  - Theme: System / Dark / Light / Force Library Theme toggles (radio)
+  - Glass intensity slider (0–100)
+  - Gloss finish toggle (on/off) — toggles `--glass-alpha`
+  - Parallax intensity slider (0–100)
+  - Motion: Full / Reduced / None
+  - Low-bandwidth toggle (disables animations & uses lower-res assets)
+  - Font family & size (Valmeria / Inter / Poppins; font-size scale)
+- Backend:
+  - Persist under settings.appearance
+- Effects:
+  - Theme: set `document.body.dataset.theme = 'dark|light|system|library'`.
+  - Glass intensity: update CSS `--glass-alpha` variable; elements redraw.
+  - Motion & low-bandwidth: toggles `prefers-reduced-motion` fallbacks in client (stop Lottie pods, reduce particle density).
+- QA:
+  - Move glass slider -> UI becomes noticeably glossier/more matte live.
+  - Toggle low-bandwidth -> Lottie stops, images replaced by `-mobile` assets.
+
+3) NOTIFICATIONS
+- Controls:
+  - Email: job_completed / billing / security (checkboxes)
+  - In-app: toasts / job status (checkboxes)
+  - Digest frequency: Instant / Hourly / Daily
+  - Webhooks: add endpoint + secret + test payload button
+- Backend:
+  - `POST /api/notifications` `POST /api/notifications/test-webhook`
+- Effects:
+  - Changing job completed email triggers server to send (or log in MOCK_MODE).
+  - Webhook test sends a signed sample payload to endpoint.
+- QA:
+  - Set email notifications ON -> on job completion (mocked) a log entry or an email-sim appears in `data/outbox.log`.
+
+4) WORKSPACE (Project defaults & storage)
+- Controls:
+  - Default project visibility: Private/Public
+  - Default template: Starter / App / Game / Landing
+  - Auto-create preview pages on save (toggle)
+  - Default storage region (for future infra): India/EU/US (affects mock image generation endpoint)
+- Backend:
+  - Persist in settings.workspace
+- Effects:
+  - New projects inherit these defaults. Changing region updates API call headers (for routing).
+- QA:
+  - Create new project -> confirms chosen template & visibility.
+
+5) EDITOR
+- Controls:
+  - Default language (JS/TS/Python/Other)
+  - Keybindings (Default/VSCode/Vim/Emacs)
+  - Font size, tab size, line wrap, theme (editor-specific dark/light)
+  - Autosave interval dropdown (Off / 5s /15s /30s)
+  - Linting on save (toggle)
+  - Live preview resolution (Auto / 720p / 1080p / 4K)
+- Backend:
+  - settings.editor; Autosave writes draft to `data/drafts/{userId}/{projectId}.json`
+- Effects:
+  - Autosave creates draft jobs; live preview resolution passed to worker as `preview.resolution`.
+  - Keybinding applies to editor component immediately.
+- QA:
+  - Set autosave 5s -> type then wait -> draft file present.
+  - Change preview resolution to 4K -> worker called with `resolution:3840x2160`.
+
+6) AI & MODELS (core)
+- Controls:
+  - Default model (dropdown: mock names gpt-5-x, gpt-5-mini, vision-capable)
+  - Temperature slider (0–1)
+  - Max tokens / Max runtime
+  - Compute tier: Fast (low cost) / Balanced / High-Fidelity (affects cost / worker behavior)
+  - Auto-refine (on/off) — runs a short pass to improve output
+  - Prompt template manager (create/edit/delete; set default)
+  - Safety filter toggle (on/off) with severity level
+  - Preview style selector (Monochrome / Gloss / Game / App UI)
+- Backend:
+  - settings.ai; model selection stored; worker receives `job.params.model/settings`.
+- Effects:
+  - Changing model/temperature causes subsequent job generation to use these settings; show “applied” toast.
+  - Auto-refine adds ~2–4s to job time but improves output; show estimated time on create button.
+- QA:
+  - Switch to High-Fidelity -> job metadata shows `computeTier:high` and worker logs show different path.
+  - Add prompt template -> appears as quick option in Studio.
+
+7) ORGANIZATION (for org-level accounts)
+- Controls:
+  - Organization name & domain settings
+  - Billing owner & admin list
+  - Project quotas (projects per user), storage limits, team invite policy
+- Backend:
+  - `GET/POST /api/organization/*` persisted in `data/orgs/{orgId}.json`
+- Effects:
+  - Quotas enforced on project creation; UI shows warnings/upgrade CTA.
+- QA:
+  - Set project quota low -> attempt to create extra project -> blocked with upgrade modal.
+
+8) SECURITY
+- Controls:
+  - Two-Factor Auth (SMS/Authenticator) — mock flow
+  - Session management (list sessions with device and last active + remote sign-out)
+  - API Keys (create/regenerate/revoke) with scopes (read, write, admin)
+  - Passwordless login toggle (email link) — mock implementation
+- Backend:
+  - `POST /api/security/*`, keep `data/api_keys.json`
+- Effects:
+  - Creating API Key returns token once and stores hashed version server-side.
+  - Revoke -> invalidates token and adds a log entry.
+- QA:
+  - Create API key -> subsequent /api/generate authenticated calls with header `x-api-key` succeed in mock.
+
+9) INTEGRATIONS
+- Controls:
+  - Connectors: GitHub / GitLab / Bitbucket (OAuth placeholders)
+  - Deploy hooks: add webhook, test
+  - Analytics: toggle (send anonymous usage)
+  - Payment gateway selector (Razorpay / Cashfree / PayU; mock)
+- Backend:
+  - `/api/integrations/*` store in `data/integrations/{userId}.json`
+- Effects:
+  - Connect GitHub -> enable “export to repo” button in Project.
+- QA:
+  - Mock OAuth flow -> connection shows success in Integrations panel.
+
+10) BILLING
+- Controls:
+  - View current plan & usage
+  - Manage payment methods (add UPI ID, add card details [mock], remove)
+  - Billing history / invoices (list & download PDF mock)
+  - Set auto-apply credits when available
+- Backend:
+  - `GET /api/billing` `POST /api/billing/method` `GET /api/billing/invoices`
+- Effects:
+  - Changing plan triggers credit allocation in `data/users.json`.
+  - Manage Billing menu in Profile redirects to this page.
+- QA:
+  - Add UPI in MOCK_MODE -> simulated success; credits added.
+
+11) TEAM
+- Controls:
+  - Invite member by email (role selector admin/editor/viewer)
+  - Manage member roles & remove
+  - Team settings: default permissions for new projects
+- Backend:
+  - `data/teams/{teamId}.json` with invites
+- Effects:
+  - Invite sends mock email; invitation accepted creates linkage and shows team projects.
+- QA:
+  - Invite user -> they appear in teammates list.
+
+12) DATA & EXPORT
+- Controls:
+  - Export all projects (ZIP)
+  - Export single project
+  - Data retention policy (7/30/90/never)
+  - Download user data (GDPR export)
+  - Delete all drafts / purge cache
+- Backend:
+  - Implement `POST /api/export` `POST /api/delete-account` with safe confirmations
+- Effects:
+  - Export produces zip in `/public/exports/{userId}-{ts}.zip`
+  - Changing retention policy schedules cleanup (cron) — simulate in MOCK by marking `expiryDate` on draft metadata.
+- QA:
+  - Export project -> zip available for download.
+
+---
+
+PERSISTED SETTINGS SCHEMA (example)
+```json
+{
+  "userId":"demo",
+  "appearance": { "theme":"dark", "glassIntensity":76, "parallax":30, "motion":"normal", "lowBandwidth":false },
+  "editor": { "language":"js", "autosave":15, "previewResolution":"1080p", "keybindings":"vscode" },
+  "ai": { "model":"gpt-5-x", "temperature":0.25, "autoRefine":true, "computeTier":"balanced", "defaultTemplateId":"t1" },
+  "notifications": { "email": { "jobs":true, "billing":true }, "digest":"daily" },
+  "integrations": { "github": {"connected":false}, "razorpay":{"gateway":"test"} }
+}
+  IMPLEMENTATION NOTES & SNIPPETS
+1. Central Settings Context (client)
+
+// SettingsContext.js
+const [settings, setSettings] = useState(null);
+useEffect(()=> { fetch('/api/settings').then(r=>r.json()).then(setSettings); }, []);
+function updateSettings(patch){ setSettings(prev=>({...prev,...patch})); fetch('/api/settings',{method:'POST',body:JSON.stringify({patch})}); }
+1. Apply appearance change (example)
+
+useEffect(()=> {
+  if(!settings) return;
+  document.documentElement.style.setProperty('--glass-alpha', settings.appearance.glassIntensity/100);
+  document.body.dataset.theme = settings.appearance.theme;
+  // handle reduced-motion
+  if(settings.appearance.motion === 'none') document.documentElement.classList.add('reduced-motion');
+  else document.documentElement.classList.remove('reduced-motion');
+}, [settings?.appearance]);
+1. Worker payload example (when creating job)
+
+const jobPayload = {
+  prompt, userId, model: settings.ai.model, temperature: settings.ai.temperature,
+  resolution: settings.editor.previewResolution, computeTier: settings.ai.computeTier
+};
+fetch('/api/generate',{ method:'POST', body: JSON.stringify(jobPayload) });
+1. Autosave implementation
+* Timer using settings.editor.autosave that writes draft to POST /api/drafts (server writes data/drafts/...)
+TEST & QA CHECKLIST (deliverable)
+* Unit tests for GET/POST /api/settings (validate schema).
+* Integration tests:
+    * Update appearance.glassIntensity -> check :root var changed.
+    * Change AI model -> create job -> worker receives model.
+    * Autosave set -> draft files appear at set interval.
+    * Add API key -> use in x-api-key header to generate job in mock.
+    * Billing plan change -> data/users.json shows credits.
+    * Export project -> zip appears in public/exports.
+* Manual smoke tests across browsers and mobile to ensure immediate UI reaction.
+MOCK_MODE BEHAVIOR
+* All external calls (payment, OAuth, 2FA) should have mock endpoints that simulate success/failure and are documented in README.
+* Provide CLI env MOCK_MODE=true default for Replit demos.
+DELIVERABLES
+* UI components for each settings section (forms, toggles, sliders) with help text.
+* Server routes updated for settings and all action endpoints.
+* Persistence files under data/settings/{userId}.json.
+* README updated with how to test settings and MOCK_MODE instructions.
+* QA test scripts / checklist.
+END NOTE
+* Be pragmatic: if integrating a 3rd-party (e.g., real OAuth or payment) is optional, keep safe stubs and clear comments where to insert real keys.
+* Keep changes incremental and well-documented. Provide a short migration note showing how existing placeholder settings should map to the new persisted schema.

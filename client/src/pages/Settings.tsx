@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-// Import settings forms (will create these next)
+// Import settings forms
 import { AccountForm } from "@/components/SettingsForm/AccountForm";
 import { AppearanceForm } from "@/components/SettingsForm/AppearanceForm";
 import { NotificationsForm } from "@/components/SettingsForm/NotificationsForm";
+import { WorkspaceForm } from "@/components/SettingsForm/WorkspaceForm";
 import { EditorForm } from "@/components/SettingsForm/EditorForm";
 import { AIForm } from "@/components/SettingsForm/AIForm";
+import { OrganizationForm } from "@/components/SettingsForm/OrganizationForm";
 import { SecurityForm } from "@/components/SettingsForm/SecurityForm";
 import { IntegrationsForm } from "@/components/SettingsForm/IntegrationsForm";
 import { BillingForm } from "@/components/SettingsForm/BillingForm";
@@ -77,8 +79,10 @@ export default function Settings() {
                     <Route path="/settings/account" component={AccountForm} />
                     <Route path="/settings/appearance" component={AppearanceForm} />
                     <Route path="/settings/notifications" component={NotificationsForm} />
+                    <Route path="/settings/workspace" component={WorkspaceForm} />
                     <Route path="/settings/editor" component={EditorForm} />
                     <Route path="/settings/ai" component={AIForm} />
+                    <Route path="/settings/organization" component={OrganizationForm} />
                     <Route path="/settings/security" component={SecurityForm} />
                     <Route path="/settings/integrations" component={IntegrationsForm} />
                     <Route path="/settings/billing" component={BillingForm} />

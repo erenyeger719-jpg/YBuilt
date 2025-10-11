@@ -336,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = "demo"; // In production, extract from JWT
       
       // Validate section is a valid settings section
-      const validSections = ["appearance", "account", "editor", "ai", "security", "integrations", "billing", "team", "notifications", "export"];
+      const validSections = ["appearance", "account", "workspace", "editor", "ai", "organization", "security", "integrations", "billing", "team", "notifications", "export"];
       if (!validSections.includes(section)) {
         return res.status(400).json({ error: "Invalid settings section" });
       }

@@ -9,7 +9,9 @@ import {
   CreditCard, 
   Users, 
   Download,
-  Bell
+  Bell,
+  Briefcase,
+  Building2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -55,8 +57,9 @@ export function SettingsSidebar() {
       ]
     },
     {
-      label: "Workspace",
+      label: "Development",
       items: [
+        { to: "/settings/workspace", icon: <Briefcase className="w-5 h-5" />, label: "Workspace" },
         { to: "/settings/editor", icon: <Code className="w-5 h-5" />, label: "Editor" },
         { to: "/settings/ai", icon: <Sparkles className="w-5 h-5" />, label: "AI & Models" },
       ]
@@ -64,6 +67,7 @@ export function SettingsSidebar() {
     {
       label: "Organization",
       items: [
+        { to: "/settings/organization", icon: <Building2 className="w-5 h-5" />, label: "Organization" },
         { to: "/settings/security", icon: <Shield className="w-5 h-5" />, label: "Security" },
         { to: "/settings/integrations", icon: <Puzzle className="w-5 h-5" />, label: "Integrations" },
         { to: "/settings/billing", icon: <CreditCard className="w-5 h-5" />, label: "Billing" },
