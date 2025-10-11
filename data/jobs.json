@@ -64,5 +64,20 @@
     "error": null,
     "createdAt": "2025-10-11T17:37:38.122Z",
     "updatedAt": "2025-10-11T17:37:41.125Z"
+  },
+  "46a788e7-7b5e-468d-8e05-342f6bb9bed5": {
+    "id": "46a788e7-7b5e-468d-8e05-342f6bb9bed5",
+    "userId": "demo",
+    "prompt": "epic games like",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/46a788e7-7b5e-468d-8e05-342f6bb9bed5/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"new\",\"description\":\"like epic games like\",\"theme\":\"monochrome\",\"heroText\":\"epic games like\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-11T17:39:40.399Z",
+    "updatedAt": "2025-10-11T17:39:58.940Z"
   }
 }

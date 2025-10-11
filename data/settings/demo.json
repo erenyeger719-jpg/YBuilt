@@ -47,7 +47,7 @@
     "computeTier": "high-fidelity",
     "previewWatermark": true,
     "defaultStyle": "monochrome",
-    "safetyFilter": false,
+    "safetyFilter": true,
     "safetyLevel": "medium",
     "promptTemplates": [
       {
