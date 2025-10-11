@@ -193,6 +193,35 @@ Password: anything
 - **GET /api/me** - Returns current user metadata
 - **Profile Display** - Shows user initials in avatar when signed in
 - **Instant Sign Out** - Clears session with one click
+- **OAuth Social Login** - Google, Apple, Facebook, Twitter/X, GitHub (all work in mock mode)
+
+### OAuth Sign-In (Mock Mode)
+The sign-in modal includes social login buttons that work seamlessly without external API keys:
+
+**Supported Providers:**
+- Google
+- Apple
+- Facebook  
+- Twitter/X
+- GitHub
+
+**How It Works:**
+1. Click any OAuth button (e.g., "Sign in with Google")
+2. In mock mode, creates user with email: `demo-{provider}@ybuilt.com`
+3. Automatically signs you in and displays provider name in profile
+4. User persists to `data/users.json` just like email/password accounts
+
+**Testing OAuth:**
+```bash
+# All providers work without configuration
+1. Click "Sign in with Google" → Creates demo-google@ybuilt.com
+2. Click "Sign in with Apple" → Creates demo-apple@ybuilt.com
+3. Each provider creates a unique mock user
+```
+
+**Mock Endpoints:**
+- `GET /api/auth/:provider` - Initiates OAuth flow (redirects to mock-success in MOCK_MODE)
+- `GET /api/auth/mock-success` - Creates demo user and completes sign-in
 
 ### Switching to Real OAuth
 To replace mock auth with real authentication (Google, GitHub, etc.):
@@ -237,6 +266,13 @@ Users can toggle **"Respect system theme"** inside the Library page to:
 
 This gives users control while maintaining the default cinematic experience.
 
+### Light Mode Resilience
+The Library page's forced theme ensures visual consistency regardless of system preferences:
+- **Toggle site to light mode** → Library remains black/red/blue
+- **CSS scoping** via `body[data-force-theme="library"]` overrides global theme
+- **Glass matcap overlay** maintains cinematic aesthetic in all modes
+- **High contrast** white text on dark bands, preserved in all conditions
+
 ### Implementation Details
 1. **Force Theme** - `useEffect` sets `data-force-theme="library"` on mount
 2. **CSS Scope** - `.library-theme` tokens override global variables
@@ -271,7 +307,15 @@ This gives users control while maintaining the default cinematic experience.
    - Enable "Respect system theme"
    - Verify Library adapts to global theme
 
-5. **Accessibility**
+5. **OAuth Sign-In Flow**
+   - Click Profile Icon → Sign In
+   - Verify OAuth buttons visible: Google, Apple, Facebook, Twitter, GitHub
+   - Click "Sign in with Google"
+   - Verify signed in as demo-google@ybuilt.com
+   - Sign out and try different provider
+   - Verify each provider creates unique user
+
+6. **Accessibility**
    - Tab through all interactive elements
    - Test screen reader (NVDA/JAWS)
    - Verify keyboard shortcuts

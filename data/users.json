@@ -9,5 +9,19 @@
     "email": "test@ybuilt.com",
     "password": "testpass123",
     "credits": 0
+  },
+  "bfa2cfcf-c42d-43a9-ae97-d9f930d8b80d": {
+    "id": "bfa2cfcf-c42d-43a9-ae97-d9f930d8b80d",
+    "username": "demo-Google",
+    "email": "demo-Google@ybuilt.com",
+    "password": "mock-oauth-password",
+    "credits": 0
+  },
+  "a62a66cc-0a1c-43e4-a128-d40184a96d0b": {
+    "id": "a62a66cc-0a1c-43e4-a128-d40184a96d0b",
+    "username": "demo-Apple",
+    "email": "demo-Apple@ybuilt.com",
+    "password": "mock-oauth-password",
+    "credits": 0
   }
 }
