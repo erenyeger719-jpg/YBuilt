@@ -439,5 +439,20 @@
     "error": null,
     "createdAt": "2025-10-11T19:39:14.307Z",
     "updatedAt": "2025-10-11T19:39:45.288Z"
+  },
+  "3f618db7-1930-4450-885a-5ed86f90a905": {
+    "id": "3f618db7-1930-4450-885a-5ed86f90a905",
+    "userId": "demo",
+    "prompt": "dhlsd",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/3f618db7-1930-4450-885a-5ed86f90a905/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"\",\"description\":\"\",\"theme\":\"monochrome\",\"heroText\":\"dhlsd\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-11T19:44:47.064Z",
+    "updatedAt": "2025-10-11T19:44:56.222Z"
   }
 }
