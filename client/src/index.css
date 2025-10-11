@@ -248,6 +248,25 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
+/* Library Page Forced Theme - Overrides global theme */
+body[data-force-theme="library"] .library-root,
+.library-theme {
+  /* Force Library color scheme regardless of system theme */
+  --lib-bg-right: #000000;
+  --lib-bg-center: #E01010;
+  --lib-bg-left-gradient-start: #CFF2FF;
+  --lib-bg-left-gradient-end: #9BD6FF;
+  --lib-text-on-dark: #ffffff;
+  --lib-text-on-light: #000000;
+  --lib-gloss-alpha: 0.14;
+  --lib-rim: rgba(255,255,255,0.12);
+  --lib-glass-blur: 10px;
+  
+  /* Override foreground for light sections */
+  --lib-foreground-light: 0 0% 0%;
+  --lib-foreground-dark: 0 0% 100%;
+}
+
 @layer base {
   * {
     @apply border-border;
