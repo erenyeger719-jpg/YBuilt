@@ -270,6 +270,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // OAuth Mock Endpoints
+  app.get("/api/auth/:provider", async (req, res) => {
+    const { provider } = req.params;
+    const validProviders = ["google", "apple", "facebook", "twitter", "github"];
+    
+    if (!validProviders.includes(provider.toLowerCase())) {
+      return res.status(400).json({ error: "Invalid provider" });
+    }
+
+    // In MOCK_MODE, redirect to mock success
+    // In production, this would initiate real OAuth flow
+    const mockMode = !process.env.OAUTH_CLIENT_ID;
+    
+    if (mockMode) {
+      return res.redirect(`/api/auth/mock-success?provider=${provider}`);
+    }
+
+    // Real OAuth flow would go here
+    res.status(501).json({ error: "Real OAuth not implemented yet" });
+  });
+
+  app.get("/api/auth/mock-success", async (req, res) => {
+    const provider = req.query.provider as string || "unknown";
+    
+    try {
+      // Create/get demo OAuth user
+      const mockEmail = `demo-${provider.toLowerCase()}@ybuilt.com`;
+      let user = await storage.getUserByEmail(mockEmail);
+      
+      if (!user) {
+        user = await storage.createUser({
+          email: mockEmail,
+          username: `${provider}User`,
+          password: "oauth-mock-password"
+        });
+        console.log(`Mock OAuth: Auto-created ${provider} user`);
+      }
+
+      // In a real app, you'd set a secure session cookie here
+      // For now, just redirect to homepage with success param
+      res.redirect(`/?oauth=success&provider=${provider}&email=${encodeURIComponent(mockEmail)}`);
+    } catch (error) {
+      console.error("OAuth mock error:", error);
+      res.redirect(`/?oauth=error`);
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
