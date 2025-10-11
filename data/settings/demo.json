@@ -2,8 +2,8 @@
   "userId": "demo",
   "appearance": {
     "theme": "dark",
-    "glassIntensity": 50,
-    "glossFinish": false,
+    "glassIntensity": 40,
+    "glossFinish": true,
     "parallaxIntensity": 20,
     "motion": "full",
     "lowPower": false,
@@ -21,8 +21,8 @@
     "emailVerified": false
   },
   "workspace": {
-    "defaultVisibility": "public",
-    "defaultTemplate": "app",
+    "defaultVisibility": "private",
+    "defaultTemplate": "starter",
     "autoCreatePreview": true,
     "storageRegion": "india"
   },
@@ -39,17 +39,30 @@
     "editorTheme": "dark"
   },
   "ai": {
-    "model": "gpt-5-x",
-    "temperature": 0.2,
-    "autoRefine": true,
+    "model": "gpt-5-mini",
+    "temperature": 0.7,
+    "autoRefine": false,
     "maxTokens": 4000,
     "maxRuntime": 30,
-    "computeTier": "balanced",
+    "computeTier": "high-fidelity",
     "previewWatermark": true,
     "defaultStyle": "monochrome",
-    "safetyFilter": true,
+    "safetyFilter": false,
     "safetyLevel": "medium",
-    "promptTemplates": []
+    "promptTemplates": [
+      {
+        "id": "fd40775b-0fd3-4c55-a0f0-b7cf58461005",
+        "name": "Alpha",
+        "template": "Alpha content",
+        "isDefault": true
+      },
+      {
+        "id": "98f8df44-05bb-44af-b101-9430cb179b01",
+        "name": "Beta",
+        "template": "Beta content",
+        "isDefault": false
+      }
+    ]
   },
   "security": {
     "twoFactor": false,

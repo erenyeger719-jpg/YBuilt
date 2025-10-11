@@ -23,5 +23,12 @@
     "email": "demo-Apple@ybuilt.com",
     "password": "mock-oauth-password",
     "credits": 0
+  },
+  "8e97101c-b119-48ce-90f5-f2c8c1644f9a": {
+    "id": "8e97101c-b119-48ce-90f5-f2c8c1644f9a",
+    "username": "demo+e2e",
+    "email": "demo+e2e@ybuilt.com",
+    "password": "password123",
+    "credits": 0
   }
 }
