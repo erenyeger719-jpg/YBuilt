@@ -1,92 +1,7 @@
 # YBUILT - AI Website Builder
 
-## Project Overview
-Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. Users enter a prompt and receive a complete website in 2-4 seconds. Features India-first payment integration with Razorpay.
-
-## Current State (MVP Complete + Auth + Library + Settings + Finalize)
-- ✅ Stunning glass-striped hero with diagonal backdrop
-- ✅ One-prompt AI generation with mock worker
-- ✅ Job queue system with real-time polling
-- ✅ Extended job lifecycle: created → queued → generating → ready_for_finalization → editing → building → deploying → published
-- ✅ Finalize page with split-view UI (preview iframe + tweak panel)
-- ✅ SEO customization (title, description) and theme selection (monochrome/gloss/game/app-ui)
-- ✅ Save Draft and Finalize actions with backend validation and cache invalidation
-- ✅ Automatic redirect from Hero to Finalize when generation completes
-- ✅ Razorpay payment integration (mock mode)
-- ✅ 8 demo preview templates with thumbnails and hover overlay
-- ✅ Dark/light modes with low-gloss accessibility
-- ✅ Currency toggle (INR/USD)
-- ✅ Full accessibility (ARIA, keyboard nav, 4.5:1 contrast, prefers-reduced-motion)
-- ✅ Mock authentication system with localStorage tokens
-- ✅ Profile icon with user initials and accessible dropdown menu
-- ✅ Library page with forced black→red→blue diagonal theme
-- ✅ Library button in header navigation
-- ✅ User persistence across server restarts
-- ✅ Settings system with black→purple→sky blue diagonal gradient theme
-- ✅ 12 settings sections with reactive SettingsContext and file persistence
-- ✅ Appearance settings form with 9 functional controls (theme, glass, gloss, parallax, motion, fonts, power modes)
-- ✅ AI & Models settings form with 10 controls plus prompt template CRUD
-- ✅ Immediate visual feedback via CSS variable updates on all appearance changes
-
-## Recent Changes
-- **2025-01-11**: Implemented complete Finalize page with split-view UI (preview + tweak panel)
-- **2025-01-11**: Created jobFinalizationSchema with Zod validation for title, description, theme, heroText
-- **2025-01-11**: Added POST /api/jobs/:jobId/finalize endpoint with validation and status transition to editing
-- **2025-01-11**: Added POST /api/jobs/:jobId/save-draft endpoint for saving without status change
-- **2025-01-11**: Updated GET /api/jobs/:jobId to return prompt, settings, error fields
-- **2025-01-11**: Added cache invalidation to finalize and save-draft mutations
-- **2025-01-11**: Implemented form state loading from job.settings with prompt fallback
-- **2025-01-11**: Updated useGeneration hook to redirect to /finalize when ready_for_finalization
-- **2025-01-11**: E2E tested: Complete flow from prompt → generate → finalize → workspace
-- **2025-01-11**: Extended job lifecycle schema for complete Replit-like product flow
-- **2025-01-11**: Added extended states: created → queued → generating → ready_for_finalization → editing → building → deploying → published
-- **2025-01-11**: Implemented builds and versions tables for pipeline tracking and rollback
-- **2025-01-11**: Enhanced storage layer with build/version methods and proper error handling
-- **2025-01-11**: Fixed job updates to use dedicated error field and updatedAt timestamps
-- **2025-01-11**: Implemented complete AI & Models settings form with 10 controls plus template CRUD
-- **2025-01-11**: Added model selector (GPT-5-X/GPT-5-Mini/Vision-Capable), temperature slider, compute tier
-- **2025-01-11**: Implemented max runtime (10-60s), max tokens (1000-8000), default style selector
-- **2025-01-11**: Added auto-refine, preview watermark toggles, safety filter with dependent level selector
-- **2025-01-11**: Built complete prompt template CRUD: add, delete, set default, with auto-default promotion
-- **2025-01-11**: Fixed regression: deleting default template now promotes first remaining to default
-- **2025-01-11**: E2E tested: All AI controls, template add/delete/default with persistence verification
-- **2025-01-11**: Implemented complete Appearance settings form with 9 functional controls
-- **2025-01-11**: Added theme selector (system/dark/light/force-library) with immediate effect
-- **2025-01-11**: Implemented glass intensity (0-100%), parallax intensity (0-100%), font size (12-20px) sliders
-- **2025-01-11**: Added gloss finish, low power mode, low bandwidth mode toggle switches
-- **2025-01-11**: Created font family selector (Inter/Valmeria/Poppins) and motion selector (full/reduced/none)
-- **2025-01-11**: All appearance changes apply immediately via SettingsContext CSS variable updates
-- **2025-01-11**: E2E tested: Settings navigation, slider interactions, toggle persistence, theme changes
-- **2025-01-11**: Expanded settings schema to 12 comprehensive sections with workspace and organization
-- **2025-01-11**: Created SettingsContext providing reactive state management and localStorage caching
-- **2025-01-11**: Implemented PATCH /api/settings/:section with validation for all 12 sections
-- **2025-01-11**: Added storage layer with getSettings/updateSettings methods and file persistence to data/settings/{userId}.json
-- **2025-01-11**: Created Settings page with sidebar navigation and section routing
-- **2025-01-11**: Updated ProfileIcon with "Settings" and "Manage Billing" menu items
-- **2025-01-11**: Settings persist across sessions with localStorage and server file storage
-- **2025-01-11**: Simplified Library.tsx to use CSS-based diagonal gradient (removed individual band divs)
-- **2025-01-11**: Updated index.css with .library-root::before for glass matcap overlay
-- **2025-01-11**: Fixed Library theme CSS variables to use exact high-contrast values
-- **2025-01-11**: Added OAuth social login buttons to SignInModal (Google, Apple, Facebook, Twitter, GitHub)
-- **2025-01-11**: Implemented mock OAuth endpoints: GET /api/auth/:provider and /api/auth/mock-success
-- **2025-01-11**: OAuth buttons auto-create users with format demo-{provider}@ybuilt.com
-- **2025-01-11**: All OAuth providers work in mock mode without external API configuration
-- **2025-01-11**: Implemented complete mock auth system with localStorage JWT-like tokens
-- **2025-01-11**: Added user persistence with loadUsers() and saveUsers() methods
-- **2025-01-11**: Auto-create users on sign-in if they don't exist (mock mode convenience)
-- **2025-01-11**: Created SignInModal component with email/password fields and keyboard accessibility
-- **2025-01-11**: Updated ProfileIcon to display user initials (Avatar) when authenticated
-- **2025-01-11**: Redesigned Library page with forced theme system using black→red→light blue diagonal bands
-- **2025-01-11**: Added "Respect system theme" toggle for Library page with accessibility support
-- **2025-01-11**: Fixed critical persistence bug: users and credits now load from data/users.json on server startup
-- **2025-01-11**: Added POST /api/auth/signin, POST /api/auth/signup, GET /api/me endpoints
-- **2025-01-11**: Fixed Header.tsx nested <a> warning by restructuring Button with asChild
-- **2025-01-11**: Updated README with comprehensive auth and Library theme documentation
-- **2025-01-11**: Added Library page with black→red→blue diagonal slash stripes
-- **2025-01-11**: Added ProfileIcon component with accessible dropdown menu using shadcn primitives
-- **2025-01-11**: Added preview thumbnails for all 8 showcase cards with hover play button overlay
-- **2025-01-11**: Fixed webhook HMAC verification to use raw body before JSON parsing
-- **2025-01-11**: Removed all emoji from UI to comply with design guidelines
+## Overview
+YBUILT is an AI-powered website builder designed for luxury with a monochrome aesthetic and cinematic glass/gloss effects. Users input a prompt and receive a complete, visually striking website within seconds. The platform aims to provide an India-first payment experience through Razorpay integration and offers comprehensive tools for AI-assisted design, code editing, and deployment. The project's ambition is to revolutionize website creation by combining advanced AI generation with a sophisticated, user-friendly interface.
 
 ## User Preferences
 - Design aesthetic: X.AI × Epic Games (cinematic, tactile, restrained)
@@ -96,134 +11,33 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 - Payment: India-first with Razorpay (UPI, QR, netbanking, wallets, cards)
 - Accessibility: Critical - WCAG AA compliance, keyboard nav, reduced motion support
 
-## Architecture
+## System Architecture
 
-### Frontend (React + TypeScript + Vite)
-- **Components**:
-  - `Hero.tsx` - Main hero with glass-striped backdrop and prompt input
-  - `Header.tsx` - Fixed header with logo, Library button, payment, currency, theme toggles, profile icon
-  - `PromptInput.tsx` - AI generation trigger with loading states
-  - `Showcase.tsx` - 8 preview cards with modal display and thumbnails
-  - `PreviewCard.tsx` - Individual preview card with hover play overlay
-  - `PreviewModal.tsx` - Full-screen iframe for generated sites
-  - `PaymentButton.tsx` - Razorpay checkout integration
-  - `CurrencyToggle.tsx` - INR/USD switching
-  - `ProfileIcon.tsx` - Circular profile button with user initials and accessible dropdown menu
-  - `SignInModal.tsx` - Auth modal with email/password fields and mode toggle
-  
-- **Pages**:
-  - `Studio.tsx` - Homepage with hero and showcase
-  - `Library.tsx` - User library with forced black→red→blue diagonal theme, project grid, empty state, theme toggle
-  
-- **Hooks**:
-  - `useGeneration.ts` - Job creation, polling, status management
-  
-- **Services**:
-  - `mockAuth.ts` - Client-side auth service with localStorage token management
-  
-- **Styling**:
-  - Custom glass/gloss utilities in `index.css`
-  - Diagonal striped backdrop system
-  - Metallic text reflections
-  - Shimmer particle effects
+### UI/UX Decisions
+The design emphasizes a luxurious, monochrome aesthetic with cinematic glass/gloss effects, specular highlights, and reflections. Key UI elements include a glass-striped hero, metallic text reflections, and shimmer particle effects. Accessibility is a top priority, adhering to WCAG AA compliance, providing keyboard navigation, and supporting reduced motion. The application supports both dark and light modes with low-gloss accessibility and includes a currency toggle for INR/USD.
 
-### Backend (Express + TypeScript)
-- **Routes**:
-  - `POST /api/generate` - Create AI generation job
-  - `GET /api/jobs/:jobId` - Poll job status
-  - `GET /api/razorpay_key` - Get payment key (mock mode aware)
-  - `POST /webhooks/razorpay` - Payment webhook with HMAC verification
-  - `GET /api/credits/:userId` - Fetch user credits
-  - `POST /api/auth/signin` - Sign in (auto-creates user in mock mode)
-  - `POST /api/auth/signup` - Create new account
-  - `GET /api/me` - Get current user metadata
-  
-- **Storage** (`server/storage.ts`):
-  - In-memory storage with file persistence
-  - Job management (create, get, update status)
-  - User management (create, get by email, get by ID)
-  - User credit tracking
-  - Loads users and jobs from JSON on startup
-  - Persists changes back to disk
-  
-- **Queue** (`server/queue.ts`):
-  - Simple in-memory job queue
-  - Mock worker with 2-4s delay
-  - Keyword-based template selection
-  - HTML generation and file writing
+### Technical Implementations
+The frontend is built with React, TypeScript, and Vite, utilizing `shadcn/ui` for components, Framer Motion for animations, TanStack Query for data fetching, Tailwind CSS for styling, and Wouter for routing. The backend is an Express.js and TypeScript application. Data persistence uses in-memory storage with file persistence for jobs, users, and payments, saving to JSON files (`data/jobs.json`, `data/users.json`, `data/payments.log`). Generated websites are stored in `public/previews/{jobId}/index.html`.
 
-### Data Persistence
-- `data/jobs.json` - Job queue storage
-- `data/users.json` - User credits (demo user starts with 0)
-- `data/payments.log` - Payment audit trail
-- `public/previews/{jobId}/index.html` - Generated websites
+### Feature Specifications
+- **AI Design Assistant**: Features theme selection, a color palette picker, file upload, and hero/SEO customization.
+- **Build Trace Viewer**: Provides structured logging for `GENERATION`, `ASSEMBLY`, `LINT`, and `STATIC-BUILD` stages.
+- **Workspace**: A Replit-like environment with a Monaco code editor, file tree navigation, live preview, and a collapsible build trace dock.
+- **Job Lifecycle**: Extended states include `created`, `queued`, `generating`, `ready_for_finalization`, `editing`, `building`, `deploying`, and `published`.
+- **Scoped Regeneration**: Allows regenerating full-site, hero-only, navigation, footer, or specific blocks.
+- **User Authentication**: Mock authentication system with localStorage tokens and social login mockups (Google, Apple, Facebook, Twitter, GitHub).
+- **Settings System**: Comprehensive settings with 12 sections, reactive `SettingsContext`, and file persistence, covering appearance, AI/models, and more.
+- **Library**: Displays saved drafts with thumbnail generation and a unique black→red→blue diagonal theme.
 
-### Mock Mode
-- Fully functional without API keys
-- Razorpay simulated (1.5s delay)
-- AI generation simulated (2-4s delay)
-- 8 template variations based on keywords
+### System Design Choices
+The system is designed to be fully functional in a mock mode without external API keys for Razorpay and AI generation, simulating delays and outcomes. It includes a simple in-memory job queue with a mock worker for processing AI generation requests. The architecture supports user persistence across server restarts and provides immediate visual feedback for appearance setting changes via CSS variable updates.
 
-## Key Dependencies
-- React 18 + TypeScript
-- Express.js + TypeScript
-- Framer Motion (animations)
-- shadcn/ui (components)
-- TanStack Query (data fetching)
-- Tailwind CSS (styling)
-- Wouter (routing)
-- Razorpay SDK (payments)
-
-## Environment Variables
-All optional - app runs in mock mode without them:
-- `RAZORPAY_KEY_ID` - Razorpay test key
-- `RAZORPAY_KEY_SECRET` - Razorpay secret
-- `RAZORPAY_WEBHOOK_SECRET` - Webhook signature verification
-- `OPENAI_API_KEY` - For future real AI (commented)
-- `REDIS_URL` - For production queue (commented)
-
-## Future Enhancements
-1. Real OpenAI/Gemini integration for AI generation
-2. Redis + BullMQ for production job queue
-3. PostgreSQL for persistent storage (schema already defined)
-4. User authentication with project history
-5. Multi-page website generation
-6. Export to GitHub/Zip
-7. Custom branding extraction
-8. Responsive preview modes
-9. Cashfree/PayU secondary gateways
-10. Subscription plans
-
-## Development Notes
-- Always maintain glass/gloss aesthetic consistency
-- Ensure all interactions have prefers-reduced-motion fallbacks
-- Keep accessibility as top priority (ARIA, keyboard, contrast)
-- Test both mock mode and real integrations
-- Maintain strict monochrome palette (no UI colors)
-
-## Testing Strategy
-1. **Generation Flow**: Prompt → Job → Poll → Display
-2. **Payment Flow**: Click → Checkout → Webhook → Credits
-3. **Accessibility**: Keyboard nav, screen reader, reduced motion
-4. **Responsiveness**: Mobile to 4K displays
-5. **Dark/Light Modes**: All components adapt correctly
-
-## Known Issues
-- Console contains validateDOMNesting accessibility warnings (non-blocking, cosmetic)
-- Razorpay script loads on every mount (could be optimized)
-- Preview iframe occasionally shows 404 immediately after generation (timing issue with mock worker file writing)
-- Toast notifications are ephemeral and difficult to assert in automated tests
-
-## Run Instructions
-```bash
-npm install
-npm run dev
-# App available at http://localhost:5000
-```
-
-## Replit Deployment
-1. Import repo
-2. Click "Run"
-3. Auto-deploys to `.replit.app` domain
-4. Add secrets in Secrets panel for production mode
-5. Webhooks auto-configured
+## External Dependencies
+- **React 18 + TypeScript**: Frontend framework.
+- **Express.js + TypeScript**: Backend framework.
+- **Framer Motion**: For animations.
+- **shadcn/ui**: UI component library.
+- **TanStack Query**: For data fetching and state management.
+- **Tailwind CSS**: For styling.
+- **Wouter**: For client-side routing.
+- **Razorpay SDK**: For payment gateway integration (India-first focus).
