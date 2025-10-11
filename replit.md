@@ -3,7 +3,7 @@
 ## Project Overview
 Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. Users enter a prompt and receive a complete website in 2-4 seconds. Features India-first payment integration with Razorpay.
 
-## Current State (MVP Complete + Auth + Library)
+## Current State (MVP Complete + Auth + Library + Settings)
 - ✅ Stunning glass-striped hero with diagonal backdrop
 - ✅ One-prompt AI generation with mock worker
 - ✅ Job queue system with real-time polling
@@ -17,8 +17,18 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 - ✅ Library page with forced black→red→blue diagonal theme
 - ✅ Library button in header navigation
 - ✅ User persistence across server restarts
+- ✅ Settings system with black→purple→sky blue diagonal gradient theme
+- ✅ 10 settings sections with backend validation and file persistence
 
 ## Recent Changes
+- **2025-01-11**: Implemented complete Settings system with black→purple→sky blue diagonal gradient theme
+- **2025-01-11**: Created settings schema with 10 sections (appearance, account, editor, AI, security, integrations, billing, team, notifications, export)
+- **2025-01-11**: Added storage layer with getSettings/updateSettings methods and file persistence to data/settings/{userId}.json
+- **2025-01-11**: Implemented server endpoints: GET /api/settings and PATCH /api/settings/:section with Zod validation
+- **2025-01-11**: Created Settings page with sidebar navigation and 10 stub form components
+- **2025-01-11**: Updated ProfileIcon with "Settings" and "Manage Billing" menu items
+- **2025-01-11**: Fixed critical validation: exported Settings type, created defaultSettings with valid placeholder email
+- **2025-01-11**: Implemented section-scoped PATCH updates with proper Zod validation
 - **2025-01-11**: Simplified Library.tsx to use CSS-based diagonal gradient (removed individual band divs)
 - **2025-01-11**: Updated index.css with .library-root::before for glass matcap overlay
 - **2025-01-11**: Fixed Library theme CSS variables to use exact high-contrast values
@@ -26,8 +36,6 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 - **2025-01-11**: Implemented mock OAuth endpoints: GET /api/auth/:provider and /api/auth/mock-success
 - **2025-01-11**: OAuth buttons auto-create users with format demo-{provider}@ybuilt.com
 - **2025-01-11**: All OAuth providers work in mock mode without external API configuration
-- **2025-01-11**: Verified Library theme resilience: remains visible in light mode (no wash-out)
-- **2025-01-11**: Updated README with OAuth mock mode instructions and testing steps
 - **2025-01-11**: Implemented complete mock auth system with localStorage JWT-like tokens
 - **2025-01-11**: Added user persistence with loadUsers() and saveUsers() methods
 - **2025-01-11**: Auto-create users on sign-in if they don't exist (mock mode convenience)

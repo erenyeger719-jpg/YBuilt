@@ -1,0 +1,76 @@
+{
+  "userId": "demo",
+  "appearance": {
+    "theme": "dark",
+    "glassIntensity": 90,
+    "parallaxIntensity": 20,
+    "motion": "normal",
+    "lowPower": false,
+    "lowBandwidth": false
+  },
+  "account": {
+    "displayName": "",
+    "email": "user@example.com",
+    "language": "en",
+    "locale": "en-US"
+  },
+  "editor": {
+    "template": "starter",
+    "language": "js",
+    "autosave": 15,
+    "previewResolution": "auto",
+    "keybindings": "default",
+    "tabSize": 2,
+    "fontSize": 14,
+    "lineWrap": true
+  },
+  "ai": {
+    "model": "gpt-5-x",
+    "temperature": 0.2,
+    "autoRefine": true,
+    "maxTokens": 4000,
+    "computeTier": "balanced",
+    "previewWatermark": true,
+    "defaultStyle": "monochrome"
+  },
+  "security": {
+    "twoFactor": false,
+    "apiKeys": [],
+    "sshKeys": []
+  },
+  "integrations": {
+    "github": {
+      "connected": false
+    },
+    "gitlab": {
+      "connected": false
+    },
+    "webhooks": [],
+    "paymentGateway": "razorpay"
+  },
+  "billing": {
+    "plan": "free",
+    "paymentMethods": []
+  },
+  "team": {
+    "invites": [],
+    "projectSharingDefault": "private"
+  },
+  "notifications": {
+    "email": {
+      "jobCompleted": true,
+      "billing": true,
+      "security": true
+    },
+    "inApp": {
+      "jobCompleted": true,
+      "billing": true,
+      "security": true
+    },
+    "frequency": "instant"
+  },
+  "export": {
+    "retentionDays": 30,
+    "autoExport": false
+  }
+}
