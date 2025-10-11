@@ -5,5 +5,19 @@
     "status": "completed",
     "result": "/previews/87700ad0-a5b0-41d3-be98-e0fc38e1af46/index.html",
     "createdAt": "2025-10-11T12:59:00.164Z"
+  },
+  "2e670b05-4338-44e3-ac19-03ef0ffb9b5f": {
+    "id": "2e670b05-4338-44e3-ac19-03ef0ffb9b5f",
+    "prompt": "modern portfolio website for a photographer",
+    "status": "completed",
+    "result": "/previews/2e670b05-4338-44e3-ac19-03ef0ffb9b5f/index.html",
+    "createdAt": "2025-10-11T13:02:26.865Z"
+  },
+  "f6c1ca4f-2036-49a9-9fbd-59dba01cb30c": {
+    "id": "f6c1ca4f-2036-49a9-9fbd-59dba01cb30c",
+    "prompt": "modern portfolio website for a photographer",
+    "status": "completed",
+    "result": "/previews/f6c1ca4f-2036-49a9-9fbd-59dba01cb30c/index.html",
+    "createdAt": "2025-10-11T13:08:55.821Z"
   }
 }

@@ -14,10 +14,13 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 - ✅ Full accessibility (ARIA, keyboard nav, 4.5:1 contrast)
 
 ## Recent Changes
-- **2024-01-11**: Added diagonal striped glass backdrop to hero section with metallic text reflections
-- **2024-01-11**: Implemented complete AI generation flow with job queue and status polling
-- **2024-01-11**: Added Razorpay payment integration with webhook handling
-- **2024-01-11**: Created currency toggle and low-gloss accessibility mode
+- **2025-01-11**: Fixed webhook HMAC verification to use raw body before JSON parsing (express.raw middleware)
+- **2025-01-11**: Removed all emoji from UI to comply with design guidelines
+- **2025-01-11**: Updated theme toggle logic to use explicit add/remove instead of toggle for better reliability
+- **2025-01-11**: Added diagonal striped glass backdrop to hero section with metallic text reflections
+- **2025-01-11**: Implemented complete AI generation flow with job queue and status polling
+- **2025-01-11**: Added Razorpay payment integration with webhook handling
+- **2025-01-11**: Created currency toggle and low-gloss accessibility mode
 
 ## User Preferences
 - Design aesthetic: X.AI × Epic Games (cinematic, tactile, restrained)
@@ -125,6 +128,8 @@ All optional - app runs in mock mode without them:
 ## Known Issues
 - LSP warning about PromptInput import in Hero.tsx (TypeScript cache issue, app works correctly)
 - Razorpay script loads on every mount (could be optimized)
+- Preview iframe occasionally shows 404 immediately after generation (timing issue with mock worker file writing)
+- Toast notifications are ephemeral and difficult to assert in automated tests
 
 ## Run Instructions
 ```bash

@@ -16,7 +16,11 @@ export default function Header() {
     
     if (savedTheme) {
       setTheme(savedTheme);
-      document.documentElement.classList.toggle("dark", savedTheme === "dark");
+      if (savedTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
     } else {
       setTheme("dark");
       document.documentElement.classList.add("dark");
@@ -31,14 +35,22 @@ export default function Header() {
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
+    if (newTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
     localStorage.setItem("theme", newTheme);
   };
 
   const toggleLowGloss = () => {
     const newLowGloss = !lowGloss;
     setLowGloss(newLowGloss);
-    document.documentElement.classList.toggle("low-gloss", newLowGloss);
+    if (newLowGloss) {
+      document.documentElement.classList.add("low-gloss");
+    } else {
+      document.documentElement.classList.remove("low-gloss");
+    }
     localStorage.setItem("lowGloss", String(newLowGloss));
   };
 
