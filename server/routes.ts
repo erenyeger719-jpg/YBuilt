@@ -12,10 +12,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Job generation endpoint
   app.post("/api/generate", async (req, res) => {
     try {
-      const validation = insertJobSchema.safeParse(req.body);
+      // For backward compatibility, default to demo user if userId not provided
+      const bodyWithUserId = {
+        ...req.body,
+        userId: req.body.userId || "demo"
+      };
+      
+      const validation = insertJobSchema.safeParse(bodyWithUserId);
       
       if (!validation.success) {
-        return res.status(400).json({ error: "Invalid prompt" });
+        return res.status(400).json({ error: "Invalid request", details: validation.error });
       }
 
       const job = await storage.createJob(validation.data);

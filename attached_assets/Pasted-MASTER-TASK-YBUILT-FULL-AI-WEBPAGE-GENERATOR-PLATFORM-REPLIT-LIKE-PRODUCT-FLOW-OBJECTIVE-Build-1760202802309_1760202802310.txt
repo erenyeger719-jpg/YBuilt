@@ -1,0 +1,236 @@
+MASTER TASK — YBUILT: FULL AI-WEBPAGE GENERATOR PLATFORM (REPLIT-LIKE PRODUCT FLOW)
+
+OBJECTIVE
+Build a full-featured Replit-style platform for generating webapps & webpages by AI for the Indian subcontinent (ybuilt). The generator should create a runnable Replit-ready repo (client + server + worker + data + tests + README) implementing the **complete product flow**:
+
+  Prompt → Draft Generation → Finalization UI → Editable Build (Studio/Workplace) → Build Worker (live step-by-step logs) → Publish (subscription-gated, Razorpay/UPI) → Live Preview + Versioning + Rollback
+
+Important: do not invent internal chain-of-thought. The Workplace must show *structured build traces, stages and model outputs/logs* (what the system did), not private or internal chain-of-thought.
+
+SCOPE & DELIVERABLES
+- A git-ready project named `ybuilt-replit-clone` (single pasteable repo tree + exact file contents).
+- Must run locally or on Replit with `npm install && npm run dev`.
+- Provide mock and production modes (MOCK_MODE) for payments, OAuth and external APIs.
+- Provide clear docs (README.md) explaining local run, Replit deployment notes and how to switch from mock to production APIs (OpenAI, image services, Redis, Razorpay).
+
+ARCHITECTURE OVERVIEW (explicit)
+- Client: Vite + React + Tailwind (pages: Home, Studio, Finalize, Workspace, Logs, Publish, Library, Settings, Billing, Account, Team)
+- Server: Node + Express (or Fastify) with REST endpoints + optional WebSocket/SSE for real-time job logs
+- Worker: Node worker process that processes queued jobs (supports Redis/BullMQ if REDIS_URL set, else in-process queue)
+- Storage: local `data/` for demo (jobs.json, users.json, builds/*); `public/previews/*` for generated preview pages & static artifacts; `storage/` for uploaded assets.
+- Queue: BullMQ if Redis available; fallback to in-process queue for MOCK_MODE
+- Payments: Razorpay primary (UPI / Netbanking / Cards), placeholder for Cashfree/PayU; MOCK_MODE to simulate payment success.
+- Auth: mock auth + OAuth placeholders (Google/GitHub/Apple). Session cookie + `ybuilt_session` localStorage support.
+
+JOB LIFECYCLE (states + transitions)
+- States: `created` → `queued` → `generating` → `ready_for_finalization` → `editing` → `building` → `deploying` → `published` OR `failed` OR `cancelled`
+- Actions:
+  - `POST /api/generate` creates job, returns jobId + previewUrl (initial draft).
+  - After generation, job transitions to `ready_for_finalization`: UI shows finalization page where user can tweak micro-copies, select templates, pick assets, or request re-generate parts.
+  - When user clicks **Select / Finalize** job, state becomes `editing` and an editable Studio/workspace opens (WYSIWYG + code).
+  - User clicks **Build** → job transitions to `building` and worker runs build pipeline, streaming logs (SSE or WebSocket).
+  - Build completes → `deploying` step (deploy to demo hosting or generate hosted static preview under `/previews/{jobId}/index.html`).
+  - Publish action (from Publish page) checks subscription/credits; gated if user lacks plan. Publish triggers `published` state and creates a production entry (live URL or simulated host).
+- Log model: worker writes structured stage logs (JSON lines): `{ stage:'render-html', status:'start', timestamp, meta }` etc — these feed the Workplace “thinking” trace UI.
+
+COMPONENTS & UI FLOW (pages + components)
+- Pages:
+  - Home (`/`) — hero, prompt box, previews carousel, tagline "Build smarter. Launch faster."
+  - Studio (`/studio`) — where user crafts prompt and triggers generation (prompt form, templates list)
+  - Finalize (`/finalize/:jobId`) — preview of generated draft, side-by-side: left = preview, right = tweak panel (title, colors, layout selection, asset swaps, SEO meta). Buttons: Re-generate parts, Save Draft, Select & Open Studio.
+  - Workspace / Workplace (`/workspace/:jobId`) — full editor: left WYSIWYG site builder + code editor (Monaco) + asset manager + right pane showing **Build Trace** (streamed logs). Top bar: Build button, Publish, Versions, Share, Logs.
+  - Build & Logs (`/jobs/:jobId/logs`) — real-time log viewer with progress bar, expandable stages, timestamps, error highlights, artifacts list (links to preview).
+  - Publish/Plan (`/publish/:jobId` & `/plan`) — purchase plan or use credits to publish. Razorpay UPI checkout integration. Success webhook updates credits & allows publish.
+  - Library (`/library`) — saved projects, create now CTA.
+  - Settings, Account, Billing, Team — full panels (we already scaffolded many).
+- Shared Components:
+  - Header (logo, search, profile, library button)
+  - Footer
+  - PromptBox (prompt + prompt-templates dropdown + quick-controls)
+  - PreviewCards (3D glass boxes with thumbnails)
+  - Modal / Portal system
+  - BuildTraceViewer: list of stages, each stage with start/finish timestamps, stdout lines, artifacts produced; ability to expand raw model outputs (structured) and diagnostics (time, compute tier).
+  - VersionPicker (list versions, diff, rollback)
+  - AssetManager (upload, CDN-like store, use assets in editor)
+  - BillingComponent (Razorpay flow)
+  - RealtimeConnector (SSE/WebSocket wrapper for logs and job updates)
+
+BACKEND ROUTES & BEHAVIOR (essential)
+- Auth:
+  - `POST /api/auth/login` (mock)
+  - `GET /api/auth/me`
+  - `GET /api/auth/:provider` (OAuth placeholder)
+- Generation & Jobs:
+  - `POST /api/generate` → body: `{ prompt, templateId?, userId, modelParams? }` → returns `{ jobId, previewUrl, status }` and enqueues job
+  - `GET /api/jobs/:jobId` → job metadata
+  - `GET /api/jobs/:jobId/logs` → historical logs (or SSE)
+  - `POST /api/jobs/:jobId/finalize` → apply finalization edits, move to editing
+  - `POST /api/jobs/:jobId/build` → trigger build pipeline (requires worker)
+  - `POST /api/jobs/:jobId/publish` → gated by billing check; calls deployment steps
+- Previews & Hosting:
+  - Serve static previews at `/previews/{jobId}/index.html`
+  - `GET /api/previews/:jobId` → preview meta
+- Billing:
+  - `GET /api/razorpay_key` → returns test key
+  - `POST /api/create_order` → create Razorpay order mock
+  - `POST /webhooks/razorpay` → verify signature, update credits
+  - `GET /api/plan` / `POST /api/plan/subscribe`
+- Storage & Assets:
+  - `POST /api/upload` → store to local `public/uploads` or mock storage; return URLs
+- Admin/Monitoring:
+  - `GET /api/admin/jobs` → list jobs for monitoring
+  - `GET /api/logs/:jobId` → raw logs download
+- Integrations:
+  - Webhooks for GitHub deployments, analytics, external CDN push
+
+WORKER & BUILD PIPELINE (detailed)
+- Worker responsibilities:
+  1. Accept job from queue
+  2. Stage A — Content Generation
+     - Call LLM/Image APIs (or MOCK) to produce HTML scaffold, CSS, assets, config files
+     - Save intermediate artifacts to `storage/{jobId}/artifacts` and log structured outputs
+  3. Stage B — Assemble Preview
+     - Assemble static preview site into `public/previews/{jobId}/index.html` (and supporting files)
+     - Run lightweight sanity checks (HTML validity, missing assets)
+  4. Stage C — Build (optional: bundling)
+     - Run bundler (esbuild/rollup) or static generation step to produce production-ready static bundle
+  5. Stage D — Tests & Lint
+     - Run smoke test (load index.html, ensure 200), optionally run Lighthouse-like checks (mock)
+  6. Stage E — Deploy / Publish
+     - If publish requested, push to demo CDN or create production host record (simulate in MOCK_MODE)
+- Worker must stream logs in structured JSON lines for UI to consume. Example log line:
+  `{ "ts":"2025-10-11T...", "stage":"stageA", "level":"info", "msg":"Generated index.html", "artifact":"public/previews/123/index.html" }`
+- Support compute tiers: simulate different durations and cost metadata (Fast/Balanced/High-Fidelity)
+
+FINALIZATION UX (explicit)
+- After initial draft generation the user is taken to `/finalize/:jobId`:
+  - Show overlay comparing alternate variants (A/B)
+  - Right-side controls:
+    - Edit text blocks inline
+    - Swap hero image (from asset manager)
+    - Change theme (monochrome/gloss/game/app)
+    - SEO meta editor
+    - CTA buttons and links editor
+  - Buttons:
+    - Save Draft
+    - Re-generate (with fine-grained scope e.g., regenerate hero, regenerate nav only)
+    - Select & Open Studio (this moves job to editing state)
+- Finalization changes are persisted and become inputs for the build worker (they modify the job's artifact set before build).
+
+WORKPLACE / STUDIO (editing experience)
+- Provide WYSIWYG editor that lets users:
+  - Click to edit text/content (content blocks)
+  - Drag-and-drop components (hero, features, gallery)
+  - Switch to Code mode (Monaco) and edit HTML/CSS/JS
+  - Live Preview pane that hot-reloads on edits
+  - Build button that triggers worker with current state
+  - Build Trace viewer: streaming logs, stage expanders, raw model outputs (structured), artifact links, error stack
+  - Versioning: snapshot on each successful build; UI to compare versions and rollback
+- UX: clearly show when workspace is "locked" by a running build; show last build timestamp and status.
+
+PUBLISHING & SUBSCRIPTION (gating)
+- Publishing requires sufficient credits / a subscription plan:
+  - Plans: Free (preview only, watermark, no publish), Creator (₹799/month — publish one site), Team (higher quotas)
+  - Implement `GET /api/plan` to show current plan and quotas; `POST /api/plan/subscribe` to purchase (Razorpay)
+  - Publish action checks `user.credits` or plan allowance; if insufficient, redirect to plan/checkout
+  - On successful payment (webhook) update `data/users.json` credits and allow `POST /api/jobs/:jobId/publish`
+
+LOGS, AUDIT & MONITORING
+- All job transitions and user actions append to `data/audit.log` with `{userId, action, jobId, ts, meta}`
+- Build logs stored per job as `data/jobs/{jobId}/logs.jsonl` and linkable in UI
+- Expose admin endpoint to tail logs and re-run jobs.
+
+COLLABORATION & TEAMS
+- Project sharing: set project to Public / Private / Team
+- Team invites & role-based access (admin/editor/viewer)
+- Collaboration: co-edit locks, activity feed, comments on build trace lines
+
+DATA MODELS (sketch)
+- jobs: `{ id, userId, prompt, templateId, state, createdAt, updatedAt, artifacts:[], settings:{ editor:, ai: }, versionIds:[], logsPath }`
+- builds: `{ id, jobId, status, startedAt, finishedAt, artifacts, metrics }`
+- users: `{ id, email, name, credits, plan, settings }`
+- previews: `{ jobId, url, thumbnail }`
+- audit entries: `{ ts, userId, action, details }`
+
+FILES & FOLDERS (explicit suggestion to scaffold)
+  ybuilt-replit-clone/
+├─ package.json
+├─ README.md
+├─ .env.example
+├─ data/
+│ ├─ users.json
+│ ├─ jobs.json
+│ ├─ builds/
+│ └─ settings/
+├─ public/
+│ ├─ previews/
+│ ├─ uploads/
+│ └─ assets/
+├─ client/
+│ ├─ package.json
+│ ├─ index.html
+│ ├─ src/
+│ │ ├─ main.jsx
+│ │ ├─ App.jsx
+│ │ ├─ pages/{Home,Studio,Finalize,Workspace,Publish,Library,Settings}.jsx
+│ │ ├─ components/{Header,PromptBox,PreviewCard,BuildTraceViewer,Editor,AssetManager,ProfileIcon}.jsx
+│ │ └─ contexts/{AuthContext,SettingsContext,JobsContext}.jsx
+│ └─ index.css
+├─ server/
+│ ├─ package.json
+│ ├─ server.js
+│ ├─ routes/{auth,generate,jobs,builds,previews,billing,webhooks,settings}.js
+│ └─ utils/{queue,storage,razorpay,logger}.js
+├─ worker/
+│ ├─ package.json
+│ └─ worker.js
+├─ infra/
+│ └─ deploy.md
+└─ test/
+└─ job_flow.test.js   
+SECURITY, PERFORMANCE & ACCESSIBILITY
+- Sanitize all user inputs; escape templates; validate file uploads.
+- Rate limits per user; job throttling; compute-tier caps.
+- Accessibility: keyboard navigation, ARIA attributes, color contrast and reduced-motion fallbacks.
+- Performance: lazy-load iframes, thumbnails and assets; limit active Lottie instances; background generation for heavy tasks.
+
+UX DETAILS — WORKFLOW EXAMPLES (show to Replit generator)
+1. User enters prompt on Home: “Create a fintech landing page for Indian SMBs with UPI checkout and testimonials”
+2. POST /api/generate → job created, queued → worker generates draft → job status `ready_for_finalization`
+3. Finalization page shows 3 variants; user edits hero text and swaps a promo image from AssetManager → clicks **Select**
+4. Job moves to editing → Studio opens; user tweaks layout, runs Build → Worker runs build pipeline with logs streaming
+5. Build completes; preview available at `/previews/{jobId}`; user clicks **Publish** → checks plan → not enough credits → purchase via Razorpay → webhook confirms payment → credits updated → user publishes → system deploys and returns live URL
+6. User can view Build Trace (what steps ran, model outputs, timestamps), download artifacts, fork project.
+
+TESTS & QA
+- Provide automated tests covering API endpoints: generate → job state transitions → build logs → publish gating with insufficient credits → purchase flow in MOCK_MODE.
+- Include a simple smoke test that runs `POST /api/generate` with a sample prompt and asserts `jobId` created and preview generated by worker mock.
+
+DOCUMENTATION (deliver with scaffold)
+- README with setup, MOCK_MODE switches, how to plug real OpenAI/Gemini keys, how to swap mock storage to S3, how to set REDIS_URL, and how to configure Razorpay keys.
+- UX doc describing job lifecycle and mapping to UI pages.
+
+PRIVACY & SAFETY NOTES
+- Do not display private chain-of-thought. "Workplace Thinking" must be structured logs and model outputs (prompt used, chosen templates, artifacts generated, timestamps, confidence metrics) — never raw internal chain-of-thought.
+- Add content-moderation filter toggle and safety checks for outputs before publishing (block offensive content).
+
+OUTPUT FORMAT REQUEST
+When you run the generator, return:
+1. A single zip / repo tree with exact file contents.
+2. A README with run instructions and MOCK_MODE explained.
+3. A short demo script (node) that simulates a full job flow (generate → finalize → build → publish) using MOCK_MODE.
+4. Assets: one sample `public/previews/sample/index.html`, sample thumbnails, and a placeholder 3D glass logo.
+
+PRIORITY NOTES (what must work in first demo)
+1. End-to-end prompt → draft → finalize → build (mock) → preview flow (static preview must be viewable)
+2. Workplace with Build Trace viewer streaming logs (SSE or simple polling)
+3. Publish gating by plan/credits and Razorpay MOCK checkout + webhook
+4. In-process queue fallback when Redis absent (for Replit demo)
+5. Clear README and a test script to reproduce the flow locally
+
+---
+
+Finish the job by producing the full scaffold (repo tree + exact files) and the demo run instructions. Keep everything modular, well-commented, and understandable to an 18-year-old developer.  
+Do not output or attempt to reveal any models' private chain-of-thought; expose only structured logs, artifacts and model outputs.
+
+END OF PROMPT

@@ -19,21 +19,60 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
-// Job schema for AI generation
+// Job schema for AI generation with extended lifecycle
+// States: created → queued → generating → ready_for_finalization → editing → building → deploying → published (or failed/cancelled)
 export const jobs = pgTable("jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
   prompt: text("prompt").notNull(),
-  status: text("status").notNull().default("pending"),
-  result: text("result"),
+  status: text("status").notNull().default("created"), // created|queued|generating|ready_for_finalization|editing|building|deploying|published|failed|cancelled
+  templateId: varchar("template_id"),
+  result: text("result"), // preview URL
+  artifacts: text("artifacts"), // JSON array of generated artifacts
+  settings: text("settings"), // JSON object with editor/ai settings used
+  versionIds: text("version_ids"), // JSON array of version snapshot IDs
+  logsPath: text("logs_path"), // path to structured logs file
+  error: text("error"), // error message if failed
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const insertJobSchema = createInsertSchema(jobs).pick({
+  userId: true,
   prompt: true,
+  templateId: true,
 });
 
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Job = typeof jobs.$inferSelect;
+
+// Build schema for tracking build pipeline runs
+export const builds = pgTable("builds", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(),
+  status: text("status").notNull().default("pending"), // pending|running|completed|failed
+  stage: text("stage"), // current stage: content_gen|assemble|build|test|deploy
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+  artifacts: text("artifacts"), // JSON array of build artifacts
+  logs: text("logs"), // JSON array of structured log lines
+  metrics: text("metrics"), // JSON object with build metrics (duration, compute tier, etc)
+  error: text("error"),
+});
+
+export type Build = typeof builds.$inferSelect;
+
+// Version schema for snapshots and rollback
+export const versions = pgTable("versions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(),
+  buildId: varchar("build_id"),
+  snapshot: text("snapshot").notNull(), // JSON snapshot of artifacts at this version
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type Version = typeof versions.$inferSelect;
 
 // Payment schema
 export const payments = pgTable("payments", {

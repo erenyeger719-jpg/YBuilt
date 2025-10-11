@@ -1,26 +1,43 @@
-import { type User, type InsertUser, type Job, type InsertJob, type Settings, settingsSchema } from "@shared/schema";
+import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema } from "@shared/schema";
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
 
 const JOBS_FILE = path.join(process.cwd(), "data", "jobs.json");
 const USERS_FILE = path.join(process.cwd(), "data", "users.json");
+const BUILDS_FILE = path.join(process.cwd(), "data", "builds.json");
+const VERSIONS_FILE = path.join(process.cwd(), "data", "versions.json");
 const SETTINGS_DIR = path.join(process.cwd(), "data", "settings");
 
 export interface IStorage {
+  // User methods
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
-  createJob(job: InsertJob): Promise<Job>;
-  getJob(id: string): Promise<Job | undefined>;
-  updateJobStatus(id: string, status: string, result?: string): Promise<void>;
-  getAllJobs(): Promise<Job[]>;
-  
   getUserCredits(userId: string): Promise<number>;
   updateUserCredits(userId: string, credits: number): Promise<void>;
   
+  // Job methods
+  createJob(job: InsertJob): Promise<Job>;
+  getJob(id: string): Promise<Job | undefined>;
+  updateJob(id: string, updates: Partial<Job>): Promise<void>;
+  updateJobStatus(id: string, status: string, result?: string): Promise<void>;
+  getAllJobs(): Promise<Job[]>;
+  getUserJobs(userId: string): Promise<Job[]>;
+  
+  // Build methods
+  createBuild(jobId: string): Promise<Build>;
+  getBuild(id: string): Promise<Build | undefined>;
+  updateBuild(id: string, updates: Partial<Build>): Promise<void>;
+  getJobBuilds(jobId: string): Promise<Build[]>;
+  
+  // Version methods
+  createVersion(jobId: string, buildId: string, snapshot: any, description?: string): Promise<Version>;
+  getVersion(id: string): Promise<Version | undefined>;
+  getJobVersions(jobId: string): Promise<Version[]>;
+  
+  // Settings methods
   getSettings(userId: string): Promise<Settings>;
   updateSettings(userId: string, settings: Partial<Settings>): Promise<Settings>;
 }
@@ -28,14 +45,20 @@ export interface IStorage {
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private jobs: Map<string, Job>;
+  private builds: Map<string, Build>;
+  private versions: Map<string, Version>;
   private userCredits: Map<string, number>;
 
   constructor() {
     this.users = new Map();
     this.jobs = new Map();
+    this.builds = new Map();
+    this.versions = new Map();
     this.userCredits = new Map([["demo", 0]]);
     this.loadJobs();
     this.loadUsers();
+    this.loadBuilds();
+    this.loadVersions();
   }
 
   private async loadJobs() {
@@ -125,10 +148,18 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const job: Job = {
       id,
+      userId: insertJob.userId,
       prompt: insertJob.prompt,
-      status: "pending",
+      templateId: insertJob.templateId || null,
+      status: "created",
       result: null,
+      artifacts: null,
+      settings: null,
+      versionIds: null,
+      logsPath: null,
+      error: null,
       createdAt: new Date(),
+      updatedAt: new Date(),
     };
     this.jobs.set(id, job);
     await this.saveJobs();
@@ -143,6 +174,7 @@ export class MemStorage implements IStorage {
     const job = this.jobs.get(id);
     if (job) {
       job.status = status;
+      job.updatedAt = new Date();
       if (result !== undefined) {
         job.result = result;
       }
@@ -198,6 +230,116 @@ export class MemStorage implements IStorage {
     await fs.writeFile(settingsFile, JSON.stringify(validated, null, 2));
     
     return validated;
+  }
+
+  // Load/save methods for builds and versions
+  private async loadBuilds() {
+    try {
+      const data = await fs.readFile(BUILDS_FILE, "utf-8");
+      const buildsData = JSON.parse(data);
+      Object.entries(buildsData).forEach(([id, build]) => {
+        this.builds.set(id, build as Build);
+      });
+    } catch (error) {
+      // File doesn't exist, that's ok
+    }
+  }
+
+  private async loadVersions() {
+    try {
+      const data = await fs.readFile(VERSIONS_FILE, "utf-8");
+      const versionsData = JSON.parse(data);
+      Object.entries(versionsData).forEach(([id, version]) => {
+        this.versions.set(id, version as Version);
+      });
+    } catch (error) {
+      // File doesn't exist, that's ok
+    }
+  }
+
+  private async saveBuilds() {
+    const buildsObj = Object.fromEntries(this.builds);
+    await fs.writeFile(BUILDS_FILE, JSON.stringify(buildsObj, null, 2));
+  }
+
+  private async saveVersions() {
+    const versionsObj = Object.fromEntries(this.versions);
+    await fs.writeFile(VERSIONS_FILE, JSON.stringify(versionsObj, null, 2));
+  }
+
+  // Extended job methods
+  async updateJob(id: string, updates: Partial<Job>): Promise<void> {
+    const job = this.jobs.get(id);
+    if (job) {
+      Object.assign(job, updates, { updatedAt: new Date() });
+      this.jobs.set(id, job);
+      await this.saveJobs();
+    }
+  }
+
+  async getUserJobs(userId: string): Promise<Job[]> {
+    return Array.from(this.jobs.values()).filter(job => job.userId === userId);
+  }
+
+  // Build methods
+  async createBuild(jobId: string): Promise<Build> {
+    const id = randomUUID();
+    const build: Build = {
+      id,
+      jobId,
+      status: "pending",
+      stage: null,
+      startedAt: new Date(),
+      finishedAt: null,
+      artifacts: null,
+      logs: null,
+      metrics: null,
+      error: null,
+    };
+    this.builds.set(id, build);
+    await this.saveBuilds();
+    return build;
+  }
+
+  async getBuild(id: string): Promise<Build | undefined> {
+    return this.builds.get(id);
+  }
+
+  async updateBuild(id: string, updates: Partial<Build>): Promise<void> {
+    const build = this.builds.get(id);
+    if (build) {
+      Object.assign(build, updates);
+      this.builds.set(id, build);
+      await this.saveBuilds();
+    }
+  }
+
+  async getJobBuilds(jobId: string): Promise<Build[]> {
+    return Array.from(this.builds.values()).filter(build => build.jobId === jobId);
+  }
+
+  // Version methods
+  async createVersion(jobId: string, buildId: string, snapshot: any, description?: string): Promise<Version> {
+    const id = randomUUID();
+    const version: Version = {
+      id,
+      jobId,
+      buildId,
+      snapshot: JSON.stringify(snapshot),
+      description: description || null,
+      createdAt: new Date(),
+    };
+    this.versions.set(id, version);
+    await this.saveVersions();
+    return version;
+  }
+
+  async getVersion(id: string): Promise<Version | undefined> {
+    return this.versions.get(id);
+  }
+
+  async getJobVersions(jobId: string): Promise<Version[]> {
+    return Array.from(this.versions.values()).filter(version => version.jobId === jobId);
   }
 }
 

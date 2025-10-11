@@ -10,14 +10,16 @@ class JobQueue {
     // Add job to queue and start processing
     if (!this.processing.has(jobId)) {
       this.processing.add(jobId);
+      // Update to queued state
+      await storage.updateJobStatus(jobId, "queued");
       this.processJob(jobId, prompt).catch(console.error);
     }
   }
 
   private async processJob(jobId: string, prompt: string) {
     try {
-      // Update status to processing
-      await storage.updateJobStatus(jobId, "processing");
+      // Update status to generating
+      await storage.updateJobStatus(jobId, "generating");
 
       // Simulate generation delay (2-4 seconds)
       const delay = 2000 + Math.random() * 2000;
@@ -31,11 +33,15 @@ class JobQueue {
       await fs.mkdir(previewDir, { recursive: true });
       await fs.writeFile(path.join(previewDir, "index.html"), html);
 
-      // Update job status to completed
-      await storage.updateJobStatus(jobId, "completed", `/previews/${jobId}/index.html`);
+      // Update job status to ready_for_finalization (user can now tweak before editing)
+      await storage.updateJobStatus(jobId, "ready_for_finalization", `/previews/${jobId}/index.html`);
     } catch (error) {
       console.error(`Error processing job ${jobId}:`, error);
-      await storage.updateJobStatus(jobId, "failed", String(error));
+      // Use updateJob to set error field instead of result
+      await storage.updateJob(jobId, {
+        status: "failed",
+        error: String(error),
+      });
     } finally {
       this.processing.delete(jobId);
     }
