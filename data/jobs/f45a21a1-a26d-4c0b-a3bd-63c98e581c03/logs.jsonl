@@ -1,0 +1,5 @@
+{"timestamp":"2025-10-11T19:31:22.418Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"demo job for logs"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-11T19:31:22.420Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-11T19:31:24.514Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-11T19:31:24.515Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-11T19:31:24.519Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/f45a21a1-a26d-4c0b-a3bd-63c98e581c03/index.html"}}

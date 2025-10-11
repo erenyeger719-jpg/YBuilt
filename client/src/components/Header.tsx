@@ -83,10 +83,8 @@ export default function Header({ showPublish, logSummary, onPublish }: HeaderPro
         <div className="flex items-center justify-between h-16 gap-4">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Link href="/">
-                <a className="flex items-center" data-testid="link-home-logo">
-                  <Logo />
-                </a>
+              <Link href="/" data-testid="link-home-logo">
+                <Logo />
               </Link>
             </TooltipTrigger>
             <TooltipContent>
@@ -129,10 +127,8 @@ export default function Header({ showPublish, logSummary, onPublish }: HeaderPro
               asChild
             >
               <Link href="/library">
-                <a>
-                  <Library className="h-4 w-4" />
-                  <span className="hidden sm:inline">Library</span>
-                </a>
+                <Library className="h-4 w-4" />
+                <span className="hidden sm:inline">Library</span>
               </Link>
             </Button>
             <PaymentButton amount={amount} currency={currency} />

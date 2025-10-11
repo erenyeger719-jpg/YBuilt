@@ -1,0 +1,127 @@
+
+
+MASTER PROMPT — Fix workspace bug & finish YBUILT Replit-level Workspace (single copy-paste note)
+Context / immediate problem
+* User reports a runtime UI error when opening a workspace from the Home → Create → Select → Open Workspace flow.
+* Error displayed (screenshot): Error: Cannot read properties of undefined (reading '0') (user also reported seeing 'O' in one instance — treat both forms as the same undefined-property error).
+* Symptom: clicking Select → Open workspace navigates to /workspace/:jobId but the workspace fails to render and shows that error instead of loading files, preview, and console.
+* Repro steps (observed): Home page → type prompt → Create → choose option/input → Select → Open Workspace → error overlay appears.
+
+Goal
+Fix the runtime error and deliver the complete, production-ready Workspace described below (UI + APIs + worker + mock mode + seeded logs). Provide robust error handling so this flow never crashes on undefined server/client data and the workspace loads reliably in MOCK_MODE.
+
+Priority bug fix (what to do first)
+1. Immediate guard & graceful failure
+    * Add defensive checks where the workspace page consumes job/draft/file arrays (e.g., files[0], draft.outputs[0], job.files[0]) so undefined/null won't throw. Replace direct indexing with safe access and fallback values.
+    * If required data is missing, show a friendly error panel with:
+        * short explanation (e.g., “Missing workspace data: draft or job not loaded”),
+        * a “Retry” button (re-fetch job metadata),
+        * a “View raw logs” button that opens the console log stream for debugging,
+        * a link to the Draft page (to recreate/select the draft).
+2. Trace root cause
+    * Instrument the open-workspace flow (Home → Select → Open) to log payloads at each step:
+        * GET /api/workspace/:jobId/files
+        * GET /api/workspace/:jobId/file?path=
+        * GET /api/jobs/:jobId (job metadata)
+        * Ensure jobId/draftId are present and match.
+    * Fix any backend response shape mismatches (server-side changed schema vs client expectations).
+3. Unit/regression tests
+    * Add tests that simulate missing/partial files and draft.outputs payloads and assert workspace renders the fallback / error UI rather than throwing.
+4. Deliver a hotfix patch that deploys immediately and removes the user-facing crash.
+
+Full feature implementation (deliverables)
+Implement/finish the workspace exactly as described below. Treat the bug fix above as highest priority, then deliver these features with MOCK_MODE=true by default.
+Frontend pages / components (deliver)
+* Workspace.jsx — /workspace/:jobId SPA shell (left file tree, center editor, right preview/console).
+* BuildTraceViewer.jsx — structured, non-chain-of-thought agent build trace viewer.
+* AgentTools.jsx — autonomy controls, Run Agent, Auto-Apply toggle, App Testing UI.
+* CommandPalette.jsx — global palette (⌘K / Ctrl+K) with sections and keyboard hints.
+* ConsolePanel.jsx — multi-stream console: Server Logs, Build Logs, Browser Console, Agent Logs; filters, search, tail, download.
+* PreviewPanel.jsx — sandboxed iframe preview with device selector, refresh, screenshot.
+* Header update — clickable Ybuilt logo (SVG) redirects to / with tooltip “Ybuilt — Home”.
+* Publish modal & flow UI.
+Backend routes (deliver)
+* GET /api/workspace/:jobId/files
+* GET /api/workspace/:jobId/file?path=
+* POST /api/workspace/:jobId/file (create/update)
+* POST /api/workspace/:jobId/run (start dev server; returns processId, port)
+* GET /api/jobs/:jobId (job metadata)
+* GET /api/jobs/:jobId/logs/stream — SSE that streams structured log objects {ts, level, source, msg, meta} in JSONL or SSE events
+* POST /api/jobs/:jobId/build — triggers mock build worker
+* POST /api/jobs/:jobId/publish — publishes (checks plan/credits)
+* GET /api/plan — plan & credits
+* GET /api/razorpay_key, POST /api/create_order, POST /api/verify_payment — mock Razorpay flows
+* POST /api/search/palette, GET /api/extensions
+Worker updates
+* Worker should accept build tasks, emit structured logs to data/jobs/{jobId}/logs.jsonl, and support autonomy-aware behavior.
+* Worker mock builds should simulate steps and emit the exact sample logs (see below) to seed Console UI.
+Data & persistence (deliver)
+* data/jobs/{jobId}/logs.jsonl seeded with example lines.
+* jobs.json, users.json, data/billing.json, library stored under data/.
+* Uploads under public/uploads/{userId}/{jobId}/...
+Mock / config
+* MOCK_MODE=true by default. Razorpay returns rzp_test_mock_key_12345.
+* README with instructions: how to run, toggle MOCK_MODE, swap real Razorpay/OpenAI keys.
+
+Acceptance criteria (what “works”)
+1. Repro steps no longer crash. Opening a workspace always results in:
+    * Left file tree loads (or clear “no files” state)
+    * Center editor loads (or empty editor state)
+    * Right preview iframe loads public/previews/{jobId}/index.html when available
+    * Console streams the seeded logs
+    * Publish button visible and triggers publish modal
+2. Console UI:
+    * Displays the seeded log lines parsed into {ts, level, source, msg, meta} with expandable raw JSON
+    * Filter by source and level, search across logs, tail on/off, Clear and Download Transcript work
+3. Agent tools:
+    * Autonomy levels Low/Medium/High/Max present and enforce behavior (Low = suggestions only; Max = will request confirm before publishing)
+4. Publish flow:
+    * GET /api/plan returns demo plan and credits (demo user has 100 credits)
+    * If insufficient credits, checkout modal loads Razorpay mock (UPI) and POST /api/create_order returns mock order
+    * On mock payment, POST /api/jobs/:jobId/publish returns publishedUrl and data/billing.json is updated with invoice
+5. Command palette:
+    * ⌘K opens palette with sections and keyboard hints; items perform the described actions (open panels, routes, run scripts)
+6. Tests:
+    * Regression tests ensure missing arrays no longer throw Cannot read properties of undefined (reading '0').
+
+Seeded example console lines (include exactly)
+Include these exact strings in data/jobs/{jobId}/logs.jsonl so Console shows realistic output by default:
+  6:16:13 PM [express] serving on port 5000
+6:16:18 PM [express] GET /api/razorpay_key 304 in 3ms :: {"key":"rzp_test_mock_key_12345","isMockMode":true}
+6:18:45 PM [express] GET /api/jobs/3844fad4-fbb8-4568-9cef-32af2560c42f 200 in 9ms :: {"id":"3844fad4-fbb8-4568-9cef-32af2560c42f"...}
+6:18:55 PM [express] POST /api/drafts 200 in 3ms :: {"ok":true,"draftId":"c601b3c5-..."}
+  	•	Console UI must parse [...] source labels ([express], [worker], [browser], [agent]) and attach meta JSON when present.
+* Provide expand-to-raw-JSON for each line.
+
+Suggested debugging checklist for the specific error
+* Check code paths where something[0] is called on load:
+    * Workspace initialization that assumes files.length > 0
+    * Draft outputs draft.outputs[0] or draft.choices[0]
+    * Editor initial open file openFiles[0]
+* Add if (!arr?.length) { /* fallback or show empty state */ }
+* Ensure route param jobId is parsed as string and used consistently. Log the jobId on client fetch start.
+* Verify API responses match expected shapes (list vs object). If server started returning null for files, handle gracefully.
+* Add error boundary on Workspace.jsx to catch render errors and present recovery UI + link to logs.
+
+UX / safety improvements while fixing
+* Show a non-blocking error card instead of a hard crash when data is missing.
+* Add a “Show last 20 logs” mini panel in the top-right of the preview as quick debug info.
+* Rate limit agent runs and builds; show helpful error if rate limit exceeded.
+* Keep LLM chain-of-thought out of UI logs; show only structured steps & artifacts.
+
+Final deliverables (copy-paste checklist)
+* Frontend: Workspace.jsx, BuildTraceViewer.jsx, AgentTools.jsx, CommandPalette.jsx, ConsolePanel.jsx, PreviewPanel.jsx, Header updates, Publish modal.
+* Backend: listed API routes implemented (mockable), SSE logs/streaming.
+* Worker: mock build flow + logs emitted to data/jobs/{jobId}/logs.jsonl.
+* Data: seeded logs.jsonl, jobs.json, users.json, data/billing.json.
+* README: run instructions, MOCK_MODE notes, keys swap steps.
+* Tests: regression test that reproduces prior crash and proves fix.
+
+Notes for the implementer/AI agent
+* Start by reproducing the crash (use the exact Home → Create → Select → Open workspace flow). Capture request/response bodies for GET /api/workspace/:jobId/files and GET /api/jobs/:jobId.
+* Patch the client with defensive guards and a recoverable UI, then instrument logs to find root cause.
+* After hotfix, deliver the full workspace features and seed the example logs above.
+* Default to MOCK_MODE=true — Razorpay returns rzp_test_mock_key_12345.
+* Keep UI glass/monochrome design and accessibility constraints described in the original spec.
+
+

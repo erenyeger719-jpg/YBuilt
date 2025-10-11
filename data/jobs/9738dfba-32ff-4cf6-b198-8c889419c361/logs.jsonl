@@ -1,0 +1,10 @@
+{"timestamp":"2025-10-11T19:34:16.456Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"seed logs job"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-11T19:34:16.459Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-11T19:34:20.299Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-11T19:34:20.299Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-11T19:34:20.300Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/9738dfba-32ff-4cf6-b198-8c889419c361/index.html"}}
+{"timestamp":"2025-10-11T19:34:50.063Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting full-site regeneration","details":{"prompt":"seed logs job","scope":"full-site"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-11T19:34:50.064Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-11T19:34:52.467Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-11T19:34:52.467Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-11T19:34:52.468Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/9738dfba-32ff-4cf6-b198-8c889419c361/index.html"}}

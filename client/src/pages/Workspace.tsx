@@ -61,10 +61,11 @@ export default function Workspace() {
   const [deviceMode, setDeviceMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [showPublishModal, setShowPublishModal] = useState(false);
 
-  // Fetch workspace data
-  const { data: workspace, isLoading } = useQuery<WorkspaceData>({
+  // Fetch workspace data with error handling
+  const { data: workspace, isLoading, error } = useQuery<WorkspaceData>({
     queryKey: ["/api/workspace", jobId, "files"],
     enabled: !!jobId,
+    retry: 2,
   });
 
   // Save file mutation
@@ -112,9 +113,9 @@ export default function Workspace() {
     },
   });
 
-  // Load selected file content
+  // Load selected file content with safety checks
   useEffect(() => {
-    if (selectedFile && workspace) {
+    if (selectedFile && workspace?.files) {
       const file = workspace.files.find((f) => f.path === selectedFile);
       if (file) {
         setFileContent(file.content);
@@ -122,37 +123,56 @@ export default function Workspace() {
     }
   }, [selectedFile, workspace]);
 
-  // Auto-select first file
+  // Auto-select first file with defensive checks
   useEffect(() => {
-    if (workspace && workspace.files.length > 0 && !selectedFile) {
+    if (workspace?.files?.length && !selectedFile) {
       setSelectedFile(workspace.files[0].path);
     }
   }, [workspace, selectedFile]);
 
-  if (isLoading) {
+  // Show error UI if workspace fails to load
+  if (error || (workspace && 'error' in workspace)) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading workspace...</p>
-        </div>
+      <div className="flex h-screen items-center justify-center">
+        <Card className="max-w-md p-6">
+          <h2 className="text-xl font-semibold mb-2">Workspace Error</h2>
+          <p className="text-muted-foreground mb-4">
+            {(workspace as any)?.error || error?.message || "Failed to load workspace data"}
+          </p>
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/workspace", jobId, "files"] })}
+              data-testid="button-retry-workspace"
+            >
+              Retry
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => setRightTab("console")}
+              data-testid="button-view-logs"
+            >
+              View Logs
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => setLocation("/")}
+              data-testid="button-back-home"
+            >
+              Back to Home
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
 
-  if (!workspace) {
+  // Show loading state
+  if (isLoading || !workspace) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex h-screen items-center justify-center">
         <div className="text-center">
-          <p className="text-muted-foreground">Workspace not found</p>
-          <Button
-            onClick={() => setLocation("/")}
-            variant="outline"
-            className="mt-4"
-            data-testid="button-back-home"
-          >
-            Back to Home
-          </Button>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading workspace...</p>
         </div>
       </div>
     );

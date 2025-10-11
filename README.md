@@ -79,22 +79,45 @@ npm run dev
 
 The app will be available at **http://localhost:5000**
 
-### Environment Variables (Optional)
+### Mock Mode (Default)
 
-Create a `.env` file for real integrations:
+YBUILT runs in **MOCK_MODE** by default - no API keys required! All features work with simulated data:
+
+- ✅ **AI Generation** - 2-4s mock builds with realistic templates
+- ✅ **Payments** - Razorpay returns `rzp_test_mock_key_12345`
+- ✅ **Authentication** - Any email/password works
+- ✅ **Credits** - Demo user starts with 100 credits
+- ✅ **Workspace** - Full IDE with Monaco editor and console logs
+- ✅ **Publishing** - Credit deduction and invoice generation
+
+**To toggle MOCK_MODE:**
+```typescript
+// In server config (auto-detected, no changes needed)
+const MOCK_MODE = !process.env.RAZORPAY_KEY_ID || 
+                  !process.env.OPENAI_API_KEY;
+```
+
+### Environment Variables (Production)
+
+Create a `.env` file to enable real integrations:
 
 ```bash
-# Razorpay (optional - runs in mock mode without)
-RAZORPAY_KEY_ID=rzp_test_your_key_here
+# Razorpay (enables real payments)
+RAZORPAY_KEY_ID=rzp_live_your_key_here
 RAZORPAY_KEY_SECRET=your_secret_here
 RAZORPAY_WEBHOOK_SECRET=your_webhook_secret_here
 
-# OpenAI (for future real AI generation)
-# OPENAI_API_KEY=sk-your-key-here
+# OpenAI (enables real AI generation)
+OPENAI_API_KEY=sk-your-key-here
 
-# Redis (for production queue)
-# REDIS_URL=redis://localhost:6379
+# Redis (for production job queue)
+REDIS_URL=redis://localhost:6379
 ```
+
+**Key Swapping:**
+- Add `.env` file with real keys → Automatically exits MOCK_MODE
+- Remove `.env` → Returns to MOCK_MODE
+- Mix & match: Real Razorpay + Mock AI, or vice versa
 
 ## 📁 Project Structure
 
@@ -231,6 +254,147 @@ To replace mock auth with real authentication (Google, GitHub, etc.):
 3. **Update** `client/src/lib/mockAuth.ts` to use real endpoints
 4. **Configure** environment variables for OAuth credentials
 5. **Remove** mock mode checks
+
+## 💻 Replit-Level Workspace
+
+### Production-Ready IDE
+YBUILT includes a complete, Replit-style workspace with Monaco editor, multi-stream console, and agent autonomy system.
+
+**Access Workspace:**
+1. Generate a website from home page
+2. Click **"Select"** on finalized job
+3. Click **"Open Workspace"** to enter IDE
+
+### Workspace Features
+
+**🎯 Header Controls**
+- **Clickable Logo** - Returns to home with tooltip
+- **Log Summary Pill** - Shows build status: success/error/building
+- **Publish Button** - Deploy with credit indicator
+
+**📁 Left Panel**
+- **File Tree** - Navigate project files (New/Upload/Rename/Delete)
+- **Build Prompt Panel** - View original prompt, add refinements
+- **Agent Tools** - Autonomy controls and agent settings
+
+**✏️ Center Panel - Monaco Editor**
+- Syntax highlighting for HTML/CSS/JS
+- Multiple file tabs
+- Split view support
+- Auto-save on Ctrl+S
+
+**👁️ Right Panel - Preview & Console**
+- **Preview Tab:**
+  - Live iframe preview
+  - Device selector: Mobile (375px) / Tablet (768px) / Desktop (1024px)
+  - Refresh, Open in new tab, Screenshot controls
+  
+- **Console Tab:**
+  - Multi-stream logs: Agent, System, User, Error
+  - Real-time SSE streaming from `data/jobs/{jobId}/logs.jsonl`
+  - Filter by source: `[express]`, `[worker]`, `[agent]`, `[browser]`
+  - Filter by level: info, warn, error
+  - Search across all logs
+  - Controls: Clear, Download Transcript, Tail (live/paused)
+  - Auto-scroll when tailing
+
+**⌨️ Command Palette (⌘K)**
+- Global keyboard shortcut: Cmd+K / Ctrl+K
+- Searchable command interface
+- 6 sections with 30+ commands:
+  - **Files** - New, Upload, Search
+  - **Actions** - Preview, Console, Stop, Refresh
+  - **Tools** - VS Code, SSH, Settings, Publishing
+  - **Developer** - Database, Secrets, Shell, Workflows
+  - **Integrations** - Auth, Git, Storage, VNC
+  - **User** - My Apps, Remix, Settings, Sign Out
+
+### Agent Autonomy System
+
+**4 Autonomy Levels:**
+1. **Pause All** - Manual approval for every change
+2. **Confirm Major** - Approval for major changes only
+3. **Confirm Actions** - Approval per action
+4. **Full Autonomy** - Auto-apply all changes
+
+**Agent Controls:**
+- **Run Agent** button - Triggers build with selected autonomy level
+- **Auto-Apply** toggle - Enable autonomous edits
+- **App Testing** - Integrated testing tool
+- **Safety/Content Scan** - Security verification
+- **Compute Tier** - Display selected compute level
+- **Model Selection** - AI model indicator
+
+**Build Process:**
+```typescript
+// Trigger agent build
+POST /api/jobs/:jobId/build
+{
+  "autonomy": "medium",  // low, medium, high, max
+  "prompt": "Add dark mode toggle"
+}
+→ Returns { "success": true, "status": "queued" }
+```
+
+### Publishing from Workspace
+
+**Complete Publish Flow:**
+1. Click **Publish** button in workspace header
+2. System checks credit balance via `GET /api/plan`
+3. **If insufficient credits:**
+   - Razorpay UPI checkout modal opens
+   - User completes payment (₹50 for publish)
+   - Credits auto-added via `POST /api/verify_payment`
+4. **If sufficient credits:**
+   - Direct publish via `POST /api/jobs/:jobId/publish`
+   - ₹50 deducted from balance
+   - Invoice created in `data/billing.json`
+   - Published URL returned
+5. Success modal shows URL with Copy/Open actions
+
+**Billing System:**
+- Invoice types: `publish`, `credit_purchase`
+- Tracks: paymentId, orderId, credits, amount
+- Stored in: `data/billing.json`
+- Demo user starts with 100 credits
+
+### Workspace Error Handling
+
+**Defensive Programming:**
+- ✅ Safe array access with optional chaining
+- ✅ Graceful error recovery UI when data missing
+- ✅ Retry/View Logs/Back Home buttons on errors
+- ✅ Loading states for all async operations
+- ✅ No crashes on undefined/null workspace data
+
+**Error Recovery UI:**
+```
+┌─────────────────────────────────────┐
+│  Workspace Error                     │
+│  Failed to load workspace data       │
+│                                      │
+│  [Retry] [View Logs] [Back to Home] │
+└─────────────────────────────────────┘
+```
+
+### Seed Logs for Testing
+
+Demo workspace logs available at `data/jobs/demo-job-123/logs.jsonl`:
+
+```json
+{"ts":"2024-10-11T18:16:13.000Z","level":"info","source":"[express]","msg":"serving on port 5000","meta":{}}
+{"ts":"2024-10-11T18:19:05.000Z","level":"info","source":"[agent]","msg":"Starting generation","meta":{"stage":"GENERATION"}}
+{"ts":"2024-10-11T18:19:18.000Z","level":"info","source":"[agent]","msg":"Generated HTML structure","meta":{"stage":"ASSEMBLY"}}
+{"ts":"2024-10-11T18:19:22.000Z","level":"warn","source":"[worker]","msg":"Linting detected minor issues","meta":{"stage":"LINT","issues":2}}
+{"ts":"2024-10-11T18:19:28.000Z","level":"info","source":"[worker]","msg":"Build complete","meta":{"stage":"STATIC-BUILD","success":true}}
+```
+
+**Console displays:**
+- Timestamp formatting
+- Source badges with colors
+- Log level indicators
+- Expandable metadata/details
+- JSON syntax highlighting
 
 ## 📚 Library Page & Theme Forcing
 
