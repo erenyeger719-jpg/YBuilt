@@ -1,5 +1,9 @@
 import { motion } from "framer-motion";
 import PromptInput from "./PromptInput";
+import { useGeneration } from "@/hooks/useGeneration";
+import PreviewModal from "./PreviewModal";
+import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -25,6 +29,28 @@ const itemVariants = {
 };
 
 export default function Hero() {
+  const { generate, reset, isGenerating, status, error } = useGeneration();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Generation failed",
+        description: error,
+        variant: "destructive",
+      });
+    }
+  }, [error, toast]);
+
+  useEffect(() => {
+    if (status?.status === "completed") {
+      toast({
+        title: "Website Generated",
+        description: "Your AI-generated website is ready to view.",
+      });
+    }
+  }, [status?.status, toast]);
+
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
       {/* Ultra-HDR Background */}
@@ -81,9 +107,19 @@ export default function Hero() {
         </motion.p>
 
         <motion.div variants={itemVariants}>
-          <PromptInput />
+          <PromptInput onGenerate={generate} isGenerating={isGenerating} />
         </motion.div>
       </motion.div>
+
+      {/* Generated preview modal */}
+      {status?.status === "completed" && status.result && (
+        <PreviewModal
+          isOpen={true}
+          onClose={reset}
+          title="Your AI-Generated Website"
+          previewUrl={status.result}
+        />
+      )}
     </section>
   );
 }

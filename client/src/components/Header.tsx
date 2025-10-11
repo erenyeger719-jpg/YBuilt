@@ -1,11 +1,14 @@
 import { Moon, Sun, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Logo from "./Logo";
+import PaymentButton from "./PaymentButton";
+import CurrencyToggle from "./CurrencyToggle";
 import { useState, useEffect } from "react";
 
 export default function Header() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [lowGloss, setLowGloss] = useState(false);
+  const [currency, setCurrency] = useState<"INR" | "USD">("INR");
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
@@ -39,13 +42,17 @@ export default function Header() {
     localStorage.setItem("lowGloss", String(newLowGloss));
   };
 
+  const amount = currency === "INR" ? 799 : 10;
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 backdrop-blur-md bg-background/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-16 gap-4">
           <Logo />
           
           <div className="flex items-center gap-2">
+            <PaymentButton amount={amount} currency={currency} />
+            <CurrencyToggle onCurrencyChange={setCurrency} />
             <Button
               size="icon"
               variant="ghost"

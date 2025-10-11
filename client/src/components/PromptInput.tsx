@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { Sparkles, ArrowRight, Loader2 } from "lucide-react";
 
 interface PromptInputProps {
   onGenerate?: (prompt: string) => void;
+  isGenerating?: boolean;
 }
 
-export default function PromptInput({ onGenerate }: PromptInputProps) {
+export default function PromptInput({ onGenerate, isGenerating = false }: PromptInputProps) {
   const [prompt, setPrompt] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (prompt.trim()) {
-      console.log("Generate triggered with prompt:", prompt);
+    if (prompt.trim() && !isGenerating) {
       onGenerate?.(prompt);
     }
   };
@@ -29,17 +29,27 @@ export default function PromptInput({ onGenerate }: PromptInputProps) {
             placeholder="Describe your website or app idea..."
             className="w-full h-14 text-lg bg-background/50 border-border/30 focus:border-primary/50 transition-colors pr-32"
             data-testid="input-prompt"
+            disabled={isGenerating}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2">
             <Button
               type="submit"
               size="default"
-              disabled={!prompt.trim()}
+              disabled={!prompt.trim() || isGenerating}
               data-testid="button-create"
               className="gap-2"
             >
-              <Sparkles className="h-4 w-4" />
-              Create
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Create
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -52,6 +62,7 @@ export default function PromptInput({ onGenerate }: PromptInputProps) {
             size="sm"
             className="gap-1"
             data-testid="button-explore"
+            disabled={isGenerating}
             onClick={() => {
               const showcaseSection = document.getElementById('showcase');
               showcaseSection?.scrollIntoView({ behavior: 'smooth' });
