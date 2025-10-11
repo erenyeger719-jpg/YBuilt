@@ -20,14 +20,23 @@ The design emphasizes a luxurious, monochrome aesthetic with cinematic glass/glo
 The frontend is built with React, TypeScript, and Vite, utilizing `shadcn/ui` for components, Framer Motion for animations, TanStack Query for data fetching, Tailwind CSS for styling, and Wouter for routing. The backend is an Express.js and TypeScript application. Data persistence uses in-memory storage with file persistence for jobs, users, and payments, saving to JSON files (`data/jobs.json`, `data/users.json`, `data/payments.log`). Generated websites are stored in `public/previews/{jobId}/index.html`.
 
 ### Feature Specifications
-- **AI Design Assistant**: Features theme selection, a color palette picker, file upload, and hero/SEO customization.
-- **Build Trace Viewer**: Provides structured logging for `GENERATION`, `ASSEMBLY`, `LINT`, and `STATIC-BUILD` stages.
-- **Workspace**: A Replit-like environment with a Monaco code editor, file tree navigation, live preview, and a collapsible build trace dock.
-- **Job Lifecycle**: Extended states include `created`, `queued`, `generating`, `ready_for_finalization`, `editing`, `building`, `deploying`, and `published`.
-- **Scoped Regeneration**: Allows regenerating full-site, hero-only, navigation, footer, or specific blocks.
-- **User Authentication**: Mock authentication system with localStorage tokens and social login mockups (Google, Apple, Facebook, Twitter, GitHub).
-- **Settings System**: Comprehensive settings with 12 sections, reactive `SettingsContext`, and file persistence, covering appearance, AI/models, and more.
-- **Library**: Displays saved drafts with thumbnail generation and a unique black→red→blue diagonal theme.
+- **AI Design Assistant**: Theme selection, color palette picker, file upload (25MB limit), and hero/SEO customization with Apply changes workflow.
+- **Build Trace Viewer**: Structured logging with expandable stages (`GENERATION`, `ASSEMBLY`, `LINT`, `STATIC-BUILD`), download transcript, 3s auto-refresh.
+- **Replit-Level Workspace**: Production-ready IDE with:
+  - **Header**: Clickable Ybuilt logo (→ home), log summary pill, Publish button with credit indicator
+  - **Left Panel**: File tree with New/Upload/Rename/Delete, Build Prompt panel with autonomy controls, Agent Tools (collapsible)
+  - **Center**: Monaco code editor with tabs, split view, syntax highlighting, file save
+  - **Right Panel**: Preview tab (Mobile/Tablet/Desktop device selector) + Console tab (multi-stream logs with filtering)
+  - **Command Palette (⌘K)**: Global searchable interface with 6 sections (Files, Actions, Tools, Developer, Integrations, User), keyboard shortcuts
+- **Multi-Stream Console**: Real-time SSE log streaming with 4 tabs (Agent, System, User, Error), filter by source/level, search, Clear/Download/Tail controls, auto-scroll.
+- **Agent Autonomy System**: 4 levels (Pause All, Confirm Major, Confirm Actions, Full Autonomy), Run Agent button, Auto-Apply toggle, App Testing tool, Safety/Content scan.
+- **Publish Flow**: Complete pipeline with plan/credit check, Razorpay UPI checkout (mock mode ready), credit deduction, invoice generation, published URL with copy/open actions.
+- **Job Lifecycle**: Extended states: `created` → `queued` → `generating` → `ready_for_finalization` → `editing` → `building` → `deploying` → `published`.
+- **Scoped Regeneration**: Full-site, hero-only, navigation, footer, or specific blocks with autonomy-aware execution.
+- **User Authentication**: Mock auth with localStorage tokens, social login mockups (Google, Apple, Facebook, Twitter, GitHub).
+- **Settings System**: 12 sections with reactive `SettingsContext`, file persistence, immediate CSS variable updates (appearance, AI/models, workspace, organization).
+- **Library**: Saved drafts with thumbnails, unique black→red→blue diagonal theme, workspace navigation.
+- **Billing System**: Credit management with `data/billing.json` invoice tracking, credit purchase via Razorpay, deduction on publish.
 
 ### System Design Choices
 The system is designed to be fully functional in a mock mode without external API keys for Razorpay and AI generation, simulating delays and outcomes. It includes a simple in-memory job queue with a mock worker for processing AI generation requests. The architecture supports user persistence across server restarts and provides immediate visual feedback for appearance setting changes via CSS variable updates.
