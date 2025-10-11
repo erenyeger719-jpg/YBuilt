@@ -1,0 +1,135 @@
+NOTES / TASK — Replace 404 in Finalize page with a working AI Design Assistant + wire Save/Select/Regen to real endpoints (persist to Library + open Workspace)
+
+Context
+Images provided: `/mnt/data/Screenshot 2025-10-11 at 11.12.02 PM.png` and `/mnt/data/Screenshot 2025-10-11 at 11.16.28 PM.png` — these show the Finalize UI with the left preview area currently showing a 404 page, and the right-side form (Title, Meta, Theme, Hero text, buttons). Replace the 404 with an interactive AI design assistant / logs panel and make the right-side controls fully functional: Save Draft must persist to Library; Select & Open Workspace must open a real workspace at `/workspace/:jobId`; Re-generate must re-run generation; file uploads and color palette must be accepted and used by the generator.
+
+High-level goal
+Turn the current static Finalize page into a working step in the job lifecycle:
+- After initial generation, user lands on `/finalize/:jobId`.
+- Left panel = **AI Designer + Build Trace** (interactive). Right panel = finalize controls (form, palette, upload, actions).
+- All actions call real server endpoints and update job state and artifacts.
+- Clicking **Select & Open Workspace** opens `/workspace/:jobId` — a Replit-like Studio (WYSIWYG + code + build trace + assets).
+- Clicking **Save Draft** saves to the user's Library and shows a proper success message.
+- Clicking **Re-generate** re-runs generation for scope selected.
+
+UX & UI changes (exact)
+1) Left panel — replace 404 with **AI Designer + Live Logs** comprising:
+   - Top: AI Designer header with small avatar, jobId, state badge (e.g., "Ready for finalization" / "Editing").
+   - Middle: Two tabs — **Design Assistant** and **Build Trace/Logs**.
+     *Design Assistant*:
+       - Stepper UI: the assistant asks a short sequence of targeted questions (theme preference, layout density, CTA tone, target audience, SEO keywords). Each step has quick-choice chips and an optional free-text input.
+       - Dropzone area labeled “Upload files & images (any format) — e.g., .docx, .pdf, .html, .png, .svg, .zip”. Accept files up to configurable size (example: 25 MB). For each uploaded file show filename, inferred type, and small parse result preview (first lines of text or image thumbnail).
+       - Color palette picker: show suggested palettes (Monochrome, High-Contrast, Warm, Cool), and also a custom palette creator with 5 swatches and HEX input; allow picking a primary accent.
+       - Live preview snapshot area — a small canvas that updates when the assistant or the user changes options.
+       - CTA: “Apply changes” (applies to job draft and updates left preview).
+     *Build Trace/Logs*:
+       - Streamed, structured log list (most recent last) with timestamps and stage badges (GENERATION, ASSEMBLY, LINT, STATIC-BUILD). Each entry can expand to show model outputs (structured text / JSON), warnings, or artifact links.
+       - If the job is idle, show the last build trace with a “Replay” button to replay logs animation.
+   - Bottom: Quick actions: Download transcript, Export instructions, Close.
+
+2) Right panel — Finalize controls (make everything functional):
+   - Page Title, Meta Description, Design Theme (dropdown), Hero Text — controlled inputs bound to job draft state.
+   - **Color Palette** control linked to left palette picker.
+   - **File Upload** control (duplicate of left dropzone) that uploads to `/api/upload` and returns `url` and parsed metadata.
+   - **Scope selector** for Re-generate: [Full site | Hero only | Navigation | Footer | Specific block] — radio or chips.
+   - Buttons:
+     - **Select & Open Workspace** (primary): when clicked, call `POST /api/jobs/:jobId/select` (body includes current draft edits). On success navigate to `/workspace/:jobId`.
+     - **Save Draft**: `POST /api/drafts` (body: jobId, userId, snapshot of draft fields + assets + thumbnail). On success: show modal toast with full success message and then add the draft to `Library` data so it appears in `/library`. If failure show error.
+     - **Re-generate**: `POST /api/jobs/:jobId/regenerate` with scope and current edits; this re-enqueues generation stage. Show progress in Build Trace.
+
+Backend endpoints & behavior (exact)
+- `POST /api/upload`
+  - Accept multipart uploads. Store under `public/uploads/{userId}/{jobId}/...`.
+  - Return `{ url, name, mime, size, parsed: { textPreview?: string, extractedImages?: [], warnings?: [] } }`.
+  - For documents (.pdf, .docx, .txt, .html) run a server-side parser (pdf->text, docx->text, html->extract body) and include `parsed.textPreview` (first 300 chars). For archives, extract and index inner files.
+  - Security: enforce max size (25MB default), whitelist content scanning, virus-scan placeholder.
+
+- `GET /api/jobs/:jobId`
+  - Return job metadata including `draftFields` (title, meta, heroText, theme, palette, assetUrls), `state`, `artifacts`, `previewUrl`, and `lastBuildTrace`.
+
+- `POST /api/drafts`
+  - Body: `{ jobId, userId, draft }` where `draft` contains the finalization fields and asset refs.
+  - Server must:
+    - Create a `draftId` and write `data/library/{userId}/drafts/{draftId}.json`.
+    - Generate thumbnail: render a small preview snapshot (server can use headless chrome or a static template with fields) into `public/previews/{draftId}/thumbnail.webp`. *(If headless not available in demo, use a placeholder image and set later.)*
+    - Add entry to `data/users.json` under `library` (push `{ draftId, title, createdAt, thumbnail }`).
+    - Return `{ ok:true, draftId, libraryEntry }`.
+
+- `POST /api/jobs/:jobId/regenerate`
+  - Body: `{ scope, draftEdits }`
+  - Server:
+    - Update job's `draftFields` with `draftEdits`.
+    - Enqueue a regeneration job in queue (same worker pipeline but respecting `scope`).
+    - Return `{ jobId, queued:true }`.
+  - Worker logs a new buildTrace series; UI shows the trace in Build Trace tab.
+
+- `POST /api/jobs/:jobId/select`
+  - Body: `{ draftEdits }`
+  - Server:
+    - Persist edits into job object and set `state = 'editing'`.
+    - Create or ensure workspace container: create folder `workspaces/{jobId}/` with current artifacts; write `workspaces/{jobId}/manifest.json`.
+    - Return `{ ok:true, workspaceUrl: '/workspace/{jobId}' }`.
+  - Client navigates to this URL.
+
+- `GET /workspace/:jobId` (server)
+  - Serve the Studio app for that job; studio mounts and loads `GET /api/jobs/:jobId` and `GET /api/workspace/{jobId}/files` (list source files). Studio must show code editor, WYSIWYG, asset manager, and Build Trace viewer.
+
+Worker changes
+- Worker must accept regeneration scopes and produce structured logs with stage labels. When generation completes, worker should write artifacts to `public/previews/{jobId}/index.html` (as now) and update job metadata.
+
+Frontend wiring & behavior (exact)
+- Left panel:
+  - Replace 404 container with `AIDesigner.jsx` component and `BuildTraceViewer.jsx`.
+  - `AIDesigner.jsx`:
+    - Renders stepper and dropzone. On upload, call `/api/upload`, show preview, add to draft edits state.
+    - On Apply changes: call `PATCH /api/jobs/:jobId` (or `POST /api/jobs/:jobId/draft`) to update `draftFields` locally and server-side.
+  - `BuildTraceViewer.jsx`:
+    - Connects to server via SSE `GET /api/jobs/:jobId/logs/stream` or polls `GET /api/jobs/:jobId/logs` every 2s.
+    - Render structured log lines; expand lines to show details, model outputs, artifacts. Include Replay & Download Transcript buttons.
+
+- Right panel:
+  - Bind all inputs to a local `draft` state derived from `GET /api/jobs/:jobId`.
+  - Buttons:
+    - **Save Draft**: call `/api/drafts` as described. On success add returned library entry to sidebar and reload library.
+    - **Select & Open Workspace**: call `/api/jobs/:jobId/select` and `window.location = workspaceUrl`.
+    - **Re-generate**: call `/api/jobs/:jobId/regenerate` with `scope` and edits. Disable UI while queued.
+
+Library persistence (make Save Draft actually persist)
+- `data/users.json` must maintain `library` array per user.
+- Saving a draft writes a JSON file and updates `data/users.json`. Update the Library UI to read `data/users.json` on load.
+
+Workspace (replicate Replit workspace)
+- Follow the earlier scaffolding for `client/pages/Workspace.jsx` but now ensure it opens for a given jobId and populates:
+  - File tree (left)
+  - Code editor (center) — Monaco or simple textarea with syntax highlighting
+  - Live Preview pane (right) — loads `/previews/{jobId}/index.html` inside an iframe
+  - Top toolbar: Build, Publish (if plan/credits), Versions, Share
+  - Build Trace dock (bottom or right) streaming logs for builds
+  - Asset Manager modal to upload/select files
+- The Workspace route must be guarded: only the job owner or team can open.
+- Build button should call `POST /api/jobs/:jobId/build` to enqueue a build (worker runs bundling + writes artifacts + updates logs).
+
+Edge cases & UX polish
+- If `GET /api/jobs/:jobId` returns job not found, show friendly message and a CTA to return to Studio.
+- When files are uploaded, parse and surface instruction text. If uploaded file contains explicit instructions (e.g., README.md with "Use Bootstrap layout"), show an "Inferred instructions" card in the AI Designer and ask user to confirm.
+- Keep file type handling robust: if binary unknown, show it as raw asset; if doc/pdf attempt text extraction.
+- Security: sanitize uploaded HTML when rendering in preview iframe (use sandbox attributes); store files under per-user directories.
+
+Testing & QA expectations (deliver)
+- Test A: Upload `.docx` with instructions → draft shows parsed text in AI Designer; AI uses that in regenerate.
+- Test B: Edit hero text + Save Draft → confirm new entry in `data/users.json` library and thumbnail created (or placeholder) and visible in `/library`.
+- Test C: Click Select & Open Workspace → `/workspace/:jobId` loads with files, editor, live preview and build trace.
+- Test D: Click Re-generate (scope: Hero only) → worker enqueues job and Build Trace shows new stage lines; preview updates when done.
+- Test E: Unauthorized user cannot open someone else's workspace.
+
+Deliverable format
+- Update repo with frontend components: `client/src/pages/Finalize.jsx` (updated), `client/src/components/AIDesigner.jsx`, `BuildTraceViewer.jsx`, `Workspace.jsx` (if missing).
+- Update server with endpoints: `/api/upload`, `/api/drafts`, `/api/jobs/:jobId/regenerate`, `/api/jobs/:jobId/select`.
+- Update worker to accept `scope` param on generation tasks.
+- Update `data/` persistence for library entries.
+- README: include quick steps to test Save Draft, Select Workspace, Re-generate functions.
+
+Final note (on tone)
+- Keep the UI consistent with your glass/monochrome style. The left AI Designer should feel like a receptionist for the build — gentle questions, clear state, and transparent logs — not opaque chain-of-thought. Logs must be structured and useful.
+
+

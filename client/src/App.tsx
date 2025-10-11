@@ -8,6 +8,7 @@ import Studio from "@/pages/Studio";
 import Library from "@/pages/Library";
 import Settings from "@/pages/Settings";
 import Finalize from "@/pages/Finalize";
+import Workspace from "@/pages/Workspace";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/" component={Studio} />
       <Route path="/library" component={Library} />
       <Route path="/finalize/:jobId" component={Finalize} />
+      <Route path="/workspace/:jobId" component={Workspace} />
       <Route path="/settings/:section?" component={Settings} />
       <Route component={NotFound} />
     </Switch>

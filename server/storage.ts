@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema } from "@shared/schema";
+import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset } from "@shared/schema";
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
@@ -8,6 +8,7 @@ const USERS_FILE = path.join(process.cwd(), "data", "users.json");
 const BUILDS_FILE = path.join(process.cwd(), "data", "builds.json");
 const VERSIONS_FILE = path.join(process.cwd(), "data", "versions.json");
 const SETTINGS_DIR = path.join(process.cwd(), "data", "settings");
+const LIBRARY_DIR = path.join(process.cwd(), "data", "library");
 
 export interface IStorage {
   // User methods
@@ -40,6 +41,16 @@ export interface IStorage {
   // Settings methods
   getSettings(userId: string): Promise<Settings>;
   updateSettings(userId: string, settings: Partial<Settings>): Promise<Settings>;
+  
+  // Draft methods
+  createDraft(draft: Omit<Draft, 'draftId' | 'createdAt' | 'updatedAt'>): Promise<Draft>;
+  getDrafts(userId: string): Promise<Draft[]>;
+  getDraft(draftId: string): Promise<Draft | undefined>;
+  updateDraft(draftId: string, updates: Partial<Draft>): Promise<void>;
+  
+  // Upload methods
+  addUploadedAsset(jobId: string, asset: UploadedAsset): Promise<void>;
+  getUploadedAssets(jobId: string): Promise<UploadedAsset[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -48,6 +59,8 @@ export class MemStorage implements IStorage {
   private builds: Map<string, Build>;
   private versions: Map<string, Version>;
   private userCredits: Map<string, number>;
+  private drafts: Map<string, Draft>;
+  private uploads: Map<string, UploadedAsset[]>;
 
   constructor() {
     this.users = new Map();
@@ -55,10 +68,13 @@ export class MemStorage implements IStorage {
     this.builds = new Map();
     this.versions = new Map();
     this.userCredits = new Map([["demo", 0]]);
+    this.drafts = new Map();
+    this.uploads = new Map();
     this.loadJobs();
     this.loadUsers();
     this.loadBuilds();
     this.loadVersions();
+    this.loadDrafts();
   }
 
   private async loadJobs() {
@@ -340,6 +356,86 @@ export class MemStorage implements IStorage {
 
   async getJobVersions(jobId: string): Promise<Version[]> {
     return Array.from(this.versions.values()).filter(version => version.jobId === jobId);
+  }
+
+  // Draft methods
+  private async loadDrafts() {
+    try {
+      // Load all user draft directories
+      const userDirs = await fs.readdir(LIBRARY_DIR);
+      for (const userId of userDirs) {
+        const draftsDir = path.join(LIBRARY_DIR, userId, "drafts");
+        try {
+          const draftFiles = await fs.readdir(draftsDir);
+          for (const file of draftFiles) {
+            if (file.endsWith(".json")) {
+              const data = await fs.readFile(path.join(draftsDir, file), "utf-8");
+              const draft = JSON.parse(data);
+              this.drafts.set(draft.draftId, draft);
+            }
+          }
+        } catch (error) {
+          // No drafts for this user yet
+        }
+      }
+    } catch (error) {
+      // Library directory doesn't exist yet
+    }
+  }
+
+  async createDraft(draft: Omit<Draft, 'draftId' | 'createdAt' | 'updatedAt'>): Promise<Draft> {
+    const draftId = randomUUID();
+    const now = new Date().toISOString();
+    const newDraft: Draft = {
+      ...draft,
+      draftId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    this.drafts.set(draftId, newDraft);
+    
+    // Save to file system
+    const userDraftsDir = path.join(LIBRARY_DIR, draft.userId, "drafts");
+    await fs.mkdir(userDraftsDir, { recursive: true });
+    const draftFile = path.join(userDraftsDir, `${draftId}.json`);
+    await fs.writeFile(draftFile, JSON.stringify(newDraft, null, 2));
+    
+    return newDraft;
+  }
+
+  async getDrafts(userId: string): Promise<Draft[]> {
+    return Array.from(this.drafts.values()).filter(draft => draft.userId === userId);
+  }
+
+  async getDraft(draftId: string): Promise<Draft | undefined> {
+    return this.drafts.get(draftId);
+  }
+
+  async updateDraft(draftId: string, updates: Partial<Draft>): Promise<void> {
+    const draft = this.drafts.get(draftId);
+    if (draft) {
+      const updated = {
+        ...draft,
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+      this.drafts.set(draftId, updated);
+      
+      // Save to file
+      const draftFile = path.join(LIBRARY_DIR, draft.userId, "drafts", `${draftId}.json`);
+      await fs.writeFile(draftFile, JSON.stringify(updated, null, 2));
+    }
+  }
+
+  // Upload methods
+  async addUploadedAsset(jobId: string, asset: UploadedAsset): Promise<void> {
+    const existing = this.uploads.get(jobId) || [];
+    this.uploads.set(jobId, [...existing, asset]);
+  }
+
+  async getUploadedAssets(jobId: string): Promise<UploadedAsset[]> {
+    return this.uploads.get(jobId) || [];
   }
 }
 

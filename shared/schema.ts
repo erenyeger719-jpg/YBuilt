@@ -347,3 +347,67 @@ export const jobFinalizationSchema = z.object({
 });
 
 export type JobFinalization = z.infer<typeof jobFinalizationSchema>;
+
+// Uploaded Asset Schema
+export const uploadedAssetSchema = z.object({
+  url: z.string(),
+  name: z.string(),
+  mime: z.string(),
+  size: z.number(),
+  parsed: z.object({
+    textPreview: z.string().optional(),
+    warnings: z.array(z.string()).default([]),
+  }).optional(),
+});
+
+export type UploadedAsset = z.infer<typeof uploadedAssetSchema>;
+
+// Draft Schema for Library Persistence
+export const draftSchema = z.object({
+  draftId: z.string(),
+  jobId: z.string(),
+  userId: z.string(),
+  thumbnail: z.string().optional(),
+  title: z.string(),
+  description: z.string(),
+  theme: z.enum(["monochrome", "gloss", "game", "app-ui"]),
+  heroText: z.string(),
+  palette: z.object({
+    primary: z.string().optional(),
+    secondary: z.string().optional(),
+    accent: z.string().optional(),
+  }).optional(),
+  assetUrls: z.array(z.string()).default([]),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type Draft = z.infer<typeof draftSchema>;
+
+// Regeneration Scope Enum
+export const regenerationScopeSchema = z.enum([
+  "full-site",
+  "hero-only",
+  "navigation",
+  "footer",
+  "specific-block"
+]);
+
+export type RegenerationScope = z.infer<typeof regenerationScopeSchema>;
+
+// Workspace Metadata Schema
+export const workspaceMetadataSchema = z.object({
+  files: z.array(z.object({
+    path: z.string(),
+    content: z.string(),
+    language: z.string().optional(),
+  })),
+  manifest: z.object({
+    name: z.string(),
+    description: z.string(),
+    entryPoint: z.string().default("index.html"),
+    dependencies: z.record(z.string()).optional(),
+  }),
+});
+
+export type WorkspaceMetadata = z.infer<typeof workspaceMetadataSchema>;

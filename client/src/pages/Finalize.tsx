@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -14,8 +13,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Sparkles, Save, ArrowRight, RefreshCw } from "lucide-react";
+import { Save, ArrowRight, RefreshCw } from "lucide-react";
 import Header from "@/components/Header";
+import AIDesigner from "@/components/AIDesigner";
+import BuildTraceViewer from "@/components/BuildTraceViewer";
 
 interface Job {
   id: string;
@@ -31,60 +32,29 @@ export default function Finalize() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [theme, setTheme] = useState<string>("monochrome");
-  const [heroText, setHeroText] = useState("");
+  const [designData, setDesignData] = useState<any>({});
+  const [regenerationScope, setRegenerationScope] = useState<string>("full-site");
 
   // Fetch job details
   const { data: job, isLoading } = useQuery<Job>({
     queryKey: ["/api/jobs", jobId],
     enabled: !!jobId,
+    refetchInterval: 3000,
   });
 
-  // Finalize mutation - moves job to editing state
-  const finalizeMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("POST", `/api/jobs/${jobId}/finalize`, {
-        title,
-        description,
-        theme,
-        heroText,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
-      toast({
-        title: "Success",
-        description: "Draft finalized! Opening workspace...",
-      });
-      // Redirect to workspace
-      setLocation(`/workspace/${jobId}`);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to finalize draft",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Save draft mutation
+  // Save draft to library mutation
   const saveDraftMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", `/api/jobs/${jobId}/save-draft`, {
-        title,
-        description,
-        theme,
-        heroText,
+      return apiRequest("POST", "/api/drafts", {
+        jobId,
+        userId: "demo",
+        ...(designData || {}),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
       toast({
         title: "Success",
-        description: "Draft saved successfully",
+        description: "Draft saved to library",
       });
     },
     onError: (error: any) => {
@@ -96,21 +66,69 @@ export default function Finalize() {
     },
   });
 
-  // Load initial form state from job.settings
+  // Select and open workspace mutation
+  const selectMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/jobs/${jobId}/select`, {
+        draftEdits: designData || {},
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Success",
+        description: "Opening workspace...",
+      });
+      setLocation(data.workspaceUrl);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to open workspace",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Regenerate with scope mutation
+  const regenerateMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/jobs/${jobId}/regenerate`, {
+        scope: regenerationScope,
+        draftEdits: designData || {},
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      toast({
+        title: "Success",
+        description: `Regenerating ${regenerationScope}...`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to regenerate",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Load initial data from job.settings
   useEffect(() => {
     if (job?.settings) {
       try {
         const settings = JSON.parse(job.settings);
-        if (settings.title) setTitle(settings.title);
-        if (settings.description) setDescription(settings.description);
-        if (settings.theme) setTheme(settings.theme);
-        if (settings.heroText) setHeroText(settings.heroText);
+        setDesignData(settings);
       } catch (error) {
         console.error("Failed to parse job settings:", error);
       }
     } else if (job?.prompt) {
-      // Initialize with prompt-based defaults
-      setHeroText(job.prompt);
+      setDesignData({
+        title: "",
+        description: "",
+        theme: "monochrome",
+        heroText: job.prompt,
+      });
     }
   }, [job]);
 
@@ -148,8 +166,34 @@ export default function Finalize() {
       <Header />
       
       <div className="pt-16 flex h-[calc(100vh-4rem)]">
-        {/* Left: Preview */}
-        <div className="flex-1 border-r border-border p-4">
+        {/* Left: AI Designer & Build Trace Tabs */}
+        <div className="w-96 border-r border-border">
+          <Tabs defaultValue="designer" className="h-full flex flex-col">
+            <TabsList className="w-full rounded-none border-b" data-testid="tabs-list">
+              <TabsTrigger value="designer" className="flex-1" data-testid="tab-designer">
+                AI Designer
+              </TabsTrigger>
+              <TabsTrigger value="trace" className="flex-1" data-testid="tab-trace">
+                Build Trace
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="designer" className="flex-1 overflow-y-auto m-0" data-testid="content-designer">
+              <AIDesigner
+                jobId={jobId || ""}
+                initialData={designData}
+                onUpdate={setDesignData}
+              />
+            </TabsContent>
+            
+            <TabsContent value="trace" className="flex-1 overflow-y-auto m-0" data-testid="content-trace">
+              <BuildTraceViewer jobId={jobId || ""} />
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Center: Preview */}
+        <div className="flex-1 p-4">
           <div className="h-full card-glass rounded-lg overflow-hidden">
             <div className="gloss-sheen" />
             <div className="relative z-10 h-full">
@@ -161,119 +205,73 @@ export default function Finalize() {
                   data-testid="iframe-preview"
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  No preview available
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-muted-foreground">No preview available</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Right: Tweak Panel */}
-        <div className="w-96 p-6 overflow-y-auto">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold mb-2">Finalize Your Website</h1>
+        {/* Right: Actions Panel */}
+        <div className="w-80 p-6 space-y-6 overflow-y-auto border-l border-border">
+          <div>
+            <h2 className="text-2xl font-bold mb-2">Actions</h2>
             <p className="text-sm text-muted-foreground">
-              Customize your draft before opening in the workspace
+              Save, regenerate, or open in workspace
             </p>
           </div>
 
-          {/* SEO Meta */}
-          <div className="space-y-4 mb-6">
+          <div className="space-y-4">
             <div>
-              <Label htmlFor="title">Page Title</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter page title"
-                data-testid="input-title"
-              />
+              <Label htmlFor="scope" data-testid="label-scope">Regeneration Scope</Label>
+              <Select value={regenerationScope} onValueChange={setRegenerationScope}>
+                <SelectTrigger className="mt-1.5" data-testid="select-scope">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full-site">Full Site</SelectItem>
+                  <SelectItem value="hero-only">Hero Only</SelectItem>
+                  <SelectItem value="navigation">Navigation</SelectItem>
+                  <SelectItem value="footer">Footer</SelectItem>
+                  <SelectItem value="specific-block">Specific Block</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div>
-              <Label htmlFor="description">Meta Description</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Enter meta description"
-                rows={3}
-                data-testid="input-description"
-              />
-            </div>
-          </div>
-
-          {/* Theme Selection */}
-          <div className="mb-6">
-            <Label htmlFor="theme">Design Theme</Label>
-            <Select value={theme} onValueChange={setTheme}>
-              <SelectTrigger id="theme" data-testid="select-theme">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monochrome">Monochrome</SelectItem>
-                <SelectItem value="gloss">Gloss & Glass</SelectItem>
-                <SelectItem value="game">Game Style</SelectItem>
-                <SelectItem value="app-ui">App UI</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Hero Text */}
-          <div className="mb-6">
-            <Label htmlFor="heroText">Hero Text</Label>
-            <Textarea
-              id="heroText"
-              value={heroText}
-              onChange={(e) => setHeroText(e.target.value)}
-              placeholder="Customize your hero section text"
-              rows={3}
-              data-testid="input-hero-text"
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div className="space-y-3">
             <Button
-              onClick={() => finalizeMutation.mutate()}
-              disabled={finalizeMutation.isPending}
-              className="w-full gap-2"
-              data-testid="button-finalize"
-            >
-              {finalizeMutation.isPending ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Finalizing...
-                </>
-              ) : (
-                <>
-                  <ArrowRight className="w-4 h-4" />
-                  Select & Open Workspace
-                </>
-              )}
-            </Button>
-
-            <Button
+              onClick={() => regenerateMutation.mutate()}
+              disabled={regenerateMutation.isPending || !designData}
               variant="outline"
-              onClick={() => saveDraftMutation.mutate()}
-              disabled={saveDraftMutation.isPending}
-              className="w-full gap-2"
-              data-testid="button-save-draft"
-            >
-              <Save className="w-4 h-4" />
-              Save Draft
-            </Button>
-
-            <Button
-              variant="ghost"
-              onClick={() => setLocation("/")}
-              className="w-full gap-2"
+              className="w-full"
               data-testid="button-regenerate"
             >
-              <Sparkles className="w-4 h-4" />
-              Re-generate
+              <RefreshCw className="w-4 h-4 mr-2" />
+              {regenerateMutation.isPending ? "Regenerating..." : "Re-generate"}
             </Button>
+
+            <div className="border-t border-border pt-4 space-y-3">
+              <Button
+                onClick={() => saveDraftMutation.mutate()}
+                disabled={saveDraftMutation.isPending || !designData}
+                variant="outline"
+                className="w-full"
+                data-testid="button-save-draft"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {saveDraftMutation.isPending ? "Saving..." : "Save to Library"}
+              </Button>
+
+              <Button
+                onClick={() => selectMutation.mutate()}
+                disabled={selectMutation.isPending || !designData}
+                className="w-full"
+                data-testid="button-select-workspace"
+              >
+                <ArrowRight className="w-4 h-4 mr-2" />
+                {selectMutation.isPending ? "Opening..." : "Select & Open Workspace"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

@@ -8,21 +8,23 @@ import Header from "@/components/Header";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
-interface Project {
-  id: string;
+interface Draft {
+  draftId: string;
   title: string;
+  description: string;
   thumbnail: string;
-  date: string;
+  createdAt: string;
+  jobId: string;
 }
 
 export default function Library() {
-  const { data: projects = [], isLoading } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+  const { data: drafts = [], isLoading } = useQuery<Draft[]>({
+    queryKey: ["/api/drafts", "demo"],
   });
 
   const [respectSystemTheme, setRespectSystemTheme] = useState(false);
   const shouldReduceMotion = useReducedMotion();
-  const hasProjects = projects.length > 0;
+  const hasDrafts = drafts.length > 0;
 
   useEffect(() => {
     // Force library theme unless user opts to respect system theme
@@ -57,7 +59,7 @@ export default function Library() {
                 My Library
               </h1>
               <p className="text-lg text-white/90 drop-shadow">
-                {hasProjects ? "Your AI-generated projects" : "Your projects will appear here"}
+                {hasDrafts ? "Your saved drafts" : "Your drafts will appear here"}
               </p>
             </motion.div>
 
@@ -80,63 +82,60 @@ export default function Library() {
             </motion.div>
           </div>
 
-          {/* Projects Grid or Empty State */}
+          {/* Drafts Grid or Empty State */}
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className={`bg-black/30 backdrop-blur-md h-64 rounded-lg border border-white/20 ${shouldReduceMotion ? '' : 'animate-pulse'}`} />
               ))}
             </div>
-          ) : hasProjects ? (
+          ) : hasDrafts ? (
             <motion.div
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
               initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.6, delay: 0.2 }}
             >
-              {projects.map((project, index) => (
+              {drafts.map((draft, index) => (
                 <motion.div
-                  key={project.id}
+                  key={draft.draftId}
                   initial={shouldReduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.6, delay: index * 0.1 }}
                   className="bg-black/30 backdrop-blur-md rounded-lg border border-white/20 overflow-hidden hover-elevate cursor-pointer"
                   whileHover={shouldReduceMotion ? {} : { y: -8 }}
-                  data-testid={`card-project-${project.id}`}
+                  data-testid={`card-draft-${draft.draftId}`}
                 >
                   <div className="aspect-video bg-gradient-to-br from-neutral-800 to-neutral-900 overflow-hidden">
                     <img 
-                      src={project.thumbnail} 
-                      alt={project.title}
+                      src={draft.thumbnail} 
+                      alt={draft.title}
                       className="w-full h-full object-cover"
                     />
                   </div>
                   
                   <div className="p-4">
-                    <h3 className="font-semibold text-white mb-1">{project.title}</h3>
-                    <p className="text-sm text-white/70 mb-4">{project.date}</p>
+                    <h3 className="font-semibold text-white mb-1">{draft.title || "Untitled"}</h3>
+                    <p className="text-sm text-white/70 mb-4">{new Date(draft.createdAt).toLocaleDateString()}</p>
                     
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="flex-1"
-                        data-testid={`button-open-${project.id}`}
-                      >
-                        <ExternalLink className="h-3 w-3 mr-1" />
-                        Open
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        data-testid={`button-duplicate-${project.id}`}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
+                      <Link href={`/workspace/${draft.jobId}`}>
+                        <a className="flex-1">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="w-full"
+                            data-testid={`button-open-${draft.draftId}`}
+                          >
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                            Open
+                          </Button>
+                        </a>
+                      </Link>
                       <Button
                         size="sm"
                         variant="ghost"
-                        data-testid={`button-delete-${project.id}`}
+                        data-testid={`button-delete-${draft.draftId}`}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -155,9 +154,9 @@ export default function Library() {
               <div className="bg-black/30 backdrop-blur-md rounded-lg border border-white/20 max-w-lg p-12 text-center space-y-6">
                 <div className="space-y-4">
                   <Sparkles className="h-12 w-12 mx-auto text-white/80" />
-                  <h2 className="text-2xl font-bold text-white">No projects yet</h2>
+                  <h2 className="text-2xl font-bold text-white">No drafts saved yet</h2>
                   <p className="text-white/70">
-                    Create your first project with a single prompt.
+                    Generate a website and save it to your library
                   </p>
                 </div>
                 
@@ -169,7 +168,7 @@ export default function Library() {
                       data-testid="button-create-now"
                     >
                       <Sparkles className="h-4 w-4" />
-                      Create Now
+                      Generate Website
                     </Button>
                   </a>
                 </Link>

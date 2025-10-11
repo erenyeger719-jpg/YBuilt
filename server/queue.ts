@@ -1,23 +1,46 @@
 import { storage } from "./storage";
 import fs from "fs/promises";
 import path from "path";
+import type { RegenerationScope } from "@shared/schema";
+
+interface LogEntry {
+  timestamp: string;
+  stage: "GENERATION" | "ASSEMBLY" | "LINT" | "STATIC-BUILD" | "ERROR";
+  message: string;
+  details?: any;
+}
 
 // Simple in-memory job queue for mock mode
 class JobQueue {
   private processing: Set<string> = new Set();
 
-  async addJob(jobId: string, prompt: string) {
+  async addJob(jobId: string, prompt: string, scope?: RegenerationScope) {
     // Add job to queue and start processing
     if (!this.processing.has(jobId)) {
       this.processing.add(jobId);
       // Update to queued state
       await storage.updateJobStatus(jobId, "queued");
-      this.processJob(jobId, prompt).catch(console.error);
+      this.processJob(jobId, prompt, scope).catch(console.error);
     }
   }
 
-  private async processJob(jobId: string, prompt: string) {
+  private async logToFile(jobId: string, entry: LogEntry) {
+    const logDir = path.join(process.cwd(), "data", "jobs", jobId);
+    await fs.mkdir(logDir, { recursive: true });
+    const logFile = path.join(logDir, "logs.jsonl");
+    await fs.appendFile(logFile, JSON.stringify(entry) + "\n");
+  }
+
+  private async processJob(jobId: string, prompt: string, scope?: RegenerationScope) {
     try {
+      // Log generation start
+      await this.logToFile(jobId, {
+        timestamp: new Date().toISOString(),
+        stage: "GENERATION",
+        message: scope ? `Starting ${scope} regeneration` : "Starting generation",
+        details: { prompt, scope }
+      });
+
       // Update status to generating
       await storage.updateJobStatus(jobId, "generating");
 
@@ -25,18 +48,45 @@ class JobQueue {
       const delay = 2000 + Math.random() * 2000;
       await new Promise(resolve => setTimeout(resolve, delay));
 
+      await this.logToFile(jobId, {
+        timestamp: new Date().toISOString(),
+        stage: "ASSEMBLY",
+        message: "Assembling components",
+      });
+
       // Generate mock HTML based on prompt
       const html = this.generateMockHTML(prompt);
+
+      await this.logToFile(jobId, {
+        timestamp: new Date().toISOString(),
+        stage: "LINT",
+        message: "Running linting checks",
+      });
 
       // Create directory and save HTML
       const previewDir = path.join(process.cwd(), "public", "previews", jobId);
       await fs.mkdir(previewDir, { recursive: true });
       await fs.writeFile(path.join(previewDir, "index.html"), html);
 
+      await this.logToFile(jobId, {
+        timestamp: new Date().toISOString(),
+        stage: "STATIC-BUILD",
+        message: "Build complete",
+        details: { outputPath: `/previews/${jobId}/index.html` }
+      });
+
       // Update job status to ready_for_finalization (user can now tweak before editing)
       await storage.updateJobStatus(jobId, "ready_for_finalization", `/previews/${jobId}/index.html`);
     } catch (error) {
       console.error(`Error processing job ${jobId}:`, error);
+      
+      await this.logToFile(jobId, {
+        timestamp: new Date().toISOString(),
+        stage: "ERROR",
+        message: `Build failed: ${error}`,
+        details: { error: String(error) }
+      });
+
       // Use updateJob to set error field instead of result
       await storage.updateJob(jobId, {
         status: "failed",

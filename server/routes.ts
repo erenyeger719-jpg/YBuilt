@@ -2,11 +2,30 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { jobQueue } from "./queue";
-import { insertJobSchema, insertUserSchema, jobFinalizationSchema } from "@shared/schema";
+import { insertJobSchema, insertUserSchema, jobFinalizationSchema, draftSchema, regenerationScopeSchema } from "@shared/schema";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { z } from "zod";
+import multer from "multer";
+
+const upload = multer({
+  dest: "public/uploads/",
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "image/jpeg", "image/png", "image/gif", "image/webp",
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/html", "text/plain"
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type"));
+    }
+  }
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Job generation endpoint
@@ -124,6 +143,224 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error saving draft:", error);
       res.status(500).json({ error: "Failed to save draft" });
+    }
+  });
+
+  // Upload files for AI Design Assistant
+  app.post("/api/upload", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const { jobId, userId } = req.body;
+      if (!jobId || !userId) {
+        return res.status(400).json({ error: "Missing jobId or userId" });
+      }
+
+      const uploadDir = path.join(process.cwd(), "public", "uploads", userId, jobId);
+      await fs.mkdir(uploadDir, { recursive: true });
+
+      const filePath = path.join(uploadDir, req.file.originalname);
+      await fs.rename(req.file.path, filePath);
+
+      const asset = {
+        url: `/uploads/${userId}/${jobId}/${req.file.originalname}`,
+        name: req.file.originalname,
+        mime: req.file.mimetype,
+        size: req.file.size,
+        parsed: {
+          textPreview: req.file.mimetype.startsWith("text/") ? 
+            (await fs.readFile(filePath, "utf-8")).substring(0, 500) : undefined,
+          warnings: []
+        }
+      };
+
+      await storage.addUploadedAsset(jobId, asset);
+
+      res.json(asset);
+    } catch (error) {
+      console.error("Upload error:", error);
+      res.status(500).json({ error: "Upload failed" });
+    }
+  });
+
+  // Create draft for library
+  app.post("/api/drafts", async (req, res) => {
+    try {
+      const { jobId, userId, ...draftData } = req.body;
+      
+      if (!jobId || !userId) {
+        return res.status(400).json({ error: "Missing jobId or userId" });
+      }
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const draft = await storage.createDraft({
+        jobId,
+        userId,
+        thumbnail: job.result || undefined,
+        ...draftData
+      });
+
+      res.json({ ok: true, draftId: draft.draftId, libraryEntry: draft });
+    } catch (error) {
+      console.error("Error creating draft:", error);
+      res.status(500).json({ error: "Failed to create draft" });
+    }
+  });
+
+  // Get drafts for library
+  app.get("/api/drafts/:userId", async (req, res) => {
+    try {
+      const drafts = await storage.getDrafts(req.params.userId);
+      res.json(drafts);
+    } catch (error) {
+      console.error("Error fetching drafts:", error);
+      res.status(500).json({ error: "Failed to fetch drafts" });
+    }
+  });
+
+  // Regenerate job with scope
+  app.post("/api/jobs/:jobId/regenerate", async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const { scope, draftEdits } = req.body;
+      
+      const scopeValidation = regenerationScopeSchema.safeParse(scope);
+      if (!scopeValidation.success) {
+        return res.status(400).json({ error: "Invalid regeneration scope" });
+      }
+
+      await storage.updateJob(req.params.jobId, {
+        settings: JSON.stringify(draftEdits),
+        status: "queued"
+      });
+
+      await jobQueue.addJob(req.params.jobId, job.prompt, scopeValidation.data);
+
+      res.json({ jobId: req.params.jobId, queued: true });
+    } catch (error) {
+      console.error("Error regenerating job:", error);
+      res.status(500).json({ error: "Failed to regenerate" });
+    }
+  });
+
+  // Select and open workspace
+  app.post("/api/jobs/:jobId/select", async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const { draftEdits } = req.body;
+
+      await storage.updateJob(req.params.jobId, {
+        settings: JSON.stringify(draftEdits),
+        status: "editing"
+      });
+
+      const workspaceDir = path.join(process.cwd(), "data", "workspaces", req.params.jobId);
+      await fs.mkdir(workspaceDir, { recursive: true });
+
+      const manifest = {
+        name: draftEdits?.title || "Untitled Project",
+        description: draftEdits?.description || "",
+        entryPoint: "index.html",
+        dependencies: {}
+      };
+
+      await fs.writeFile(
+        path.join(workspaceDir, "manifest.json"),
+        JSON.stringify(manifest, null, 2)
+      );
+
+      res.json({ ok: true, workspaceUrl: `/workspace/${req.params.jobId}` });
+    } catch (error) {
+      console.error("Error selecting job:", error);
+      res.status(500).json({ error: "Failed to select" });
+    }
+  });
+
+  // Get workspace files
+  app.get("/api/workspace/:jobId/files", async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const previewPath = job.result?.replace("/previews/", "");
+      if (!previewPath) {
+        return res.status(404).json({ error: "No preview available" });
+      }
+
+      const previewDir = path.join(process.cwd(), "public", "previews", req.params.jobId);
+      const indexPath = path.join(previewDir, "index.html");
+
+      try {
+        const content = await fs.readFile(indexPath, "utf-8");
+        
+        res.json({
+          files: [
+            {
+              path: "index.html",
+              content,
+              language: "html"
+            }
+          ],
+          manifest: {
+            name: "Generated Site",
+            description: job.prompt,
+            entryPoint: "index.html"
+          }
+        });
+      } catch (error) {
+        res.status(404).json({ error: "Workspace files not found" });
+      }
+    } catch (error) {
+      console.error("Error fetching workspace files:", error);
+      res.status(500).json({ error: "Failed to fetch workspace files" });
+    }
+  });
+
+  // Get job logs
+  app.get("/api/jobs/:jobId/logs", async (req, res) => {
+    try {
+      const logFile = path.join(process.cwd(), "data", "jobs", req.params.jobId, "logs.jsonl");
+      
+      try {
+        const content = await fs.readFile(logFile, "utf-8");
+        const logs = content.trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+        res.json(logs);
+      } catch (error) {
+        res.json([]);
+      }
+    } catch (error) {
+      console.error("Error fetching logs:", error);
+      res.status(500).json({ error: "Failed to fetch logs" });
+    }
+  });
+
+  // Get drafts for user
+  app.get("/api/drafts/:userId", async (req, res) => {
+    try {
+      const drafts = await storage.getDrafts(req.params.userId);
+      res.json(drafts);
+    } catch (error) {
+      console.error("Error fetching drafts:", error);
+      res.status(500).json({ error: "Failed to fetch drafts" });
     }
   });
 
