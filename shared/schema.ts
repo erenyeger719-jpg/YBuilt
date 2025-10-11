@@ -337,3 +337,13 @@ export const defaultSettings: Settings = {
     autoExport: false,
   },
 };
+
+// Job Finalization Schema
+export const jobFinalizationSchema = z.object({
+  title: z.string().min(1, "Title is required").max(100),
+  description: z.string().min(1, "Description is required").max(200),
+  theme: z.enum(["monochrome", "gloss", "game", "app-ui"]),
+  heroText: z.string().max(200),
+});
+
+export type JobFinalization = z.infer<typeof jobFinalizationSchema>;

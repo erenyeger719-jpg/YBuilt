@@ -19,5 +19,50 @@
     "status": "completed",
     "result": "/previews/f6c1ca4f-2036-49a9-9fbd-59dba01cb30c/index.html",
     "createdAt": "2025-10-11T13:08:55.821Z"
+  },
+  "6c6c3dd8-512e-484f-aa0d-ecda8a76f3f8": {
+    "id": "6c6c3dd8-512e-484f-aa0d-ecda8a76f3f8",
+    "userId": "demo",
+    "prompt": "new",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/6c6c3dd8-512e-484f-aa0d-ecda8a76f3f8/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-11T17:26:12.196Z",
+    "updatedAt": "2025-10-11T17:26:14.222Z"
+  },
+  "9ce390c6-b30e-4cdf-9060-b97c202fa69e": {
+    "id": "9ce390c6-b30e-4cdf-9060-b97c202fa69e",
+    "userId": "demo",
+    "prompt": "Create a modern portfolio website",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/9ce390c6-b30e-4cdf-9060-b97c202fa69e/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"My Portfolio\",\"description\":\"A modern portfolio showcasing my work\",\"theme\":\"gloss\",\"heroText\":\"Welcome to my portfolio\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-11T17:34:50.210Z",
+    "updatedAt": "2025-10-11T17:36:45.767Z"
+  },
+  "aadfe02c-0231-4de3-b9bb-c7ecf01ce515": {
+    "id": "aadfe02c-0231-4de3-b9bb-c7ecf01ce515",
+    "userId": "demo",
+    "prompt": "epic games like",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/aadfe02c-0231-4de3-b9bb-c7ecf01ce515/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-11T17:37:38.122Z",
+    "updatedAt": "2025-10-11T17:37:41.125Z"
   }
 }

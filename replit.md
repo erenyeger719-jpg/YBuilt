@@ -3,10 +3,15 @@
 ## Project Overview
 Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. Users enter a prompt and receive a complete website in 2-4 seconds. Features India-first payment integration with Razorpay.
 
-## Current State (MVP Complete + Auth + Library + Settings)
+## Current State (MVP Complete + Auth + Library + Settings + Finalize)
 - ✅ Stunning glass-striped hero with diagonal backdrop
 - ✅ One-prompt AI generation with mock worker
 - ✅ Job queue system with real-time polling
+- ✅ Extended job lifecycle: created → queued → generating → ready_for_finalization → editing → building → deploying → published
+- ✅ Finalize page with split-view UI (preview iframe + tweak panel)
+- ✅ SEO customization (title, description) and theme selection (monochrome/gloss/game/app-ui)
+- ✅ Save Draft and Finalize actions with backend validation and cache invalidation
+- ✅ Automatic redirect from Hero to Finalize when generation completes
 - ✅ Razorpay payment integration (mock mode)
 - ✅ 8 demo preview templates with thumbnails and hover overlay
 - ✅ Dark/light modes with low-gloss accessibility
@@ -24,6 +29,20 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 - ✅ Immediate visual feedback via CSS variable updates on all appearance changes
 
 ## Recent Changes
+- **2025-01-11**: Implemented complete Finalize page with split-view UI (preview + tweak panel)
+- **2025-01-11**: Created jobFinalizationSchema with Zod validation for title, description, theme, heroText
+- **2025-01-11**: Added POST /api/jobs/:jobId/finalize endpoint with validation and status transition to editing
+- **2025-01-11**: Added POST /api/jobs/:jobId/save-draft endpoint for saving without status change
+- **2025-01-11**: Updated GET /api/jobs/:jobId to return prompt, settings, error fields
+- **2025-01-11**: Added cache invalidation to finalize and save-draft mutations
+- **2025-01-11**: Implemented form state loading from job.settings with prompt fallback
+- **2025-01-11**: Updated useGeneration hook to redirect to /finalize when ready_for_finalization
+- **2025-01-11**: E2E tested: Complete flow from prompt → generate → finalize → workspace
+- **2025-01-11**: Extended job lifecycle schema for complete Replit-like product flow
+- **2025-01-11**: Added extended states: created → queued → generating → ready_for_finalization → editing → building → deploying → published
+- **2025-01-11**: Implemented builds and versions tables for pipeline tracking and rollback
+- **2025-01-11**: Enhanced storage layer with build/version methods and proper error handling
+- **2025-01-11**: Fixed job updates to use dedicated error field and updatedAt timestamps
 - **2025-01-11**: Implemented complete AI & Models settings form with 10 controls plus template CRUD
 - **2025-01-11**: Added model selector (GPT-5-X/GPT-5-Mini/Vision-Capable), temperature slider, compute tier
 - **2025-01-11**: Implemented max runtime (10-60s), max tokens (1000-8000), default style selector

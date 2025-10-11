@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useLocation } from "wouter";
 import PromptInput from "./PromptInput";
 import { useGeneration } from "@/hooks/useGeneration";
 import PreviewModal from "./PreviewModal";
@@ -29,7 +30,8 @@ const itemVariants = {
 };
 
 export default function Hero() {
-  const { generate, reset, isGenerating, status, error } = useGeneration();
+  const [, setLocation] = useLocation();
+  const { generate, reset, isGenerating, status, error, redirectUrl } = useGeneration();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -42,14 +44,12 @@ export default function Hero() {
     }
   }, [error, toast]);
 
+  // Handle redirect to finalize page
   useEffect(() => {
-    if (status?.status === "completed") {
-      toast({
-        title: "Website Generated",
-        description: "Your AI-generated website is ready to view.",
-      });
+    if (redirectUrl) {
+      setLocation(redirectUrl);
     }
-  }, [status?.status, toast]);
+  }, [redirectUrl, setLocation]);
 
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
@@ -110,16 +110,6 @@ export default function Hero() {
           <PromptInput onGenerate={generate} isGenerating={isGenerating} />
         </motion.div>
       </motion.div>
-
-      {/* Generated preview modal */}
-      {status?.status === "completed" && status.result && (
-        <PreviewModal
-          isOpen={true}
-          onClose={reset}
-          title="Your AI-Generated Website"
-          previewUrl={status.result}
-        />
-      )}
     </section>
   );
 }

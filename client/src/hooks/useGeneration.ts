@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 
 interface JobStatus {
   id: string;
-  status: "pending" | "processing" | "completed" | "failed";
+  status: "created" | "queued" | "generating" | "ready_for_finalization" | "editing" | "building" | "deploying" | "published" | "failed" | "cancelled";
   result?: string;
   createdAt: string;
 }
@@ -12,6 +12,7 @@ export function useGeneration() {
   const [status, setStatus] = useState<JobStatus | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
 
   // Poll for job status
   useEffect(() => {
@@ -25,7 +26,13 @@ export function useGeneration() {
         const data: JobStatus = await response.json();
         setStatus(data);
 
-        if (data.status === "completed" || data.status === "failed") {
+        // Handle different terminal states
+        if (data.status === "ready_for_finalization") {
+          clearInterval(pollInterval);
+          setIsGenerating(false);
+          // Redirect to finalize page
+          setRedirectUrl(`/finalize/${jobId}`);
+        } else if (data.status === "failed" || data.status === "cancelled") {
           clearInterval(pollInterval);
           setIsGenerating(false);
           
@@ -72,6 +79,7 @@ export function useGeneration() {
     setStatus(null);
     setIsGenerating(false);
     setError(null);
+    setRedirectUrl(null);
   };
 
   return {
@@ -80,5 +88,6 @@ export function useGeneration() {
     isGenerating,
     status,
     error,
+    redirectUrl,
   };
 }

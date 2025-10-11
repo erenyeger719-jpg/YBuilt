@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { jobQueue } from "./queue";
-import { insertJobSchema, insertUserSchema } from "@shared/schema";
+import { insertJobSchema, insertUserSchema, jobFinalizationSchema } from "@shared/schema";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
@@ -47,13 +47,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         id: job.id,
+        prompt: job.prompt,
         status: job.status,
         result: job.result,
+        error: job.error,
+        settings: job.settings,
         createdAt: job.createdAt,
       });
     } catch (error) {
       console.error("Error fetching job:", error);
       res.status(500).json({ error: "Failed to fetch job" });
+    }
+  });
+
+  // Finalize job - save edits and move to editing state
+  app.post("/api/jobs/:jobId/finalize", async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      if (job.status !== "ready_for_finalization") {
+        return res.status(400).json({ error: "Job is not ready for finalization" });
+      }
+
+      // Validate request body
+      const validationResult = jobFinalizationSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid finalization data", 
+          details: validationResult.error.errors 
+        });
+      }
+
+      const finalizationSettings = validationResult.data;
+
+      await storage.updateJob(req.params.jobId, {
+        status: "editing",
+        settings: JSON.stringify(finalizationSettings),
+      });
+
+      res.json({ success: true, status: "editing" });
+    } catch (error) {
+      console.error("Error finalizing job:", error);
+      res.status(500).json({ error: "Failed to finalize job" });
+    }
+  });
+
+  // Save draft edits without changing status
+  app.post("/api/jobs/:jobId/save-draft", async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      // Validate request body
+      const validationResult = jobFinalizationSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid draft data", 
+          details: validationResult.error.errors 
+        });
+      }
+
+      const draftSettings = validationResult.data;
+
+      await storage.updateJob(req.params.jobId, {
+        settings: JSON.stringify(draftSettings),
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error saving draft:", error);
+      res.status(500).json({ error: "Failed to save draft" });
     }
   });
 
