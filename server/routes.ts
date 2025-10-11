@@ -136,7 +136,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let user = await storage.getUserByEmail(email);
       
       if (!user) {
-        return res.status(401).json({ error: "Invalid credentials" });
+        // In mock mode, auto-create user if they don't exist
+        const username = email.split('@')[0];
+        user = await storage.createUser({
+          email,
+          username,
+          password // In production, hash this password
+        });
+        console.log(`Mock auth: Auto-created user ${email}`);
       }
 
       // In mock mode, we don't actually verify password

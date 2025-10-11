@@ -164,6 +164,86 @@ Generated website displays in full-screen iframe modal with glass aesthetics.
 5. Credits added to user account
 6. Transaction logged to `data/payments.log`
 
+## 🔐 Authentication (Mock Mode)
+
+### Mock Auth System
+YBUILT includes a fully functional mock authentication system that works without requiring OAuth providers or backend authentication services.
+
+### How to Sign In (Mock Mode)
+1. Click the **Profile Icon** in the top-right corner
+2. Select **"Sign In"** from the dropdown
+3. Enter any email and password (any combination works in mock mode)
+4. Click **"Sign In"** or **"Create Account"**
+5. Your session is stored locally and persists across page refreshes
+
+### Testing Credentials
+```bash
+# Any email/password combination works in mock mode
+Email: demo@ybuilt.com
+Password: demo123
+
+# Or create your own
+Email: yourname@example.com
+Password: anything
+```
+
+### Mock Auth Features
+- **LocalStorage Token** - JWT-like token stored in `ybuilt_session` key
+- **User Persistence** - Demo user created in `data/users.json`
+- **GET /api/me** - Returns current user metadata
+- **Profile Display** - Shows user initials in avatar when signed in
+- **Instant Sign Out** - Clears session with one click
+
+### Switching to Real OAuth
+To replace mock auth with real authentication (Google, GitHub, etc.):
+
+1. **Install Passport.js** (example code commented in `server/routes.ts`)
+2. **Add OAuth Strategy** - Google, GitHub, or email/password
+3. **Update** `client/src/lib/mockAuth.ts` to use real endpoints
+4. **Configure** environment variables for OAuth credentials
+5. **Remove** mock mode checks
+
+## 📚 Library Page & Theme Forcing
+
+### Library Theme System
+The Library page uses a **forced theme** that overrides the global light/dark mode to maintain visual consistency with its unique design.
+
+### Visual Design
+The Library page features:
+- **Black → Red → Light Blue** diagonal slash bands (30° angle)
+- **High-Contrast Glass** materials with specular highlights
+- **Forced Color Scheme** that remains visible regardless of site theme
+- **Accessibility-First** design with ≥4.5:1 contrast ratios
+
+### Theme Behavior
+```javascript
+// Library page automatically sets forced theme
+document.body.dataset.forceTheme = 'library';
+
+// CSS tokens override global theme
+body[data-force-theme="library"] .library-root {
+  --lib-bg-right: #000000;      // Deep black
+  --lib-bg-center: #E01010;     // High-contrast red
+  --lib-bg-left-gradient-start: #CFF2FF;  // Light cyan
+  --lib-bg-left-gradient-end: #9BD6FF;    // Light sky blue
+}
+```
+
+### Respecting System Theme (Optional)
+Users can toggle **"Respect system theme"** inside the Library page to:
+- Disable the forced theme
+- Allow Library to adapt to light/dark mode
+- Restore global color tokens
+
+This gives users control while maintaining the default cinematic experience.
+
+### Implementation Details
+1. **Force Theme** - `useEffect` sets `data-force-theme="library"` on mount
+2. **CSS Scope** - `.library-theme` tokens override global variables
+3. **Cleanup** - Effect cleanup removes forced theme on unmount
+4. **Toggle** - Switch component controls `respectSystemTheme` state
+5. **Fallback** - Glass materials work without `backdrop-filter` support
+
 ## 🧪 Testing
 
 ### Manual Testing
@@ -177,7 +257,21 @@ Generated website displays in full-screen iframe modal with glass aesthetics.
    - Verify mock payment success
    - Check toast notification
 
-3. **Accessibility**
+3. **Authentication Flow**
+   - Click Profile Icon → Sign In
+   - Enter test@example.com / password123
+   - Verify user initials appear in avatar
+   - Navigate to My Library
+   - Sign Out and verify profile resets
+
+4. **Library Theme**
+   - Navigate to /library
+   - Verify diagonal black/red/blue bands
+   - Toggle site theme (Library remains consistent)
+   - Enable "Respect system theme"
+   - Verify Library adapts to global theme
+
+5. **Accessibility**
    - Tab through all interactive elements
    - Test screen reader (NVDA/JAWS)
    - Verify keyboard shortcuts

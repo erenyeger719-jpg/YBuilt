@@ -31,6 +31,7 @@ export class MemStorage implements IStorage {
     this.jobs = new Map();
     this.userCredits = new Map([["demo", 0]]);
     this.loadJobs();
+    this.loadUsers();
   }
 
   private async loadJobs() {
@@ -39,6 +40,23 @@ export class MemStorage implements IStorage {
       const jobsData = JSON.parse(data);
       Object.entries(jobsData).forEach(([id, job]) => {
         this.jobs.set(id, job as Job);
+      });
+    } catch (error) {
+      // File doesn't exist or is empty, that's ok
+    }
+  }
+
+  private async loadUsers() {
+    try {
+      const data = await fs.readFile(USERS_FILE, "utf-8");
+      const usersData = JSON.parse(data);
+      Object.entries(usersData).forEach(([id, userData]: [string, any]) => {
+        // Extract user fields and credits
+        const { credits, ...user } = userData;
+        this.users.set(id, user as User);
+        if (credits !== undefined) {
+          this.userCredits.set(id, credits);
+        }
       });
     } catch (error) {
       // File doesn't exist or is empty, that's ok
@@ -75,21 +93,28 @@ export class MemStorage implements IStorage {
       password: insertUser.password
     };
     this.users.set(id, user);
+    this.userCredits.set(id, 0);
     
     // Save to file
-    try {
-      const data = await fs.readFile(USERS_FILE, "utf-8");
-      const users = JSON.parse(data);
-      users[id] = { ...user, credits: 0 };
-      await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
-    } catch (error) {
-      // Initialize file if it doesn't exist
-      const users: any = {};
-      users[id] = { ...user, credits: 0 };
-      await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
-    }
+    await this.saveUsers();
     
     return user;
+  }
+
+  private async saveUsers() {
+    try {
+      // Combine users and credits into one file
+      const usersData: any = {};
+      this.users.forEach((user, id) => {
+        usersData[id] = {
+          ...user,
+          credits: this.userCredits.get(id) || 0
+        };
+      });
+      await fs.writeFile(USERS_FILE, JSON.stringify(usersData, null, 2));
+    } catch (error) {
+      console.error("Error saving users:", error);
+    }
   }
 
   async createJob(insertJob: InsertJob): Promise<Job> {
@@ -132,19 +157,7 @@ export class MemStorage implements IStorage {
 
   async updateUserCredits(userId: string, credits: number): Promise<void> {
     this.userCredits.set(userId, credits);
-    // Also save to file
-    try {
-      const data = await fs.readFile(USERS_FILE, "utf-8");
-      const users = JSON.parse(data);
-      if (users[userId]) {
-        users[userId].credits = credits;
-      } else {
-        users[userId] = { id: userId, credits };
-      }
-      await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
-    } catch (error) {
-      console.error("Error updating user credits:", error);
-    }
+    await this.saveUsers();
   }
 }
 

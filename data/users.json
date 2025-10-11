@@ -1,1 +1,13 @@
-{"demo":{"id":"demo","credits":0}}
+{
+  "demo": {
+    "id": "demo",
+    "credits": 0
+  },
+  "35a19574-e995-4d8d-a6a0-63f0dfdc0fb9": {
+    "id": "35a19574-e995-4d8d-a6a0-63f0dfdc0fb9",
+    "username": "test",
+    "email": "test@ybuilt.com",
+    "password": "testpass123",
+    "credits": 0
+  }
+}
