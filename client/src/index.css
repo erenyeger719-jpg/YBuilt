@@ -254,17 +254,48 @@ body[data-force-theme="library"] .library-root,
   /* Force Library color scheme regardless of system theme */
   --lib-bg-right: #000000;
   --lib-bg-center: #E01010;
-  --lib-bg-left-gradient-start: #CFF2FF;
-  --lib-bg-left-gradient-end: #9BD6FF;
-  --lib-text-on-dark: #ffffff;
-  --lib-text-on-light: #000000;
-  --lib-gloss-alpha: 0.14;
+  --lib-bg-left-start: #CFF2FF;
+  --lib-bg-left-end: #9BD6FF;
+  --lib-glass-alpha: 0.14;
   --lib-rim: rgba(255,255,255,0.12);
-  --lib-glass-blur: 10px;
-  
-  /* Override foreground for light sections */
-  --lib-foreground-light: 0 0% 0%;
-  --lib-foreground-dark: 0 0% 100%;
+  --lib-text-on-dark: #FFFFFF;
+  --lib-text-on-light: #000000;
+}
+
+/* Library root background with diagonal glass stripes */
+body[data-force-theme="library"] .library-root {
+  --r: var(--lib-bg-right);
+  --c: var(--lib-bg-center);
+  --l1: var(--lib-bg-left-start);
+  --l2: var(--lib-bg-left-end);
+  background: 
+    linear-gradient(120deg, 
+      var(--r) 0% 33%, 
+      var(--c) 33% 66%, 
+      var(--l1) 66% 100%
+    );
+  background-size: cover;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Glass overlay with matcap reflection */
+body[data-force-theme="library"] .library-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url('/library-glass-matcap.webp') center/cover no-repeat;
+  opacity: 0.14;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  backdrop-filter: blur(8px) saturate(120%);
+}
+
+/* Text backplate for contrast */
+.lib-text-backplate {
+  background: rgba(0,0,0,0.36);
+  padding: 6px 10px;
+  border-radius: 8px;
 }
 
 @layer base {

@@ -1,0 +1,147 @@
+PATCH PROMPT — FIX LIBRARY THEME (NO WASH-OUT) + CENTERED SIGN-IN + OAUTH
+
+Context: This patch updates only the Library page UI and the Sign-in modal/flow in the existing YBUILT project. Do not change other pages or global theme behavior except where explicitly requested below.
+
+OBJECTIVE
+1. Make the Library background a high-contrast, glossy glass slash pattern: **right = true black**, **center = high-contrast red**, **left = light blue gradient** (glass finish). The Library must NOT wash out when the site/theme toggles to light mode — force the Library to always use this theme unless the user explicitly opts out.
+2. Fix the Sign-in UI: center the sign-in form modal in the viewport (regardless of scroll) and add direct social/OAuth login buttons (Google, Facebook, Twitter/X, Apple, GitHub) with placeholders and MOCK_MODE fallbacks.
+
+REQUIREMENTS — LIBRARY BACKGROUND & THEME
+- Visual:
+  - Use three diagonal (“/”, ~30° tilt) glossy glass bands across the Library hero/background in this order (right→center→left): **#000000 (black)** → **#E01010 (red)** → **light blue gradient (#CFF2FF → #9BD6FF)**.
+  - Bands are discrete (NOT soft gradients across bands). Each band is a PBR-like glass surface (semi-transparent base, rim specular, internal micro-reflection, faint bloom).
+  - Provide `public/library-bg-8k.webp`, `public/library-bg-4k.webp`, `public/library-bg-mobile.avif`, and `public/library-glass-matcap.webp`.
+- Force Library Theme:
+  - Scope the Library page with `.library-theme` and force tokens regardless of global theme.
+  - Add `document.body.dataset.forceTheme = 'library'` on mount and remove on unmount.
+  - CSS variables inside `.library-theme`:
+    ```
+    --lib-bg-right: #000000;
+    --lib-bg-center: #E01010;
+    --lib-bg-left-start: #CFF2FF;
+    --lib-bg-left-end: #9BD6FF;
+    --lib-glass-alpha: 0.14;
+    --lib-rim: rgba(255,255,255,0.12);
+    --lib-text-on-dark: #FFFFFF;
+    --lib-text-on-light: #000000;
+    ```
+  - Example CSS for stripes (copy-paste):
+    ```css
+    body[data-force-theme="library"] .library-root {
+      --r: var(--lib-bg-right);
+      --c: var(--lib-bg-center);
+      --l1: var(--lib-bg-left-start);
+      --l2: var(--lib-bg-left-end);
+      background-image:
+        linear-gradient(120deg,
+          var(--r) 0 33%,
+          var(--c) 33% 66%,
+          linear-gradient(90deg, var(--l1), var(--l2)) 66% 100%);
+      background-size: cover;
+      position: relative;
+      overflow: hidden;
+    }
+    /* glass overlay and matcap reflection */
+    body[data-force-theme="library"] .library-root::before {
+      content: "";
+      position:absolute; inset:0;
+      background: url('/public/library-glass-matcap.webp') center/cover no-repeat;
+      opacity: 0.14; mix-blend-mode: overlay; pointer-events:none;
+      backdrop-filter: blur(8px) saturate(120%);
+    }
+    ```
+- Light-mode resilience:
+  - The Library must ignore `prefers-color-scheme` and global light theme variables — all Library selectors should reference `.library-theme` tokens.
+  - Add a Library UI toggle: “Force Library Theme ON/OFF” (default: ON). When OFF, fall back to site-wide theme.
+- Contrast & Accessibility:
+  - Ensure copy on each stripe meets WCAG (≥4.5:1). For small text, add micro glass backplates if needed:
+    ```css
+    .lib-text-backplate { background: rgba(0,0,0,0.36); padding: 6px 10px; border-radius:8px; }
+    ```
+- Responsive:
+  - Mobile: compress stripe count to 2 (black + gradient-blue), keep tilt, or stack bands vertically to preserve legibility.
+
+REQUIREMENTS — SIGN-IN MODAL & OAUTH
+- Modal positioning & layout:
+  - The sign-in form must be a fixed-centered modal regardless of page scroll. Use position:fixed + transform:center technique to prevent it being pushed below fold.
+  - Exact CSS (copy-paste):
+    ```css
+    .signin-modal {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(680px, 92vw);
+      max-height: 92vh;
+      overflow: auto;
+      z-index: 12000;
+      border-radius: 14px;
+      padding: 28px;
+      background: rgba(255,255,255,0.03); /* glass */
+      backdrop-filter: blur(12px) saturate(120%);
+      box-shadow: 0 30px 80px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.02);
+    }
+    .signin-backdrop {
+      position: fixed; inset:0; background: rgba(0,0,0,0.5); z-index:11990;
+    }
+    ```
+  - Ensure the modal is keyboard-focus-trapped and closable via ESC.
+- Form behavior:
+  - Inputs: email + password + remember checkbox + Submit. On `MOCK_MODE=true` the backend accepts any email and returns a fake session token stored in `localStorage` (`ybuilt_session`).
+  - Error states should appear inline; if the mock fails show an accessible toast.
+- OAuth / Direct social login buttons:
+  - Add social buttons in the modal with provider logos and labels: **Sign in with Google**, **Sign in with Apple**, **Sign in with Facebook**, **Sign in with Twitter/X**, **Sign in with GitHub**.
+  - Each button should open an auth flow endpoint (server placeholder) `/api/auth/{provider}`. In MOCK_MODE, clicking provider returns a mocked success immediately.
+  - Provide server-side placeholder routes that simulate OAuth handshake and redirect back with mock user info:
+    ```js
+    // server/routes/auth.js (placeholder)
+    router.get('/auth/:provider', (req,res)=> {
+      if (MOCK_MODE) return res.redirect('/auth/mock-success?provider='+req.params.provider);
+      // real OAuth flow when keys provided
+    });
+    router.get('/auth/mock-success', (req,res)=> {
+      // create demo user in data/users.json; set cookie or return mock token
+    });
+    ```
+  - Keep UI secure: use `rel="noopener noreferrer"` on external redirects and ARIA attributes on buttons.
+- Placement fix:
+  - If the sign-in modal previously rendered far below, check parent stacking context and remove any ancestor `transform` or `position:relative` that breaks fixed positioning; ensure modal appended to `<body>` or portal root.
+  - Provide a React portal example:
+    ```jsx
+    // Portal usage
+    return createPortal(<Modal>…</Modal>, document.body);
+    ```
+- Accessibility:
+  - All social buttons must have `aria-label="Sign in with Google"` etc.
+  - Provide `aria-live` region updates for auth success/failure.
+- Demo credentials & README:
+  - Update README with MOCK_MODE OAuth test steps and sample emails.
+
+QA & TEST CASES
+1. Library theme test:
+   - Set system to light mode, open Library route — verify forced glossy black→red→blue bands visible and readable (contrast pass). Toggle Force Library Theme OFF and verify site theme applies.
+2. Sign-in modal test:
+   - From any page (including Library), click Sign-in button — the modal must appear centered (vertically/horizontally) and be focus-trapped. Test keyboard only navigation and ESC close.
+3. OAuth test (MOCK_MODE):
+   - Click “Sign in with Google” — in MOCK_MODE, receive immediate mock-success and user appears logged in with profile icon updated.
+4. Integration test:
+   - After sign-in (mock), open Library — ensure “My Library” reflects demo projects and Create Now works.
+
+DELIVERABLES (what to return)
+- Updated files / patches or commit:
+  - `client/src/pages/Library.jsx` (forceTheme mounting + .library-root usage)
+  - `client/src/index.css` or `client/src/pages/Library.module.css` (library variables + glass matcap overlay)
+  - `public/library-bg-8k.webp`, `public/library-bg-4k.webp`, `public/library-bg-mobile.avif`, `public/library-glass-matcap.webp`
+  - `client/src/components/SigninModal.jsx` (centered portal modal + social buttons)
+  - `server/routes/auth.js` (mock oauth endpoints)
+  - README update (MOCK_MODE auth & library theme explanation + testing steps)
+- A short code snippet showing how to mount/unmount `.library-theme`:
+  ```js
+  useEffect(()=> {
+    document.body.dataset.forceTheme = 'library';
+    return () => { delete document.body.dataset.forceTheme; }
+  }, []);
+  NOTES & PRIORITY
+* Priority #1: Library must not wash out in light mode — force theme tokens for Library only.
+* Priority #2: Sign-in modal must center; add social sign-ins with MOCK_MODE behavior.
+* Keep everything accessible, reversible, and documented.
