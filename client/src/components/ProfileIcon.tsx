@@ -1,60 +1,144 @@
-import { User, Library, Settings, LogOut, LogIn } from "lucide-react";
+import { useState, useEffect } from "react";
+import { User, Settings, LogOut, LogIn } from "lucide-react";
 import { useLocation } from "wouter";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { SignInModal } from "./SignInModal";
+import { mockAuth, type MockUser } from "@/lib/mockAuth";
+import { useToast } from "@/hooks/use-toast";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-interface ProfileIconProps {
-  isAuthenticated?: boolean;
-}
-
-export default function ProfileIcon({ isAuthenticated = false }: ProfileIconProps) {
+export default function ProfileIcon() {
   const [, setLocation] = useLocation();
+  const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
+  const [showSignIn, setShowSignIn] = useState(false);
+  const { toast } = useToast();
 
-  const menuItems = isAuthenticated
-    ? [
-        { icon: Library, label: "My Library", href: "/library" },
-        { icon: Settings, label: "Settings", href: "/settings" },
-        { icon: LogOut, label: "Sign Out", href: "#" },
-      ]
-    : [
-        { icon: LogIn, label: "Sign In", href: "/signin" },
-      ];
+  useEffect(() => {
+    // Load current user on mount
+    const loadUser = async () => {
+      const user = await mockAuth.getCurrentUser();
+      setCurrentUser(user);
+    };
+    loadUser();
+  }, []);
+
+  const handleSelect = (path: string) => {
+    if (path === "signout") {
+      mockAuth.signOut();
+      setCurrentUser(null);
+      toast({
+        title: "Signed out successfully",
+        description: "You have been signed out of your account",
+      });
+      return;
+    }
+    if (path === "signin") {
+      setShowSignIn(true);
+      return;
+    }
+    setLocation(path);
+  };
+
+  const handleSignInSuccess = (user: MockUser) => {
+    setCurrentUser(user);
+  };
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (!currentUser) return "?";
+    return currentUser.username.substring(0, 2).toUpperCase();
+  };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="w-10 h-10 rounded-full glass-cta-border"
-          data-testid="button-profile"
-          aria-label="Profile menu"
-        >
-          <User className="h-5 w-5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        {menuItems.map((item, index) => (
-          <DropdownMenuItem
-            key={index}
-            className="cursor-pointer"
-            data-testid={`link-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-            onSelect={() => {
-              if (item.href !== "#") {
-                setLocation(item.href);
-              }
-            }}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full card-glass w-9 h-9"
+            data-testid="button-profile"
+            aria-label="Profile menu"
           >
-            <item.icon className="h-4 w-4 mr-2" />
-            <span>{item.label}</span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            <div className="gloss-sheen rounded-full" />
+            {currentUser ? (
+              <Avatar className="h-7 w-7 relative z-10">
+                <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
+                  {getUserInitials()}
+                </AvatarFallback>
+              </Avatar>
+            ) : (
+              <User className="h-4 w-4 relative z-10" />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56 card-glass">
+          <div className="gloss-sheen" />
+          {currentUser ? (
+            <>
+              <DropdownMenuLabel className="relative z-10">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{currentUser.username}</p>
+                  <p className="text-xs leading-none text-muted-foreground">{currentUser.email}</p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => handleSelect("/library")}
+                className="cursor-pointer relative z-10"
+                data-testid="menu-item-library"
+              >
+                <User className="mr-2 h-4 w-4" />
+                My Library
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => handleSelect("/settings")}
+                className="cursor-pointer relative z-10"
+                data-testid="menu-item-settings"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => handleSelect("signout")}
+                className="cursor-pointer relative z-10"
+                data-testid="menu-item-signout"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
+              </DropdownMenuItem>
+            </>
+          ) : (
+            <>
+              <DropdownMenuLabel className="relative z-10">Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => handleSelect("signin")}
+                className="cursor-pointer relative z-10"
+                data-testid="menu-item-signin"
+              >
+                <LogIn className="mr-2 h-4 w-4" />
+                Sign In
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <SignInModal
+        open={showSignIn}
+        onOpenChange={setShowSignIn}
+        onSuccess={handleSignInSuccess}
+      />
+    </>
   );
 }
