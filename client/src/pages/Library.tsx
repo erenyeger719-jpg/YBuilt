@@ -41,80 +41,8 @@ export default function Library() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <div className="library-root min-h-screen relative overflow-hidden">
-        {/* Library Background - Black → Red → Light Blue Diagonal Bands */}
-        <div className="fixed inset-0 -z-10">
-          {/* Rightmost Band - Deep Black with Rim Highlights */}
-          <div 
-            className="absolute inset-0"
-            style={{
-              background: 'var(--lib-bg-right)',
-              clipPath: 'polygon(100% 0, 100% 100%, 66% 100%, 33% 0)',
-            }}
-          >
-            {/* Rim highlights for black band */}
-            <div 
-              className="absolute inset-0"
-              style={{
-                background: 'linear-gradient(120deg, transparent 0%, var(--lib-rim) 100%)',
-              }}
-            />
-            {/* Glass overlay */}
-            <div 
-              className="absolute inset-0"
-              style={{
-                backdropFilter: `blur(var(--lib-glass-blur)) saturate(130%)`,
-                background: `rgba(255,255,255,var(--lib-gloss-alpha))`,
-              }}
-            />
-          </div>
-
-          {/* Center Band - High-Contrast Red */}
-          <div 
-            className="absolute inset-0"
-            style={{
-              background: 'var(--lib-bg-center)',
-              clipPath: 'polygon(66% 0, 66% 100%, 33% 100%, 0% 0)',
-            }}
-          >
-            {/* Glass overlay */}
-            <div 
-              className="absolute inset-0"
-              style={{
-                backdropFilter: `blur(var(--lib-glass-blur)) saturate(130%)`,
-                background: `rgba(255,255,255,var(--lib-gloss-alpha))`,
-              }}
-            />
-          </div>
-
-          {/* Leftmost Band - Light Blue Gradient */}
-          <div 
-            className="absolute inset-0"
-            style={{
-              background: `linear-gradient(135deg, var(--lib-bg-left-gradient-start) 0%, var(--lib-bg-left-gradient-end) 100%)`,
-              clipPath: 'polygon(33% 0, 33% 100%, 0% 100%, 0% 0)',
-            }}
-          >
-            {/* Glass overlay */}
-            <div 
-              className="absolute inset-0"
-              style={{
-                backdropFilter: `blur(var(--lib-glass-blur)) saturate(130%)`,
-                background: `rgba(255,255,255,var(--lib-gloss-alpha))`,
-              }}
-            />
-          </div>
-
-          {/* Shimmer overlay (respects reduced motion) */}
-          {!shouldReduceMotion && (
-            <div className="absolute inset-0 pointer-events-none opacity-30">
-              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-transparent animate-pulse" />
-            </div>
-          )}
-
-          {/* Top gradient wash for readability */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/40" />
-        </div>
+      <div className="library-root min-h-screen">
+        {/* Glass matcap and diagonal stripes applied via CSS ::before pseudo-element */}
 
         {/* Content */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 pt-24">
