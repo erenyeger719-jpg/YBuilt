@@ -5,22 +5,25 @@ import type { RegenerationScope } from "@shared/schema";
 
 interface LogEntry {
   timestamp: string;
-  stage: "GENERATION" | "ASSEMBLY" | "LINT" | "STATIC-BUILD" | "ERROR";
+  level?: "info" | "warn" | "error";
+  stage: "GENERATION" | "ASSEMBLY" | "LINT" | "STATIC-BUILD" | "ERROR" | "AGENT";
+  source?: string;
   message: string;
   details?: any;
+  metadata?: any;
 }
 
 // Simple in-memory job queue for mock mode
 class JobQueue {
   private processing: Set<string> = new Set();
 
-  async addJob(jobId: string, prompt: string, scope?: RegenerationScope) {
+  async addJob(jobId: string, prompt: string, scope?: RegenerationScope, autonomy?: string) {
     // Add job to queue and start processing
     if (!this.processing.has(jobId)) {
       this.processing.add(jobId);
       // Update to queued state
       await storage.updateJobStatus(jobId, "queued");
-      this.processJob(jobId, prompt, scope).catch(console.error);
+      this.processJob(jobId, prompt, scope, autonomy).catch(console.error);
     }
   }
 
@@ -31,15 +34,30 @@ class JobQueue {
     await fs.appendFile(logFile, JSON.stringify(entry) + "\n");
   }
 
-  private async processJob(jobId: string, prompt: string, scope?: RegenerationScope) {
+  private async processJob(jobId: string, prompt: string, scope?: RegenerationScope, autonomy: string = "medium") {
     try {
       // Log generation start
       await this.logToFile(jobId, {
         timestamp: new Date().toISOString(),
+        level: "info",
         stage: "GENERATION",
+        source: "worker",
         message: scope ? `Starting ${scope} regeneration` : "Starting generation",
-        details: { prompt, scope }
+        details: { prompt, scope },
+        metadata: { autonomy }
       });
+
+      // Agent autonomy logs
+      if (autonomy && autonomy !== "low") {
+        await this.logToFile(jobId, {
+          timestamp: new Date().toISOString(),
+          level: "info",
+          stage: "AGENT",
+          source: "agent",
+          message: `Agent running with ${autonomy} autonomy`,
+          metadata: { autonomy, mode: autonomy === "max" ? "full-build" : "assisted" }
+        });
+      }
 
       // Update status to generating
       await storage.updateJobStatus(jobId, "generating");
@@ -50,16 +68,32 @@ class JobQueue {
 
       await this.logToFile(jobId, {
         timestamp: new Date().toISOString(),
+        level: "info",
         stage: "ASSEMBLY",
+        source: "worker",
         message: "Assembling components",
       });
 
       // Generate mock HTML based on prompt
       const html = this.generateMockHTML(prompt);
 
+      // Agent-aware linting
+      if (autonomy === "high" || autonomy === "max") {
+        await this.logToFile(jobId, {
+          timestamp: new Date().toISOString(),
+          level: "info",
+          stage: "AGENT",
+          source: "agent",
+          message: "Running lint check...",
+          metadata: { autonomy, action: "auto-lint" }
+        });
+      }
+
       await this.logToFile(jobId, {
         timestamp: new Date().toISOString(),
+        level: "info",
         stage: "LINT",
+        source: "worker",
         message: "Running linting checks",
       });
 
@@ -70,10 +104,24 @@ class JobQueue {
 
       await this.logToFile(jobId, {
         timestamp: new Date().toISOString(),
+        level: "info",
         stage: "STATIC-BUILD",
+        source: "worker",
         message: "Build complete",
         details: { outputPath: `/previews/${jobId}/index.html` }
       });
+
+      // Additional agent logs for max autonomy
+      if (autonomy === "max") {
+        await this.logToFile(jobId, {
+          timestamp: new Date().toISOString(),
+          level: "info",
+          stage: "AGENT",
+          source: "agent",
+          message: "Running test suite...",
+          metadata: { autonomy, testsRun: 5, testsPassed: 5 }
+        });
+      }
 
       // Update job status to ready_for_finalization (user can now tweak before editing)
       await storage.updateJobStatus(jobId, "ready_for_finalization", `/previews/${jobId}/index.html`);
@@ -82,7 +130,9 @@ class JobQueue {
       
       await this.logToFile(jobId, {
         timestamp: new Date().toISOString(),
+        level: "error",
         stage: "ERROR",
+        source: "worker",
         message: `Build failed: ${error}`,
         details: { error: String(error) }
       });

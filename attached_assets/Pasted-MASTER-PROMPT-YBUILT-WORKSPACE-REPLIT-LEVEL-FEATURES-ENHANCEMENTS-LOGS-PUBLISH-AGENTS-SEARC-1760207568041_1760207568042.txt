@@ -1,0 +1,139 @@
+MASTER PROMPT — YBUILT WORKSPACE: REPLIT-LEVEL FEATURES + ENHANCEMENTS (LOGS, PUBLISH, AGENTS, SEARCH/PALETTE)
+
+OBJECTIVE
+Create a full-featured, production-ready **Workspace** and Finalize experience for **ybuilt** that matches and improves on Replit’s workspace UX. Implement:
+
+- Top-left Ybuilt logo → click redirects to Home `/`.
+- Finalize page left area replaced by AI Designer + Build Trace + interactive assistant (already done) — enhance with the features below.
+- A Replit-quality Workspace `/workspace/:jobId` with: file tree, code editor, WYSIWYG, live preview tab, console tab (streaming server & build logs), agent tools (autonomy levels: Low/Medium/High/Max), testing tools, extension panel, publish flow, search/command palette (mirrors screenshots), and top-right Publish + Search + Plan UI.
+- Persist drafts into Library and ensure Save Draft, Select→Workspace, Re-generate all work and update data store.
+- Mockable integrations: Razorpay (UPI), OAuth, Redis (optional), OpenAI (optional); default MOCK_MODE=true.
+
+PRINCIPLES
+- Keep the existing glass/monochrome aesthetic and polished motion, but make the workspace ergonomic and clearly more powerful than Replit (fewer clicks, better logs, clearer agent controls, easier publishing).
+- Do not expose LLM chain-of-thought; show only structured logs, model outputs as artifacts, and human-readable stage traces.
+
+UI / UX SPEC — GLOBAL
+- Header (persistent):
+  - Left: clickable Ybuilt logo (SVG). Clicking navigates to `/` (home). Add tooltip “Ybuilt — Home”.
+  - Middle: Project name (editable in place), small breadcrumbs.
+  - Right cluster: Search/Command Palette icon (⌘K), “Buy Creator Plan ₹799” CTA, currency (INR), quick toggles (theme, motion), Profile icon (dropdown with Settings, Library, Manage Billing, Sign out).
+  - Top-right also shows small Log Summary pill (e.g., “Build: success • Last: 2m ago”) and Publish button when workspace loaded.
+
+WORKSPACE LAYOUT `/workspace/:jobId`
+- Left column (collapsible):
+  - File tree / Project explorer (folders, files) with New File, Upload, Rename, Delete.
+  - Under the prompt area (below file tree), place **Build Prompt** panel: shows the original prompt and a small editable field. Buttons: “Run Agent”, “Test App”, “Autonomy: Low / Medium / High / Max” (radio or segmented control). Show current compute tier and model.
+  - Panel: Agent Tools (collapsible) — App Testing (integration tests runner), Linter, Security scanner, Extension Store access.
+
+- Center column:
+  - Editor tab set (Monaco or similar) with tabs for each open file. Provide split + drag-drop layout.
+  - Inline file save, syntax errors shown in gutter.
+  - Top of editor: quick actions for Run, Debug, Format, Open Preview.
+  - Bottom of editor: version control bar (branch, commit, push), snapshots, and quick terminal button.
+
+- Right column (primary preview & console area):
+  - Two main tabs: PREVIEW (default) and CONSOLE.
+    - PREVIEW: iframe showing `/previews/{jobId}/index.html` (sandboxed). Provide small mini tab header with quick controls: Refresh iframe, Open in new tab, Screenshot, Device selector (Desktop / Tablet / Mobile).
+    - CONSOLE: multi-stream console UI. Tabs inside Console: Server Logs, Build Logs, Browser Console, Custom Agent Logs.
+      - Show formatted console lines like your example, with timestamp, source label ([express], [worker], [browser]) and expand for full metadata JSON.
+      - Provide “filter” by source, level (info/warn/error), and search within logs.
+      - Add a top-right Log Summary and Controls: Clear, Download Transcript, Tail (live/paused).
+      - On the right of the console header (or at top-right of preview area) add a compact Publish button with plan/credit indicator and a small search icon that opens the global command palette (same as header).
+
+FUNCTIONALITY & ROUTES (server + client)
+- Frontend:
+  - `GET /workspace/:jobId` serves the workspace SPA which loads job metadata and files via API.
+  - Command palette (⌘K) replicates screenshot: show items like Preview, Console, Files, Search, Open in VS Code, Remix, Settings, Extension Store, Secrets, DB, Shell, Workflows, Publishing, Assistant, etc. Each entry must have an icon and keyboard shortcut hint.
+- APIs (server):
+  - `GET /api/workspace/:jobId/files` → lists files + metadata
+  - `GET /api/workspace/:jobId/file?path=` → file contents
+  - `POST /api/workspace/:jobId/file` → create/update file
+  - `POST /api/workspace/:jobId/run` → start dev server (returns processId, port), streams server logs
+  - `GET /api/jobs/:jobId/logs/stream` — SSE or WebSocket for structured logs (build, worker, server) — messages: `{ ts, level, source, msg, meta }`
+  - `POST /api/jobs/:jobId/build` → triggers worker build pipeline
+  - `POST /api/jobs/:jobId/publish` → checks plan/credits, creates deployment (mock or real)
+  - `GET /api/razorpay_key` / `POST /api/create_order` / `POST /webhooks/razorpay`
+  - `POST /api/search/palette` and `GET /api/extensions` for palette & extensions.
+- Worker:
+  - Accept `build` tasks and emit structured logs to `data/jobs/{jobId}/logs.jsonl`.
+  - When serving dev server, stream express logs to workspace console.
+
+PUBLISH FLOW & Button behavior
+- Publish button (top-right of workspace & preview) triggers:
+  1. `GET /api/plan` - show current plan and publish cost (simulated).
+  2. If insufficient credits, show quick checkout modal (Razorpay UPI test) inline.
+  3. On successful payment webhook, unlock publish and call `POST /api/jobs/:jobId/publish`.
+  4. Publish action packages `public/previews/{jobId}` and creates a deploy record. Return `publishedUrl`.
+  5. UI: show success banner and copyable live URL. Generate plan/invoice entry in `data/billing.json`.
+
+LOGS DISPLAY — exact sample lines
+- Console UI must be able to display lines like the sample you provided. Example line formatting:
+6:16:13 PM [express] serving on port 5000
+6:16:18 PM [express] GET /api/razorpay_key 304 in 3ms :: {"key":"rzp_test_mock_key_12345","isMockMode":true}
+6:18:51 PM [express] POST /api/drafts 200 in 3ms :: {"ok":true,"draftId":"c601b3c5-..."}   - Provide expand to raw JSON for each line. Implement filters and searching across logs. Provide a persistent mini “last 10 lines” badge at top-right of preview area for quick glance.
+
+AGENT TOOLS & AUTONOMY
+- Below prompt area (left), add Agent Tools:
+- Autonomy slider with four discrete levels: **Low, Medium, High, Max**.
+  - Low: conservative; agent suggests edits only, requires manual apply.
+  - Medium: agent can make local code edits, propose tests.
+  - High: agent will run tests, auto-fix lint, propose a new build.
+  - Max: agent will run full build, run test suite, and optionally publish (but must ask final confirmation before publishing).
+- App Testing tool: runs configured test scripts, shows pass/fail, code frame for failures.
+- Safety/Content scan toggle for publishing.
+- Agent UI:
+- “Run Agent” button; on click it creates an agent job and streams agent steps into Build Trace viewer (structured, no chain-of-thought).
+- Provide an “Auto-Apply” toggle per autonomy level for users who trust the agent.
+
+SEARCH / COMMAND PALETTE (⌘K) — replicate screenshot items
+- Implement a searchable palette with sections and items as shown in images:
+- Files, Search, Stop (Stop Repl), Open development URL, Open in desktop app, Open in VS Code, Copy SSH Command, My Apps, Remix, Settings, Preview, Console, Assistant, Publishing, App Storage, Auth, Code Search, Database, Developer, Extension Store, Git, Integrations, Playground, Replit Key-Value Store, Secrets, Security Scanner, Shell, User Settings, VNC, Workflows, etc.
+- Each entry triggers the correct action (open panel, route, run script). Include keyboard hints shown in images (e.g., Ctrl+K, Ctrl+P, Ctrl+Shift+F).
+
+LEFT LOGGED MINI-PANEL & TOP-RIGHT LOG SUMMARY
+- Add a compact, optionally detachable "mini-log panel" that can be pinned to top-right of the preview/console tab showing the last N lines and a quick status (build in progress, server running, errors).
+- Top-right area near Publish also shows a "Recent Activity" dropdown that lists last 10 server events (derived from logs) with timestamps as your sample.
+
+IMPROVEMENTS OVER REPLIT (explicit)
+- Better log filtering (by JSON meta fields), search across logs, and inline stack-frame links.
+- Agent autonomy with safe publish gating (must confirm publish even at Max unless user toggles Auto-Publish).
+- One-click UPI checkout integrated into publish modal for India; receipts written to `data/billing.json`.
+- Snapshot thumbnails auto-generated for library entries and versions.
+- Unified command palette that includes Extension Store & Secrets clearly, and keyboard-first actions.
+- Accessibility: ARIA landmarks, keyboard-first palette, reduced-motion, contrast toggles.
+
+DATA & PERSISTENCE
+- jobs.json, users.json, builds/, logs in `data/jobs/{jobId}/logs.jsonl`
+- library entries under `data/users.json` library array
+- billing entries under `data/billing.json`
+- uploads under `public/uploads/{userId}/{jobId}/...`
+
+SECURITY & SANDBOX
+- Iframes use `sandbox="allow-scripts allow-forms allow-same-origin"` with CSP and origin isolation; sanitize uploaded HTML before rendering (strip scripts unless from workspace).
+- Rate-limit agent runs, builds and publish calls per-user.
+
+DEVELOPMENT & MOCK MODE
+- Provide MOCK_MODE default: worker simulates builds, Razorpay returns `rzp_test_mock_key_12345`, OAuth flows return demo users. Document how to switch to real keys in README.
+- Provide a small demo script that creates a job, generates a draft, saves draft, selects workspace, triggers a build, and publishes in MOCK_MODE.
+
+DELIVERABLES (what to return)
+1. Frontend components/pages: `Workspace.jsx`, `BuildTraceViewer.jsx`, `AgentTools.jsx`, `CommandPalette.jsx`, `ConsolePanel.jsx`, `PreviewPanel.jsx`, header updates (logo redirect), Publish modal.
+2. Server routes: `api/workspace/*`, `api/jobs/*` (build, publish, logs/stream), `api/run`, `api/razorpay*`.
+3. Worker updates: structured logs & autonomy-aware tasks.
+4. README: run instructions, MOCK_MODE notes, how to change keys.
+5. Example console logs seeded with the lines you provided so the Console UI shows realistic output by default.
+
+EXAMPLE CONSOLE LINES (seed data — include exact strings)
+- Include the exact sample logs you pasted — ensure Console UI parses them into `source=[express]` etc:
+ 6:16:13 PM [express] serving on port 5000
+6:16:18 PM [express] GET /api/razorpay_key 304 in 3ms :: {"key":"rzp_test_mock_key_12345","isMockMode":true}
+6:18:45 PM [express] GET /api/jobs/3844fad4-fbb8-4568-9cef-32af2560c42f 200 in 9ms :: {"id":"3844fad4-fbb8-4568-9cef-32af2560c42f"...}
+6:18:55 PM [express] POST /api/drafts 200 in 3ms :: {"ok":true,"draftId":"c601b3c5-..."}
+...  
+FINAL NOTES TO GENERATOR / DEV
+- Match icons, keyboard hints and layout density from the screenshots.
+- Keep UI performance high; lazy-load preview iframe and log streams; cap lines in console UI and offer download.
+- Deliver with strong comments and a README explaining where to find Publish & Command Palette code, how to test publish in MOCK_MODE, and how to plug real Razorpay/OpenAI/Redis.
+
+END OF PROMPT

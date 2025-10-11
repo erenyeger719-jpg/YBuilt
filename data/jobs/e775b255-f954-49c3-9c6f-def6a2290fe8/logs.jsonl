@@ -1,0 +1,4 @@
+{"timestamp":"2025-10-11T18:45:57.947Z","stage":"GENERATION","message":"Starting generation","details":{"prompt":"ejhh"}}
+{"timestamp":"2025-10-11T18:46:01.847Z","stage":"ASSEMBLY","message":"Assembling components"}
+{"timestamp":"2025-10-11T18:46:01.848Z","stage":"LINT","message":"Running linting checks"}
+{"timestamp":"2025-10-11T18:46:01.850Z","stage":"STATIC-BUILD","message":"Build complete","details":{"outputPath":"/previews/e775b255-f954-49c3-9c6f-def6a2290fe8/index.html"}}

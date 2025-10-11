@@ -678,6 +678,356 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== NEW WORKSPACE & PUBLISH ROUTES =====
+
+  // Get plan info
+  app.get("/api/plan", async (req, res) => {
+    try {
+      // In mock mode, use demo user
+      const userId = "demo";
+      const credits = await storage.getUserCredits(userId);
+
+      res.json({
+        currentPlan: "free",
+        publishCost: 50, // INR per publish
+        credits
+      });
+    } catch (error) {
+      console.error("Error fetching plan:", error);
+      res.status(500).json({ error: "Failed to fetch plan" });
+    }
+  });
+
+  // Create Razorpay order for credits purchase
+  app.post("/api/create_order", async (req, res) => {
+    try {
+      const { amount } = req.body;
+      
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ error: "Invalid amount" });
+      }
+
+      // In mock mode, return a mock order
+      const orderId = `order_${crypto.randomUUID().slice(0, 12)}`;
+      
+      res.json({
+        id: orderId,
+        amount: amount * 100, // Razorpay expects amount in paise
+        currency: "INR",
+        receipt: `receipt_${Date.now()}`,
+        status: "created"
+      });
+    } catch (error) {
+      console.error("Error creating order:", error);
+      res.status(500).json({ error: "Failed to create order" });
+    }
+  });
+
+  // Verify payment and add credits
+  app.post("/api/verify_payment", async (req, res) => {
+    try {
+      const { orderId, paymentId, amount } = req.body;
+      const userId = "demo"; // In production, extract from JWT
+
+      // In mock mode, just add credits
+      await storage.addCredits(userId, amount);
+
+      // Create invoice for credit purchase
+      const invoice = {
+        id: `inv_${crypto.randomUUID().slice(0, 8)}`,
+        userId,
+        amount,
+        type: "credit_purchase" as const,
+        jobId: null,
+        timestamp: new Date().toISOString(),
+        status: "paid" as const,
+        paymentId,
+        orderId
+      };
+
+      await storage.createInvoice(invoice);
+
+      res.json({
+        success: true,
+        credits: await storage.getUserCredits(userId)
+      });
+    } catch (error) {
+      console.error("Error verifying payment:", error);
+      res.status(500).json({ error: "Failed to verify payment" });
+    }
+  });
+
+  // Publish job
+  app.post("/api/jobs/:jobId/publish", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const userId = "demo"; // In production, extract from JWT
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      // Check credits
+      const publishCost = 50;
+      const credits = await storage.getUserCredits(userId);
+
+      if (credits < publishCost) {
+        return res.status(402).json({ 
+          error: "Insufficient credits", 
+          required: publishCost,
+          available: credits 
+        });
+      }
+
+      // Deduct credits
+      await storage.deductCredits(userId, publishCost);
+
+      // Create invoice
+      const invoice = {
+        id: `inv_${crypto.randomUUID().slice(0, 8)}`,
+        userId,
+        amount: publishCost,
+        type: "publish" as const,
+        jobId,
+        timestamp: new Date().toISOString(),
+        status: "paid" as const
+      };
+
+      await storage.createInvoice(invoice);
+
+      // Update job status
+      await storage.updateJob(jobId, { status: "published" });
+
+      const publishedUrl = `https://${jobId}.ybuilt.app`;
+
+      res.json({
+        success: true,
+        publishedUrl,
+        invoice
+      });
+    } catch (error) {
+      console.error("Error publishing job:", error);
+      res.status(500).json({ error: "Failed to publish" });
+    }
+  });
+
+  // Get workspace file
+  app.get("/api/workspace/:jobId/file", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { path: filePath } = req.query;
+
+      if (!filePath || typeof filePath !== "string") {
+        return res.status(400).json({ error: "Missing file path" });
+      }
+
+      const fullPath = path.join(process.cwd(), "public", "previews", jobId, filePath);
+
+      try {
+        const content = await fs.readFile(fullPath, "utf-8");
+        res.json({ path: filePath, content });
+      } catch (error) {
+        res.status(404).json({ error: "File not found" });
+      }
+    } catch (error) {
+      console.error("Error reading file:", error);
+      res.status(500).json({ error: "Failed to read file" });
+    }
+  });
+
+  // Save workspace file
+  app.post("/api/workspace/:jobId/file", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { path: filePath, content } = req.body;
+
+      if (!filePath || typeof content !== "string") {
+        return res.status(400).json({ error: "Missing file path or content" });
+      }
+
+      const fullPath = path.join(process.cwd(), "public", "previews", jobId, filePath);
+      const dirPath = path.dirname(fullPath);
+
+      // Ensure directory exists
+      await fs.mkdir(dirPath, { recursive: true });
+
+      // Write file
+      await fs.writeFile(fullPath, content, "utf-8");
+
+      res.json({ success: true, path: filePath });
+    } catch (error) {
+      console.error("Error writing file:", error);
+      res.status(500).json({ error: "Failed to write file" });
+    }
+  });
+
+  // Log streaming (SSE)
+  app.get("/api/jobs/:jobId/logs/stream", async (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no"); // Disable nginx buffering
+
+    const { jobId } = req.params;
+    const logFile = path.join(process.cwd(), "data", "jobs", jobId, "logs.jsonl");
+
+    // Send initial connection message
+    res.write(`data: ${JSON.stringify({ type: "connected", jobId })}\n\n`);
+
+    // Send existing logs first
+    try {
+      const content = await fs.readFile(logFile, "utf-8");
+      const existingLogs = content.trim().split("\n").filter(Boolean);
+      
+      for (const line of existingLogs) {
+        try {
+          const log = JSON.parse(line);
+          // Transform to expected format
+          const transformedLog = {
+            timestamp: log.timestamp || new Date(log.ts || Date.now()).toISOString(),
+            level: log.level || "info",
+            source: log.source || "worker",
+            message: log.message || log.msg || "",
+            metadata: log.metadata || log.details || log.meta || {}
+          };
+          res.write(`data: ${JSON.stringify(transformedLog)}\n\n`);
+        } catch (parseError) {
+          console.error("Failed to parse log line:", parseError);
+        }
+      }
+    } catch (error) {
+      // No logs yet or file doesn't exist
+      console.log(`No logs found for job ${jobId}`);
+    }
+
+    // Poll for new logs every 500ms
+    let lastSize = 0;
+    try {
+      const stats = await fs.stat(logFile);
+      lastSize = stats.size;
+    } catch (error) {
+      // File doesn't exist yet
+    }
+
+    const intervalId = setInterval(async () => {
+      try {
+        const stats = await fs.stat(logFile);
+        if (stats.size > lastSize) {
+          // File has grown, read new content
+          const stream = await fs.open(logFile, "r");
+          const buffer = Buffer.alloc(stats.size - lastSize);
+          await stream.read(buffer, 0, buffer.length, lastSize);
+          await stream.close();
+          
+          const newContent = buffer.toString("utf-8");
+          const newLines = newContent.trim().split("\n").filter(Boolean);
+          
+          for (const line of newLines) {
+            try {
+              const log = JSON.parse(line);
+              const transformedLog = {
+                timestamp: log.timestamp || new Date(log.ts || Date.now()).toISOString(),
+                level: log.level || "info",
+                source: log.source || "worker",
+                message: log.message || log.msg || "",
+                metadata: log.metadata || log.details || log.meta || {}
+              };
+              res.write(`data: ${JSON.stringify(transformedLog)}\n\n`);
+            } catch (parseError) {
+              console.error("Failed to parse log line:", parseError);
+            }
+          }
+          
+          lastSize = stats.size;
+        }
+      } catch (error) {
+        // File doesn't exist yet, that's ok
+      }
+    }, 500);
+
+    // Clean up on client disconnect
+    req.on("close", () => {
+      clearInterval(intervalId);
+      res.end();
+    });
+  });
+
+  // Build job
+  app.post("/api/jobs/:jobId/build", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { autonomy, prompt } = req.body;
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      // Update job with autonomy settings
+      const autonomyLevel = autonomy || "medium";
+      await storage.updateJob(jobId, { 
+        status: "queued",
+        settings: JSON.stringify({ autonomy: autonomyLevel })
+      });
+
+      // Trigger job queue with autonomy level
+      const buildPrompt = prompt || job.prompt || "Rebuild and refine the application";
+      await jobQueue.addJob(jobId, buildPrompt, undefined, autonomyLevel);
+
+      res.json({ 
+        success: true, 
+        status: "queued",
+        autonomy: autonomyLevel
+      });
+    } catch (error) {
+      console.error("Error starting build:", error);
+      res.status(500).json({ error: "Failed to start build" });
+    }
+  });
+
+  // Extensions list
+  app.get("/api/extensions", async (req, res) => {
+    try {
+      res.json([
+        { id: "prettier", name: "Prettier", icon: "✨", installed: true },
+        { id: "eslint", name: "ESLint", icon: "🔍", installed: false },
+        { id: "typescript", name: "TypeScript", icon: "📘", installed: true },
+        { id: "tailwind", name: "Tailwind IntelliSense", icon: "🎨", installed: true },
+      ]);
+    } catch (error) {
+      console.error("Error fetching extensions:", error);
+      res.status(500).json({ error: "Failed to fetch extensions" });
+    }
+  });
+
+  // Command palette search
+  app.post("/api/search/palette", async (req, res) => {
+    try {
+      const { query } = req.body;
+      
+      // Mock implementation - return filtered results
+      const allCommands = [
+        { id: "new-file", label: "New File", category: "Files" },
+        { id: "upload", label: "Upload", category: "Files" },
+        { id: "preview", label: "Preview", category: "Actions" },
+        { id: "console", label: "Console", category: "Actions" },
+        { id: "settings", label: "Settings", category: "Tools" },
+      ];
+
+      const filtered = query 
+        ? allCommands.filter(cmd => 
+            cmd.label.toLowerCase().includes(query.toLowerCase())
+          )
+        : allCommands;
+
+      res.json(filtered);
+    } catch (error) {
+      console.error("Error searching commands:", error);
+      res.status(500).json({ error: "Failed to search commands" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

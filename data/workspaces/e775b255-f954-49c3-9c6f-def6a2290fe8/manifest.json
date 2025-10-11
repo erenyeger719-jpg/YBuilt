@@ -1,0 +1,6 @@
+{
+  "name": "hre",
+  "description": "hr",
+  "entryPoint": "index.html",
+  "dependencies": {}
+}

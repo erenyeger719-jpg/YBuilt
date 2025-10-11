@@ -1,16 +1,35 @@
-import { Moon, Sun, Sparkles, Library } from "lucide-react";
+import { Moon, Sun, Sparkles, Library, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Badge } from "@/components/ui/badge";
+import { Link, useLocation } from "wouter";
 import Logo from "./Logo";
 import PaymentButton from "./PaymentButton";
 import CurrencyToggle from "./CurrencyToggle";
 import ProfileIcon from "./ProfileIcon";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useState, useEffect } from "react";
 
-export default function Header() {
+interface HeaderProps {
+  showPublish?: boolean;
+  logSummary?: {
+    status: "success" | "error" | "building";
+    lastBuild: string;
+  };
+  onPublish?: () => void;
+}
+
+export default function Header({ showPublish, logSummary, onPublish }: HeaderProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [lowGloss, setLowGloss] = useState(false);
   const [currency, setCurrency] = useState<"INR" | "USD">("INR");
+  const [location] = useLocation();
+
+  const isWorkspace = location.startsWith("/workspace/");
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
@@ -62,9 +81,45 @@ export default function Header() {
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 backdrop-blur-md bg-background/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
-          <Logo />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/">
+                <a className="flex items-center" data-testid="link-home-logo">
+                  <Logo />
+                </a>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Ybuilt — Home</p>
+            </TooltipContent>
+          </Tooltip>
           
           <div className="flex items-center gap-2">
+            {isWorkspace && logSummary && (
+              <Badge 
+                variant={logSummary.status === "success" ? "default" : logSummary.status === "error" ? "destructive" : "secondary"}
+                className="gap-1.5"
+                data-testid="badge-log-summary"
+              >
+                <span className="text-xs">
+                  Build: {logSummary.status} • Last: {logSummary.lastBuild}
+                </span>
+              </Badge>
+            )}
+            
+            {isWorkspace && showPublish && (
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2"
+                onClick={onPublish}
+                data-testid="button-publish"
+              >
+                <Upload className="h-4 w-4" />
+                <span>Publish</span>
+              </Button>
+            )}
+            
             <Button
               variant="ghost"
               size="sm"

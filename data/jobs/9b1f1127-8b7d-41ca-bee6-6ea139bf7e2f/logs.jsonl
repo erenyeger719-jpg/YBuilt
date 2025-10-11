@@ -1,0 +1,4 @@
+{"timestamp":"2025-10-11T18:53:30.467Z","stage":"GENERATION","message":"Starting generation","details":{"prompt":"epic games like"}}
+{"timestamp":"2025-10-11T18:53:32.675Z","stage":"ASSEMBLY","message":"Assembling components"}
+{"timestamp":"2025-10-11T18:53:32.675Z","stage":"LINT","message":"Running linting checks"}
+{"timestamp":"2025-10-11T18:53:32.676Z","stage":"STATIC-BUILD","message":"Build complete","details":{"outputPath":"/previews/9b1f1127-8b7d-41ca-bee6-6ea139bf7e2f/index.html"}}

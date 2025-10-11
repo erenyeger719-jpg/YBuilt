@@ -18,6 +18,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   getUserCredits(userId: string): Promise<number>;
   updateUserCredits(userId: string, credits: number): Promise<void>;
+  addCredits(userId: string, amount: number): Promise<void>;
   
   // Job methods
   createJob(job: InsertJob): Promise<Job>;
@@ -51,6 +52,23 @@ export interface IStorage {
   // Upload methods
   addUploadedAsset(jobId: string, asset: UploadedAsset): Promise<void>;
   getUploadedAssets(jobId: string): Promise<UploadedAsset[]>;
+  
+  // Billing methods
+  createInvoice(invoice: Invoice): Promise<Invoice>;
+  getInvoices(userId: string): Promise<Invoice[]>;
+  deductCredits(userId: string, amount: number): Promise<void>;
+}
+
+export interface Invoice {
+  id: string;
+  userId: string;
+  amount: number;
+  type: "publish" | "credit_purchase";
+  jobId?: string | null;
+  timestamp: string;
+  status: "paid" | "pending" | "failed";
+  paymentId?: string;
+  orderId?: string;
 }
 
 export class MemStorage implements IStorage {
@@ -61,20 +79,23 @@ export class MemStorage implements IStorage {
   private userCredits: Map<string, number>;
   private drafts: Map<string, Draft>;
   private uploads: Map<string, UploadedAsset[]>;
+  private invoices: Map<string, Invoice>;
 
   constructor() {
     this.users = new Map();
     this.jobs = new Map();
     this.builds = new Map();
     this.versions = new Map();
-    this.userCredits = new Map([["demo", 0]]);
+    this.userCredits = new Map([["demo", 100]]); // Initialize demo user with 100 credits
     this.drafts = new Map();
     this.uploads = new Map();
+    this.invoices = new Map();
     this.loadJobs();
     this.loadUsers();
     this.loadBuilds();
     this.loadVersions();
     this.loadDrafts();
+    this.loadInvoices();
   }
 
   private async loadJobs() {
@@ -436,6 +457,61 @@ export class MemStorage implements IStorage {
 
   async getUploadedAssets(jobId: string): Promise<UploadedAsset[]> {
     return this.uploads.get(jobId) || [];
+  }
+
+  // Billing methods
+  private async loadInvoices() {
+    try {
+      const billingFile = path.join(process.cwd(), "data", "billing.json");
+      const data = await fs.readFile(billingFile, "utf-8");
+      const billingData = JSON.parse(data);
+      if (billingData.invoices) {
+        billingData.invoices.forEach((invoice: Invoice) => {
+          this.invoices.set(invoice.id, invoice);
+        });
+      }
+    } catch (error) {
+      // File doesn't exist yet or is empty
+    }
+  }
+
+  private async saveInvoices() {
+    try {
+      const billingFile = path.join(process.cwd(), "data", "billing.json");
+      const invoicesArray = Array.from(this.invoices.values());
+      await fs.writeFile(
+        billingFile,
+        JSON.stringify({ invoices: invoicesArray }, null, 2)
+      );
+    } catch (error) {
+      console.error("Error saving invoices:", error);
+    }
+  }
+
+  async createInvoice(invoice: Invoice): Promise<Invoice> {
+    this.invoices.set(invoice.id, invoice);
+    await this.saveInvoices();
+    return invoice;
+  }
+
+  async getInvoices(userId: string): Promise<Invoice[]> {
+    return Array.from(this.invoices.values()).filter(
+      (invoice) => invoice.userId === userId
+    );
+  }
+
+  async deductCredits(userId: string, amount: number): Promise<void> {
+    const currentCredits = this.userCredits.get(userId) ?? 0;
+    const newCredits = Math.max(0, currentCredits - amount);
+    this.userCredits.set(userId, newCredits);
+    await this.saveUsers();
+  }
+
+  async addCredits(userId: string, amount: number): Promise<void> {
+    const currentCredits = this.userCredits.get(userId) ?? 0;
+    const newCredits = currentCredits + amount;
+    this.userCredits.set(userId, newCredits);
+    await this.saveUsers();
   }
 }
 
