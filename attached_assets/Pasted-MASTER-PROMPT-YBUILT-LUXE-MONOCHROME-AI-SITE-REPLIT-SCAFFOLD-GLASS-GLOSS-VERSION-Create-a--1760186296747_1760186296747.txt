@@ -1,0 +1,99 @@
+MASTER PROMPT — YBUILT: LUXE MONOCHROME AI SITE + REPLIT SCAFFOLD (GLASS & GLOSS VERSION)
+
+Create a luxurious, ultra-HDR monochrome website and a Replit-ready starter repo for **ybuilt** (tagline EXACT: "Build smarter. Launch faster."). Visual + UX must read like X.AI × Epic Games: cinematic, tactile, restrained — a new-world portal where users create websites/apps with one prompt. **Apply a cohesive glossy / glass material system to all UI, text, objects, and cards so the entire page reads like polished glass and high-end metal.**
+
+VISUAL SUMMARY
+- Palette: strict monochrome (black → greys → white). No UI colors. Allow micro metallic rim only in exported logo assets. Push extreme dynamic range: deepest blacks #000000, pure whites #FFFFFF, punchy midtones, strong specular highlights, crisp edges, subtle bloom.
+- Material system (NEW — Glass & Gloss):
+  - Treat primary surfaces (panels, cards, logo, preview box faces, some large text blocks) as layered glass: semi-translucent base, strong specular rim, subtle internal reflection, and faint environmental reflections. Use fresnel highlights and soft bloom on rim edges.
+  - Text should be rendered as metallic-on-glass when overlaid on panels: specular gradient, slight bevel / inner-shadow for depth, and tiny soft reflection to read like polished metal under a glass surface.
+  - Buttons, icons and small UI controls: glass shards — glossy face, thin near-white rim, subtle inner glow on hover. Maintain accessible contrast.
+  - Preview cards: extruded 3D glass blocks with glossy front face and matte beveled sides. Cast soft shadow and micro-reflection on the surface.
+  - Logo: 3D sculpted glass Y with refractive interior, specular highlights, micro-bloom and rim-light; "built" sits flush to the right with matching glass/metal treatment.
+- Background: full-bleed left→right gradient (black → charcoal → near-white) composited with layered 3D smoke ribbons, fine sand/particle flecks, and the uploaded ripple texture at `/mnt/data/istockphoto-1475933993-612x612.jpg`. Provide responsive outputs: 8K, 4K, 2K, mobile AVIF/WebP. Ensure background subtly reflects in foreground glass surfaces for realism.
+- Metallic text mapping:
+  - Text placed on dark areas → white-metallic with bright specular gradient + faint reflection.
+  - Text placed on light areas → black-metallic with deep specular + inner shadow.
+  - Small red-metallic accents allowed sparingly for badges only (exports permitted).
+- Composition: diagonal/tilted layered planes (5–7) with varied textures: glass gloss, paper-origami folds (rabbit/tiger/elephant accents), brushed micrograin. Provide parallax depth and crisp separation so layers read at 4K and mobile.
+- Showcase: 6–8 3D preview cards (extruded, rim-lit, tactile glass) arranged near hero bottom — each a mini-carousel showing websites/apps created by AI; click opens modal/iframe `/previews/{id}/index.html`.
+- Motion: high-class, restrained animation — headline reveal (clip + opacity), logo intro (scale + specular sweep + idle breathe), parallax layers, card lift + highlight sweep, Lottie for smoke/origami. Include `prefers-reduced-motion` fallbacks.
+
+UX & FLOW
+- Hero copy (exact): Headline: "From Idea to Digital Reality." Tagline: "Build smarter. Launch faster."
+- Prompt box in hero: single input with placeholder; minimal CTAs (primary: "Create", secondary: "Explore previews"). Prompt box should appear as a glass slab inset into the hero with glossy rim and subtle reflection of the giant Y.
+- Creation flow: POST `/api/generate` → server creates job in `data/jobs.json` → client polls `GET /api/jobs/{jobId}` until `status==='completed'` → show `public/previews/{jobId}/index.html` in iframe.
+- Accessibility: keyboard navigable modals, ARIA labels, 4.5:1 contrast for body text, reduce-motion toggle persisted in localStorage. Provide a "Low-gloss / high-contrast" toggle for users who need less shine.
+
+PAYMENTS (India-first)
+- Implement Razorpay demo integration supporting UPI (collect & intent), UPI QR, netbanking, wallets, cards. Server exposes `GET /api/razorpay_key` to return test `RAZORPAY_KEY_ID`. Client uses that to open Razorpay checkout for "Buy Creator Plan ₹799". Server webhook `POST /webhooks/razorpay` must verify `x-razorpay-signature` via HMAC-SHA256 and on `payment.captured` update `data/users.json` demo credits and log to `data/payments.log`.
+- Support optional secondary gateways (placeholder config) for Cashfree/PayU toggling by ENV.
+- Default currency INR; include currency toggle (INR/USD) but UPI flows only for INR sandbox.
+- MOCK_MODE: repo must run fully in mock mode without real payment or OpenAI keys.
+
+TASK: Scaffold a Replit-ready starter project named "ybuilt-starter" (single pasteable output)
+GOAL: Produce a git-ready project (full file tree + exact file contents) that runs on Replit or locally with:
+
+  npm install && npm run dev
+
+REQUIRED SCOPE (create these files exactly)
+- Top-level: package.json, .env.example, README.md, deploy.md, data/jobs.json ({}), data/users.json ({"demo":{"id":"demo","credits":0}}).
+- public/: background.png (use uploaded texture to generate background-8k.webp, background-4k.webp, background-mobile.avif), logo.svg (glass Y placeholder), fonts/Valmeria.woff2 (placeholder), previews/sample/index.html, previews/1..8/index.html (demo pages).
+  - In addition to the image exports, include `logo_gloss_poster.png` (static hero with specular highlights) and `glass_matcap.webp` (for environment reflection reference).
+- client/: Vite + React + Tailwind
+  - package.json, index.html, postcss.config.cjs, tailwind.config.cjs
+  - src/main.jsx, App.jsx
+  - src/pages/Studio.jsx (prompt form, hero, 6–8 preview cards with modal/iframe)
+  - src/components/Header.jsx, Logo.jsx, Hero.jsx, PreviewCard.jsx, ModalPreview.jsx
+  - src/index.css with @font-face Valmeria and the monochrome theme plus `.app-bg`, `.smoke-overlay`, `.card-glass`, `.cta`, `.preview-iframe` and the ultra-high-contrast CSS tweaks (use variables --bg-left, --bg-mid, --bg-right, --glass-edge, --text-main). Add glass-specific CSS variables: `--glass-alpha`, `--glass-reflection`, `--rim-strength`.
+- server/: Node + Express
+  - package.json, server.js
+  - routes/generate.js, routes/jobs.js, routes/webhooks.js
+  - utils/queue.js (BullMQ if REDIS_URL else in-process mock)
+  - serve static `public/previews/*`
+- worker/: package.json, worker.js (process jobs; support --mock / MOCK_JOB; simulate 2–4s generation; write `public/previews/{jobId}/index.html`; update `data/jobs.json` to completed). Include commented example to swap mock to real OpenAI/Gemini.
+- test/generate.test.js — simple test POST /api/generate and assert jobId exists.
+
+DELIVERABLES (what AI must return)
+1. A single pasteable repo tree with exact file contents (ready to paste into Replit).
+2. Hero art + exported assets: `background-8k.webp`, `background-4k.webp`, `background-mobile.avif`, `logo.svg`, `logo_gloss_poster.png`, `glass_matcap.webp`, and 6–8 preview pages under `public/previews/`.
+3. Lottie or Framer Motion variants for `logoIntro`, `headlineStagger`, `cardStagger`, `smokeRibbons` (or JSON placeholders).
+4. README with run instructions (`npm install && npm run dev`), Replit notes (port/env), Razorpay sandbox testing, MOCK_MODE explanation, and how to replace mock generation with OpenAI/Redis.
+5. Ensure all animations honor `prefers-reduced-motion`. Lazy-load iframe previews. Limit heavy Lottie loops.
+
+SHORT MIDJOURNEY/SD ONE-LINER for hero renders (optional)
+"Ultra-HDR monochrome cinematic hero: void background left→right black→grey→white, layered tilted strata, 3D glass sculpted Y with 'built' attached, specular rim lighting, high-contrast smoke ribbons, tactile 3D preview boxes (6–8), paper-origami accents, metallic white-on-black / black-on-white text mapping, heavy glossy glass material and reflections, 4K+ detail."
+
+SNIPPET: quick CSS for glass + gloss (copy into client/src/index.css)
+```css
+:root{
+  --glass-alpha: 0.12;
+  --glass-reflection: rgba(255,255,255,0.08);
+  --rim-strength: rgba(255,255,255,0.10);
+}
+.card-glass {
+  background: linear-gradient(180deg, rgba(255,255,255,var(--glass-alpha)), rgba(255,255,255,0.02));
+  border: 1px solid var(--rim-strength);
+  backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+}
+.gloss-sheen::after {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02) 30%, transparent 60%);
+  mix-blend-mode: screen;
+  transform: translateY(-30%) rotate(-12deg);
+  opacity: 0.9;
+}
+.metal-text {
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(220,220,220,0.65));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.55);
+}
