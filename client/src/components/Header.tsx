@@ -1,8 +1,10 @@
-import { Moon, Sun, Sparkles } from "lucide-react";
+import { Moon, Sun, Sparkles, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
 import Logo from "./Logo";
 import PaymentButton from "./PaymentButton";
 import CurrencyToggle from "./CurrencyToggle";
+import ProfileIcon from "./ProfileIcon";
 import { useState, useEffect } from "react";
 
 export default function Header() {
@@ -63,6 +65,20 @@ export default function Header() {
           <Logo />
           
           <div className="flex items-center gap-2">
+            <Link href="/library">
+              <a>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  data-testid="button-library"
+                  aria-label="Library"
+                >
+                  <Library className="h-4 w-4" />
+                  <span className="hidden sm:inline">Library</span>
+                </Button>
+              </a>
+            </Link>
             <PaymentButton amount={amount} currency={currency} />
             <CurrencyToggle onCurrencyChange={setCurrency} />
             <Button
@@ -88,6 +104,7 @@ export default function Header() {
                 <Moon className="h-5 w-5" />
               )}
             </Button>
+            <ProfileIcon />
           </div>
         </div>
       </div>

@@ -122,6 +122,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get user projects (mock data for now)
+  app.get("/api/projects", async (req, res) => {
+    try {
+      // For now, return empty array as we don't have project storage yet
+      // In a real implementation, this would fetch from storage
+      res.json([]);
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      res.status(500).json({ error: "Failed to fetch projects" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

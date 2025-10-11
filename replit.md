@@ -14,6 +14,10 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 - ✅ Full accessibility (ARIA, keyboard nav, 4.5:1 contrast)
 
 ## Recent Changes
+- **2025-01-11**: Added Library page with black→red→blue diagonal slash stripes (intentional color departure from monochrome per user request)
+- **2025-01-11**: Added ProfileIcon component with accessible dropdown menu using shadcn primitives
+- **2025-01-11**: Added preview thumbnails for all 8 showcase cards with hover play button overlay
+- **2025-01-11**: Added Library button to header navigation
 - **2025-01-11**: Fixed webhook HMAC verification to use raw body before JSON parsing (express.raw middleware)
 - **2025-01-11**: Removed all emoji from UI to comply with design guidelines
 - **2025-01-11**: Updated theme toggle logic to use explicit add/remove instead of toggle for better reliability
@@ -25,6 +29,7 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 ## User Preferences
 - Design aesthetic: X.AI × Epic Games (cinematic, tactile, restrained)
 - Color palette: Strict monochrome (black → white) with extreme HDR
+  - **Exception**: Library page uses black→red→blue diagonal stripes per explicit user request
 - Material system: Glass/gloss with specular highlights and reflections
 - Payment: India-first with Razorpay (UPI, QR, netbanking, wallets, cards)
 - Accessibility: Critical - WCAG AA compliance, keyboard nav, reduced motion support

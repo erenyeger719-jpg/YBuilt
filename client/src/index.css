@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --shimmer-animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root {
+    --shimmer-animation: shimmer 20s linear infinite;
+  }
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);

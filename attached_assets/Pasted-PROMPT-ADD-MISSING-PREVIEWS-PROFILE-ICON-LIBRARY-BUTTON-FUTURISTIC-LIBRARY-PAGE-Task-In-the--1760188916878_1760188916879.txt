@@ -1,0 +1,69 @@
+PROMPT — ADD MISSING PREVIEWS, PROFILE ICON, LIBRARY BUTTON & FUTURISTIC LIBRARY PAGE
+
+Task: In the existing YBUILT project, add/fill the missing preview images for all pop boxes, add a profile icon in the top-right header, add a visible Library button (or Library link inside the profile menu) that opens a Library page, and build a futuristic Library page with glossy diagonal slash stripes ("/") in black → red → blue order (not a gradient). If the user has no projects, show a clear “Create Now” call-to-action.
+
+1) FILL MISSING POP-BOX IMAGES
+- For each preview card shown under the hero (6–8 cards), add a generated high-quality thumbnail: `public/previews/{id}/thumbnail.webp`. If any `index.html` preview is missing, generate a demo `public/previews/{id}/index.html` that shows a mini site/app mock.
+- Thumbnails should match site aesthetics: 4K source, monochrome/glass material, subtle reflections, slight vignette, and a small metallic title overlay.
+- Cards must show thumbnail, small title, and micro-play overlay. On hover: lift + highlight sweep; on click: open modal/iframe to `/previews/{id}/index.html`.
+
+2) PROFILE ICON (TOP-RIGHT)
+- Add a circular profile icon in the top-right of the header:
+  - File: `client/src/components/ProfileIcon.jsx` (or inject into existing Header).
+  - Visual: circular glass button (42×42 px) with reflective rim, minimalist user silhouette inside (white-metallic or black-metallic depending on contrast).
+  - Interaction: click opens dropdown with: “My Library”, “Settings”, “Sign out” or “Sign in / Create account” if not authenticated.
+  - Accessibility: aria-label, keyboard focus outline, and focus trap inside dropdown on open.
+
+3) LIBRARY BUTTON & PLACEMENT
+- Place a **Library** button in the header nav (right side) and also inside the profile dropdown.
+- Style: glass-outline button matching CTA treatment; small light sweep on hover.
+- Behavior: click navigates to `/library` page or opens the Library modal if using single-page flow.
+
+4) LIBRARY PAGE (BLACK → RED → BLUE SLASH BACKDROP)
+- Route / file: `client/src/pages/Library.jsx`
+- Background: glossy diagonal slash panels ("/") arranged across the canvas in repeating order: **black → red → blue → black**. These are not gradients but distinct glossy glass stripes (tilted ~30°). Each stripe should be polished, rim-lit and reflective with subtle fog overlay.
+  - Provide responsive assets `public/library-bg-8k.webp`, `public/library-bg-4k.webp`, `public/library-bg-mobile.avif`.
+- Glass & Gloss: the stripes should read as layered glass, with specular highlights and faint environment reflections; ensure high contrast and shine.
+- Geometry & Motion: subtle parallax on cursor/scroll; a slow shimmer/light wave across stripes (Lottie / CSS). Respect `prefers-reduced-motion`.
+- Text color mapping:
+  - On black stripe → white-metallic text
+  - On red stripe → white-metallic text
+  - On blue stripe → black-metallic text with faint red edge highlight
+- Layout:
+  - Grid of project cards: each card = 3D extruded glass rectangle with thumbnail, title, date, and mini action icons (Open / Duplicate / Delete).
+  - Empty state: centered glass slab with message: **“No projects yet. Create your first one.”** and a prominent **“Create Now”** glass CTA that opens the Studio prompt.
+  - Cards open into Studio or modal with glossy transition and blur-dissolve animation.
+- Accessibility: keyboard navigation, ARIA labels, readable contrast (≥4.5:1 for body text).
+
+5) ASSET & FILE EXPECTATIONS (for generator/dev)
+- Add thumbnails and previews: `public/previews/1..8/thumbnail.webp` and `public/previews/1..8/index.html` (if missing).
+- Add library background assets: `public/library-bg-8k.webp`, `public/library-bg-4k.webp`, `public/library-bg-mobile.avif`.
+- Add profile component: `client/src/components/ProfileIcon.jsx`.
+- Add library page: `client/src/pages/Library.jsx`.
+- Update header: `client/src/components/Header.jsx` to include Library button and ProfileIcon.
+
+6) MOTION & INTERACTIONS
+- Card hover: lift (translateY -8px) + highlight sweep (280–360ms).
+- Library stripes: very slow shimmer (12–24s loop) or Lottie reflection; low density particles overlay; parallax depth ratio subtle.
+- Modal open: backdrop fade 240ms; modal scale 0.96→1 with spring 520–680ms.
+- Respect `prefers-reduced-motion`.
+
+7) MICROCOPY & CTAs
+- Library empty state: Title: “No projects yet.” Body: “Create your first project with a single prompt.” CTA: “Create Now”.
+- Project card small label: show project name and date (e.g., “Prototype — Sep 10, 2025”).
+
+8) PERFORMANCE & FALLBACKS
+- Provide lower-res thumbnails for mobile; lazy-load iframe content only when card is activated.
+- Limit active Lottie instances; provide static PNG fallbacks.
+
+9) QA CHECKLIST (deliverable)
+- Ensure all preview boxes show thumbnails and open previews.
+- Ensure header shows profile icon and Library button; both accessible.
+- Verify Library page loads responsive backgrounds and shows projects or empty state with Create Now CTA.
+- Verify color/text mapping rules and contrast.
+- Verify keyboard navigation & reduced-motion behavior.
+
+STYLE DIRECTION (one-line for visual generator)
+“Add 6–8 high-res monochrome glass-style preview thumbnails, a circular glass profile icon in the top-right, and a Library page with glossy diagonal slash stripes (black → red → blue → black) that reads like futuristic polished glass; include Create Now empty state, parallax shimmer, and high-contrast metallic text mapping.”
+
+End of prompt.
