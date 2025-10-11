@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Commerce Store</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    header { padding: 1rem 2rem; border-bottom: 1px solid #ddd; }
+    .products { padding: 2rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 2rem; }
+    .product { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+    .product-img { height: 200px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .product-info { padding: 1rem; }
+    .price { font-weight: bold; font-size: 1.25rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <header><h1>Shop</h1></header>
+  <div class="products">
+    <div class="product"><div class="product-img"></div><div class="product-info"><h3>Product 1</h3><div class="price">$99</div></div></div>
+    <div class="product"><div class="product-img"></div><div class="product-info"><h3>Product 2</h3><div class="price">$149</div></div></div>
+    <div class="product"><div class="product-img"></div><div class="product-info"><h3>Product 3</h3><div class="price">$199</div></div></div>
+  </div>
+</body>
+</html>
