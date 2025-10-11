@@ -19,6 +19,15 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 - ✅ User persistence across server restarts
 
 ## Recent Changes
+- **2025-01-11**: Simplified Library.tsx to use CSS-based diagonal gradient (removed individual band divs)
+- **2025-01-11**: Updated index.css with .library-root::before for glass matcap overlay
+- **2025-01-11**: Fixed Library theme CSS variables to use exact high-contrast values
+- **2025-01-11**: Added OAuth social login buttons to SignInModal (Google, Apple, Facebook, Twitter, GitHub)
+- **2025-01-11**: Implemented mock OAuth endpoints: GET /api/auth/:provider and /api/auth/mock-success
+- **2025-01-11**: OAuth buttons auto-create users with format demo-{provider}@ybuilt.com
+- **2025-01-11**: All OAuth providers work in mock mode without external API configuration
+- **2025-01-11**: Verified Library theme resilience: remains visible in light mode (no wash-out)
+- **2025-01-11**: Updated README with OAuth mock mode instructions and testing steps
 - **2025-01-11**: Implemented complete mock auth system with localStorage JWT-like tokens
 - **2025-01-11**: Added user persistence with loadUsers() and saveUsers() methods
 - **2025-01-11**: Auto-create users on sign-in if they don't exist (mock mode convenience)
