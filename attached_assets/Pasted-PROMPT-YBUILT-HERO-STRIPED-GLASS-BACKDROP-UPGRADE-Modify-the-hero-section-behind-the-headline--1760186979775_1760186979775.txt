@@ -1,0 +1,38 @@
+PROMPT — YBUILT HERO STRIPED GLASS BACKDROP UPGRADE
+
+Modify the hero section behind the headline **"From Idea to Digital Reality"** to use a high-contrast, diagonal striped glass background instead of a flat white area. The stripe pattern should alternate **white-glass** and **black-glass** bands, tilted at a 25–35° angle (like “/” slashes) running from top-left to bottom-right. Each stripe must appear as **literal glossy glass** — semi-transparent, reflective, and high-specular — with subtle rim highlights and soft bloom to catch light dynamically as if illuminated by stage lights.
+
+VISUAL & MATERIAL REQUIREMENTS
+- Stripe colors: alternating deep black glass (reflective, inner-glow edges) and pure white glass (translucent frosted reflection).  
+- Material: use full glass PBR-like finish — slight transparency, reflection blur, and specular sheen. The goal is to look like stacked slanted glass plates under studio lighting.
+- Reflection: the headline text **"From Idea to Digital Reality"** should reflect faintly across the surface of the glass stripes — subtle horizontal mirroring (opacity ~0.12–0.18), slightly warped by curvature, giving the illusion of depth and realism.
+- Orientation: keep diagonal slant consistent across hero width; ensure the stripes align smoothly and continue slightly beyond the visible area for seamless looping effect.
+- Motion: slow parallax shift or a gentle refractive wave effect on hover/scroll (like light bending through glass). Keep this animation subtle and elegant — no hard movement.
+- Light: simulate studio lighting sweeping across diagonals; add micro-bloom highlights along stripe edges to enhance contrast and glass realism. Maintain overall ultra-HDR monochrome dynamic range.
+- Background integration: these stripes replace the previous white backdrop behind the headline while keeping the rest of the hero gradient (black→grey→white) intact. Ensure the black/white-glass stripes blend softly into the surrounding hero gradient for continuity.
+- Reflection lighting: ensure reflections match the hero lighting direction — soft right-to-left light fade with a subtle blue-white rim tone for realism (do not add visible color tint).
+- Accessibility: headline text must remain legible (contrast ratio ≥ 4.5:1). If needed, add a subtle fog/overlay behind text with rgba(0,0,0,0.25) to improve readability without breaking the glass illusion.
+
+MICRO-DETAILS
+- Add a faint inner-shadow under each stripe edge to enhance separation.
+- Slight refraction distortion for letters near stripe borders.
+- Optionally add a tiny animated particle shimmer along glass stripe intersections (only 2–3 visible specks, like dust glinting in light).
+
+TECHNICAL / IMPLEMENTATION NOTES
+- Use layered divs with clip-path or mask-image for the diagonal bands.
+- Apply backdrop-filter: blur(8px) saturate(150%) contrast(1.2); and `mix-blend-mode: screen` on lighter stripes, `overlay` on darker ones.
+- Add a pseudo-element above the background for the reflected text:
+  ```css
+  .hero-reflection::after {
+    content: "From Idea to Digital Reality";
+    position: absolute;
+    inset: 0;
+    font-family: 'Valmeria';
+    font-size: clamp(2.4rem, 5vw, 4rem);
+    text-align: center;
+    color: rgba(255,255,255,0.12);
+    transform: scaleY(-1) translateY(30%);
+    filter: blur(2px);
+    mix-blend-mode: screen;
+    pointer-events: none;
+  }

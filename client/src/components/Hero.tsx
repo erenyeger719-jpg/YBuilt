@@ -36,6 +36,27 @@ export default function Hero() {
         </div>
       </div>
 
+      {/* Diagonal Striped Glass Backdrop */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="glass-stripe-container">
+          {/* Glass stripes */}
+          {[...Array(12)].map((_, i) => (
+            <div
+              key={i}
+              className={`glass-stripe ${i % 2 === 0 ? 'glass-stripe-white' : 'glass-stripe-black'}`}
+              style={{
+                left: `${i * 10 - 10}%`,
+              }}
+            />
+          ))}
+          
+          {/* Reflected headline text */}
+          <div className="hero-reflection" aria-hidden="true">
+            From Idea to Digital Reality
+          </div>
+        </div>
+      </div>
+
       {/* Content */}
       <motion.div
         className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center"
@@ -44,10 +65,12 @@ export default function Hero() {
         animate="visible"
       >
         <motion.h1
-          className="text-hero-mobile md:text-hero font-bold mb-6 metal-text"
+          className="text-hero-mobile md:text-hero font-bold mb-6 metal-text relative"
           variants={itemVariants}
         >
-          From Idea to Digital Reality
+          <span className="relative z-10">From Idea to Digital Reality</span>
+          {/* Text readability overlay */}
+          <span className="absolute inset-0 bg-black/20 dark:bg-black/30 blur-xl -z-10" aria-hidden="true" />
         </motion.h1>
         
         <motion.p
