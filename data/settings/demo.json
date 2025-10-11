@@ -39,7 +39,7 @@
     "editorTheme": "dark"
   },
   "ai": {
-    "model": "gpt-5-mini",
+    "model": "gpt-5-x",
     "temperature": 0.7,
     "autoRefine": false,
     "maxTokens": 4000,
