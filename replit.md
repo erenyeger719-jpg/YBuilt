@@ -20,9 +20,17 @@ Luxurious monochrome AI website builder with cinematic glass/gloss aesthetics. U
 - ✅ Settings system with black→purple→sky blue diagonal gradient theme
 - ✅ 12 settings sections with reactive SettingsContext and file persistence
 - ✅ Appearance settings form with 9 functional controls (theme, glass, gloss, parallax, motion, fonts, power modes)
+- ✅ AI & Models settings form with 10 controls plus prompt template CRUD
 - ✅ Immediate visual feedback via CSS variable updates on all appearance changes
 
 ## Recent Changes
+- **2025-01-11**: Implemented complete AI & Models settings form with 10 controls plus template CRUD
+- **2025-01-11**: Added model selector (GPT-5-X/GPT-5-Mini/Vision-Capable), temperature slider, compute tier
+- **2025-01-11**: Implemented max runtime (10-60s), max tokens (1000-8000), default style selector
+- **2025-01-11**: Added auto-refine, preview watermark toggles, safety filter with dependent level selector
+- **2025-01-11**: Built complete prompt template CRUD: add, delete, set default, with auto-default promotion
+- **2025-01-11**: Fixed regression: deleting default template now promotes first remaining to default
+- **2025-01-11**: E2E tested: All AI controls, template add/delete/default with persistence verification
 - **2025-01-11**: Implemented complete Appearance settings form with 9 functional controls
 - **2025-01-11**: Added theme selector (system/dark/light/force-library) with immediate effect
 - **2025-01-11**: Implemented glass intensity (0-100%), parallax intensity (0-100%), font size (12-20px) sliders
