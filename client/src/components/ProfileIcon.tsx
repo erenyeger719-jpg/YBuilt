@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { User, Settings, LogOut, LogIn } from "lucide-react";
+import { User, Settings, LogOut, LogIn, CreditCard } from "lucide-react";
 import { useLocation } from "wouter";
 import {
   DropdownMenu,
@@ -106,6 +106,14 @@ export default function ProfileIcon() {
               >
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => handleSelect("/settings/billing")}
+                className="cursor-pointer relative z-10"
+                data-testid="menu-item-manage-billing"
+              >
+                <CreditCard className="mr-2 h-4 w-4" />
+                Manage Billing
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

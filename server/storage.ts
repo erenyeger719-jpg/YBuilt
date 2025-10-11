@@ -1,10 +1,11 @@
-import { type User, type InsertUser, type Job, type InsertJob } from "@shared/schema";
+import { type User, type InsertUser, type Job, type InsertJob, type Settings, settingsSchema } from "@shared/schema";
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
 
 const JOBS_FILE = path.join(process.cwd(), "data", "jobs.json");
 const USERS_FILE = path.join(process.cwd(), "data", "users.json");
+const SETTINGS_DIR = path.join(process.cwd(), "data", "settings");
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -19,6 +20,9 @@ export interface IStorage {
   
   getUserCredits(userId: string): Promise<number>;
   updateUserCredits(userId: string, credits: number): Promise<void>;
+  
+  getSettings(userId: string): Promise<Settings>;
+  updateSettings(userId: string, settings: Partial<Settings>): Promise<Settings>;
 }
 
 export class MemStorage implements IStorage {
@@ -158,6 +162,42 @@ export class MemStorage implements IStorage {
   async updateUserCredits(userId: string, credits: number): Promise<void> {
     this.userCredits.set(userId, credits);
     await this.saveUsers();
+  }
+
+  async getSettings(userId: string): Promise<Settings> {
+    const settingsFile = path.join(SETTINGS_DIR, `${userId}.json`);
+    try {
+      const data = await fs.readFile(settingsFile, "utf-8");
+      const parsed = JSON.parse(data);
+      return settingsSchema.parse(parsed);
+    } catch (error) {
+      // Return default settings if file doesn't exist
+      const { defaultSettings } = await import("@shared/schema");
+      const defaults = { ...defaultSettings, userId };
+      // Ensure settings directory exists
+      await fs.mkdir(SETTINGS_DIR, { recursive: true });
+      await fs.writeFile(settingsFile, JSON.stringify(defaults, null, 2));
+      return defaults;
+    }
+  }
+
+  async updateSettings(userId: string, updates: Partial<Settings>): Promise<Settings> {
+    const current = await this.getSettings(userId);
+    // Deep merge updates with current settings
+    const updated = {
+      ...current,
+      ...updates,
+      userId, // Ensure userId stays consistent
+    };
+    
+    // Validate merged settings
+    const validated = settingsSchema.parse(updated);
+    
+    const settingsFile = path.join(SETTINGS_DIR, `${userId}.json`);
+    await fs.mkdir(SETTINGS_DIR, { recursive: true });
+    await fs.writeFile(settingsFile, JSON.stringify(validated, null, 2));
+    
+    return validated;
   }
 }
 

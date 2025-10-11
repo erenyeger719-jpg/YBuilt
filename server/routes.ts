@@ -317,6 +317,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Settings API
+  app.get("/api/settings", async (req, res) => {
+    try {
+      // In mock mode, use demo user ID from authorization or default
+      const userId = "demo"; // In production, extract from JWT
+      const settings = await storage.getSettings(userId);
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+      res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
+  app.patch("/api/settings/:section", async (req, res) => {
+    try {
+      const { section } = req.params;
+      const userId = "demo"; // In production, extract from JWT
+      
+      // Validate section is a valid settings section
+      const validSections = ["appearance", "account", "editor", "ai", "security", "integrations", "billing", "team", "notifications", "export"];
+      if (!validSections.includes(section)) {
+        return res.status(400).json({ error: "Invalid settings section" });
+      }
+      
+      // Get current settings
+      const current = await storage.getSettings(userId);
+      
+      // Validate the section data against the schema
+      const { settingsSchema } = await import("@shared/schema");
+      const sectionSchema = settingsSchema.shape[section as keyof typeof settingsSchema.shape];
+      
+      // Parse and validate the incoming section data
+      const validatedSectionData = sectionSchema.parse(req.body);
+      
+      // Update only the specific section
+      const updates = { [section]: validatedSectionData };
+      const updatedSettings = await storage.updateSettings(userId, updates);
+      
+      res.json(updatedSettings);
+    } catch (error) {
+      console.error("Error updating settings:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        return res.status(400).json({ error: "Invalid settings data", details: error });
+      }
+      res.status(500).json({ error: "Failed to update settings" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

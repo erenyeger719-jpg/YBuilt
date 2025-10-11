@@ -298,6 +298,61 @@ body[data-force-theme="library"] .library-root::before {
   border-radius: 8px;
 }
 
+/* ========================================
+   SETTINGS PAGE THEME (Black → Purple → Sky Blue)
+   ======================================== */
+body[data-force-theme="settings"] .settings-root,
+.settings-theme {
+  /* Force Settings color scheme */
+  --settings-bg-right: #000000;
+  --settings-bg-center: #7A1FF3;
+  --settings-bg-left-start: #CFF2FF;
+  --settings-bg-left-end: #9BD6FF;
+  --settings-glass-alpha: 0.14;
+  --settings-rim: rgba(255,255,255,0.12);
+  --settings-text-on-dark: #FFFFFF;
+  --settings-text-on-light: #000000;
+}
+
+/* Settings root background with soft diagonal gradient blend */
+body[data-force-theme="settings"] .settings-root {
+  --r: var(--settings-bg-right);
+  --c: var(--settings-bg-center);
+  --l1: var(--settings-bg-left-start);
+  --l2: var(--settings-bg-left-end);
+  background: 
+    linear-gradient(120deg in oklch, 
+      var(--r) 0% 40%, 
+      var(--c) 40% 70%, 
+      var(--l1) 70% 100%
+    );
+  background-size: cover;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Glass overlay with matcap reflection */
+body[data-force-theme="settings"] .settings-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url('/settings-glass-matcap.webp') center/cover no-repeat;
+  opacity: var(--settings-glass-alpha);
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  backdrop-filter: blur(10px) saturate(130%);
+}
+
+/* Settings text on dark backgrounds */
+body[data-force-theme="settings"] .settings-text-light {
+  color: var(--settings-text-on-dark);
+}
+
+/* Settings text on light backgrounds */
+body[data-force-theme="settings"] .settings-text-dark {
+  color: var(--settings-text-on-light);
+}
+
 @layer base {
   * {
     @apply border-border;

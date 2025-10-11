@@ -1,0 +1,157 @@
+PROMPT — YBUILT: SETTINGS MENU + SETTINGS PAGE (VISUALS, OPTIONS, FUNCTIONALITY)
+
+Objective
+Add a complete Settings system to YBUILT: a settings menu in the user profile + a full Settings page. The Settings must replicate and improve on Replit-style options, include AI/product-specific controls, and materially change the user experience when toggled. Add a **Manage Billing** item to the profile menu that redirects to the Plan/Billing page.
+
+Design & Visuals (Library-like but unique)
+- Page background: glossy slash bands, faded blend (not hard divisions) from **right → center → left**:
+  - Right: **high-contrast black** (#000000) (deep, glossy glass)
+  - Center: **high-contrast purple** (#7A1FF3 or similar) (glass with violet rim)
+  - Left: **sky blue gradient** (light cyan → sky blue e.g., #CFF2FF→#9BD6FF) (glass gradient)
+- Bands are diagonal (~30° tilt), but softly feathered where they meet (faded blend), not hard stripes.
+- Material: PBR glass — rim specular, subtle reflections, soft bloom; keep accessible contrast.
+- Provide `public/settings-bg-8k.webp` and responsive variants.
+- Typography: Valmeria for headings; Inter for forms. Controls use glass buttons and toggles consistent with platform.
+
+Placement & Navigation
+- Add a **Settings** item to profile dropdown (Profile Icon → Settings). Also a persistent sidebar link when viewing /settings.
+- Manage Billing appears in profile dropdown as **Manage Billing** and links to `/plan` or opens the Billing view.
+
+Files to add / update
+- `client/src/pages/Settings.jsx` (main settings page)
+- `client/src/components/SettingsSidebar.jsx` (left nav: Account, Appearance, Editor, AI, Security, Integrations, Billing, Team, Data & Export)
+- `client/src/components/SettingsForm/*` (AccountForm.jsx, AppearanceForm.jsx, EditorForm.jsx, AIForm.jsx, SecurityForm.jsx, BillingForm.jsx, TeamForm.jsx, ExportData.jsx)
+- `client/src/index.css` → add `.settings-root` tokens + `--settings-bg-*` variables and glass matcap overlay
+- `server/routes/settings.js` — endpoints to persist user settings server-side (`GET /api/settings`, `POST /api/settings`), fallback to localStorage in MOCK_MODE
+- Update `client/src/components/ProfileIcon.jsx` — add Manage Billing menu item
+
+UX: sections & options (what to include + how it changes experience)
+1) Account (must)
+- Display name, email, change password
+- Avatar upload (store in `/public/avatars/`)
+- Email verification status, language & locale
+Functional effect: updates label & profile icon; display name used across previews and default site titles.
+
+2) Appearance & Interface
+- Theme mode: System / Dark / Light / **Force Library Theme** (already exists) — toggling switches site tokens immediately.
+- Gloss intensity slider (0–100) — changes `--glass-alpha` and `--rim-strength` globally, toggles shine across the UI in real-time.
+- Parallax intensity (0–100) — controls parallax depth across hero, library and settings.
+- Motion: Normal / Reduced / None — toggles `prefers-reduced-motion` fallback behavior; affects Lottie and parallax.
+- Low-power / Low-bandwidth mode — disables looping Lotties, reduces particle density, serves lower-res images.
+Functional effect: immediate visual update; saved server-side so all sessions reflect preference.
+
+3) Editor & Workspace Defaults
+- Default project template (dropdown)
+- Default language (JS/TS/Python/Other)
+- Autosave interval (5s, 15s, 30s, off) — controls auto-save of prompt & project drafts
+- Live Preview resolution (Auto / 1080p / 4K / Mobile) — changes worker preview generation resolution
+- Keybindings (Default / VSCode / Vim / Emacs)
+- Tab size & font size; line wrap toggle
+Functional effect: controls editor UX and preview outputs; autosave creates draft entries in `data/jobs.json` with `draft:true`.
+
+4) AI / Model Defaults (AI-first options)
+- Default model & temperature (dropdown + slider)
+- Prompt templates library (create / edit / delete template)
+- Auto-Refine (on/off) — if on, worker will run a short refinement pass after generation (adds 1–3s latency but higher fidelity)
+- Max tokens / compute tier selector (select CPU / GPU tiers or “Fast” / “Balanced” / “High-Fidelity”)
+- Preview watermark toggle (on/off)
+- Default preview style (Monochrome / Gloss / Game / App UI) — mapping affects generator prompt templates
+Functional effect: changes how jobs are enqueued and what the worker produces (resolution, post-processing, model parameters). Store templates in `data/prompt_templates.json`.
+
+5) Security & Access
+- Two-Factor Authentication (enable/disable) — mock code flow in MOCK_MODE with SMS/email simulation
+- API Keys management — generate/regenerate/revoke API keys (server stores hashed token data in `data/api_keys.json`)
+- SSH Keys — add/remove keys (for advanced deploy)
+- Session management: list active sessions, remote sign-out
+Functional effect: controls API usage and account safety; API keys enable server-side LLM integrations.
+
+6) Integrations
+- GitHub / GitLab / Bitbucket connect (OAuth placeholders in MOCK_MODE)
+- Webhook endpoints: add / test / remove; test button sends sample payload to endpoint
+- Payment gateways: manage which gateway to use (Razorpay default; optional Cashfree, PayU)
+Functional effect: integrates continuous export/auto-deploy and webhook notifications.
+
+7) Billing & Plans (in Settings and Manage Billing link)
+- Show current plan, usage, next billing date
+- Manage payment methods (card, UPI, wallet) — add / remove (mocked in MOCK_MODE)
+- View invoices (download PDF)
+- Change plan → redirect to `/plan` with plan chooser and UPI-enabled checkout
+Functional effect: updates subscription & grants credits server-side in `data/users.json` and `data/billing.json`.
+
+8) Team & Collaboration
+- Team invites (email invite + role: admin/editor/viewer)
+- Project sharing defaults (public/private)
+- Organization settings (team billing)
+Functional effect: controls access and sharing; invite creates `team` entries in `data/teams.json`.
+
+9) Data & Export
+- Export all projects (ZIP)
+- Data retention policy toggle (keep drafts for X days)
+- Delete account (confirmation, GDPR-style export before delete)
+Functional effect: permanent operations on `data/` files.
+
+10) Notifications
+- Email & in-app toggles (Job completed, Billing, Security alerts)
+- Frequency & digest settings
+Functional effect: toggles webhook/email sends (server simulates in MOCK_MODE).
+
+Persistence & API
+- Client calls `GET /api/settings` at load and `POST /api/settings` on save (server stores per-user JSON under `data/settings/{userId}.json`).
+- In MOCK_MODE, settings are stored locally and in `data/users.json` under `settings` object.
+- Changes must be reactive (immediate effect) and saved; UI shows “Saved” toast.
+
+Accessibility & UX polish
+- Keyboard-navigable forms; aria labels for each control.
+- Confirm dialogs for destructive actions (delete API key, delete account).
+- Tooltips describing each setting and its immediate effect.
+- Provide “Restore defaults” button at top-right of Settings page.
+
+Implementation snippets (copy-paste examples)
+1) Settings JSON schema (server-side)
+```json
+{
+  "userId":"demo",
+  "appearance": {
+    "theme":"dark",
+    "glassIntensity": 0.8,
+    "parallax": 0.2,
+    "motion":"normal",
+    "lowBandwidth": false
+  },
+  "editor": {
+    "template":"starter",
+    "language":"js",
+    "autosave":15,
+    "previewResolution":"1080p"
+  },
+  "ai": {
+    "model":"gpt-5-x",
+    "temperature":0.2,
+    "autoRefine": true,
+    "computeTier":"balanced"
+  }
+}
+  :root {
+  --settings-bg-right: #000000;
+  --settings-bg-center: #7A1FF3; /* purple */
+  --settings-bg-left-start: #CFF2FF;
+  --settings-bg-left-end: #9BD6FF;
+  --settings-glass-alpha: 0.14;
+  --settings-rim: rgba(255,255,255,0.12);
+}
+.settings-root {
+  background-image:
+    linear-gradient(120deg,
+      var(--settings-bg-right) 0 40%,
+      var(--settings-bg-center) 40% 70%,
+      linear-gradient(90deg, var(--settings-bg-left-start), var(--settings-bg-left-end)) 70% 100%);
+  background-size: cover;
+  position: relative;
+}
+.settings-root::before {
+  content:""; position:absolute; inset:0;
+  background: url('/public/settings-glass-matcap.webp') center/cover no-repeat;
+  opacity: var(--settings-glass-alpha); mix-blend-mode: overlay;
+  backdrop-filter: blur(10px) saturate(130%);
+}
+   
