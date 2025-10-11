@@ -9,6 +9,7 @@ const USERS_FILE = path.join(process.cwd(), "data", "users.json");
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
   createJob(job: InsertJob): Promise<Job>;
@@ -59,10 +60,35 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.email === email,
+    );
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const user: User = { 
+      id,
+      username: insertUser.username,
+      email: insertUser.email,
+      password: insertUser.password
+    };
     this.users.set(id, user);
+    
+    // Save to file
+    try {
+      const data = await fs.readFile(USERS_FILE, "utf-8");
+      const users = JSON.parse(data);
+      users[id] = { ...user, credits: 0 };
+      await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
+    } catch (error) {
+      // Initialize file if it doesn't exist
+      const users: any = {};
+      users[id] = { ...user, credits: 0 };
+      await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
+    }
+    
     return user;
   }
 

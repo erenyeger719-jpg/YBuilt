@@ -2,10 +2,11 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { jobQueue } from "./queue";
-import { insertJobSchema } from "@shared/schema";
+import { insertJobSchema, insertUserSchema } from "@shared/schema";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Job generation endpoint
@@ -119,6 +120,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching credits:", error);
       res.status(500).json({ error: "Failed to fetch credits" });
+    }
+  });
+
+  // Auth: Sign in (mock mode)
+  app.post("/api/auth/signin", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password required" });
+      }
+
+      // Check if user exists
+      let user = await storage.getUserByEmail(email);
+      
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // In mock mode, we don't actually verify password
+      // In production, you'd verify against hashed password
+      
+      const credits = await storage.getUserCredits(user.id);
+      
+      res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          credits
+        }
+      });
+    } catch (error) {
+      console.error("Sign in error:", error);
+      res.status(500).json({ error: "Sign in failed" });
+    }
+  });
+
+  // Auth: Sign up (mock mode)
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password required" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(409).json({ error: "User already exists" });
+      }
+
+      // Create username from email
+      const username = email.split('@')[0];
+      
+      // Create user
+      const user = await storage.createUser({
+        email,
+        username,
+        password // In production, hash this password
+      });
+
+      // Initialize credits
+      const credits = await storage.getUserCredits(user.id);
+
+      res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          credits
+        }
+      });
+    } catch (error) {
+      console.error("Sign up error:", error);
+      res.status(500).json({ error: "Sign up failed" });
+    }
+  });
+
+  // Get current user
+  app.get("/api/me", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+      
+      // Validate mock token format (header.payload.signature)
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return res.status(401).json({ error: "Invalid token" });
+      }
+
+      try {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+        
+        // Check expiration
+        if (payload.exp && payload.exp < Date.now()) {
+          return res.status(401).json({ error: "Token expired" });
+        }
+
+        // Get user by email from token
+        const user = await storage.getUserByEmail(payload.email);
+        
+        if (!user) {
+          return res.status(401).json({ error: "User not found" });
+        }
+
+        const credits = await storage.getUserCredits(user.id);
+
+        res.json({
+          user: {
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            credits
+          }
+        });
+      } catch (error) {
+        return res.status(401).json({ error: "Invalid token" });
+      }
+    } catch (error) {
+      console.error("Get current user error:", error);
+      res.status(500).json({ error: "Failed to get user" });
     }
   });
 

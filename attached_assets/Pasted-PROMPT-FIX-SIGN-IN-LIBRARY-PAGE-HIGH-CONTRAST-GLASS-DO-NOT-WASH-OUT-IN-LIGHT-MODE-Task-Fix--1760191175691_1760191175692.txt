@@ -1,0 +1,94 @@
+PROMPT — FIX: SIGN-IN + LIBRARY PAGE HIGH-CONTRAST GLASS (DO NOT WASH OUT IN LIGHT MODE)
+
+Task: Fix the sign-in/auth flow and redesign the Library page background per the following exact spec. This is an additive patch to the existing YBUILT project — do not change other pages' light/dark behavior except for the Library page which must keep high-contrast visibility in light mode.
+
+A — SIGN-IN / AUTH BEHAVIOR (make it actually work in MOCK_MODE)
+1. Make Sign-in / Create Account fully functional in MOCK_MODE:
+   - Implement a client-side mock auth service when `MOCK_MODE=true` that:
+     * Accepts email + password and returns a mock JWT-like token stored in `localStorage` (key: `ybuilt_session`).
+     * Creates a demo user entry in `data/users.json` if not present (`id: demo`, `email: ...`, `credits: 0`).
+     * Expose `GET /api/me` to return current user metadata when a valid mock token is present (server checks token format, not a real signature).
+   - Ensure profile icon reflects auth state: if logged in show user initials / avatar; if not show generic silhouette and dropdown with sign-in links.
+   - Ensure sign-in dropdown/modal can be opened, focused, closed with keyboard; show success and error toasts (accessible).
+   - Update README to document how to use MOCK_MODE sign-in and how to switch to real OAuth later.
+
+B — LIBRARY PAGE VISUAL & THEME FIXES (exact)
+1. Background layout (left-to-right / visual sweep):
+   - From **right → center → left** render three glossy bands **(high-contrast black → high-contrast red → light blue gradient)** arranged as diagonal slash panels (~30° tilt). Note: bands should blend softly at seams but remain visually distinct; red is solid high-contrast, blue is a **subtle gradient** (light cyan → light sky blue) to add luminosity.
+   - The **rightmost band must be deepest black** (true #000000) with strong rim highlights so UI elements there read as white-metallic. Center band is high-contrast red (#E01010 or similar). Left band is **light blue gradient** (e.g. #CFF2FF → #9BD6FF) with glossy glass reflections.
+2. Material & gloss:
+   - All three bands must use a glass PBR-like finish: semi-translucent base, specular rim highlights, subtle internal reflection, and faint environmental reflection (use `background-clip` / `mask` + matcap or reflection map). Provide `library-glass-matcap.webp`.
+   - Apply stronger bloom/specular highlights than other pages so the Library reads luminous even in light mode.
+3. Light mode resilience (CRITICAL)
+   - Override the global `prefers-color-scheme` behavior **only for the Library page** so toggling the site to light mode **does NOT** wash the Library to an unusable white-on-white state.
+   - Implementation details:
+     * Create a CSS scope `.library-theme` that forces the Library page color tokens regardless of system theme:
+       ```css
+       .library-theme {
+         --lib-bg-right: #000000;
+         --lib-bg-center: #E01010;
+         --lib-bg-left-gradient-start: #CFF2FF;
+         --lib-bg-left-gradient-end: #9BD6FF;
+         --lib-text-on-dark: #ffffff;
+         --lib-text-on-light: #000000;
+         --lib-gloss-alpha: 0.14;
+         --lib-rim: rgba(255,255,255,0.12);
+       }
+       ```
+     * Add `data-force-theme="library"` attribute to `<body>` when route is `/library` so frontend CSS/JS can detect and apply `.library-theme` even if site-level theme is light.
+     * Ensure CSS selectors for Library use `.library-theme` token values so they do not inherit global light-mode variables.
+     * In JS, on route change to `/library`, set `document.body.dataset.forceTheme = 'library'`; on leave, remove it.
+   - Provide a visible UI toggle inside Library: **“Respect system theme / Force Library Theme”** (default: Force Library Theme ON). This allows users who want to see Library in standard light theme to opt out.
+4. Accessibility & contrast:
+   - Ensure all text over red/blue/black bands meets ≥4.5:1 contrast. For small UI text, bump contrast or add semi-opaque glass backplate behind text (e.g., `rgba(0,0,0,0.36)` or `rgba(255,255,255,0.12)` depending on band).
+   - Provide CSS fallback for users who disable backdrop-filter: an opaque fallback panel behind text.
+5. Responsive behavior:
+   - On narrow/mobile screens compress stripe pattern to 3 vertical bands stacked or reduce to 2 bands (black + gradient-blue) so content remains legible. Keep the glass matcap reflection consistent across sizes.
+6. Deliverables for visuals:
+   - `public/library-bg-8k.webp`, `public/library-bg-4k.webp`, `public/library-bg-mobile.avif` updated to match this spec.
+   - `public/library-glass-matcap.webp` (reflection reference).
+   - A small CSS sample to include in `client/src/pages/Library.jsx` or `client/src/index.css` demonstrating `.library-theme` variables and forced theme application.
+
+C — INTERACTION & USABILITY ADJUSTMENTS
+1. Ensure Library page does not hide controls when switching themes; CTAs must remain visible and tactile.
+2. Ensure Create Now button still appears for empty state and launches Studio prompt; ensure this button uses `.library-theme` tokens for color and glass treatment.
+3. Ensure profile dropdown sign-out and "My Library" link route correctly and update UI immediately without refresh.
+
+D — TEST CASES & QA
+1. Test 1: With system light-mode active, navigate to Library. Verify Library shows forced glossy black/red/blue bands and all text/buttons are visible.
+2. Test 2: Toggle site theme to dark and light — Library remains legible and uses `.library-theme` unless user explicitly toggles to respect system theme inside Library.
+3. Test 3: Mock sign-in flow in `MOCK_MODE` — sign in, view Library, Create Now creates a demo project entry in `data/jobs.json` and the Library list updates instantly.
+4. Test 4: Accessibility checks — keyboard navigation through Library cards, modals, and sign-in dropdown; color contrast meets WCAG for body text.
+
+E — DOCUMENTATION
+- Update README (section: Library and Auth) to explain:
+  - How LIBRARY forces its theme and how users/devs can toggle it.
+  - How to test sign-in in MOCK_MODE (sample credentials).
+  - Where to replace mock auth with real OAuth (commented code pointers).
+
+F — SHORT IMPLEMENTATION SNIPPET (copy-paste)
+```js
+// client/src/pages/Library.jsx (on mount)
+useEffect(()=> {
+  document.body.dataset.forceTheme = 'library';
+  return () => { delete document.body.dataset.forceTheme; }
+}, []);
+
+  /* client/src/index.css */
+body[data-force-theme="library"] .library-root { /* use library tokens */ }
+.library-root { background: linear-gradient(120deg,
+  var(--lib-bg-right) 0 33%,
+  linear-gradient(90deg, var(--lib-bg-center), var(--lib-bg-center)) 33% 66%,
+  linear-gradient(90deg, var(--lib-bg-left-gradient-start), var(--lib-bg-left-gradient-end)) 66% 100%);
+  background-blend-mode: normal;
+  /* glass overlay */
+  --glass-alpha: 0.14;
+  backdrop-filter: blur(10px) saturate(130%);
+}
+  G — FINAL NOTE
+* This patch must only change Library page theming and fix the sign-in/auth behavior in MOCK_MODE. Do not globally override the rest of the site’s theme. Provide the updated visual assets and a short README section describing how to test and toggle Library theme.
+Deliver: a single patch commit (or a zip) containing:
+* Updated Library page code (Library.jsx, CSS), updated header auth/profile wiring (ProfileIcon.jsx, sign-in mock), updated public/library-* assets, and README additions.
+ 
+End of prompt.  
+Want this merged back into your master prompt (so your generator has the full spec + fixes), or do you want me to produce the actual code changes/files now?
