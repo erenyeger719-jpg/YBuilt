@@ -1,9 +1,9 @@
 {
   "userId": "demo",
   "appearance": {
-    "theme": "system",
-    "glassIntensity": 80,
-    "glossFinish": true,
+    "theme": "dark",
+    "glassIntensity": 50,
+    "glossFinish": false,
     "parallaxIntensity": 20,
     "motion": "full",
     "lowPower": false,
