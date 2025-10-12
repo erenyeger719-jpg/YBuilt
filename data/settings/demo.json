@@ -2,7 +2,7 @@
   "userId": "demo",
   "appearance": {
     "theme": "dark",
-    "glassIntensity": 40,
+    "glassIntensity": 25,
     "glossFinish": true,
     "parallaxIntensity": 20,
     "motion": "full",
@@ -40,29 +40,16 @@
   },
   "ai": {
     "model": "gpt-5-x",
-    "temperature": 0.7,
-    "autoRefine": false,
+    "temperature": 0.2,
+    "autoRefine": true,
     "maxTokens": 4000,
     "maxRuntime": 30,
-    "computeTier": "high-fidelity",
+    "computeTier": "balanced",
     "previewWatermark": true,
     "defaultStyle": "monochrome",
     "safetyFilter": true,
     "safetyLevel": "medium",
-    "promptTemplates": [
-      {
-        "id": "fd40775b-0fd3-4c55-a0f0-b7cf58461005",
-        "name": "Alpha",
-        "template": "Alpha content",
-        "isDefault": true
-      },
-      {
-        "id": "98f8df44-05bb-44af-b101-9430cb179b01",
-        "name": "Beta",
-        "template": "Beta content",
-        "isDefault": false
-      }
-    ]
+    "promptTemplates": []
   },
   "security": {
     "twoFactor": false,

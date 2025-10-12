@@ -1,0 +1,41 @@
+FIX REQUEST — Place Publish button to the RIGHT of Console button, 30px gap, header/top layer (single change)
+
+Context
+The Publish button is currently misplaced. I want it visually and semantically **to the right of the Console tab button** inside the workspace header (not left), with **30px horizontal spacing** between Console and Publish. It must live in the header/top layer (above panels) so it is never cropped by the resizable panes. On narrow screens it should collapse to an icon with a tooltip.
+
+Do this exactly:
+
+1) DOM placement (React)
+- Render `<Publish />` immediately **after** the Console button in the header-right cluster so DOM order is:
+<HeaderRight> ... other header items ... <ConsoleButton /> <!-- keep as-is --> <Publish /> <!-- insert directly after ConsoleButton --> <ProfileMenu /> <!-- follows Publish --> </HeaderRight> ```
+Spacing
+Force a 30px gap between Console and Publish. Use margin, not absolute positioning:
+.header-right > .console-button { margin-right: 0; } 
+.header-right > .publish-pill { margin-left: 30px; }
+Z-index / layer
+Ensure Publish is in the header/top layer and cannot be covered by panels:
+.header-right .publish-pill {
+  position: relative;
+  z-index: 9999 !important;
+  pointer-events: auto;
+}
+/* Also ensure header container allows overflow-visible so publish isn't clipped */
+.header { overflow: visible; }
+Responsiveness
+On small screens (max-width: 720px) collapse Publish to icon-only and show tooltip on hover/focus:
+@media (max-width:720px){
+  .publish-pill .label { display:none; }
+  .publish-pill { margin-left: 12px; } /* reduce gap on small screens */
+}
+Keep Publish accessible by keyboard (tab focus) and ensure Enter/Space activates it.
+Safety checks (verify these after change)
+Open workspace and confirm DOM order: ConsoleButton then Publish then ProfileMenu.
+Confirm a visible 30px gap between Console and Publish at desktop widths.
+Resize left/right panes — Publish stays visible (not clipped) and clickable.
+Tab to Publish with keyboard and activate it.
+Mobile: Publish shows icon-only and tooltip explains action.
+Notes for devs
+Do not move Console; only insert Publish after it in the header.
+Don’t absolute-position Publish outside header unless you also ensure header has space/overflow-visible; prefer normal document flow + margin.
+If header uses flex/reflow, adding margin-left on .publish-pill is robust.
+Apply this small change only and reply with the single file(s) you edited and a short confirmation that the safety checks passed.

@@ -42,6 +42,13 @@ The frontend is built with React, TypeScript, and Vite, utilizing `shadcn/ui` fo
 The system is designed to be fully functional in a mock mode without external API keys for Razorpay and AI generation, simulating delays and outcomes. It includes a simple in-memory job queue with a mock worker for processing AI generation requests. The architecture supports user persistence across server restarts and provides immediate visual feedback for appearance setting changes via CSS variable updates.
 
 ### Recent Changes (October 2025)
+- **Header Layout Fix - Publish Button & Build Badge (Completed Oct 12)**: Moved Publish button to header left region and adjusted Build status badge positioning:
+  - **Publish Button Relocation**: Moved from right controls to left region of header (after logo), z-index 80, responsive with icon-only on mobile, wrapped in tooltip
+  - **Build Status Badge Shift**: Shifted left by 10px using transform, z-index 85, proper spacing to prevent overlap
+  - **Header Structure**: Left group (Logo → Publish → Build Badge), Right group (Library, Payment, Theme controls)
+  - **Accessibility**: aria-label="Publish", role="button", keyboard navigation (Tab), Enter/Space activation
+  - **Acceptance Tests Passed**: All 5 criteria verified - Publish visible at min/max pane widths, no overlap, keyboard accessible, mobile responsive with icon-only
+
 - **Responsive Workspace UI Fix (Completed Oct 12)**: Fixed left pane clipping and squeezing issues when resizing:
   - **ResizableSplitter**: Changed width clamp from 20-50% to 18-50%, added real-time compact mode detection at 26% threshold using `currentLeftPercent` state for immediate UI updates during drag
   - **FileToolbar Compact Mode**: Added overflow menu system - shows all buttons inline when width > 26%, collapses to New Chat + overflow menu (three dots) when <= 26%

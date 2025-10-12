@@ -1,0 +1,49 @@
+FIX: Move Publish button + adjust Build-status badge (single change)
+
+Context
+The Publish button is currently clipped/cropped by the right pane and sitting under other layers. The build-status badge ("Build: success • Last: 2m ago") is mispositioned. Fix both so they’re visible, non-overlapping, and responsive.
+
+Requested changes (do all of these)
+
+1) Relocate Publish button into the header (left region)
+- Remove the Publish button DOM from its current container.
+- Insert it into the workspace header left/center area (preferably inside `.header .left-controls` or `.header .brand-row`), not inside the right pane. Visually it should sit in the header row, left side, leaving a small gap from the logo and before the other header items.
+- CSS: `.publish-pill { margin-left: 10px; margin-right: 18px; z-index: 80; position: relative; }`
+- Accessibility: keep `aria-label="Publish"`, `role="button"`, and keyboard focus states.
+
+2) Ensure Publish sits next to the Console button (visually grouped) but in the header layer
+- If you have a “Console” tab button in the header toolbar, place Publish visually adjacent to it (with consistent spacing) while keeping Publish inside the header DOM. If the Console control is inside the right toolbar, create a small header-level visual grouping so Publish appears next to Console without being clipped by the right pane.
+- Use the header as the canonical placement — don’t keep Publish inside the resizable pane.
+
+3) Bring Publish to top layer
+- Make sure Publish is not covered by any panel: `.publish-pill { z-index: 80 !important; }`
+- Ensure its container has `overflow: visible` so it doesn’t get clipped by parent.
+
+4) Move / shift Build-status badge left by 10px (and keep it visible)
+- Adjust the build-status badge positioning so it sits left of its current place by 10px and is on the same top header row.
+- CSS example: `.build-status { transform: translateX(-10px); z-index: 85; position: relative; }`
+- Ensure the badge and Publish do not overlap — if space conflicts, reduce spacing to maintain non-overlap and responsive wrap.
+
+5) Responsive rules
+- On narrow screens collapse Publish to icon-only and keep it in the header. Add tooltip on hover.
+- Ensure both Publish and Build-status never move into the resizable left pane; they must remain in the header so pane resizing never crops them.
+
+6) Safety checks & acceptance
+- Do not add new visual artifacts; just move elements and adjust CSS.
+- Acceptance tests:
+  a. Resize left pane to minimum: Publish remains visible in header (not clipped).
+  b. Resize right pane: Publish remains visible and clickable.
+  c. Build-status badge sits 10px to the left of previous position, visible and not overlapped by other UI.
+  d. Keyboard focus reaches Publish via Tab and triggers action with Enter/Space.
+  e. Mobile: Publish collapses to icon-only and tooltip explains function.
+
+Implementation hints (copy/paste for dev)
+- Move DOM node in React by rendering `<Publish />` inside the header component instead of current file.
+- Use CSS var or utility class for z-index (`--top-z: 80`) rather than hardcoding.
+- If header has overflow hidden, set header child container for Publish to `overflow: visible`.
+- Do not attempt to absolute-position Publish outside header without ensuring header has space.
+
+Deliverable
+- Single commit that moves Publish to header, adjusts Build-status badge CSS, and updates responsive styles. Reply with the list of files changed and confirm acceptance tests (a–e) pass.
+
+End.
