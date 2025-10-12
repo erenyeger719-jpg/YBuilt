@@ -42,84 +42,76 @@ export default function ResizableSplitter({
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const splitterRef = useRef<HTMLDivElement>(null);
+  const rafId = useRef<number | null>(null);
 
   // Check for reduced motion preference
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Save to localStorage whenever leftPercent changes
-  useEffect(() => {
-    localStorage.setItem(storageKey, leftPercent.toString());
-  }, [leftPercent, storageKey]);
-
-  const handleMouseDown = useCallback(() => {
+  // Pointer Events - unified handler for mouse/touch/pen
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (!splitterRef.current || !containerRef.current) return;
+    
+    // Capture pointer for reliable tracking
+    splitterRef.current.setPointerCapture(e.pointerId);
     setIsDragging(true);
-  }, []);
+  };
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
+  const handlePointerMove = useCallback(
+    (e: PointerEvent) => {
       if (!isDragging || !containerRef.current) return;
 
-      requestAnimationFrame(() => {
+      // Skip if rAF already pending (prevent queuing)
+      if (rafId.current !== null) return;
+
+      rafId.current = requestAnimationFrame(() => {
+        rafId.current = null;
+
         if (!containerRef.current) return;
-        
-        const container = containerRef.current;
-        const containerRect = container.getBoundingClientRect();
-        const containerWidth = containerRect.width;
+
+        const rect = containerRef.current.getBoundingClientRect();
+        const containerWidth = rect.width;
         
         // Calculate position relative to container
-        const mouseX = e.clientX - containerRect.left;
-        let newLeftPercent = (mouseX / containerWidth) * 100;
+        const mouseX = e.clientX - rect.left;
+        let leftPct = (mouseX / containerWidth) * 100;
 
         // Apply constraints: 20% min, 50% max for left pane
         const minLeftPercent = Math.max(20, (minLeftWidth / containerWidth) * 100);
         const maxLeftPercent = Math.min(50, 100 - (minRightWidth / containerWidth) * 100);
 
-        newLeftPercent = Math.max(minLeftPercent, Math.min(maxLeftPercent, newLeftPercent));
+        leftPct = Math.max(minLeftPercent, Math.min(maxLeftPercent, leftPct));
 
-        setLeftPercent(newLeftPercent);
+        // Update CSS variable (cheap, no React re-render)
+        containerRef.current.style.setProperty('--left-width-pct', `${leftPct}%`);
       });
     },
     [isDragging, minLeftWidth, minRightWidth]
   );
 
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
+  const handlePointerUp = useCallback(
+    (e: PointerEvent) => {
+      if (!splitterRef.current || !containerRef.current) return;
 
-  const handleTouchStart = useCallback(() => {
-    setIsDragging(true);
-  }, []);
+      // Release pointer capture
+      splitterRef.current.releasePointerCapture((e as PointerEvent).pointerId);
 
-  const handleTouchMove = useCallback(
-    (e: TouchEvent) => {
-      if (!isDragging || !containerRef.current) return;
+      // NOW update React state for persistence
+      const finalPct = containerRef.current.style.getPropertyValue('--left-width-pct') || `${leftPercent}%`;
+      const numericPct = parseFloat(finalPct);
+      
+      setLeftPercent(numericPct);
+      localStorage.setItem(storageKey, numericPct.toString());
 
-      requestAnimationFrame(() => {
-        if (!containerRef.current) return;
-        
-        const container = containerRef.current;
-        const containerRect = container.getBoundingClientRect();
-        const containerWidth = containerRect.width;
-        
-        const touch = e.touches[0];
-        const touchX = touch.clientX - containerRect.left;
-        let newLeftPercent = (touchX / containerWidth) * 100;
+      setIsDragging(false);
 
-        // Apply constraints: 20% min, 50% max for left pane
-        const minLeftPercent = Math.max(20, (minLeftWidth / containerWidth) * 100);
-        const maxLeftPercent = Math.min(50, 100 - (minRightWidth / containerWidth) * 100);
-
-        newLeftPercent = Math.max(minLeftPercent, Math.min(maxLeftPercent, newLeftPercent));
-
-        setLeftPercent(newLeftPercent);
-      });
+      // Cancel any pending rAF
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
     },
-    [isDragging, minLeftWidth, minRightWidth]
+    [leftPercent, storageKey]
   );
-
-  const handleTouchEnd = useCallback(() => {
-    setIsDragging(false);
-  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -147,45 +139,51 @@ export default function ResizableSplitter({
 
       if (newLeftPercent !== leftPercent) {
         setLeftPercent(newLeftPercent);
+        localStorage.setItem(storageKey, newLeftPercent.toString());
       }
     },
-    [leftPercent, minLeftWidth, minRightWidth]
+    [leftPercent, minLeftWidth, minRightWidth, storageKey]
   );
 
-  // Mouse event listeners
+  // Pointer event listeners
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("pointermove", handlePointerMove);
+      document.addEventListener("pointerup", handlePointerUp);
       
       return () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
+        document.removeEventListener("pointermove", handlePointerMove);
+        document.removeEventListener("pointerup", handlePointerUp);
       };
     }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [isDragging, handlePointerMove, handlePointerUp]);
 
-  // Touch event listeners
+  // Set initial CSS variable on mount to ensure it's always in sync with clamped leftPercent
   useEffect(() => {
-    if (isDragging) {
-      document.addEventListener("touchmove", handleTouchMove);
-      document.addEventListener("touchend", handleTouchEnd);
-      
-      return () => {
-        document.removeEventListener("touchmove", handleTouchMove);
-        document.removeEventListener("touchend", handleTouchEnd);
-      };
+    if (containerRef.current) {
+      containerRef.current.style.setProperty('--left-width-pct', `${leftPercent}%`);
     }
-  }, [isDragging, handleTouchMove, handleTouchEnd]);
+  }, []); // Run once on mount
+
+  // Update CSS variable when leftPercent changes (for keyboard/storage updates)
+  useEffect(() => {
+    if (containerRef.current && !isDragging) {
+      containerRef.current.style.setProperty('--left-width-pct', `${leftPercent}%`);
+    }
+  }, [leftPercent, isDragging]);
 
   const transitionStyle = prefersReducedMotion || isDragging ? {} : { transition: "width 0.1s ease" };
 
   return (
-    <div ref={containerRef} className="flex h-full w-full">
-      {/* Left Pane */}
+    <div 
+      ref={containerRef} 
+      className="flex h-full w-full"
+      style={{ '--left-width-pct': `${leftPercent}%` } as React.CSSProperties}
+    >
+      {/* Left Pane - Uses CSS variable for width */}
       <div
         style={{
-          width: `${leftPercent}%`,
+          width: 'var(--left-width-pct)',
           ...transitionStyle,
         }}
         className="overflow-hidden"
@@ -200,8 +198,7 @@ export default function ResizableSplitter({
         aria-orientation="vertical"
         aria-label="Resize workspace panels"
         tabIndex={0}
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleTouchStart}
+        onPointerDown={handlePointerDown}
         onKeyDown={handleKeyDown}
         className={`
           w-1 bg-border hover:bg-primary/50 cursor-col-resize
@@ -214,7 +211,7 @@ export default function ResizableSplitter({
       {/* Right Pane */}
       <div
         style={{
-          width: `${100 - leftPercent}%`,
+          width: `calc(100% - var(--left-width-pct))`,
           ...transitionStyle,
         }}
         className="overflow-hidden"

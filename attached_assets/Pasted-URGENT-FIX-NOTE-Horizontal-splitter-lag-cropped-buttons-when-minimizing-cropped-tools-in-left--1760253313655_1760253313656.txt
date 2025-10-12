@@ -1,0 +1,127 @@
+URGENT FIX NOTE — Horizontal splitter lag + cropped buttons when minimizing + cropped tools in left AI pane
+
+CONTEXT
+After recent layout work the vertical splitter mostly minimizes the left pane smoothly, but expanding horizontally is laggy, hard to control, and often crops important controls (Agent, Build, Upload buttons). Also multiple toolbar buttons at the top of the left AI pane are being visually cropped when the pane becomes narrow. We need the splitter drag to be smooth and reversible, and UI controls must *never* be clipped — they should either remain visible, collapse into icons, or move into an overflow menu.
+
+SCOPE — only fix these behaviors:
+1. Smooth, responsive horizontal resize (left/right) with no lag and reversible expand. Drag should feel real-time and precise.
+2. Prevent Agent / Build / Upload / other toolbar buttons from being cropped when pane is minimized — instead they should:
+   - stay visible if there is space, or
+   - collapse to icon-only, or
+   - move into an overflow menu (three-dots) that is always reachable.
+3. The top toolbar and left AI-pane controls must not be clipped; ensure sticky/positioning and overflow rules keep them visible.
+4. When minimized, the left pane must truly shrink (visual size changes) but controls must not disappear off-screen; they should be reorganized responsively.
+5. Keep accessibility: keyboard resizing, ARIA for overflow menu, focus management.
+
+INSTRUCTIONS (copy-paste for the dev/agent)
+
+A — Smooth, precise splitter (use pointer capture + requestAnimationFrame)
+Replace current drag handler with this pattern. Key points: use Pointer Events, call `setPointerCapture`/`releasePointerCapture`, update a single CSS variable with `requestAnimationFrame` for smoothness, and *only* write layout (width) once per frame. Clamp left width to min/max (min 20%, max 50%) as requested earlier.
+
+Copy-paste example (vanilla JS / React-friendly):
+
+```js
+// Splitter.js — use inside a component that has refs: containerRef, leftRef, rightRef
+let dragging = false;
+let raf = null;
+
+function onPointerDown(e) {
+  dragging = true;
+  splitterEl.setPointerCapture(e.pointerId);
+  document.addEventListener('pointermove', onPointerMove);
+  document.addEventListener('pointerup', onPointerUp);
+}
+
+function onPointerMove(e) {
+  if (!dragging) return;
+  // compute desired left percent
+  const rect = containerRef.current.getBoundingClientRect();
+  let leftPx = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+  let leftPct = (leftPx / rect.width) * 100;
+  leftPct = Math.max(20, Math.min(50, leftPct)); // clamp to 20-50%
+  // throttle / batch visual update using rAF
+  if (raf) return;
+  raf = requestAnimationFrame(() => {
+    raf = null;
+    // update CSS var - this is cheap and avoids layout thrash
+    containerRef.current.style.setProperty('--left-width-pct', `${leftPct}%`);
+  });
+}
+
+function onPointerUp(e) {
+  dragging = false;
+  splitterEl.releasePointerCapture(e.pointerId);
+  document.removeEventListener('pointermove', onPointerMove);
+  document.removeEventListener('pointerup', onPointerUp);
+  // Persist final size
+  const finalLeft = containerRef.current.style.getPropertyValue('--left-width-pct') || '33%';
+  localStorage.setItem('ybuilt.split.leftPct', finalLeft);
+}
+ CSS side (use the CSS var for size so browser paints are fast):  .workspace-split {
+  --left-width-pct: 33%;
+  display:flex;
+  height: calc(100vh - var(--header-h));
+}
+.column-left { width: calc(var(--left-width-pct)); min-width: 240px; max-width: 50vw; }
+.column-right { flex:1 1 auto; }
+.splitter { width:8px; cursor:col-resize; touch-action:none; }
+  Notes:
+* Updating a CSS variable is cheaper than constantly setting element.style.width (less layout thrash).
+* Using requestAnimationFrame avoids queuing multiple layout writes per frame and smooths motion.
+B — Avoid layout thrash: batch DOM reads/writes If code reads layout (getBoundingClientRect) and writes style within the same frame repeatedly, it causes jank. Use the above pattern: read once, compute, then schedule one write per rAF.
+C — Make buttons never get cropped (responsive behavior) Apply these rules to toolbar and prompt-bar items:
+1. Buttons should not shrink below a usable icon size:
+.toolbar .btn { flex: 0 0 auto; min-width:44px; height:44px; padding:6px; }
+ 2. The textarea/prompt should be the flexible element: .prompt-input { flex: 1 1 auto; min-width:120px; }
+    3.	When horizontal space is limited, collapse text labels to icons via CSS + JS:
+    * Add a CSS class .compact to the toolbar when width is less than threshold (e.g., 420px).
+    * In .compact, hide .btn .label { display:none } leaving icon only.
+4. If still insufficient space, show an overflow menu:
+    * Keep a DOM node .toolbar-overflow-btn (three-dots) always present (hidden if not needed).
+    * When toolbar detects items do not fit (use a simple overflow check), move excess buttons into the overflow menu (clone/cascade into a popover). For quick implementation, use ResizeObserver on the toolbar and compare scrollWidth > clientWidth.
+Example pseudo-code to manage overflow:   const ro = new ResizeObserver(() => { checkOverflow(); });
+ro.observe(toolbarEl);
+
+function checkOverflow(){
+  const fits = toolbarEl.scrollWidth <= toolbarEl.clientWidth;
+  if (!fits) {
+    toolbarEl.classList.add('has-overflow');
+    // find rightmost items to move into overflow until fits
+    // (simple heuristic: move items with data-priority low)
+  } else {
+    toolbarEl.classList.remove('has-overflow');
+    // move items back out
+  }
+}
+  D — Ensure minimize does not crop buttons (visual behavior)
+* When left pane is minimized, do not hide controls off-screen. Instead:
+1. Reduce the pane width but keep toolbar visible using CSS overflow:visible on parent, OR
+2. Move toolbar into top header or into overflow menu when width < threshold.
+* Implement this rule: if left width < 300px → switch toolbar to compact mode and pin its controls into the header or overflow. This ensures Build/Agent are still reachable.
+E — Fix expand lag (common causes & fixes)
+* If expanding is slow or jumps, confirm:
+1. No heavy synchronous JS running on pointermove (e.g., heavy JSON updates).
+2. No re-render of large React tree on every pointermove — debounce UI state updates. Use the CSS variable rAF approach and update React state only on pointerup for persistence.
+* If React re-render is needed to show width-dependent layout, avoid doing it on each move; instead listen to the CSS var or use useEffect with requestAnimationFrame throttle.
+F — Accessibility and keyboard support
+* Keep splitter focusable and respond to arrow keys (+ shift for bigger steps) to adjust leftPct. Persist to localStorage when done.
+* When overflow menu opens, transfer focus to first menu item and support Esc to close.
+G — Acceptance criteria (what to verify)
+1. Drag left splitter to minimize: happens smoothly and controls remain visible (or move into overflow/header). No cropping.
+2. Drag to expand back to any width up to 50%: expands smoothly, no jerky jumps, and interactive controls are usable during drag.
+3. When left width < threshold, toolbar switches to compact mode (icons only) quickly and predictably.
+4. Overflow menu works: hidden items are available in the popover and keyboard accessible.
+5. No layout thrash or console warnings; performance counters show <16ms per frame during drag on a typical dev workstation.
+6. Prompt input remains usable and not squeezed to zero width at any point.
+H — Debugging checklist (if still problematic)
+* Use Chrome DevTools performance trace while dragging; ensure there are not expensive paints or style recalc spikes.
+* Temporarily log requestAnimationFrame fps to confirm smoothness.
+* Check for heavy setState calls on pointermove; remove them.
+* Confirm pointermove events before rAF are not being queued to multiple rAFs.
+FINAL NOTE FOR REPLIT AI / DEVS
+* The bug is not visual styling only — it’s caused by layout thrashing and uncontrolled DOM writes during drag. Fix by:
+    * Relying on CSS var updated inside rAF for visual feedback.
+    * Persisting the final value in React state or localStorage on pointerup.
+    * Handling toolbar overflow gracefully (collapse → icons → overflow menu).
+* Deliver: updated Splitter.js (or component), toolbar overflow handler, small CSS changes (min-widths, compact class), and a one-line report that acceptance tests pass.
+

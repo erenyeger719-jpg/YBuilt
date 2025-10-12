@@ -2,7 +2,7 @@ import { useState, useRef, KeyboardEvent, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Plus, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Upload, X, ChevronDown, ChevronUp } from "lucide-react";
 
 export interface UploadedFile {
   id: string;
@@ -16,7 +16,6 @@ interface PromptBarProps {
   onPromptChange?: (text: string) => void;
   onSubmit: (promptText: string) => void;
   onFileUpload: (file: File) => void;
-  onNewChat?: () => void;
   onRemoveFile?: (fileId: string) => void;
   uploadedFiles?: UploadedFile[];
   isLoading?: boolean;
@@ -29,7 +28,6 @@ export default function PromptBar({
   onPromptChange,
   onSubmit,
   onFileUpload,
-  onNewChat,
   onRemoveFile,
   uploadedFiles = [],
   isLoading = false,
@@ -149,71 +147,68 @@ export default function PromptBar({
             </div>
           )}
 
-          {/* Main Input Row - Heights: 56px mobile, 64px tablet, 72px desktop */}
-          <div className="px-3 h-14 sm:h-16 lg:h-18 flex items-center gap-2 overflow-visible">
-        {/* Upload Icon Button */}
-        <div className="flex-shrink-0 flex-grow-0" style={{ flexBasis: '44px' }}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            onChange={handleFileSelect}
-            className="hidden"
-            data-testid="input-file-upload"
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading}
-            data-testid="button-upload-file-prompt"
-          >
-            <Upload className="h-4 w-4" />
-          </Button>
-        </div>
+          {/* Main Input Row */}
+          <div className="px-3 py-2 flex items-center gap-2">
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              className="hidden"
+              data-testid="input-file-upload"
+            />
 
-        {/* Textarea - Flex-1 with min-width to prevent squeeze */}
-        <div className="flex-1 min-w-[200px]">
-          <textarea
-            ref={textareaRef}
-            value={promptText}
-            onChange={(e) => setPromptText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a command or paste a file. Press Enter to send, Shift+Enter for newline."
-            className="
-              w-full resize-none bg-transparent border-0
-              focus:outline-none focus:ring-0
-              text-sm placeholder:text-muted-foreground
-              min-h-[44px] max-h-32 overflow-y-auto
-              disabled:opacity-50 disabled:cursor-not-allowed
-            "
-            rows={2}
-            tabIndex={0}
-            aria-label="Build prompt"
-            disabled={isLoading}
-            data-testid="input-prompt-text"
-          />
-        </div>
+            {/* Upload Button - Always visible */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 flex-shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+              data-testid="button-upload-file-prompt"
+              title="Upload file"
+            >
+              <Upload className="h-4 w-4" />
+            </Button>
 
-        {/* Agent Button (passed as prop) */}
-        {agentButton && (
-          <div className="flex-shrink-0 flex-grow-0" style={{ flexBasis: '54px' }}>
-            {agentButton}
-          </div>
-        )}
+            {/* Textarea - Flex with min-width to prevent squeeze */}
+            <textarea
+              ref={textareaRef}
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a command or paste a file. Press Enter to send, Shift+Enter for newline."
+              className="
+                flex-1 min-w-[200px] resize-none bg-transparent border-0
+                focus:outline-none focus:ring-0
+                text-sm placeholder:text-muted-foreground
+                min-h-[36px] max-h-32 overflow-y-auto
+                disabled:opacity-50 disabled:cursor-not-allowed
+              "
+              rows={1}
+              tabIndex={0}
+              aria-label="Build prompt"
+              disabled={isLoading}
+              data-testid="input-prompt-text"
+            />
 
-        {/* Build Button */}
-        <div className="flex-shrink-0 flex-grow-0" style={{ flexBasis: 'auto', minWidth: '80px' }}>
-          <Button
-            onClick={handleSubmit}
-            disabled={isLoading || !promptText.trim()}
-            size="default"
-            className="h-10 px-5 whitespace-nowrap"
-            data-testid="button-build-prompt"
-          >
-            {isLoading ? "Building..." : "Build"}
-          </Button>
-        </div>
+            {/* Agent Button - Always visible if provided */}
+            {agentButton && (
+              <div className="flex-shrink-0">
+                {agentButton}
+              </div>
+            )}
+
+            {/* Build Button - Always visible */}
+            <Button
+              onClick={handleSubmit}
+              disabled={isLoading || !promptText.trim()}
+              size="default"
+              className="flex-shrink-0 px-5"
+              data-testid="button-build-prompt"
+            >
+              {isLoading ? "Building..." : "Build"}
+            </Button>
           </div>
         </>
       )}

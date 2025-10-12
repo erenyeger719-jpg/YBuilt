@@ -1,0 +1,31 @@
+D — Ensure minimize does not crop buttons (visual behavior)
+When left pane is minimized, do not hide controls off-screen. Instead:
+Reduce the pane width but keep toolbar visible using CSS overflow:visible on parent, OR
+Move toolbar into top header or into overflow menu when width < threshold.
+Implement this rule: if left width < 300px → switch toolbar to compact mode and pin its controls into the header or overflow. This ensures Build/Agent are still reachable.
+E — Fix expand lag (common causes & fixes)
+If expanding is slow or jumps, confirm:
+No heavy synchronous JS running on pointermove (e.g., heavy JSON updates).
+No re-render of large React tree on every pointermove — debounce UI state updates. Use the CSS variable rAF approach and update React state only on pointerup for persistence.
+If React re-render is needed to show width-dependent layout, avoid doing it on each move; instead listen to the CSS var or use useEffect with requestAnimationFrame throttle.
+F — Accessibility and keyboard support
+Keep splitter focusable and respond to arrow keys (+ shift for bigger steps) to adjust leftPct. Persist to localStorage when done.
+When overflow menu opens, transfer focus to first menu item and support Esc to close.
+G — Acceptance criteria (what to verify)
+Drag left splitter to minimize: happens smoothly and controls remain visible (or move into overflow/header). No cropping.
+Drag to expand back to any width up to 50%: expands smoothly, no jerky jumps, and interactive controls are usable during drag.
+When left width < threshold, toolbar switches to compact mode (icons only) quickly and predictably.
+Overflow menu works: hidden items are available in the popover and keyboard accessible.
+No layout thrash or console warnings; performance counters show <16ms per frame during drag on a typical dev workstation.
+Prompt input remains usable and not squeezed to zero width at any point.
+H — Debugging checklist (if still problematic)
+Use Chrome DevTools performance trace while dragging; ensure there are not expensive paints or style recalc spikes.
+Temporarily log requestAnimationFrame fps to confirm smoothness.
+Check for heavy setState calls on pointermove; remove them.
+Confirm pointermove events before rAF are not being queued to multiple rAFs.
+FINAL NOTE FOR REPLIT AI / DEVS
+The bug is not visual styling only — it’s caused by layout thrashing and uncontrolled DOM writes during drag. Fix by:
+Relying on CSS var updated inside rAF for visual feedback.
+Persisting the final value in React state or localStorage on pointerup.
+Handling toolbar overflow gracefully (collapse → icons → overflow menu).
+Deliver: updated Splitter.js (or component), toolbar overflow handler, small CSS changes (min-widths, compact class), and a one-line report that acceptance tests pass.
