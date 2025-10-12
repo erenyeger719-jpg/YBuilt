@@ -44,11 +44,11 @@ The system is designed to be fully functional in a mock mode without external AP
 ### Recent Changes (October 2025)
 - **Publish Button Repositioned to Console Tab (Completed Oct 12)**: Moved Publish button to workspace toolbar, right of Console tab:
   - **DOM Placement**: Publish now in workspace toolbar (right pane), immediately after Console TabsTrigger, before preview controls
-  - **Spacing**: 30px gap between Console and Publish on desktop (`ml-[30px]`), 12px on mobile (`max-[720px]:ml-3`)
+  - **Spacing**: 40px gap between Console and Publish on desktop (`ml-[40px]`), 12px on mobile (`max-[720px]:ml-3`)
   - **Top Layer**: z-index 9999 with `pointer-events: auto`, `overflow-visible` on containers prevents clipping
   - **Responsive**: Desktop shows icon + "Publish" text, mobile (<720px) shows icon-only via `max-[720px]:hidden`
   - **Accessibility**: aria-label="Publish", role="button", tooltip "Publish your website", keyboard Tab focus, Enter/Space activation
-  - **Acceptance Tests Passed**: All safety checks verified - DOM order correct, 30px gap maintained, no clipping with pane resize, keyboard accessible, mobile icon-only
+  - **Acceptance Tests Passed**: All safety checks verified - DOM order correct, 40px gap maintained, no clipping with pane resize, keyboard accessible, mobile icon-only
 
 - **Responsive Workspace UI Fix (Completed Oct 12)**: Fixed left pane clipping and squeezing issues when resizing:
   - **ResizableSplitter**: Changed width clamp from 20-50% to 18-50%, added real-time compact mode detection at 26% threshold using `currentLeftPercent` state for immediate UI updates during drag

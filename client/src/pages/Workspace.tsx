@@ -438,7 +438,7 @@ export default function Workspace() {
                 <Button
                   variant="default"
                   size="sm"
-                  className="gap-2 relative publish-pill ml-[30px] max-[720px]:ml-3"
+                  className="gap-2 relative publish-pill ml-[40px] max-[720px]:ml-3"
                   style={{ zIndex: 9999, pointerEvents: 'auto' }}
                   onClick={() => setShowPublishModal(true)}
                   data-testid="button-publish"
