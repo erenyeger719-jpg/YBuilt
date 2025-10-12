@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 interface ResizableSplitterProps {
-  leftPane: React.ReactNode;
+  leftPane: React.ReactNode | ((isCompact: boolean) => React.ReactNode);
   rightPane: React.ReactNode;
   defaultLeftPercent?: number;
   minLeftWidth?: number;
   minRightWidth?: number;
   storageKey?: string;
+  compactThreshold?: number;
 }
 
 export function useResizableSplitter(defaultLeftPercent: number) {
@@ -25,13 +26,14 @@ export default function ResizableSplitter({
   minLeftWidth = 240,
   minRightWidth = 560,
   storageKey = "workspaceSplit",
+  compactThreshold = 26,
 }: ResizableSplitterProps) {
   const [leftPercent, setLeftPercent] = useState(() => {
     const saved = localStorage.getItem(storageKey);
     let initial = saved ? parseFloat(saved) : defaultLeftPercent;
     
-    // Clamp initial value to 20%-50% range
-    initial = Math.max(20, Math.min(50, initial));
+    // Clamp initial value to 18%-50% range
+    initial = Math.max(18, Math.min(50, initial));
     
     // Save clamped value back to localStorage
     localStorage.setItem(storageKey, initial.toString());
@@ -75,8 +77,8 @@ export default function ResizableSplitter({
         const mouseX = e.clientX - rect.left;
         let leftPct = (mouseX / containerWidth) * 100;
 
-        // Apply constraints: 20% min, 50% max for left pane
-        const minLeftPercent = Math.max(20, (minLeftWidth / containerWidth) * 100);
+        // Apply constraints: 18% min, 50% max for left pane
+        const minLeftPercent = Math.max(18, (minLeftWidth / containerWidth) * 100);
         const maxLeftPercent = Math.min(50, 100 - (minRightWidth / containerWidth) * 100);
 
         leftPct = Math.max(minLeftPercent, Math.min(maxLeftPercent, leftPct));
@@ -131,8 +133,8 @@ export default function ResizableSplitter({
         newLeftPercent = leftPercent + step;
       }
 
-      // Apply constraints: 20% min, 50% max for left pane
-      const minLeftPercent = Math.max(20, (minLeftWidth / containerWidth) * 100);
+      // Apply constraints: 18% min, 50% max for left pane
+      const minLeftPercent = Math.max(18, (minLeftWidth / containerWidth) * 100);
       const maxLeftPercent = Math.min(50, 100 - (minRightWidth / containerWidth) * 100);
 
       newLeftPercent = Math.max(minLeftPercent, Math.min(maxLeftPercent, newLeftPercent));
@@ -173,6 +175,9 @@ export default function ResizableSplitter({
   }, [leftPercent, isDragging]);
 
   const transitionStyle = prefersReducedMotion || isDragging ? {} : { transition: "width 0.1s ease" };
+  
+  // Determine if we're in compact mode
+  const isCompact = leftPercent <= compactThreshold;
 
   return (
     <div 
@@ -186,9 +191,9 @@ export default function ResizableSplitter({
           width: 'var(--left-width-pct)',
           ...transitionStyle,
         }}
-        className="overflow-hidden"
+        className={`overflow-hidden ${isCompact ? 'left--compact' : ''}`}
       >
-        {leftPane}
+        {typeof leftPane === 'function' ? leftPane(isCompact) : leftPane}
       </div>
 
       {/* Splitter */}

@@ -359,21 +359,26 @@ export default function Workspace() {
     mobile: "375px",
   };
 
-  // Left Pane Content
-  const leftPane = (
+  // Left Pane Content - Function that receives isCompact from ResizableSplitter
+  const leftPane = (isCompact: boolean) => (
     <div className="h-full flex flex-col">
-      {/* File Tree Header */}
-      <div className="p-3 border-b border-border flex-shrink-0">
+      {/* File Tree Header - Sticky */}
+      <div className="sticky top-0 z-40 p-3 border-b border-border flex-shrink-0 bg-background">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-sm">{workspace.manifest.name}</h3>
+          <h3 className={`font-semibold text-sm ${isCompact ? 'truncate' : ''}`}>
+            {workspace.manifest.name}
+          </h3>
           <FileToolbar
             onNewChat={() => setShowNewChatModal(true)}
             onUpload={handleFileUpload}
             onSaveFile={() => {}}
             onNewFolder={() => setShowNewFolderDialog(true)}
+            isCompact={isCompact}
           />
         </div>
-        <p className="text-xs text-muted-foreground">{workspace.manifest.description}</p>
+        {!isCompact && (
+          <p className="text-xs text-muted-foreground">{workspace.manifest.description}</p>
+        )}
       </div>
       
       {/* Prompts & AI Messages Area */}

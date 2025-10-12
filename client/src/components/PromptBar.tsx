@@ -124,7 +124,7 @@ export default function PromptBar({
         <>
           {/* File Pills Row (if there are uploaded files) - Horizontal scroll */}
           {uploadedFiles.length > 0 && (
-            <div className="px-3 pt-2 pb-1 flex gap-1 overflow-x-auto max-h-12 items-center">
+            <div className="px-3 pt-2 pb-1 flex gap-1 overflow-x-auto max-h-12 items-center scrollbar-thin">
               {uploadedFiles.map((file) => (
                 <Badge
                   key={file.id}
@@ -147,8 +147,8 @@ export default function PromptBar({
             </div>
           )}
 
-          {/* Main Input Row */}
-          <div className="px-3 py-2 flex items-center gap-2">
+          {/* Main Input Row - Fixed height, stable layout */}
+          <div className="px-3 py-2 flex items-center gap-2 min-h-[56px]">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
@@ -158,7 +158,7 @@ export default function PromptBar({
               data-testid="input-file-upload"
             />
 
-            {/* Upload Button - Always visible */}
+            {/* Upload Button - Fixed size, always visible */}
             <Button
               variant="ghost"
               size="icon"
@@ -179,32 +179,32 @@ export default function PromptBar({
               onKeyDown={handleKeyDown}
               placeholder="Type a command or paste a file. Press Enter to send, Shift+Enter for newline."
               className="
-                flex-1 min-w-[200px] resize-none bg-transparent border-0
+                flex-1 min-w-[120px] resize-none bg-transparent border-0
                 focus:outline-none focus:ring-0
                 text-sm placeholder:text-muted-foreground
-                min-h-[36px] max-h-32 overflow-y-auto
+                min-h-[36px] max-h-[140px] overflow-y-auto
                 disabled:opacity-50 disabled:cursor-not-allowed
               "
-              rows={1}
+              rows={2}
               tabIndex={0}
               aria-label="Build prompt"
               disabled={isLoading}
               data-testid="input-prompt-text"
             />
 
-            {/* Agent Button - Always visible if provided */}
+            {/* Agent Button - Fixed size, always visible if provided */}
             {agentButton && (
               <div className="flex-shrink-0">
                 {agentButton}
               </div>
             )}
 
-            {/* Build Button - Always visible */}
+            {/* Build Button - Fixed size, always visible */}
             <Button
               onClick={handleSubmit}
               disabled={isLoading || !promptText.trim()}
               size="default"
-              className="flex-shrink-0 px-5"
+              className="flex-shrink-0 min-w-[72px]"
               data-testid="button-build-prompt"
             >
               {isLoading ? "Building..." : "Build"}

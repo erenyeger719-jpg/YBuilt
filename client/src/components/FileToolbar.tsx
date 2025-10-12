@@ -1,7 +1,13 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, FileUp, Save, FolderPlus } from "lucide-react";
+import { Plus, FileUp, Save, FolderPlus, MoreVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface FileToolbarProps {
   onNewFile?: () => void;
@@ -9,6 +15,7 @@ interface FileToolbarProps {
   onSaveFile?: () => void;
   onNewFolder?: () => void;
   onNewChat?: () => void;
+  isCompact?: boolean;
 }
 
 export default function FileToolbar({
@@ -17,9 +24,11 @@ export default function FileToolbar({
   onSaveFile,
   onNewFolder,
   onNewChat,
+  isCompact = false,
 }: FileToolbarProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [overflowOpen, setOverflowOpen] = useState(false);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -43,6 +52,92 @@ export default function FileToolbar({
     }
   };
 
+  // In compact mode, show only primary actions + overflow menu
+  if (isCompact) {
+    return (
+      <div className="flex items-center gap-1">
+        {/* New Chat/Message Button - Primary action */}
+        {onNewChat && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onNewChat}
+            data-testid="button-new-chat"
+            title="New message"
+          >
+            <Plus className="h-3 w-3" />
+          </Button>
+        )}
+
+        {/* Overflow Menu for secondary actions */}
+        <DropdownMenu open={overflowOpen} onOpenChange={setOverflowOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              data-testid="button-toolbar-overflow"
+              title="More actions"
+            >
+              <MoreVertical className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" data-testid="menu-toolbar-overflow">
+            {onUpload && (
+              <DropdownMenuItem
+                onClick={() => {
+                  fileInputRef.current?.click();
+                  setOverflowOpen(false);
+                }}
+                data-testid="menu-item-upload-file"
+              >
+                <FileUp className="h-4 w-4 mr-2" />
+                Upload File
+              </DropdownMenuItem>
+            )}
+            {onSaveFile && (
+              <DropdownMenuItem
+                onClick={() => {
+                  onSaveFile();
+                  setOverflowOpen(false);
+                }}
+                data-testid="menu-item-save-file"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Download File
+              </DropdownMenuItem>
+            )}
+            {onNewFolder && (
+              <DropdownMenuItem
+                onClick={() => {
+                  onNewFolder();
+                  setOverflowOpen(false);
+                }}
+                data-testid="menu-item-new-folder"
+              >
+                <FolderPlus className="h-4 w-4 mr-2" />
+                New Folder
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Hidden file input */}
+        {onUpload && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFileSelect}
+            className="hidden"
+            data-testid="input-toolbar-file-upload"
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Normal mode - show all buttons
   return (
     <div className="flex items-center gap-1">
       {/* New Chat/Message Button */}
