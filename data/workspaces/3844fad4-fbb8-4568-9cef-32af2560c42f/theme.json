@@ -12,10 +12,10 @@
   "borderRadius": "0.5rem",
   "colors": {
     "background": "#000000",
-    "text": "#000000",
+    "text": "#fffafa",
     "mutedBackground": "#f5f5f5",
     "mutedText": "#666666",
-    "primaryBackground": "#141414",
+    "primaryBackground": "#ffffff",
     "primaryText": "#000000",
     "secondaryBackground": "#e5e5e5",
     "secondaryText": "#0a0a0a",
