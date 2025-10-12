@@ -100,7 +100,7 @@ export default function LogoButton({
       <DropdownMenuContent
         align="start"
         side="bottom"
-        className="w-56"
+        className={isWorkspace ? "logo-menu workspace" : "w-56"}
         style={{ zIndex: 9999 }}
         data-testid="menu-logo-dropdown"
         aria-label="Ybuilt menu"
@@ -109,16 +109,16 @@ export default function LogoButton({
           onClick={() => handleNavigation("/")}
           data-testid="menuitem-home"
         >
-          {isWorkspace && <Home className="h-4 w-4 mr-2" aria-hidden="true" />}
-          Home
+          <span className="menu-label">Home</span>
+          {isWorkspace && <Home className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
           onClick={() => handleNavigation("/recent")}
           data-testid="menuitem-recent"
         >
-          {isWorkspace && <Clock className="h-4 w-4 mr-2" aria-hidden="true" />}
-          Recent
+          <span className="menu-label">Recent</span>
+          {isWorkspace && <Clock className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
@@ -126,24 +126,24 @@ export default function LogoButton({
           disabled={!currentProjectName}
           data-testid="menuitem-current-project"
         >
-          {isWorkspace && <FileCode className="h-4 w-4 mr-2" aria-hidden="true" />}
-          {currentProjectName ? truncateProjectName(currentProjectName) : "No Workspace"}
+          <span className="menu-label">{currentProjectName ? truncateProjectName(currentProjectName) : "No Workspace"}</span>
+          {isWorkspace && <FileCode className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
           onClick={() => handleNavigation("/library")}
           data-testid="menuitem-library"
         >
-          {isWorkspace && <Library className="h-4 w-4 mr-2" aria-hidden="true" />}
-          Library
+          <span className="menu-label">Library</span>
+          {isWorkspace && <Library className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
-          onClick={() => handleNavigation("/account")}
+          onClick={() => handleNavigation("/settings/account")}
           data-testid="menuitem-account"
         >
-          {isWorkspace && <UserCircle className="h-4 w-4 mr-2" aria-hidden="true" />}
-          Account
+          <span className="menu-label">Account</span>
+          {isWorkspace && <UserCircle className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         {!isWorkspace && (
@@ -156,19 +156,19 @@ export default function LogoButton({
         )}
 
         <DropdownMenuItem
-          onClick={() => handleNavigation("/profile")}
+          onClick={() => handleNavigation("/settings/profile")}
           data-testid="menuitem-profile"
         >
-          {isWorkspace && <User className="h-4 w-4 mr-2" aria-hidden="true" />}
-          Profile
+          <span className="menu-label">Profile</span>
+          {isWorkspace && <User className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
           onClick={() => handleNavigation("/notifications")}
           data-testid="menuitem-notifications"
         >
-          {isWorkspace && <Bell className="h-4 w-4 mr-2" aria-hidden="true" />}
-          Notifications
+          <span className="menu-label">Notifications</span>
+          {isWorkspace && <Bell className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         {!isWorkspace && (
@@ -184,8 +184,8 @@ export default function LogoButton({
           onClick={() => handleNavigation("/teams/new")}
           data-testid="menuitem-create-team"
         >
-          {isWorkspace && <Users className="h-4 w-4 mr-2" aria-hidden="true" />}
-          Create Team
+          <span className="menu-label">Create Team</span>
+          {isWorkspace && <Users className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuSub>
@@ -193,8 +193,8 @@ export default function LogoButton({
             aria-haspopup="true"
             data-testid="menuitem-clui"
           >
-            {isWorkspace && <Terminal className="h-4 w-4 mr-2" aria-hidden="true" />}
-            CLUI
+            <span className="menu-label">CLUI</span>
+            {isWorkspace && <Terminal className="menu-icon h-5 w-5" aria-hidden="true" />}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
             style={{ zIndex: 9999 }}
@@ -225,16 +225,16 @@ export default function LogoButton({
           onClick={handleThemeClick}
           data-testid="menuitem-theme"
         >
-          {isWorkspace && <Palette className="h-4 w-4 mr-2" aria-hidden="true" />}
-          {isWorkspace ? "Theme for project" : "Toggle Theme"}
+          <span className="menu-label">{isWorkspace ? "Theme for project" : "Toggle Theme"}</span>
+          {isWorkspace && <Palette className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
           onClick={() => handleNavigation("/settings")}
           data-testid="menuitem-settings"
         >
-          {isWorkspace && <Settings className="h-4 w-4 mr-2" aria-hidden="true" />}
-          Settings
+          <span className="menu-label">Settings</span>
+          {isWorkspace && <Settings className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuSub>
@@ -242,8 +242,8 @@ export default function LogoButton({
             aria-haspopup="true"
             data-testid="menuitem-help"
           >
-            {isWorkspace && <HelpCircle className="h-4 w-4 mr-2" aria-hidden="true" />}
-            Help
+            <span className="menu-label">Help</span>
+            {isWorkspace && <HelpCircle className="menu-icon h-5 w-5" aria-hidden="true" />}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
             style={{ zIndex: 9999 }}
@@ -288,8 +288,8 @@ export default function LogoButton({
           onClick={handleLogout}
           data-testid="menuitem-logout"
         >
-          {isWorkspace && <LogOut className="h-4 w-4 mr-2" aria-hidden="true" />}
-          Log out
+          <span className="menu-label">Log out</span>
+          {isWorkspace && <LogOut className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
       </DropdownMenuContent>
       <GetHelpModal open={helpModalOpen} onOpenChange={setHelpModalOpen} />

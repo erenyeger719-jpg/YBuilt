@@ -1,0 +1,132 @@
+TASK — Remove three menu items from the workspace Logo dropdown; restyle dropdown as premium glossy with right-aligned icons and exact routing
+
+GOAL
+1) Remove the following items **only** from the Ybuilt logo dropdown when shown in the Workspace view:
+   - core
+   - unread
+   - back
+2) Restyle that dropdown to a premium, glossy glass look.
+3) Add icons for every remaining menu item — icon should appear to the RIGHT of the text label with a fixed left margin equivalent to “six spaces”.
+4) Ensure clicking each menu item navigates to the correct route (Account → /settings/account, Profile → /settings/profile, etc.).
+5) Do not change other header elements or global behavior. Changes apply to Workspace Logo dropdown only.
+
+REQUIREMENTS (apply exactly)
+
+A — Remove items (workspace-only)
+- Detect workspace route (e.g., path starts with `/workspace/` or route match). Only in this context, remove the items labeled `core`, `unread`, and `back` from the Logo dropdown menu data array/render output.
+- Do not remove those items elsewhere in the app unless explicitly requested.
+- If any code references these labels by index, use graceful guards: check existence before use.
+
+B — Premium glossy styling (exact)
+- Replace existing dropdown style with a glass panel using CSS variables and the site tokens. Add subtle inner highlight, soft shadow, and slight blur. Use the following CSS (place at end of global stylesheet so it overrides earlier rules):
+
+```css
+/* Logo dropdown — premium glass style (workspace only) */
+.logo-menu.workspace {
+  min-width: 260px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(10px) saturate(120%);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  border-radius: 12px;
+  padding: 8px;
+  color: var(--text-main, #eaeaea);
+  font-family: var(--font-display, 'Valmeria','Inter','Poppins',system-ui,sans-serif);
+  z-index: 9999;
+}
+
+/* menu items: modern spacing */
+.logo-menu.workspace li[role="menuitem"]{
+  display:flex;
+  align-items:center;
+  justify-content:space-between; /* text left, icon right */
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .12s ease, transform .06s ease;
+}
+
+/* hover/focus states */
+.logo-menu.workspace li[role="menuitem"]:hover,
+.logo-menu.workspace li[role="menuitem"]:focus {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  transform: translateY(-1px);
+  outline: none;
+}
+
+/* right-aligned icon: keep "six spaces" effect via margin-left */
+.logo-menu.workspace .menu-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.logo-menu.workspace .menu-icon {
+  margin-left: 24px; /* ~6 spaces visual gap; adjust if branding requires exact spacing */
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  opacity: .95;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));
+}
+Notes: using justify-content: space-between keeps the label left and the icon pinned to the right; the margin-left: 24px guarantees the requested six-character gap visually. Adjust color tokens to match the app palette if needed.
+C — Icon placement & assets
+
+Include inline SVG sprite or small icon components. Use monochrome, 20×20 px icons. Map icons to labels as follows (add aria-hidden="true" on SVG):
+Home        → home icon
+Recent      → history/clock icon
+{project}   → folder/project icon
+Library     → library/bookshelf icon
+Account     → user icon
+Profile     → avatar icon
+Notifications → bell icon (show numeric badge when >0)
+Create Team → team icon
+CLUI        → terminal/chev icon (submenu caret)
+Toggle Theme → palette icon
+Settings    → gear icon
+Help        → question icon
+Log out     → sign-out icon
+Render each menu item as:
+<li role="menuitem" data-action="home">
+  <span class="menu-label">Home</span>
+  <svg class="menu-icon">...</svg>
+</li>
+D — Routing & action mapping (must wire exactly)
+Wire these actions to routes (or behaviors):
+home → navigate('/')
+recent → navigate('/recent')
+open-current/project entry → navigate(/workspace/${projectId}) (use current project id)
+library → navigate('/library')
+account → navigate('/settings/account')
+profile → navigate('/settings/profile')
+notifications → navigate('/notifications')
+create-team → open modal /teams/new (or navigate('/teams/new'))
+clui → open submenu or navigate('/clui')
+toggle-theme → open theme picker (or toggle)
+settings → navigate('/settings')
+help → open help submenu/modal (existing behavior)
+logout → call sign-out endpoint and navigate('/login')
+Ensure navigation uses app router (React Router / wouter) so history and active state remain correct.
+E — Accessibility & keyboard
+Keep role="menu" and role="menuitem".
+Each item must have tabindex="0" and support keyboard navigation (arrow up/down, Enter to activate, Esc to close).
+Add title attribute equal to full label for truncated labels and tooltip on hover for icons.
+F — Workspace-only scope & graceful guards
+Apply the above removal and premium styling only when menu is rendered in the workspace context (.logo-menu.workspace class). For other pages, leave existing styles unchanged.
+If code uses a common menu data source for multiple contexts, add conditional rendering where necessary rather than globally mutating data.
+G — Acceptance tests (manual)
+Open Workspace → click Ybuilt logo → dropdown appears. Confirm core, unread, and back are NOT present.
+Dropdown styling is glossy, glass-like; items have soft shadows and rounded corners as in CSS above.
+Each menu item shows its icon to the right of the text, with a visually clear gap (~24px). Icons render crisp and match labels.
+Clicking Account → /settings/account; Profile → /settings/profile; Library → /library; Home → /. All navigations use router and update URL.
+Keyboard navigation: open menu with Enter/Space, navigate with arrows, Enter triggers.
+Non-workspace pages: logo click continues to behave as before (usually navigate to /); dropdown unaffected on non-workspace pages.
+No console errors introduced; code uses guards for removed items so nothing breaks.
+H — Implementation hints & safe rollbacks
+Modify the workspace-specific menu data before render (e.g., getLogoMenuItemsForContext('workspace')) rather than mutating global menu list.
+Add .logo-menu.workspace class to the DOM in the Header when route is workspace for easy CSS targeting.
+If any dependent code referenced the removed labels by string, add defensive checks (e.g., if(item) { ... }) and do a quick grep to avoid runtime undefined errors.
+DELIVERABLE
+One PR or commit that:
+Removes core, unread, and back from the workspace Logo menu.
+Adds the premium glossy CSS above and ensures it applies only to the workspace menu.
+Adds icons and markup for each visible menu item, with icons to the right and spacing as specified.
+Wires menu actions to routes exactly as listed and ensures keyboard accessibility.
+Includes a short QA note confirming acceptance tests A–G.
+END OF TASK —   Do it exactly; do not change other header behavior or the global menu outside the workspace context.

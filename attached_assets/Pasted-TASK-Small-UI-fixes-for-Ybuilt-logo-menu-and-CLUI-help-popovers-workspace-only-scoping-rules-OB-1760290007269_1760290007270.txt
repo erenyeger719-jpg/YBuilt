@@ -1,0 +1,135 @@
+TASK — Small UI fixes for Ybuilt logo menu and CLUI/help popovers (workspace-only scoping rules)
+
+OBJECTIVE (one line)
+1) In **Home** and **Library** pages change Ybuilt logo behavior as follows: on Home the logo becomes a no-op (focusable but does nothing); on Library clicking the logo redirects to `/` (Home). Keep the logo/dropdown behavior unchanged everywhere else (Workspace, Settings, etc.).  
+2) Remove CLUI’s hover-trigger popover (only for the CLUI control) — keep click/submenu behavior intact.  
+3) Fix Help submenu side-popup cropping in the workspace logo dropdown — ensure the Help side popup renders above headers/toolbars (topmost layer) and is not clipped.
+
+APPLY THESE CHANGES EXACTLY (do not modify other header/menu behavior)
+
+A — Logo click behavior (Home / Library only)
+1. Detect page context with router (preferred):
+   - `isHome = location.pathname === '/'`
+   - `isLibrary = location.pathname.startsWith('/library')`
+   - `isWorkspace = routeMatch('/workspace/:id')` etc.
+
+2. Patch LogoButton click handler (Header.jsx or equivalent) — minimal conditional wrapper:
+
+```jsx
+// Header.jsx pseudo
+const location = useLocation();
+const isHome = location.pathname === '/';
+const isLibrary = location.pathname.startsWith('/library');
+
+function onLogoClick(e) {
+  if (isHome) {
+    // Home: do nothing; keep element keyboard focusable for A11Y
+    e.preventDefault();
+    // telemetry: logo_click { page: 'home', action: 'noop' }
+    return;
+  }
+  if (isLibrary) {
+    // Library: always redirect to home
+    e.preventDefault();
+    navigate('/');
+    // telemetry: logo_click { page: 'library', action: 'navigate_home' }
+    return;
+  }
+  // Other pages: preserve existing behavior (dropdown/menu/open)
+  return handleDefaultLogoAction(e);
+}
+Notes:
+Keep button focusable on Home and Library for accessibility; use aria-disabled="true" on Home if desired.
+Do not mutate global menu data; change only click handler logic.
+Add telemetry events (logo_click) for analytics.
+Acceptance (A1–A3):
+Home: click logo => no navigation, no dropdown.
+Library: click logo => navigate to /.
+Workspace/Settings: existing dropdown behavior unchanged.
+B — Remove CLUI hover popover (CLUI only)
+Find CLUI menu/button component. Remove hover open handlers only:
+Remove onMouseEnter, onMouseOver, onPointerEnter that open the side popover.
+Keep onClick, keyboard (Enter/Space), and aria-haspopup="true" so click+keyboard still open submenu.
+If hover logic is shared across items, make it conditional:
+if (item.key === 'clui') {
+  // do not attach hover listeners
+} else {
+  // attach hover listeners as before
+}
+Keep the submenu accessible via keyboard (arrow keys) and click.
+Acceptance (B1–B2):
+Moving cursor near CLUI no longer opens the side popover.
+Clicking CLUI still opens its submenu (click/keyboard) and subitems work.
+C — Fix Help submenu side-popup cropping (render topmost & portal)
+Problem: the Help side popup is being clipped by header/toolbars due to stacking contexts. Fix by portal + fixed positioning + high z-index and closing competing overlays.
+Render the Help side-popup via a React portal to document.body (or #modal-root under <body>):
+import { createPortal } from 'react-dom';
+function HelpSidePopup({ open, anchorRect, ... }) {
+  if (!open) return null;
+  return createPortal(
+    <div className="help-side-popup" role="menu" data-help-popup>
+      {/* popup content */}
+    </div>,
+    document.body
+  );
+}
+Use fixed positioning relative to the viewport (calculate left/top from anchorRect) and very-high safe z-index:
+.help-side-popup {
+  position: fixed !important;
+  z-index: 2147483601 !important;  /* extremely high but not MAX_INT */
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.6);
+  border-radius: 10px;
+  padding: 8px;
+  max-width: 360px;
+  overflow: auto;
+}
+Before opening the Help side-popup, explicitly close the logo dropdown (if open) and any other open overlays to avoid stacking conflicts:
+function openHelpPopup(anchorRect) {
+  closeLogoDropdown();
+  closeOtherOverlays();
+  setHelpPopup({ open: true, anchorRect });
+}
+Defensive check: remove any transform, filter, or will-change styles on ancestors that create stacking contexts for the header area (only if necessary). Prefer portal approach — avoid global overrides unless debugging shows a culprit.
+If popup placement needs to be anchored to the menu item, compute left/top from anchorRect and adjust to remain on-screen (flip to other side if near viewport edge).
+Acceptance (C1–C5):
+The Help side-popup now appears fully visible (no cropping) above headers/toolbars.
+Works on hover/focus/click as before (but if hover logic was changed earlier, keep intended trigger).
+Popup placement is correct relative to Help item, and keyboard navigation works.
+No other UI layout or behavior changed.
+D — Scope & Safety (must follow)
+All changes are workspace-only for logo dropdown behavior and Help side-popup fixes — verify with route checks.
+Do not change global header behavior on non-targeted pages except Home and Library click behavior described in A.
+Keep existing styling tokens (glass/monochrome) intact; only add portal and z-index tweaks for popups.
+E — Debugging tips (deliver with PR)
+If popup still clips: run this snippet in console to find stacking-context parents of header:
+function findStackingAncestors(el) {
+  const out=[];
+  let cur = el.parentElement;
+  while(cur){
+    const s = getComputedStyle(cur);
+    if (s.transform !== 'none' || s.filter !== 'none' || s.opacity !== '1' || s.willChange !== 'auto') {
+      out.push({tag: cur.tagName, id: cur.id, classes: cur.className, style: {transform:s.transform, filter:s.filter, opacity:s.opacity, willChange:s.willChange}});
+    }
+    cur = cur.parentElement;
+  }
+  console.table(out);
+}
+findStackingAncestors(document.querySelector('.header'));
+Use portal mounting if any ancestor stacking context exists.
+F — Acceptance checklist to run before merge
+Home page: click logo → no-op (no navigation, no dropdown), button remains focusable.
+Library page: click logo → navigate to /.
+Workspace & Settings: logo dropdown unchanged and functional.
+CLUI: hover near CLUI no longer opens popover; click still opens submenu.
+Help side-popup: opens fully visible above toolbars; not cropped; keyboard accessible.
+No console errors and no regressions in other menu behavior.
+DELIVERABLE
+One succinct PR that:
+Modifies Header.jsx (LogoButton handler) and applies route checks.
+Adjusts CLUI component to remove hover open handlers.
+Changes Help popup to portal + fixed CSS + anchor math; closes competing overlays before open.
+Adds small QA note showing result of Acceptance checklist.  —  Do not expand scope beyond the three fixes described.
+END 
