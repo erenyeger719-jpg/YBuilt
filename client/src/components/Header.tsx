@@ -2,7 +2,7 @@ import { Moon, Sun, Sparkles, Library, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import Logo from "./Logo";
+import LogoButton from "./LogoButton";
 import PaymentButton from "./PaymentButton";
 import CurrencyToggle from "./CurrencyToggle";
 import ProfileIcon from "./ProfileIcon";
@@ -19,9 +19,10 @@ interface HeaderProps {
     status: "success" | "error" | "building";
     lastBuild: string;
   };
+  workspaceName?: string;
 }
 
-export default function Header({ logSummary }: HeaderProps) {
+export default function Header({ logSummary, workspaceName }: HeaderProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [lowGloss, setLowGloss] = useState(false);
   const [currency, setCurrency] = useState<"INR" | "USD">("INR");
@@ -75,20 +76,24 @@ export default function Header({ logSummary }: HeaderProps) {
 
   const amount = currency === "INR" ? 799 : 10;
 
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    window.location.href = "/";
+  };
+
+  const workspaceId = isWorkspace ? location.split("/")[2] : undefined;
+  const currentProjectPath = workspaceId ? `/workspace/${workspaceId}` : undefined;
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 backdrop-blur-md bg-background/80">
+    <header className="fixed top-0 left-0 right-0 z-[70] border-b border-border/50 backdrop-blur-md bg-background/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link href="/" data-testid="link-home-logo">
-                <Logo />
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Ybuilt — Home</p>
-            </TooltipContent>
-          </Tooltip>
+          <LogoButton
+            currentProjectName={workspaceName}
+            currentProjectPath={currentProjectPath}
+            onThemeToggle={toggleTheme}
+            onLogout={handleLogout}
+          />
           
           <div className="flex items-center gap-2">
             {isWorkspace && logSummary && (

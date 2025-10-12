@@ -633,6 +633,7 @@ export default function Workspace() {
           status: "success",
           lastBuild: "2m ago",
         }}
+        workspaceName={workspace.manifest.name}
       />
       <CommandPalette />
       <PublishModal
