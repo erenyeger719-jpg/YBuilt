@@ -1,0 +1,170 @@
+TASK — remove 4 dropdown items + implement full Profile & Account settings + add icons to workspace logo dropdown
+
+OBJECTIVE
+1. Remove these items from the Ybuilt logo dropdown **only in the workspace**:  
+   - "Generated Site"  
+   - "Core"  
+   - "Unread"  
+   - "Back"  
+2. Implement a premium-class **Profile** page and an **Account** settings page with full functionality and persistence. Profile must include user details + list of all user projects. Account must implement email/password, server location, notifications, export apps, billing view, usage alerts, referrals, roles, SSH keys, account secrets, connected services, domains, themes, and the rest of the items you provided.  
+3. Add clear icons to each workspace Ybuilt logo dropdown item (house for Home, library icon for Library, gear for Settings, user avatar for Profile, bell for Notifications, etc.). Icons must appear in the dropdown in workspace only.  
+4. Keep everything else unchanged. Do not add/remove any other global header items.
+
+SCOPE (do only these)
+- Edit header menu behavior (workspace-only), the Settings → Profile & Account pages, backend API endpoints for settings and persistence, and the dropdown icons.  
+- Use existing design tokens (glass/monochrome) and the Valmeria heading font. Make Profile/Account look premium with subtle glass cards, 2xl rounded corners, soft shadows, and smooth micro-animations.
+
+DETAILS — EXACT WORK TO DO
+
+A — Remove dropdown items (workspace-only)
+- In the workspace-only LogoMenu rendering, remove these items from the menu list: `Generated Site`, `Core`, `Unread`, `Back`.  
+- Do not remove them from other UI areas if used elsewhere (verify usage). If any code depends on them, replace logic gracefully (no broken refs).  
+- Acceptance: those items must not appear in workspace Logo dropdown; other pages unaffected.
+
+B — Add icons to workspace Logo dropdown items
+- For each dropdown item (workspace logo menu), prefix the label with an icon SVG (inline sprite). Use these mappings:
+  - Home → house icon
+  - Recent → clock/history
+  - {currentProjectName} / No Workspace → project/file icon
+  - Library → bookshelf/library icon
+  - Account → user icon
+  - Profile → avatar icon
+  - Notifications → bell icon (show unread badge if >0)
+  - Create Team → team icon
+  - CLUI → terminal/chevron icon (submenu indicator)
+  - Toggle Theme → palette icon
+  - Settings → gear icon
+  - Help → question-mark icon
+  - Log out → sign-out icon
+- Icons must be 20px high, monochrome (match theme), and have `aria-hidden="true"`. Add `aria-label` on menu items as before.
+- Acceptance: icons visible and aligned, keyboard accessible, menu order unchanged except removed items.
+
+C — Implement Profile page (Settings → Profile)
+Create a premium Profile page under `/settings/profile` (or existing settings profile route). Must include:
+
+1. Header card (avatar + display name)
+   - Avatar upload (drag & drop + click to upload). Store to `public/uploads/avatars/{userId}.png`.
+   - Username (immutable in UI; note: “You can change your username through the CLI once” text if CLI rule applies).
+   - Display name editable (first, last).
+   - Bio (max 140 chars) with character counter.
+   - Public profile preview toggle (show/hide public profile).
+
+2. Contact & identity
+   - Email (read-only in Profile view; editable from Account if desired).
+   - Verified status badge (email verified).
+
+3. Projects list (important)
+   - List all user projects (from `data/users.json` or `GET /api/users/:id/projects`). Each row: project thumbnail (snapshot if available), name (click opens workspace), createdAt, lastPublished (if any), actions: Open, Duplicate, Export, Delete.
+   - Pagination/infinite scroll if >20 projects.
+   - Click “Export” bundles project into zip and downloads (backend endpoint).
+
+4. Roles & flags
+   - Show user roles (Explorer, Admin, etc.) with small explainers and ability to remove role if user is owner.
+
+5. SSH Keys & Account Secrets quick links
+   - Link to SSH keys panel and Account Secrets (both in Account section below), but show short summary here.
+
+6. Accessibility & UX
+   - All fields must be keyboard accessible; forms autosave draft and show “Saved” toast.
+   - Avatar upload previews immediately and persists on Save.
+
+Backend & API for Profile
+- `GET /api/users/:userId/profile` → returns profile JSON including projects list.
+- `POST /api/users/:userId/profile` → update profile fields (avatar path, firstName, lastName, bio, visibility).
+- `POST /api/users/:userId/projects/:projectId/export` → returns zip for download.
+- Persist under `data/users.json` and `public/uploads/avatars/`.
+
+D — Implement Account page (Settings → Account)
+Make `/settings/account` fully functional with these sections and behaviors:
+
+1. Email & Password
+   - View and change email (send verification link), change password (current, new, confirm).
+   - `POST /api/users/:id/email/change`, `POST /api/users/:id/password/change`.
+
+2. Server Location (Region selector)
+   - Show current server region; allow change (dropdown: Asia, US, EU, etc.) that updates preference `data/users/:id/region`.
+   - Show note: changing region affects deployments; confirm modal before applying.
+
+3. Notifications
+   - Toggle: transactional emails, marketing emails. Persist toggles to user settings. `PATCH /api/users/:id/notifications`.
+
+4. Export Apps / Bulk Export
+   - Bulk export all personal apps: `POST /api/users/:id/export-apps` → generates staged zip in `/public/exports/{userId}/...` and returns download link. Show progress and a toast when ready.
+
+5. Billing & Plan
+   - Show plan (e.g., Replit Core), next payment, amount. Show “Change plan” which routes to `/billing/plans`.
+   - Show payment method (masked), Manage card triggers existing Razorpay or mock flow.
+   - Set Usage Alerts: UI slider + amount input; `POST /api/users/:id/usage-alerts`.
+
+6. Referrals & Credits
+   - Show referral link (copy button) and credits earned.
+
+7. Roles & Explorer toggles (remove role)
+   - Allow opt-in/out for Tester/Explorer role; if removal affects permissions show confirmation.
+
+8. SSH Keys
+   - Add key: paste public key, validates format (ssh-rsa/ed25519), persists to `data/users/:id/ssh_keys.json`. Allow delete.
+   - Endpoint: `POST /api/users/:id/ssh-keys`, `DELETE /api/users/:id/ssh-keys/:keyId`.
+
+9. Account Secrets
+   - Manage account-level secrets with encrypted storage: `GET /api/users/:id/secrets`, `POST /api/users/:id/secrets`, `DELETE /api/users/:id/secrets/:name`.
+   - UI: name, value masked, reveal on click, copy value, push to project secrets via selector.
+
+10. Connected Services
+   - Show connected OAuth providers (GitHub, Google, Facebook, Apple). Allow Connect/Disconnect. Use mock OAuth flows in MOCK_MODE.
+   - Endpoints: `GET /api/users/:id/integrations`, `POST /api/users/:id/integrations/{provider}/connect`, `POST /api/users/:id/integrations/{provider}/disconnect`.
+
+11. Domains
+   - Show managed domains list; Add domain UI (validation); remove domain. Store in `data/users/:id/domains.json`.
+
+12. Themes
+   - Show Official + Custom themes (list existing logic). Allow install/uninstall custom themes. (Hook into existing themes API).
+
+E — Visual / Premium polish
+- Use glass panels, soft shadows, p-4..p-8 spacing, Valmeria for headings, Inter/Poppins for body. Buttons use subtle glass CTA style with accessible contrast. Micro-animations for toggles, save confirmations.
+- Add icons for each Settings section (Profile: avatar, Account: shield/credit, Billing: card, SSH Keys: key icon, Secrets: lock, Integrations: plug, Themes: palette, Domains: globe, Projects: folder).
+- Add a compact activity log at bottom of Profile showing recent actions.
+
+F — Data persistence & security
+- All settings persisted in `data/users.json` (structured) and, for larger objects, individual files `data/users/{id}/...` (ssh_keys.json, secrets.json, domains.json, projects.json).
+- Protect endpoints: verify user identity against session (MOCK_MODE bypass with demo user).
+- For secrets: store only encrypted values (simulate encryption with base64 in MOCK_MODE) and never echo raw secret except when user explicitly reveals in UI.
+
+G — Export / Import behavior
+- Export projects: server zips project folder under `public/exports/{userId}/...` and returns download link.
+- Allow importing a zip into new project via `/api/projects/import` (optional).
+
+H — Analytics & Telemetry
+- Emit events: `profile_updated`, `avatar_uploaded`, `password_changed`, `ssh_key_added`, `integration_connected`, `export_started`.
+
+I — Acceptance tests (must pass)
+1. Workspace Logo dropdown: the four items listed are removed. Icons appear beside remaining items. (Manual test)
+2. Profile page:
+   - Avatar upload works and persists file.
+   - Edit name/bio save and reflect in header.
+   - Projects list loads and Open/Export/Delete actions work.
+3. Account page:
+   - Email change flow (mock verification), password change validates and returns success.
+   - Region change updates user preference and shows confirm modal.
+   - Notifications toggles persist.
+   - Export apps starts job and produces downloadable zip.
+   - Billing pane shows plan data and payment modal works in MOCK_MODE.
+   - SSH keys add/delete persist.
+   - Secrets add/view/delete persist and values masked by default.
+   - Connected services show status and can connect/disconnect in MOCK_MODE.
+4. Security: secrets not leaked in logs; endpoints require user auth.
+5. Visual: Profile & Account pages display premium styling and icons and are responsive.
+6. Telemetry events emitted for major actions.
+
+J — Developer notes & safe rollbacks
+- If any UI element depends on the removed items, provide fallback behavior (no crash).
+- Keep all API changes backward-compatible where possible.
+- Document new endpoints in README.
+
+DELIVERABLE
+- Frontend: updated LogoMenu (workspace-only), icons SVG sprite, `Settings/Profile.jsx`, `Settings/Account.jsx`, UI components (AvatarUpload, ProjectsList, SSHKeysPanel, SecretsPanel, IntegrationsPanel, BillingPanel).
+- Backend: user settings endpoints (GET/POST/PUT as above), export endpoints, persistence files under `data/`.
+- README: quick usage + how to test MOCK_MODE for integrations & billing.
+- QA: short pass/fail report for each Acceptance test.
+
+END — paste this entire block into Replit’s AI or hand to your dev. Do not expand scope or change other header/menu items beyond the exact work described.

@@ -559,5 +559,20 @@
     "error": null,
     "createdAt": "2025-10-12T09:28:58.922Z",
     "updatedAt": "2025-10-12T09:29:02.382Z"
+  },
+  "439b5813-bafc-4e31-bc35-033dde52a62b": {
+    "id": "439b5813-bafc-4e31-bc35-033dde52a62b",
+    "userId": "demo",
+    "prompt": "frfvee",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/439b5813-bafc-4e31-bc35-033dde52a62b/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-12T15:02:53.985Z",
+    "updatedAt": "2025-10-12T15:02:56.030Z"
   }
 }

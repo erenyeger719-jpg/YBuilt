@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -52,6 +52,7 @@ export default function GetHelpModal({ open, onOpenChange }: GetHelpModalProps) 
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const lastFocusedElement = useRef<HTMLElement | null>(null);
 
   // Fetch current user data
   const { data: userData } = useQuery<{ user: { username: string; email: string } }>({
@@ -69,11 +70,35 @@ export default function GetHelpModal({ open, onOpenChange }: GetHelpModalProps) 
     },
   });
 
-  // Reset form when modal closes
+  // Save focus when modal opens, restore when it closes
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      // Save the currently focused element when modal opens
+      // But if it's in a dropdown menu, save the logo button instead
+      const activeEl = document.activeElement as HTMLElement;
+      const logoButton = document.querySelector('[data-testid="button-logo-menu"]') as HTMLElement;
+      
+      // If focused element is in a dropdown or menu, use logo button as fallback
+      if (activeEl?.closest('[role="menu"]') || activeEl?.closest('[role="menuitem"]')) {
+        lastFocusedElement.current = logoButton;
+      } else {
+        lastFocusedElement.current = activeEl;
+      }
+    } else {
+      // Reset form when modal closes
       form.reset();
       setSelectedFiles([]);
+      
+      // Restore focus to the saved element or logo button as fallback
+      const elementToFocus = lastFocusedElement.current || 
+                            document.querySelector('[data-testid="button-logo-menu"]') as HTMLElement;
+      
+      if (elementToFocus && typeof elementToFocus.focus === 'function') {
+        // Small delay to ensure modal is fully closed
+        setTimeout(() => {
+          elementToFocus.focus();
+        }, 150);
+      }
     }
   }, [open, form]);
 

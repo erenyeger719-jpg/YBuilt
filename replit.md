@@ -33,6 +33,7 @@ The frontend is built with React, TypeScript, and Vite, utilizing `shadcn/ui` fo
 - **Library**: Stores saved drafts with thumbnails and a unique black→red→blue diagonal theme.
 - **Billing System**: Handles credit management, invoice tracking, credit purchases, and deduction upon publishing.
 - **Workspace-Only Theme Editor**: A comprehensive per-workspace theme customization system with a modal for color, typography, and preset adjustments. It offers live preview via CSS variables and persistence to `data/workspaces/{jobId}/theme.json`.
+- **Help Menu System**: Replit-inspired help interface with hover-based submenu, live system status monitoring, comprehensive support ticket system with file attachments, and dedicated support pages for billing, account, and technical assistance. Features keyboard accessibility and proper focus management.
 
 ### System Design Choices
 The system supports a mock mode for Razorpay and AI generation, simulating delays and outcomes without requiring external API keys. It includes an in-memory job queue with a mock worker for AI generation requests. User persistence is ensured across server restarts, and immediate visual feedback is provided for appearance setting changes through CSS variable updates.
