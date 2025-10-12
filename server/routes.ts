@@ -8,6 +8,7 @@ import fs from "fs/promises";
 import path from "path";
 import { z } from "zod";
 import multer from "multer";
+import archiver from "archiver";
 
 const upload = multer({
   dest: "public/uploads/",
@@ -650,6 +651,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching projects:", error);
       res.status(500).json({ error: "Failed to fetch projects" });
+    }
+  });
+
+  // Get user profile with projects
+  app.get("/api/users/:userId/profile", async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Get user's jobs/projects
+      const jobs = await storage.getUserJobs(req.params.userId);
+      
+      // Transform jobs to projects format
+      const projects = jobs.map(job => ({
+        id: job.id,
+        name: job.settings ? JSON.parse(job.settings).title || "Untitled" : "Untitled",
+        thumbnail: job.result || "/previews/default-thumbnail.jpg",
+        createdAt: job.createdAt,
+        lastPublished: job.status === "published" ? job.updatedAt : null,
+        status: job.status,
+      }));
+
+      // Get settings for SSH keys and secrets counts
+      const settings = await storage.getSettings(req.params.userId);
+      const sshKeysCount = settings.security.sshKeys?.length || 0;
+      const secretsCount = settings.security.apiKeys?.length || 0;
+
+      res.json({
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          bio: user.bio || "",
+          avatar: user.avatar || null,
+          publicProfile: user.publicProfile || false,
+          emailVerified: user.emailVerified || false,
+          roles: user.roles || [],
+        },
+        projects,
+        counts: {
+          sshKeys: sshKeysCount,
+          secrets: secretsCount,
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({ error: "Failed to fetch user profile" });
+    }
+  });
+
+  // Update user profile
+  app.post("/api/users/:userId/profile", async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const { firstName, lastName, bio, publicProfile } = req.body;
+
+      // Validate bio length
+      if (bio && bio.length > 140) {
+        return res.status(400).json({ error: "Bio must be 140 characters or less" });
+      }
+
+      const updatedUser = await storage.updateUser(req.params.userId, {
+        firstName,
+        lastName,
+        bio,
+        publicProfile,
+      });
+
+      res.json({
+        success: true,
+        user: {
+          id: updatedUser.id,
+          username: updatedUser.username,
+          email: updatedUser.email,
+          firstName: updatedUser.firstName || "",
+          lastName: updatedUser.lastName || "",
+          bio: updatedUser.bio || "",
+          avatar: updatedUser.avatar || null,
+          publicProfile: updatedUser.publicProfile || false,
+          emailVerified: updatedUser.emailVerified || false,
+          roles: updatedUser.roles || [],
+        }
+      });
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      res.status(500).json({ error: "Failed to update user profile" });
+    }
+  });
+
+  // Upload avatar
+  const avatarUpload = multer({
+    dest: "public/uploads/avatars/",
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Invalid file type. Only images are allowed"));
+      }
+    }
+  });
+
+  app.post("/api/users/:userId/avatar", avatarUpload.single("avatar"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const user = await storage.getUser(req.params.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const { userId } = req.params;
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "avatars");
+      await fs.mkdir(uploadDir, { recursive: true });
+
+      const ext = path.extname(req.file.originalname);
+      const fileName = `${userId}${ext}`;
+      const filePath = path.join(uploadDir, fileName);
+      
+      await fs.rename(req.file.path, filePath);
+
+      const avatarUrl = `/uploads/avatars/${fileName}`;
+      
+      const updatedUser = await storage.updateUser(userId, { avatar: avatarUrl });
+
+      res.json({
+        success: true,
+        avatarUrl,
+        user: {
+          id: updatedUser.id,
+          avatar: updatedUser.avatar,
+        }
+      });
+    } catch (error) {
+      console.error("Avatar upload error:", error);
+      res.status(500).json({ error: "Avatar upload failed" });
+    }
+  });
+
+  // Delete project
+  app.delete("/api/projects/:projectId", async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.projectId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // In a real implementation, we'd delete the job and associated files
+      // For now, just update status to indicate it's deleted
+      await storage.updateJob(req.params.projectId, { status: "deleted" });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      res.status(500).json({ error: "Failed to delete project" });
     }
   });
 
@@ -1308,6 +1478,511 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching commands:", error);
       res.status(500).json({ error: "Failed to search commands" });
+    }
+  });
+
+  // ========== PROFILE ENDPOINTS ==========
+  
+  // GET /api/users/:userId/profile - Get user profile and projects
+  app.get("/api/users/:userId/profile", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const profileData = await storage.getUserProfile(userId);
+      res.json(profileData);
+    } catch (error: any) {
+      console.error("Error fetching profile:", error);
+      if (error.message === "User not found") {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.status(500).json({ error: "Failed to fetch profile" });
+    }
+  });
+
+  // POST /api/users/:userId/profile - Update user profile
+  app.post("/api/users/:userId/profile", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { firstName, lastName, bio, publicProfile } = req.body;
+      
+      const updatedUser = await storage.updateUserProfile(userId, {
+        firstName,
+        lastName,
+        bio,
+        publicProfile,
+      });
+      
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      if (error.message === "User not found") {
+        return res.status(404).json({ error: "User not found" });
+      }
+      if (error.message?.includes("Bio must be")) {
+        return res.status(400).json({ error: error.message });
+      }
+      res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  // POST /api/users/:userId/avatar - Upload avatar
+  const avatarUpload = multer({
+    dest: "public/uploads/avatars/",
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Invalid file type. Only images allowed."));
+      }
+    }
+  });
+
+  app.post("/api/users/:userId/avatar", avatarUpload.single("avatar"), async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const ext = path.extname(req.file.originalname);
+      const avatarDir = path.join(process.cwd(), "public", "uploads", "avatars");
+      await fs.mkdir(avatarDir, { recursive: true });
+      
+      const avatarPath = path.join(avatarDir, `${userId}${ext}`);
+      await fs.rename(req.file.path, avatarPath);
+
+      const avatarUrl = `/uploads/avatars/${userId}${ext}`;
+      
+      // Update user avatar
+      await storage.updateUser(userId, { avatar: avatarUrl });
+
+      res.json({ avatarUrl });
+    } catch (error) {
+      console.error("Error uploading avatar:", error);
+      res.status(500).json({ error: "Failed to upload avatar" });
+    }
+  });
+
+  // POST /api/users/:userId/projects/:projectId/export - Export project as zip
+  app.post("/api/users/:userId/projects/:projectId/export", async (req, res) => {
+    try {
+      const { userId, projectId } = req.params;
+      
+      const job = await storage.getJob(projectId);
+      if (!job) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      if (job.userId !== userId) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const exportsDir = path.join(process.cwd(), "public", "exports", userId);
+      await fs.mkdir(exportsDir, { recursive: true });
+      
+      const zipPath = path.join(exportsDir, `${projectId}.zip`);
+      const output = await fs.open(zipPath, "w");
+      const archive = archiver("zip", { zlib: { level: 9 } });
+
+      archive.pipe(output.createWriteStream());
+
+      // Add project files
+      const previewDir = path.join(process.cwd(), "public", "previews", projectId);
+      try {
+        await fs.access(previewDir);
+        archive.directory(previewDir, false);
+      } catch (error) {
+        // No preview files, just add a README
+        archive.append("This project has no files yet.", { name: "README.txt" });
+      }
+
+      await archive.finalize();
+      await output.close();
+
+      const downloadUrl = `/exports/${userId}/${projectId}.zip`;
+      res.json({ downloadUrl });
+    } catch (error) {
+      console.error("Error exporting project:", error);
+      res.status(500).json({ error: "Failed to export project" });
+    }
+  });
+
+  // ========== ACCOUNT ENDPOINTS ==========
+  
+  // POST /api/users/:userId/email/change - Change email (mock)
+  app.post("/api/users/:userId/email/change", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { newEmail } = req.body;
+      
+      if (!newEmail || !z.string().email().safeParse(newEmail).success) {
+        return res.status(400).json({ error: "Invalid email address" });
+      }
+
+      // Mock verification flow - in production would send verification email
+      res.json({ 
+        success: true, 
+        message: "Verification email sent to " + newEmail 
+      });
+    } catch (error) {
+      console.error("Error changing email:", error);
+      res.status(500).json({ error: "Failed to change email" });
+    }
+  });
+
+  // POST /api/users/:userId/password/change - Change password
+  app.post("/api/users/:userId/password/change", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { currentPassword, newPassword } = req.body;
+      
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: "Current and new password required" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Validate current password
+      if (user.password !== currentPassword) {
+        return res.status(400).json({ error: "Current password is incorrect" });
+      }
+
+      // Update password (in production would hash with bcrypt)
+      await storage.updateUser(userId, { password: newPassword });
+
+      res.json({ success: true, message: "Password updated successfully" });
+    } catch (error) {
+      console.error("Error changing password:", error);
+      res.status(500).json({ error: "Failed to change password" });
+    }
+  });
+
+  // PATCH /api/users/:userId/region - Update user region
+  app.patch("/api/users/:userId/region", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { region } = req.body;
+      
+      if (!region) {
+        return res.status(400).json({ error: "Region is required" });
+      }
+
+      const updatedUser = await storage.updateUser(userId, { region });
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating region:", error);
+      res.status(500).json({ error: "Failed to update region" });
+    }
+  });
+
+  // PATCH /api/users/:userId/notifications - Update notification settings
+  app.patch("/api/users/:userId/notifications", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { notificationSettings } = req.body;
+      
+      if (!notificationSettings) {
+        return res.status(400).json({ error: "Notification settings required" });
+      }
+
+      const updatedUser = await storage.updateUser(userId, { notificationSettings });
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating notifications:", error);
+      res.status(500).json({ error: "Failed to update notifications" });
+    }
+  });
+
+  // POST /api/users/:userId/export-apps - Export all user projects
+  app.post("/api/users/:userId/export-apps", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      const exportsDir = path.join(process.cwd(), "public", "exports", userId);
+      await fs.mkdir(exportsDir, { recursive: true });
+      
+      const zipPath = path.join(exportsDir, "all-projects.zip");
+      const output = await fs.open(zipPath, "w");
+      const archive = archiver("zip", { zlib: { level: 9 } });
+
+      archive.pipe(output.createWriteStream());
+
+      const jobs = await storage.getUserJobs(userId);
+      
+      for (const job of jobs) {
+        const previewDir = path.join(process.cwd(), "public", "previews", job.id);
+        try {
+          await fs.access(previewDir);
+          archive.directory(previewDir, `project-${job.id}`);
+        } catch (error) {
+          // Skip if no preview files
+        }
+      }
+
+      await archive.finalize();
+      await output.close();
+
+      const downloadUrl = `/exports/${userId}/all-projects.zip`;
+      res.json({ downloadUrl, status: "ready" });
+    } catch (error) {
+      console.error("Error exporting all apps:", error);
+      res.status(500).json({ error: "Failed to export apps" });
+    }
+  });
+
+  // GET /api/users/:userId/billing - Get billing info
+  app.get("/api/users/:userId/billing", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      // Mock billing data
+      const billingData = {
+        plan: "Creator Plan",
+        nextPayment: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        amount: 2000,
+        currency: "INR",
+        paymentMethod: {
+          type: "card",
+          last4: "4242",
+        },
+        usage: {
+          builds: 42,
+          storage: 1250,
+          bandwidth: 8500,
+        },
+        limits: {
+          builds: 1000,
+          storage: 10000,
+          bandwidth: 50000,
+        },
+      };
+
+      res.json(billingData);
+    } catch (error) {
+      console.error("Error fetching billing:", error);
+      res.status(500).json({ error: "Failed to fetch billing info" });
+    }
+  });
+
+  // POST /api/users/:userId/usage-alerts - Set usage alert threshold
+  app.post("/api/users/:userId/usage-alerts", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { threshold } = req.body;
+      
+      if (typeof threshold !== "number" || threshold < 0 || threshold > 100) {
+        return res.status(400).json({ error: "Threshold must be between 0 and 100" });
+      }
+
+      // Mock storage - in production would save to user settings
+      res.json({ success: true, threshold });
+    } catch (error) {
+      console.error("Error setting usage alert:", error);
+      res.status(500).json({ error: "Failed to set usage alert" });
+    }
+  });
+
+  // POST /api/users/:userId/roles - Update user roles
+  app.post("/api/users/:userId/roles", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { roles } = req.body;
+      
+      if (!Array.isArray(roles)) {
+        return res.status(400).json({ error: "Roles must be an array" });
+      }
+
+      const updatedUser = await storage.updateUser(userId, { roles });
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating roles:", error);
+      res.status(500).json({ error: "Failed to update roles" });
+    }
+  });
+
+  // ========== SSH KEYS ENDPOINTS ==========
+  
+  // GET /api/users/:userId/ssh-keys - Get SSH keys
+  app.get("/api/users/:userId/ssh-keys", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const keys = await storage.getUserSSHKeys(userId);
+      res.json(keys);
+    } catch (error) {
+      console.error("Error fetching SSH keys:", error);
+      res.status(500).json({ error: "Failed to fetch SSH keys" });
+    }
+  });
+
+  // POST /api/users/:userId/ssh-keys - Add SSH key
+  app.post("/api/users/:userId/ssh-keys", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { name, publicKey } = req.body;
+      
+      if (!name || !publicKey) {
+        return res.status(400).json({ error: "Name and public key required" });
+      }
+
+      // Basic SSH key validation
+      if (!publicKey.startsWith("ssh-rsa") && !publicKey.startsWith("ssh-ed25519")) {
+        return res.status(400).json({ error: "Invalid SSH key format" });
+      }
+
+      const newKey = await storage.addSSHKey(userId, { name, publicKey });
+      res.json(newKey);
+    } catch (error) {
+      console.error("Error adding SSH key:", error);
+      res.status(500).json({ error: "Failed to add SSH key" });
+    }
+  });
+
+  // DELETE /api/users/:userId/ssh-keys/:keyId - Delete SSH key
+  app.delete("/api/users/:userId/ssh-keys/:keyId", async (req, res) => {
+    try {
+      const { userId, keyId } = req.params;
+      await storage.deleteSSHKey(userId, keyId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting SSH key:", error);
+      res.status(500).json({ error: "Failed to delete SSH key" });
+    }
+  });
+
+  // ========== SECRETS ENDPOINTS ==========
+  
+  // GET /api/users/:userId/secrets - Get secrets
+  app.get("/api/users/:userId/secrets", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const secrets = await storage.getUserSecrets(userId);
+      res.json(secrets);
+    } catch (error) {
+      console.error("Error fetching secrets:", error);
+      res.status(500).json({ error: "Failed to fetch secrets" });
+    }
+  });
+
+  // POST /api/users/:userId/secrets - Add secret
+  app.post("/api/users/:userId/secrets", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { name, value } = req.body;
+      
+      if (!name || !value) {
+        return res.status(400).json({ error: "Name and value required" });
+      }
+
+      const newSecret = await storage.addSecret(userId, { name, value });
+      res.json(newSecret);
+    } catch (error) {
+      console.error("Error adding secret:", error);
+      res.status(500).json({ error: "Failed to add secret" });
+    }
+  });
+
+  // DELETE /api/users/:userId/secrets/:name - Delete secret
+  app.delete("/api/users/:userId/secrets/:name", async (req, res) => {
+    try {
+      const { userId, name } = req.params;
+      await storage.deleteSecret(userId, name);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting secret:", error);
+      res.status(500).json({ error: "Failed to delete secret" });
+    }
+  });
+
+  // ========== INTEGRATIONS ENDPOINTS ==========
+  
+  // GET /api/users/:userId/integrations - Get integrations
+  app.get("/api/users/:userId/integrations", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const integrations = await storage.getUserIntegrations(userId);
+      res.json(integrations);
+    } catch (error) {
+      console.error("Error fetching integrations:", error);
+      res.status(500).json({ error: "Failed to fetch integrations" });
+    }
+  });
+
+  // POST /api/users/:userId/integrations/:provider/connect - Connect integration
+  app.post("/api/users/:userId/integrations/:provider/connect", async (req, res) => {
+    try {
+      const { userId, provider } = req.params;
+      await storage.connectIntegration(userId, provider);
+      res.json({ success: true, message: `Connected to ${provider}` });
+    } catch (error) {
+      console.error("Error connecting integration:", error);
+      res.status(500).json({ error: "Failed to connect integration" });
+    }
+  });
+
+  // POST /api/users/:userId/integrations/:provider/disconnect - Disconnect integration
+  app.post("/api/users/:userId/integrations/:provider/disconnect", async (req, res) => {
+    try {
+      const { userId, provider } = req.params;
+      await storage.disconnectIntegration(userId, provider);
+      res.json({ success: true, message: `Disconnected from ${provider}` });
+    } catch (error) {
+      console.error("Error disconnecting integration:", error);
+      res.status(500).json({ error: "Failed to disconnect integration" });
+    }
+  });
+
+  // ========== DOMAINS ENDPOINTS ==========
+  
+  // GET /api/users/:userId/domains - Get domains
+  app.get("/api/users/:userId/domains", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const domains = await storage.getUserDomains(userId);
+      res.json(domains);
+    } catch (error) {
+      console.error("Error fetching domains:", error);
+      res.status(500).json({ error: "Failed to fetch domains" });
+    }
+  });
+
+  // POST /api/users/:userId/domains - Add domain
+  app.post("/api/users/:userId/domains", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { domain } = req.body;
+      
+      if (!domain) {
+        return res.status(400).json({ error: "Domain is required" });
+      }
+
+      // Basic domain validation
+      const domainRegex = /^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/i;
+      if (!domainRegex.test(domain)) {
+        return res.status(400).json({ error: "Invalid domain format" });
+      }
+
+      const newDomain = await storage.addDomain(userId, { domain });
+      res.json(newDomain);
+    } catch (error) {
+      console.error("Error adding domain:", error);
+      res.status(500).json({ error: "Failed to add domain" });
+    }
+  });
+
+  // DELETE /api/users/:userId/domains/:domainId - Delete domain
+  app.delete("/api/users/:userId/domains/:domainId", async (req, res) => {
+    try {
+      const { userId, domainId } = req.params;
+      await storage.deleteDomain(userId, domainId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting domain:", error);
+      res.status(500).json({ error: "Failed to delete domain" });
     }
   });
 

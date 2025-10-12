@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset, type ProjectTheme, projectThemeSchema, themePresets, type SupportTicket, type InsertSupportTicket, type SystemStatus } from "@shared/schema";
+import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset, type ProjectTheme, projectThemeSchema, themePresets, type SupportTicket, type InsertSupportTicket, type SystemStatus, type SSHKey, type InsertSSHKey, type Secret, type InsertSecret, type Integration, type Domain, type InsertDomain } from "@shared/schema";
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
@@ -18,6 +18,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<User>): Promise<User>;
   getUserCredits(userId: string): Promise<number>;
   updateUserCredits(userId: string, credits: number): Promise<void>;
   addCredits(userId: string, amount: number): Promise<void>;
@@ -68,6 +69,30 @@ export interface IStorage {
   getSupportTickets(userId: string): Promise<SupportTicket[]>;
   createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket>;
   getSystemStatus(): Promise<SystemStatus>;
+  
+  // Profile methods
+  getUserProfile(userId: string): Promise<{ user: User, projects: Job[] }>;
+  updateUserProfile(userId: string, data: { firstName?: string, lastName?: string, bio?: string, publicProfile?: boolean }): Promise<User>;
+  
+  // SSH Key methods
+  getUserSSHKeys(userId: string): Promise<SSHKey[]>;
+  addSSHKey(userId: string, key: InsertSSHKey): Promise<SSHKey>;
+  deleteSSHKey(userId: string, keyId: string): Promise<void>;
+  
+  // Secret methods
+  getUserSecrets(userId: string): Promise<Secret[]>;
+  addSecret(userId: string, secret: InsertSecret): Promise<Secret>;
+  deleteSecret(userId: string, name: string): Promise<void>;
+  
+  // Integration methods
+  getUserIntegrations(userId: string): Promise<Integration[]>;
+  connectIntegration(userId: string, provider: string): Promise<void>;
+  disconnectIntegration(userId: string, provider: string): Promise<void>;
+  
+  // Domain methods
+  getUserDomains(userId: string): Promise<Domain[]>;
+  addDomain(userId: string, domain: InsertDomain): Promise<Domain>;
+  deleteDomain(userId: string, domainId: string): Promise<void>;
 }
 
 export interface Invoice {
@@ -177,6 +202,26 @@ export class MemStorage implements IStorage {
     await this.saveUsers();
     
     return user;
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User> {
+    const user = this.users.get(id);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const updatedUser = {
+      ...user,
+      ...updates,
+      id: user.id, // Ensure id doesn't change
+      username: user.username, // Ensure username doesn't change
+      email: user.email, // Ensure email doesn't change (use separate endpoint for that)
+    };
+
+    this.users.set(id, updatedUser);
+    await this.saveUsers();
+    
+    return updatedUser;
   }
 
   private async saveUsers() {
@@ -649,6 +694,217 @@ export class MemStorage implements IStorage {
       ],
       lastUpdated: new Date().toISOString(),
     };
+  }
+
+  // Profile methods
+  async getUserProfile(userId: string): Promise<{ user: User, projects: Job[] }> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const projects = await this.getUserJobs(userId);
+    return { user, projects };
+  }
+
+  async updateUserProfile(userId: string, data: { firstName?: string, lastName?: string, bio?: string, publicProfile?: boolean }): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Validate bio length
+    if (data.bio && data.bio.length > 140) {
+      throw new Error("Bio must be 140 characters or less");
+    }
+
+    const updatedUser = {
+      ...user,
+      ...data,
+    };
+
+    this.users.set(userId, updatedUser);
+    await this.saveUsers();
+    
+    return updatedUser;
+  }
+
+  // SSH Key methods
+  async getUserSSHKeys(userId: string): Promise<SSHKey[]> {
+    const keysFile = path.join(process.cwd(), "data", "users", userId, "ssh_keys.json");
+    try {
+      const data = await fs.readFile(keysFile, "utf-8");
+      return JSON.parse(data);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async addSSHKey(userId: string, key: InsertSSHKey): Promise<SSHKey> {
+    const keys = await this.getUserSSHKeys(userId);
+    const newKey: SSHKey = {
+      ...key,
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+      fingerprint: this.generateSSHFingerprint(key.publicKey),
+    };
+    
+    keys.push(newKey);
+    
+    const keysDir = path.join(process.cwd(), "data", "users", userId);
+    await fs.mkdir(keysDir, { recursive: true });
+    const keysFile = path.join(keysDir, "ssh_keys.json");
+    await fs.writeFile(keysFile, JSON.stringify(keys, null, 2));
+    
+    return newKey;
+  }
+
+  async deleteSSHKey(userId: string, keyId: string): Promise<void> {
+    const keys = await this.getUserSSHKeys(userId);
+    const filtered = keys.filter(k => k.id !== keyId);
+    
+    const keysFile = path.join(process.cwd(), "data", "users", userId, "ssh_keys.json");
+    await fs.writeFile(keysFile, JSON.stringify(filtered, null, 2));
+  }
+
+  private generateSSHFingerprint(publicKey: string): string {
+    // Simple mock fingerprint - in production would use proper crypto
+    const hash = publicKey.slice(0, 32);
+    return `SHA256:${hash}`;
+  }
+
+  // Secret methods
+  async getUserSecrets(userId: string): Promise<Secret[]> {
+    const secretsFile = path.join(process.cwd(), "data", "users", userId, "secrets.json");
+    try {
+      const data = await fs.readFile(secretsFile, "utf-8");
+      return JSON.parse(data);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async addSecret(userId: string, secret: InsertSecret): Promise<Secret> {
+    const secrets = await this.getUserSecrets(userId);
+    
+    // Base64 encode the value (mock encryption)
+    const encodedValue = Buffer.from(secret.value).toString("base64");
+    
+    const newSecret: Secret = {
+      id: randomUUID(),
+      name: secret.name,
+      value: encodedValue,
+      createdAt: new Date().toISOString(),
+    };
+    
+    secrets.push(newSecret);
+    
+    const secretsDir = path.join(process.cwd(), "data", "users", userId);
+    await fs.mkdir(secretsDir, { recursive: true });
+    const secretsFile = path.join(secretsDir, "secrets.json");
+    await fs.writeFile(secretsFile, JSON.stringify(secrets, null, 2));
+    
+    return newSecret;
+  }
+
+  async deleteSecret(userId: string, name: string): Promise<void> {
+    const secrets = await this.getUserSecrets(userId);
+    const filtered = secrets.filter(s => s.name !== name);
+    
+    const secretsFile = path.join(process.cwd(), "data", "users", userId, "secrets.json");
+    await fs.writeFile(secretsFile, JSON.stringify(filtered, null, 2));
+  }
+
+  // Integration methods
+  async getUserIntegrations(userId: string): Promise<Integration[]> {
+    const integrationsFile = path.join(process.cwd(), "data", "users", userId, "integrations.json");
+    try {
+      const data = await fs.readFile(integrationsFile, "utf-8");
+      return JSON.parse(data);
+    } catch (error) {
+      // Return default integrations
+      return [
+        { provider: "github", connected: false },
+        { provider: "gitlab", connected: false },
+        { provider: "bitbucket", connected: false },
+        { provider: "google", connected: false },
+      ];
+    }
+  }
+
+  async connectIntegration(userId: string, provider: string): Promise<void> {
+    const integrations = await this.getUserIntegrations(userId);
+    const existing = integrations.find(i => i.provider === provider);
+    
+    if (existing) {
+      existing.connected = true;
+      existing.connectedAt = new Date().toISOString();
+      existing.username = `${userId}_${provider}`; // Mock username
+    } else {
+      integrations.push({
+        provider,
+        connected: true,
+        connectedAt: new Date().toISOString(),
+        username: `${userId}_${provider}`,
+      });
+    }
+    
+    const integrationsDir = path.join(process.cwd(), "data", "users", userId);
+    await fs.mkdir(integrationsDir, { recursive: true });
+    const integrationsFile = path.join(integrationsDir, "integrations.json");
+    await fs.writeFile(integrationsFile, JSON.stringify(integrations, null, 2));
+  }
+
+  async disconnectIntegration(userId: string, provider: string): Promise<void> {
+    const integrations = await this.getUserIntegrations(userId);
+    const existing = integrations.find(i => i.provider === provider);
+    
+    if (existing) {
+      existing.connected = false;
+      existing.connectedAt = undefined;
+      existing.username = undefined;
+    }
+    
+    const integrationsFile = path.join(process.cwd(), "data", "users", userId, "integrations.json");
+    await fs.writeFile(integrationsFile, JSON.stringify(integrations, null, 2));
+  }
+
+  // Domain methods
+  async getUserDomains(userId: string): Promise<Domain[]> {
+    const domainsFile = path.join(process.cwd(), "data", "users", userId, "domains.json");
+    try {
+      const data = await fs.readFile(domainsFile, "utf-8");
+      return JSON.parse(data);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async addDomain(userId: string, domain: InsertDomain): Promise<Domain> {
+    const domains = await this.getUserDomains(userId);
+    
+    const newDomain: Domain = {
+      id: randomUUID(),
+      domain: domain.domain,
+      verified: false,
+      createdAt: new Date().toISOString(),
+    };
+    
+    domains.push(newDomain);
+    
+    const domainsDir = path.join(process.cwd(), "data", "users", userId);
+    await fs.mkdir(domainsDir, { recursive: true });
+    const domainsFile = path.join(domainsDir, "domains.json");
+    await fs.writeFile(domainsFile, JSON.stringify(domains, null, 2));
+    
+    return newDomain;
+  }
+
+  async deleteDomain(userId: string, domainId: string): Promise<void> {
+    const domains = await this.getUserDomains(userId);
+    const filtered = domains.filter(d => d.id !== domainId);
+    
+    const domainsFile = path.join(process.cwd(), "data", "users", userId, "domains.json");
+    await fs.writeFile(domainsFile, JSON.stringify(filtered, null, 2));
   }
 }
 

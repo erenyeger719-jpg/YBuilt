@@ -5,6 +5,21 @@ import Logo from "./Logo";
 import GetHelpModal from "@/components/GetHelpModal";
 import type { SystemStatus } from "@shared/schema";
 import {
+  Home,
+  Clock,
+  FileCode,
+  Library,
+  UserCircle,
+  User,
+  Bell,
+  Users,
+  Terminal,
+  Palette,
+  Settings,
+  HelpCircle,
+  LogOut,
+} from "lucide-react";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -94,6 +109,7 @@ export default function LogoButton({
           onClick={() => handleNavigation("/")}
           data-testid="menuitem-home"
         >
+          {isWorkspace && <Home className="h-4 w-4 mr-2" aria-hidden="true" />}
           Home
         </DropdownMenuItem>
 
@@ -101,6 +117,7 @@ export default function LogoButton({
           onClick={() => handleNavigation("/recent")}
           data-testid="menuitem-recent"
         >
+          {isWorkspace && <Clock className="h-4 w-4 mr-2" aria-hidden="true" />}
           Recent
         </DropdownMenuItem>
 
@@ -109,6 +126,7 @@ export default function LogoButton({
           disabled={!currentProjectName}
           data-testid="menuitem-current-project"
         >
+          {isWorkspace && <FileCode className="h-4 w-4 mr-2" aria-hidden="true" />}
           {currentProjectName ? truncateProjectName(currentProjectName) : "No Workspace"}
         </DropdownMenuItem>
 
@@ -116,6 +134,7 @@ export default function LogoButton({
           onClick={() => handleNavigation("/library")}
           data-testid="menuitem-library"
         >
+          {isWorkspace && <Library className="h-4 w-4 mr-2" aria-hidden="true" />}
           Library
         </DropdownMenuItem>
 
@@ -123,20 +142,24 @@ export default function LogoButton({
           onClick={() => handleNavigation("/account")}
           data-testid="menuitem-account"
         >
+          {isWorkspace && <UserCircle className="h-4 w-4 mr-2" aria-hidden="true" />}
           Account
         </DropdownMenuItem>
 
-        <DropdownMenuItem
-          onClick={() => handleNavigation("/core")}
-          data-testid="menuitem-core"
-        >
-          Core
-        </DropdownMenuItem>
+        {!isWorkspace && (
+          <DropdownMenuItem
+            onClick={() => handleNavigation("/core")}
+            data-testid="menuitem-core"
+          >
+            Core
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuItem
           onClick={() => handleNavigation("/profile")}
           data-testid="menuitem-profile"
         >
+          {isWorkspace && <User className="h-4 w-4 mr-2" aria-hidden="true" />}
           Profile
         </DropdownMenuItem>
 
@@ -144,20 +167,24 @@ export default function LogoButton({
           onClick={() => handleNavigation("/notifications")}
           data-testid="menuitem-notifications"
         >
+          {isWorkspace && <Bell className="h-4 w-4 mr-2" aria-hidden="true" />}
           Notifications
         </DropdownMenuItem>
 
-        <DropdownMenuItem
-          onClick={() => handleNavigation("/notifications?filter=unread")}
-          data-testid="menuitem-notifications-unread"
-        >
-          Unread
-        </DropdownMenuItem>
+        {!isWorkspace && (
+          <DropdownMenuItem
+            onClick={() => handleNavigation("/notifications?filter=unread")}
+            data-testid="menuitem-notifications-unread"
+          >
+            Unread
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuItem
           onClick={() => handleNavigation("/teams/new")}
           data-testid="menuitem-create-team"
         >
+          {isWorkspace && <Users className="h-4 w-4 mr-2" aria-hidden="true" />}
           Create Team
         </DropdownMenuItem>
 
@@ -166,6 +193,7 @@ export default function LogoButton({
             aria-haspopup="true"
             data-testid="menuitem-clui"
           >
+            {isWorkspace && <Terminal className="h-4 w-4 mr-2" aria-hidden="true" />}
             CLUI
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
@@ -197,6 +225,7 @@ export default function LogoButton({
           onClick={handleThemeClick}
           data-testid="menuitem-theme"
         >
+          {isWorkspace && <Palette className="h-4 w-4 mr-2" aria-hidden="true" />}
           {isWorkspace ? "Theme for project" : "Toggle Theme"}
         </DropdownMenuItem>
 
@@ -204,6 +233,7 @@ export default function LogoButton({
           onClick={() => handleNavigation("/settings")}
           data-testid="menuitem-settings"
         >
+          {isWorkspace && <Settings className="h-4 w-4 mr-2" aria-hidden="true" />}
           Settings
         </DropdownMenuItem>
 
@@ -212,6 +242,7 @@ export default function LogoButton({
             aria-haspopup="true"
             data-testid="menuitem-help"
           >
+            {isWorkspace && <HelpCircle className="h-4 w-4 mr-2" aria-hidden="true" />}
             Help
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
@@ -242,12 +273,14 @@ export default function LogoButton({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        <DropdownMenuItem
-          onClick={handleBack}
-          data-testid="menuitem-back"
-        >
-          Back
-        </DropdownMenuItem>
+        {!isWorkspace && (
+          <DropdownMenuItem
+            onClick={handleBack}
+            data-testid="menuitem-back"
+          >
+            Back
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
 
@@ -255,6 +288,7 @@ export default function LogoButton({
           onClick={handleLogout}
           data-testid="menuitem-logout"
         >
+          {isWorkspace && <LogOut className="h-4 w-4 mr-2" aria-hidden="true" />}
           Log out
         </DropdownMenuItem>
       </DropdownMenuContent>

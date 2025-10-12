@@ -7,7 +7,8 @@ import { RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // Import settings forms
-import { AccountForm } from "@/components/SettingsForm/AccountForm";
+import Profile from "@/pages/settings/Profile";
+import Account from "@/pages/settings/Account";
 import { AppearanceForm } from "@/components/SettingsForm/AppearanceForm";
 import { NotificationsForm } from "@/components/SettingsForm/NotificationsForm";
 import { WorkspaceForm } from "@/components/SettingsForm/WorkspaceForm";
@@ -76,7 +77,8 @@ export default function Settings() {
                 <div className="gloss-sheen" />
                 <div className="relative z-10">
                   <Switch>
-                    <Route path="/settings/account" component={AccountForm} />
+                    <Route path="/settings/profile" component={Profile} />
+                    <Route path="/settings/account" component={Account} />
                     <Route path="/settings/appearance" component={AppearanceForm} />
                     <Route path="/settings/notifications" component={NotificationsForm} />
                     <Route path="/settings/workspace" component={WorkspaceForm} />
@@ -89,7 +91,7 @@ export default function Settings() {
                     <Route path="/settings/team" component={TeamForm} />
                     <Route path="/settings/export" component={ExportData} />
                     <Route path="/settings">
-                      <Redirect to="/settings/account" />
+                      <Redirect to="/settings/profile" />
                     </Route>
                   </Switch>
                 </div>

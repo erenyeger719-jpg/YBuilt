@@ -11,7 +11,8 @@ import {
   Download,
   Bell,
   Briefcase,
-  Building2
+  Building2,
+  UserCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +51,7 @@ export function SettingsSidebar() {
     {
       label: "Personal",
       items: [
+        { to: "/settings/profile", icon: <UserCircle className="w-5 h-5" />, label: "Profile" },
         { to: "/settings/account", icon: <User className="w-5 h-5" />, label: "Account" },
         { to: "/settings/appearance", icon: <Palette className="w-5 h-5" />, label: "Appearance" },
         { to: "/settings/notifications", icon: <Bell className="w-5 h-5" />, label: "Notifications" },

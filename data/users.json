@@ -1,6 +1,10 @@
 {
   "demo": {
     "id": "demo",
+    "firstName": "Demo",
+    "lastName": "Updated",
+    "bio": "Updated bio",
+    "avatar": "/uploads/avatars/demo.png",
     "credits": 0
   },
   "35a19574-e995-4d8d-a6a0-63f0dfdc0fb9": {

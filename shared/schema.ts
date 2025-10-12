@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -8,13 +8,30 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  bio: text("bio"),
+  avatar: text("avatar"),
+  publicProfile: boolean("public_profile").default(false).notNull(),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  region: text("region"),
+  roles: text("roles").array(),
+  notificationSettings: jsonb("notification_settings"),
+  referralCode: text("referral_code").unique(),
+  referralCredits: integer("referral_credits").default(0).notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  email: true,
-  password: true,
-});
+export const insertUserSchema = createInsertSchema(users)
+  .omit({
+    id: true,
+  })
+  .extend({
+    bio: z.string().max(140, "Bio must be 140 characters or less").optional(),
+    notificationSettings: z.object({
+      transactional: z.boolean().default(true),
+      marketing: z.boolean().default(false),
+    }).optional(),
+  });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -492,6 +509,53 @@ export const systemStatusSchema = z.object({
 });
 
 export type SystemStatus = z.infer<typeof systemStatusSchema>;
+
+// SSH Key Schema
+export const sshKeySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  publicKey: z.string(),
+  fingerprint: z.string().optional(),
+  createdAt: z.string(),
+});
+
+export const insertSSHKeySchema = sshKeySchema.omit({ id: true, createdAt: true, fingerprint: true });
+export type SSHKey = z.infer<typeof sshKeySchema>;
+export type InsertSSHKey = z.infer<typeof insertSSHKeySchema>;
+
+// Secret Schema
+export const secretSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  value: z.string(), // base64 encoded
+  createdAt: z.string(),
+});
+
+export const insertSecretSchema = secretSchema.omit({ id: true, createdAt: true });
+export type Secret = z.infer<typeof secretSchema>;
+export type InsertSecret = z.infer<typeof insertSecretSchema>;
+
+// Integration Schema
+export const integrationSchema = z.object({
+  provider: z.string(),
+  connected: z.boolean(),
+  username: z.string().optional(),
+  connectedAt: z.string().optional(),
+});
+
+export type Integration = z.infer<typeof integrationSchema>;
+
+// Domain Schema
+export const domainSchema = z.object({
+  id: z.string(),
+  domain: z.string(),
+  verified: z.boolean().default(false),
+  createdAt: z.string(),
+});
+
+export const insertDomainSchema = domainSchema.omit({ id: true, createdAt: true, verified: true });
+export type Domain = z.infer<typeof domainSchema>;
+export type InsertDomain = z.infer<typeof insertDomainSchema>;
 
 // Theme presets
 export const themePresets = {
