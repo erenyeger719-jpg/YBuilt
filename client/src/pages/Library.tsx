@@ -119,19 +119,16 @@ export default function Library() {
                     <p className="text-sm text-white/70 mb-4">{new Date(draft.createdAt).toLocaleDateString()}</p>
                     
                     <div className="flex gap-2">
-                      <Link href={`/workspace/${draft.jobId}`}>
-                        <a className="flex-1">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="w-full"
-                            data-testid={`button-open-${draft.draftId}`}
-                          >
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Open
-                          </Button>
-                        </a>
-                      </Link>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="flex-1"
+                        onClick={() => window.location.href = `/workspace/${draft.jobId}`}
+                        data-testid={`button-open-${draft.draftId}`}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Open
+                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -160,18 +157,15 @@ export default function Library() {
                   </p>
                 </div>
                 
-                <Link href="/">
-                  <a>
-                    <Button 
-                      className="gap-2"
-                      size="lg"
-                      data-testid="button-create-now"
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      Generate Website
-                    </Button>
-                  </a>
-                </Link>
+                <Button 
+                  className="gap-2"
+                  size="lg"
+                  onClick={() => window.location.href = '/'}
+                  data-testid="button-create-now"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Generate Website
+                </Button>
               </div>
             </motion.div>
           )}

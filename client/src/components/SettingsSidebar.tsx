@@ -24,22 +24,21 @@ interface SidebarItemProps {
 
 function SidebarItem({ to, icon, label, active }: SidebarItemProps) {
   return (
-    <Link href={to}>
-      <a
-        data-testid={`settings-nav-${label.toLowerCase().replace(/\s+/g, '-')}`}
-        className={cn(
-          "flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors",
-          "hover-elevate active-elevate-2",
-          active 
-            ? "bg-accent text-accent-foreground" 
-            : "text-muted-foreground hover:text-foreground"
-        )}
-      >
-        <span className="w-5 h-5 flex items-center justify-center">
-          {icon}
-        </span>
-        <span className="font-medium">{label}</span>
-      </a>
+    <Link
+      href={to}
+      data-testid={`settings-nav-${label.toLowerCase().replace(/\s+/g, '-')}`}
+      className={cn(
+        "flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors",
+        "hover-elevate active-elevate-2",
+        active 
+          ? "bg-accent text-accent-foreground" 
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      <span className="w-5 h-5 flex items-center justify-center">
+        {icon}
+      </span>
+      <span className="font-medium">{label}</span>
     </Link>
   );
 }
