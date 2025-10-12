@@ -73,6 +73,14 @@ The system is designed to be fully functional in a mock mode without external AP
   - **Full-Height Preview**: Preview iframe now correctly fills viewport (bottom = window.innerHeight) with PageToolSheet overlay working properly
   - **Test Coverage**: All acceptance criteria verified via automated Playwright tests
 
+- **Workspace UI Emergency Fixes (Completed Oct 12)**: Critical fixes for toolbar clipping, prompt squeeze, and splitter bugs:
+  - **ResizableSplitter 20%-50% Clamp**: Hard limit left pane to 20% min, 50% max with initial localStorage clamp, requestAnimationFrame for smooth resizing
+  - **Toolbar Visibility**: Fixed z-index (`sticky top-0 z-50 overflow-visible h-14`) ensuring all device mode buttons and action icons visible and clickable
+  - **Prompt Textarea Anti-Squeeze**: Added `min-w-[200px]` to textarea wrapper, fixed button flex-basis (Upload: 44px, Agent: 54px, Build: 80px min-width)
+  - **Keyboard Splitter Control**: Arrow keys adjust width by 2% steps with clamp enforcement
+  - **Initial Clamp Bug Fix**: Critical fix to clamp persisted localStorage values on load, preventing >50% violations on first render
+  - **Full Regression Testing**: All 8 acceptance criteria verified (toolbar visible, columns fill viewport, prompt comfortable, pills scroll horizontally, buttons not overlapping, splitter clamps, smooth/reversible, no cropping)
+
 - **Select & Open Workspace Flow (Fixed)**: Resolved race condition and JSON parsing bug where clicking "Select & Open Workspace" on Finalize page showed "Workspace not ready" error. Fix includes: (1) POST /api/jobs/:jobId/select now returns `workspaceReady: true` field, (2) Finalize.tsx properly parses JSON response with `res.json()`, (3) Query refetch disabled during navigation with `enabled: !!jobId && !selectMutation.isPending` to prevent status change from blocking navigation.
 
 ## External Dependencies
