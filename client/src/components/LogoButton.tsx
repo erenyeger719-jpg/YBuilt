@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import Logo from "./Logo";
+import GetHelpModal from "@/components/GetHelpModal";
+import type { SystemStatus } from "@shared/schema";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +34,13 @@ export default function LogoButton({
 }: LogoButtonProps) {
   const [, setLocation] = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
+
+  // Poll system status every 30 seconds
+  const { data: systemStatus } = useQuery<SystemStatus>({
+    queryKey: ["/api/status"],
+    refetchInterval: 30000,
+  });
 
   const handleNavigation = (path: string) => {
     setLocation(path);
@@ -197,12 +207,40 @@ export default function LogoButton({
           Settings
         </DropdownMenuItem>
 
-        <DropdownMenuItem
-          onClick={() => handleNavigation("/help")}
-          data-testid="menuitem-help"
-        >
-          Help
-        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger
+            aria-haspopup="true"
+            data-testid="menuitem-help"
+          >
+            Help
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent
+            style={{ zIndex: 9999 }}
+            data-testid="submenu-help"
+          >
+            <DropdownMenuItem
+              onClick={() => handleNavigation("/status")}
+              data-testid="menuitem-status"
+              className="flex items-center gap-2"
+            >
+              <span className={`w-2 h-2 rounded-full ${
+                systemStatus?.services?.some(s => s.status === "degraded") 
+                  ? "bg-amber-500" 
+                  : systemStatus?.ok 
+                    ? "bg-green-500" 
+                    : "bg-red-500"
+              }`} />
+              <span>{systemStatus?.summary || "Checking status..."}</span>
+            </DropdownMenuItem>
+            
+            <DropdownMenuItem
+              onClick={() => { setDropdownOpen(false); setHelpModalOpen(true); }}
+              data-testid="menuitem-get-help"
+            >
+              ? Get help
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
 
         <DropdownMenuItem
           onClick={handleBack}
@@ -220,6 +258,7 @@ export default function LogoButton({
           Log out
         </DropdownMenuItem>
       </DropdownMenuContent>
+      <GetHelpModal open={helpModalOpen} onOpenChange={setHelpModalOpen} />
     </DropdownMenu>
   );
 }
