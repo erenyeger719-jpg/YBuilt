@@ -55,7 +55,7 @@ The system is designed to be fully functional in a mock mode without external AP
 
 - **Workspace Layout Refactor (Completed Oct 12)**: Complete restructure of workspace UX with resizable panes and improved prompt handling:
   - **ResizableSplitter**: Draggable vertical divider between left (33%) and right (67%) columns with localStorage persistence, min widths (240px/560px), ARIA support, mouse/touch/keyboard navigation
-  - **PromptBar Refactor**: Fixed responsive heights (48px mobile, 56px tablet, 64px desktop), native textarea for reliable input, controlled state management, async-safe submission (preserves input on errors)
+  - **PromptBar Refactor**: Fixed responsive heights (56px mobile, 64px tablet, 72px desktop), native textarea for reliable input, controlled state management, async-safe submission (preserves input on errors)
   - **Layout Structure**: Left column (FileTree + sticky PromptBar at bottom), Right column (Preview/Console tabs with toolbar)
   - **PageToolSheet**: Bottom slide-up panel for index.html editing with Monaco editor (replaces inline editor)
   - **File Upload Pills**: Uploaded files displayed as removable pills in PromptBar with proper UI feedback
@@ -63,6 +63,15 @@ The system is designed to be fully functional in a mock mode without external AP
   - **NewChatModal Preset Fix**: Presets now load into PromptBar textarea for user editing before submission (previously submitted immediately)
   - **Async Submission Safety**: PromptBar preserves user input until Workspace confirms successful async submission, preventing data loss on errors
   - **Accessibility**: Full ARIA support, keyboard navigation (Tab/Shift+Tab/Arrow keys), reduced motion support, responsive breakpoints
+
+- **Workspace Layout Bug Fixes (Completed Oct 12)**: Final polish for workspace prompt UX with viewport height and prompt bar improvements:
+  - **Viewport Height Fix**: Changed from `h-[calc(100vh-4rem)]` to `h-screen` + `flex-1` pattern, eliminating 64px black strip at bottom
+  - **PromptBar Sizing**: Increased heights to 56px mobile (`h-14`), 64px tablet (`h-16`), 72px desktop (`h-18`) with `min-h-[44px] max-h-32` textarea
+  - **Horizontal File Pills**: Changed from `flex-wrap` to `overflow-x-auto max-h-12` for horizontal scrolling without vertical growth
+  - **Collapse/Expand Control**: Added toggle header with chevron icons, localStorage persistence (key: "promptBarCollapsed")
+  - **Duplicate Button Removal**: Removed duplicate + New Chat button from PromptBar (kept only in FileToolbar)
+  - **Full-Height Preview**: Preview iframe now correctly fills viewport (bottom = window.innerHeight) with PageToolSheet overlay working properly
+  - **Test Coverage**: All acceptance criteria verified via automated Playwright tests
 
 - **Select & Open Workspace Flow (Fixed)**: Resolved race condition and JSON parsing bug where clicking "Select & Open Workspace" on Finalize page showed "Workspace not ready" error. Fix includes: (1) POST /api/jobs/:jobId/select now returns `workspaceReady: true` field, (2) Finalize.tsx properly parses JSON response with `res.json()`, (3) Query refetch disabled during navigation with `enabled: !!jobId && !selectMutation.isPending` to prevent status change from blocking navigation.
 
