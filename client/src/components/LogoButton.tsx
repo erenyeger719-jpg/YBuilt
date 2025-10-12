@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import Logo from "./Logo";
@@ -37,6 +37,8 @@ interface LogoButtonProps {
   onLogout?: () => void;
   isWorkspace?: boolean;
   onThemeModalOpen?: () => void;
+  isHome?: boolean;
+  isLibrary?: boolean;
 }
 
 export default function LogoButton({
@@ -46,6 +48,8 @@ export default function LogoButton({
   onLogout,
   isWorkspace = false,
   onThemeModalOpen,
+  isHome = false,
+  isLibrary = false,
 }: LogoButtonProps) {
   const [, setLocation] = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -88,12 +92,49 @@ export default function LogoButton({
     }, 100);
   };
 
+  // Close dropdown when navigating to Home or Library
+  useEffect(() => {
+    if (isHome || isLibrary) {
+      setDropdownOpen(false);
+    }
+  }, [isHome, isLibrary]);
+
+  const handleTriggerClick = () => {
+    if (isHome) {
+      // Home: no-op, keep focusable for accessibility
+      return;
+    }
+    if (isLibrary) {
+      // Library: navigate to home
+      setLocation('/');
+      return;
+    }
+    // Other pages: toggle dropdown
+    setDropdownOpen(!dropdownOpen);
+  };
+
   return (
-    <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+    <DropdownMenu 
+      open={dropdownOpen} 
+      onOpenChange={(open) => {
+        // Only allow opening if not on Home or Library pages
+        if (open && (isHome || isLibrary)) {
+          return;
+        }
+        setDropdownOpen(open);
+      }}
+    >
       <DropdownMenuTrigger
         className="focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
         data-testid="button-logo-menu"
         aria-label="Open Ybuilt menu"
+        onClick={handleTriggerClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleTriggerClick();
+          }
+        }}
       >
         <Logo />
       </DropdownMenuTrigger>
@@ -192,6 +233,8 @@ export default function LogoButton({
           <DropdownMenuSubTrigger
             aria-haspopup="true"
             data-testid="menuitem-clui"
+            onPointerMove={(e) => e.preventDefault()}
+            onPointerEnter={(e) => e.preventDefault()}
           >
             <span className="menu-label">CLUI</span>
             {isWorkspace && <Terminal className="menu-icon h-5 w-5" aria-hidden="true" />}
@@ -246,7 +289,8 @@ export default function LogoButton({
             {isWorkspace && <HelpCircle className="menu-icon h-5 w-5" aria-hidden="true" />}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
-            style={{ zIndex: 9999 }}
+            className="help-side-popup"
+            style={{ zIndex: 2147483601 }}
             data-testid="submenu-help"
           >
             <DropdownMenuItem

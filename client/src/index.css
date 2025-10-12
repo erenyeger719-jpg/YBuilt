@@ -690,4 +690,10 @@ body[data-force-theme="settings"] .settings-text-dark {
 .dark .logo-menu.workspace [role="menuitem"]:focus {
   background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)) !important;
 }
+
+/* Help submenu high z-index to prevent cropping */
+.help-side-popup {
+  position: fixed !important;
+  z-index: 2147483601 !important;
+}
 }

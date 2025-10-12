@@ -31,6 +31,8 @@ export default function Header({ logSummary, workspaceName, onThemeModalOpen }: 
   const [location] = useLocation();
 
   const isWorkspace = location.startsWith("/workspace/");
+  const isHome = location === '/';
+  const isLibrary = location.startsWith('/library');
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
@@ -97,6 +99,8 @@ export default function Header({ logSummary, workspaceName, onThemeModalOpen }: 
             onLogout={handleLogout}
             isWorkspace={isWorkspace}
             onThemeModalOpen={onThemeModalOpen}
+            isHome={isHome}
+            isLibrary={isLibrary}
           />
           
           <div className="flex items-center gap-2">
