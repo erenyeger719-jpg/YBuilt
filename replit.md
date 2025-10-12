@@ -53,6 +53,17 @@ The system is designed to be fully functional in a mock mode without external AP
   - **useWorkspace Hook**: Centralized workspace operations (promptToFile, createFolder, saveFile, downloadFile) with optimistic updates
   - **Agent Settings Propagation Fix**: Build requests now properly send all agent settings (autonomyLevel, autoApply, safetyFilter, computeTier) to backend, previously only sent autonomy level
 
+- **Workspace Layout Refactor (Completed Oct 12)**: Complete restructure of workspace UX with resizable panes and improved prompt handling:
+  - **ResizableSplitter**: Draggable vertical divider between left (33%) and right (67%) columns with localStorage persistence, min widths (240px/560px), ARIA support, mouse/touch/keyboard navigation
+  - **PromptBar Refactor**: Fixed responsive heights (48px mobile, 56px tablet, 64px desktop), native textarea for reliable input, controlled state management, async-safe submission (preserves input on errors)
+  - **Layout Structure**: Left column (FileTree + sticky PromptBar at bottom), Right column (Preview/Console tabs with toolbar)
+  - **PageToolSheet**: Bottom slide-up panel for index.html editing with Monaco editor (replaces inline editor)
+  - **File Upload Pills**: Uploaded files displayed as removable pills in PromptBar with proper UI feedback
+  - **Camera Button Removal**: Removed camera icon, added Page Tool button for HTML editing
+  - **NewChatModal Preset Fix**: Presets now load into PromptBar textarea for user editing before submission (previously submitted immediately)
+  - **Async Submission Safety**: PromptBar preserves user input until Workspace confirms successful async submission, preventing data loss on errors
+  - **Accessibility**: Full ARIA support, keyboard navigation (Tab/Shift+Tab/Arrow keys), reduced motion support, responsive breakpoints
+
 - **Select & Open Workspace Flow (Fixed)**: Resolved race condition and JSON parsing bug where clicking "Select & Open Workspace" on Finalize page showed "Workspace not ready" error. Fix includes: (1) POST /api/jobs/:jobId/select now returns `workspaceReady: true` field, (2) Finalize.tsx properly parses JSON response with `res.json()`, (3) Query refetch disabled during navigation with `enabled: !!jobId && !selectMutation.isPending` to prevent status change from blocking navigation.
 
 ## External Dependencies
