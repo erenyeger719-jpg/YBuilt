@@ -1,0 +1,107 @@
+TASK — Logo dropdown: workspace-only behavior + new menu + full routing & accessibility
+
+GOAL (one sentence)
+Make the Ybuilt logo open a functional dropdown **only** inside the Workspace page. On all other pages (Home, Library, etc.) clicking the logo must simply navigate to Home (/). Implement the new menu items (exact list below), wire each to a reasonable action/route, handle “no workspace” state, and ensure keyboard/ARIA/accessibility, top-layer rendering, and telemetry.
+
+SCOPE (do only these)
+• Only change header/LogoButton and menu behavior + routing handlers.  
+• Do not modify other header components or move other UI elements.  
+• Keep styling congruent with the site’s glass/monochrome theme and ensure menu not clipped (z-index).
+
+NEW MENU (exact order & labels — implement exactly)
+Home  
+Recent  
+No Workspace  ← show when NOT in a workspace; when in a workspace replace with dynamic `{currentProjectName}` pointing to current project  
+Library  
+Account  
+Core  
+Profile  
+Notifications  
+Unread  
+Create Team  
+CLUI  → opens a nested submenu (or route /clui)  
+Toggle Theme  
+Settings  
+Help  
+Back  
+Log out
+
+DETAILED INSTRUCTIONS (copy/paste into code task)
+
+1) DOM placement & workspace-only toggle
+- Render `LogoButton` as the first child in header-left (existing place). The `LogoButton` must:
+  - On Workspace pages (`/workspace/*` or route matches), toggle the dropdown menu anchored bottom-left of the logo.
+  - On any non-workspace page, clicking the logo navigates to `/` (Home) and **does not** open the dropdown.
+
+Pseudo:
+```jsx
+// Header.jsx
+const isWorkspace = useRouteMatches('/workspace/:id'); // or however routing checks
+<LogoButton onClick={() => isWorkspace ? toggleMenu() : navigate('/') } />
+{ isWorkspace && menuOpen && <LogoMenu currentProject={...} /> }
+Menu structure & dynamic item
+Menu uses role="menu" and items role="menuitem".
+If isWorkspace true: show {currentProjectName} at the 3rd position (click opens that workspace route). If not workspace: show static No Workspace (disabled, aria-disabled).
+CLUI must be aria-haspopup="true" and open a submenu (keyboard/mouse) or route /clui.
+Exact routing / action mapping (implement exactly)
+Map each data-action item to:
+Home → navigate('/')
+Recent → navigate('/recent')
+currentProjectName (when workspace) → navigate('/workspace/:jobId') (open same project)
+No Workspace (when shown) → disabled; on click show small toast "No workspace open"
+Library → navigate('/library')
+Account → navigate('/account')
+Core → navigate('/core')
+Profile → navigate('/profile')
+Notifications → navigate('/notifications')
+Unread → navigate('/notifications?filter=unread')
+Create Team → open team creation modal or navigate('/teams/new')
+CLUI → open /clui or show nested submenu (try submenu first; fallback route if not implemented)
+Toggle Theme → open theme picker or toggle dark/light immediately (respect existing app setting)
+Settings → navigate('/settings')
+Help → navigate('/help') or open support modal
+Back → history.back() (browser back)
+Log out → call sign-out endpoint, clear session, navigate('/login')
+Behavior details & UX rules (do these exactly)
+Anchor dropdown to logo bottom-left with subtle glass/monochrome styling, drop shadow, rounded corners. .logo-menu { z-index: 9999; }
+Keyboard & ARIA:
+LogoButton focusable; Enter/Space toggles menu.
+Arrow Up/Down navigates items; Enter selects; Esc closes. Focus trap while open.
+For submenu CLUI, arrow right opens submenu; arrow left closes it.
+Provide aria-disabled for No Workspace if shown.
+Dynamic project name:
+Truncate long names with ellipsis; show full name via title attribute or tooltip.
+Close on outside click or Esc; return focus to LogoButton when closed.
+Telemetry: emit event menu_click with {action, page, inWorkspace,bool} for every selection.
+Visibility rules (important)
+Menu visible only in Workspace view. On Home / Library / other pages:
+Clicking logo = immediate navigate('/'). No dropdown should appear.
+If users want a global header menu later, implement separately — do not do it now.
+Ensure header parent containers have overflow: visible to avoid clipping; add wrapper if needed.
+Edge cases & safety
+If currentProjectName is not available or jobId stale, display No Workspace disabled.
+If user is not authenticated, Account, Profile, Create Team, Log out should behave gracefully: Account/Profile redirect to login.
+If CLUI submenu is not implemented, fallback to navigate('/clui').
+Implementation hints (developer-friendly)
+Implement LogoMenu as controlled React component with keyboard handling; do not rely solely on native <select>.
+Use useEffect + pointerdown or mousedown listener to detect outside clicks and close menu.
+Use useRouteMatch / useLocation to determine isWorkspace.
+Use aria roles: role="menu", role="menuitem", aria-haspopup for CLUI, aria-expanded on toggle.
+Testing & acceptance (must pass)
+A. Logo visible at left-most header.
+B. On Workspace page: clicking logo toggles dropdown; items appear in exact order.
+C. On non-Workspace pages (home, library, etc.): clicking logo navigates to / and does NOT open dropdown.
+D. currentProjectName displays when in workspace and opens the same workspace on click. When not in workspace show No Workspace disabled.
+E. Each menu item activates the exact mapped route/action above.
+F. CLUI opens submenu (or navigates /clui fallback).
+G. Menu is keyboard accessible (Enter/Space to open; arrows to navigate; Enter select; Esc close).
+H. Menu not clipped; z-index keeps it above panels.
+I. menu_click telemetry fires on each selection.
+Deliverable
+One commit:
+Header.jsx (LogoButton wired with workspace-only behavior)
+LogoMenu.jsx (menu component, submenu component)
+Small CSS addition .logo-menu and z-index fix
+Telemetry hook integration
+QA report confirming acceptance A–I
+END 

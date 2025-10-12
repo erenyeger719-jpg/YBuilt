@@ -2,6 +2,7 @@ import { Moon, Sun, Sparkles, Library, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
+import Logo from "./Logo";
 import LogoButton from "./LogoButton";
 import PaymentButton from "./PaymentButton";
 import CurrencyToggle from "./CurrencyToggle";
@@ -88,12 +89,23 @@ export default function Header({ logSummary, workspaceName }: HeaderProps) {
     <header className="fixed top-0 left-0 right-0 z-[70] border-b border-border/50 backdrop-blur-md bg-background/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
-          <LogoButton
-            currentProjectName={workspaceName}
-            currentProjectPath={currentProjectPath}
-            onThemeToggle={toggleTheme}
-            onLogout={handleLogout}
-          />
+          {isWorkspace ? (
+            <LogoButton
+              currentProjectName={workspaceName}
+              currentProjectPath={currentProjectPath}
+              onThemeToggle={toggleTheme}
+              onLogout={handleLogout}
+            />
+          ) : (
+            <Link 
+              href="/" 
+              aria-label="Go to home"
+              data-testid="link-logo-home"
+              className="focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
+            >
+              <Logo />
+            </Link>
+          )}
           
           <div className="flex items-center gap-2">
             {isWorkspace && logSummary && (

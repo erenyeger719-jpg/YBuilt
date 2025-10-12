@@ -72,17 +72,20 @@ The system is designed with a mock mode for Razorpay and AI generation, simulati
   - **Sticky Header Fix**: Removed nested ScrollArea from FileTree to prevent sticky header issues
   - **Acceptance Tests Passed**: Verified no control cropping at 18-50% width range, compact mode triggers correctly, overflow menu accessible
 
-- **LogoButton Dropdown Navigation Menu (Completed Oct 12)**: Implemented comprehensive dropdown menu from Ybuilt logo with full navigation and system controls:
+- **LogoButton Dropdown Navigation Menu - Workspace-Only (Completed Oct 12)**: Implemented workspace-conditional dropdown menu from Ybuilt logo with full navigation and system controls:
   - **Component**: LogoButton.tsx using Radix UI DropdownMenu with uncontrolled state for reliable open/close behavior
+  - **Workspace-Only Behavior**: Logo acts differently based on page context:
+    - **Workspace pages (`/workspace/*`)**: Logo button (data-testid="button-logo-menu") opens dropdown menu on click
+    - **All other pages (Home, Library, etc.)**: Logo is simple link (data-testid="link-logo-home") that navigates to `/` - NO dropdown appears
   - **Menu Structure**: 16 items in order: Home, Recent, dynamic workspace name, Library, Account, Core, Profile, Notifications, Unread (notifications filter), Create Team, CLUI submenu (Command Line→/clui/command-line, Terminal→/clui/terminal, Console→/clui/console), Toggle Theme, Settings, Help, Back, and Logout
   - **Dynamic Workspace Display**: Shows workspace.manifest.name (e.g., "Generated Site") when in workspace context instead of "No Workspace", truncates long names at 30 chars
-  - **Header Integration**: Workspace passes workspaceName prop → Header → LogoButton, extracts workspaceId from URL for currentProjectPath
+  - **Header Integration**: Workspace passes workspaceName prop → Header → LogoButton, extracts workspaceId from URL for currentProjectPath; Header detects workspace route with `location.startsWith("/workspace/")` to conditionally render dropdown or link
   - **Z-Index Hierarchy**: Header z-[70] (above workspace left pane z-[60]), dropdown content z-9999 to prevent click interception
-  - **Accessibility**: Clear labels for all items, aria-label on trigger and content, keyboard navigation (Tab focus, Enter/Space toggle, Arrow keys navigate, Enter activates, Esc closes), all items have unique data-testid
+  - **Accessibility**: Clear labels for all items, aria-label on trigger ("Open Ybuilt menu" for button, "Go to home" for link), keyboard navigation (Tab focus, Enter/Space toggle, Arrow keys navigate, Enter activates, Esc closes), all items have unique data-testid
   - **Auto-Close Behavior**: Dropdown auto-closes on item click (Radix default), manual close on Esc or click outside
   - **Callbacks**: onThemeToggle toggles dark class on document.documentElement, onLogout clears localStorage and redirects to /
   - **Routes**: All routes use valid kebab-case paths, CLUI submenu items navigate to /clui/command-line, /clui/terminal, /clui/console
-  - **Acceptance Tests Passed**: All core functionality verified - dropdown opens on click, all 16 items present with clear labels, navigation works, workspace name displays correctly, keyboard navigation functional, logout works, auto-close behavior confirmed
+  - **Acceptance Tests Passed**: Workspace-only behavior verified - dropdown ONLY opens on workspace pages, logo navigates to `/` on all other pages, all 16 items present with clear labels, navigation works, workspace name displays correctly, keyboard navigation functional, logout works, auto-close behavior confirmed
 
 ## External Dependencies
 - **React 18 + TypeScript**: Frontend framework.
