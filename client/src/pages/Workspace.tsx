@@ -698,7 +698,7 @@ export default function Workspace() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden pt-16">
         <ResizableSplitter
           leftPane={leftPane}
           rightPane={rightPane}

@@ -72,6 +72,12 @@ The system is designed with a mock mode for Razorpay and AI generation, simulati
   - **Sticky Header Fix**: Removed nested ScrollArea from FileTree to prevent sticky header issues
   - **Acceptance Tests Passed**: Verified no control cropping at 18-50% width range, compact mode triggers correctly, overflow menu accessible
 
+- **Workspace Toolbar Positioning Fixes (Completed Oct 12)**: Fixed Preview/Console/Publish toolbar visibility and positioning issues:
+  - **Right-Edge Cropping Fix**: Modified toolbar container to prevent right-edge clipping - removed overflow-hidden from parent, increased z-index to 60, added proper padding (pl-4 pr-3), set Publish button z-index to 80
+  - **Vertical Position Fix**: Added pt-16 (padding-top: 64px) to main content wrapper to account for fixed header height, preventing toolbar from overlaying the Buy Creator Plan/Library bar; toolbar now correctly sits beneath the header
+  - **Z-Index Hierarchy**: Toolbar z-60, Publish button z-80, proper layering above content
+  - **Acceptance Tests Passed**: Toolbar fully visible without cropping, correctly positioned below header bar, all controls clickable and keyboard-accessible, responsive behavior maintained
+
 - **LogoButton Dropdown Navigation Menu - Workspace-Only (Completed Oct 12)**: Implemented workspace-conditional dropdown menu from Ybuilt logo with full navigation and system controls:
   - **Component**: LogoButton.tsx using Radix UI DropdownMenu with uncontrolled state for reliable open/close behavior
   - **Workspace-Only Behavior**: Logo acts differently based on page context:

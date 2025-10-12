@@ -1,0 +1,80 @@
+URGENT FIX — Move Preview / Console / Publish toolbar *down* so it sits beneath the Buy Creator Plan / Library bar (stop overlaying)
+
+Problem (one line)
+The small toolbar containing the Preview, Console, Publish and related buttons is currently shifted *up* and overlaying the “Buy Creator Plan / Library” bar. Fix only the vertical position of that toolbar so it sits below the Buy-plan/library bar (its original place) and does not overlap or sit in a lower z-layer. Keep everything else exactly as-is.
+
+Do this exact sequence (copy/paste into code task)
+
+1) Locate the elements (no global refactor)
+- Identify in code which DOM node renders the Buy plan/library bar (example selectors: `.top-cta-bar`, `.plan-bar`, `.header-actions`) and which node renders the small preview/console/publish toolbar (example: `.preview-toolbar`, `.preview-controls`, `.right-pane-toolbar`).
+- Do not move or change the Buy-plan/library bar.
+
+2) Make the toolbar a sibling placed *after* the buy-plan/library bar (JSX)
+- Ensure DOM order is:
+  ```jsx
+  <header> ... main header ... </header>
+  <div className="top-cta-bar"> /* Buy Creator Plan / Library bar */ </div>
+  <div className="preview-toolbar-wrapper"> /* <- preview/console/publish toolbar must be HERE */ </div>
+  <div className="workspace-body"> ...right pane preview/console area... </div>
+If currently preview-toolbar is rendered inside the buy-plan bar or absolutely-positioned over it, move it so the toolbar is a sibling placed immediately below the buy-plan bar. This is a DOM placement change only for that toolbar node.
+CSS: ensure toolbar sits visually below (no overlay)
+Add/update CSS for preview-toolbar-wrapper and toolbar:
+/* keep the buy-plan bar untouched */
+.top-cta-bar { position: relative; z-index: 50; }
+
+/* ensure preview toolbar sits beneath the buy-plan bar (not over it) */
+.preview-toolbar-wrapper {
+  position: relative;             /* normal flow */
+  z-index: 55;                    /* just above main content but below any modal overlays */
+  margin-top: 6px;                /* small gap below buy-plan bar */
+  display:flex;
+  align-items:center;
+  padding:8px 12px;
+  box-sizing:border-box;
+  background: transparent;        /* keep theme consistent */
+}
+
+/* the actual toolbar row */
+.preview-toolbar {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
+  border-radius:8px;
+  padding:4px 8px;
+}
+
+/* ensure no absolute positioning moves toolbar upward */
+.preview-toolbar, .preview-toolbar-wrapper { position: relative !important; top: auto !important; transform: none !important; }
+Remove any CSS that forces the toolbar upward / overlays it
+Search and remove/override these kinds of rules affecting the toolbar:
+position: absolute; top: -XXpx or transform: translateY(-XXpx) on toolbar or any parent.
+z-index that places toolbar below main content but above buy-plan bar incorrectly.
+If such rule exists and used elsewhere, override it safely (example above: position: relative !important; top: auto !important; transform: none !important;).
+Preserve header stacking & accessibility
+Keep buy-plan/library bar visually above main header? — do not change its z-index or position.
+Toolbar must be focusable, keyboard-accessible, and tab-order should remain unchanged (appear after buy-plan/library controls).
+Ensure toolbar is not clipped by overflow:hidden on its ancestors—if needed set the ancestor overflow to visible only for the toolbar area.
+Minimal JS guard (if toolbar is absolutely positioned by script)
+If some script positions toolbar via JS, change logic so it calculates top as:
+top = buyPlanBar.getBoundingClientRect().bottom + desiredGap
+or better: render it in DOM below buyPlanBar and avoid absolute positioning.
+Acceptance tests (must pass)
+A. Visual: The Preview / Console / Publish toolbar is now visually BELOW the Buy Creator Plan / Library bar, not overlapping or overlaying it.
+B. Tab order: Tab sequence goes Buy-plan controls → Preview toolbar → rest of workspace (unchanged).
+C. No controls are clipped — all toolbar buttons visible and clickable.
+D. No other header or left/right pane layout changes occurred.
+E. The toolbar does not float above modals or get hidden under panels; it sits in normal flow (relative positioning).
+F. Mobile: toolbar stacks or collapses gracefully but remains below buy-plan bar.
+Rollback plan (if visual regressions occur)
+Revert the single component file changed (the toolbar wrapper JSX) and the CSS snippet above.
+Implementation notes for dev (do not alter)
+Use DOM sibling placement instead of absolute coordinates. This prevents future overlay regressions.
+Avoid !important except for the defensive position/transform override in step 3; prefer to clean the original culprit rule when possible.
+If the toolbar must remain sticky on scroll, use position: sticky; top: calc(var(--header-height) + var(--buy-plan-height) + 6px) so it stays visually below the buy-plan bar.
+Deliverable
+One commit that:
+Ensures preview-toolbar is a sibling placed immediately below the buy-plan/library bar.
+Adds the CSS snippet above (or merges logically into existing stylesheet).
+Confirms Acceptance tests A–F pass.
+End of task.
