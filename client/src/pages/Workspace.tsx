@@ -21,25 +21,25 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import {
-  File,
   ExternalLink,
   Monitor,
   Tablet,
   Smartphone,
   RotateCw,
-  Camera,
+  FileCode,
 } from "lucide-react";
 import Header from "@/components/Header";
-import BuildTraceViewer from "@/components/BuildTraceViewer";
 import ConsolePanel from "@/components/ConsolePanel";
 import CommandPalette from "@/components/CommandPalette";
 import PublishModal from "@/components/PublishModal";
-import PromptBar from "@/components/PromptBar";
+import PromptBar, { type UploadedFile } from "@/components/PromptBar";
 import AgentButton, { type AgentSettings } from "@/components/AgentButton";
 import FileTree from "@/components/FileTree";
 import FileToolbar from "@/components/FileToolbar";
 import NewChatModal from "@/components/NewChatModal";
 import PromptFileModal from "@/components/PromptFileModal";
+import ResizableSplitter from "@/components/ResizableSplitter";
+import PageToolSheet from "@/components/PageToolSheet";
 
 interface WorkspaceFile {
   path: string;
@@ -64,9 +64,6 @@ export default function Workspace() {
   const { toast } = useToast();
   const workspace$ = useWorkspace(jobId || "");
 
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [fileContent, setFileContent] = useState<string>("");
-  const [showBuildTrace, setShowBuildTrace] = useState(false);
   const [rightTab, setRightTab] = useState<"preview" | "console">("preview");
   const [deviceMode, setDeviceMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -75,6 +72,11 @@ export default function Workspace() {
   const [selectedPromptFile, setSelectedPromptFile] = useState<WorkspaceFile | null>(null);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState("");
+  const [showPageToolSheet, setShowPageToolSheet] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [fileContent, setFileContent] = useState<string>("");
+  const [promptText, setPromptText] = useState("");
   
   // Agent settings
   const [agentSettings, setAgentSettings] = useState<AgentSettings>({
@@ -91,27 +93,41 @@ export default function Workspace() {
     retry: 2,
   });
 
-  // Save file mutation
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedFile) return;
-      return apiRequest("PUT", `/api/workspace/${jobId}/files/${selectedFile}`, {
-        content: fileContent,
+  // Auto-select first non-prompt file when workspace loads
+  useEffect(() => {
+    if (workspace?.files && !selectedFile) {
+      const firstNonPromptFile = workspace.files.find(
+        (file) => !file.path.includes("/prompts/") && !file.path.endsWith(".md")
+      );
+      if (firstNonPromptFile) {
+        setSelectedFile(firstNonPromptFile.path);
+      }
+    }
+  }, [workspace?.files, selectedFile]);
+
+  // Load file content when selected file changes
+  useEffect(() => {
+    if (selectedFile && workspace?.files) {
+      const file = workspace.files.find((f) => f.path === selectedFile);
+      if (file) {
+        setFileContent(file.content);
+      }
+    }
+  }, [selectedFile, workspace?.files]);
+
+  // Get index.html content for PageToolSheet
+  const indexHtmlFile = workspace?.files.find(f => f.path === "index.html" || f.path.endsWith("/index.html"));
+
+  // Save index.html mutation
+  const saveIndexMutation = useMutation({
+    mutationFn: async (content: string): Promise<void> => {
+      const path = indexHtmlFile?.path || "index.html";
+      await apiRequest("PUT", `/api/workspace/${jobId}/files/${path}`, {
+        content,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspace", jobId, "files"] });
-      toast({
-        title: "Saved",
-        description: `${selectedFile} saved successfully`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save file",
-        variant: "destructive",
-      });
     },
   });
 
@@ -127,7 +143,6 @@ export default function Workspace() {
       });
     },
     onSuccess: () => {
-      setShowBuildTrace(true);
       toast({
         title: "Building",
         description: "Build started...",
@@ -142,26 +157,6 @@ export default function Workspace() {
     },
   });
 
-  // Load selected file content with safety checks
-  useEffect(() => {
-    if (selectedFile && workspace?.files) {
-      const file = workspace.files.find((f) => f.path === selectedFile);
-      if (file) {
-        setFileContent(file.content);
-      }
-    }
-  }, [selectedFile, workspace]);
-
-  // Auto-select first NON-PROMPT file with defensive checks
-  useEffect(() => {
-    if (workspace?.files?.length && !selectedFile) {
-      const firstNonPromptFile = workspace.files.find(f => f.type !== "prompt");
-      if (firstNonPromptFile) {
-        setSelectedFile(firstNonPromptFile.path);
-      }
-    }
-  }, [workspace, selectedFile]);
-
   // Handle prompt submission
   const handlePromptSubmit = async (promptText: string) => {
     try {
@@ -171,6 +166,13 @@ export default function Workspace() {
         filenameHint: promptText.slice(0, 30).replace(/[^a-z0-9]/gi, '-'),
       });
 
+      // Add to uploaded files pills
+      setUploadedFiles(prev => [...prev, {
+        id: result.file.name,
+        name: result.file.name,
+        path: result.file.path,
+      }]);
+
       toast({
         title: "Prompt Saved",
         description: `Created ${result.file.name}`,
@@ -178,6 +180,9 @@ export default function Workspace() {
 
       // Start build with the prompt
       await buildMutation.mutateAsync({ prompt: promptText });
+      
+      // Clear prompt text after successful submission
+      setPromptText("");
     } catch (error: any) {
       toast({
         title: "Error",
@@ -205,6 +210,19 @@ export default function Workspace() {
       }
 
       const asset = await response.json();
+
+      // Create prompt file for the uploaded asset
+      const result = await workspace$.promptToFile({
+        promptText: `Uploaded file: ${file.name}`,
+        filenameHint: file.name.replace(/\.[^/.]+$/, ""),
+      });
+
+      // Add to uploaded files pills
+      setUploadedFiles(prev => [...prev, {
+        id: result.file.name,
+        name: file.name,
+        path: result.file.path,
+      }]);
       
       toast({
         title: "File Uploaded",
@@ -221,33 +239,9 @@ export default function Workspace() {
     }
   };
 
-  // Handle toolbar actions
-  const handleDownloadFile = async () => {
-    if (!selectedFile) {
-      toast({
-        title: "No File Selected",
-        description: "Please select a file to download",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      await workspace$.downloadFile({
-        path: selectedFile,
-        suggestedName: selectedFile.split('/').pop(),
-      });
-      toast({
-        title: "Downloaded",
-        description: "File saved to your device",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Download Error",
-        description: error.message || "Failed to download file",
-        variant: "destructive",
-      });
-    }
+  // Handle remove file from pills
+  const handleRemoveFile = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
   const handleNewFolder = async () => {
@@ -283,11 +277,10 @@ export default function Workspace() {
     setShowPromptFileModal(true);
   };
 
-  // Handle new chat action
+  // Handle new chat action - load preset into prompt bar
   const handleNewChatAction = (prompt: string) => {
-    if (prompt) {
-      handlePromptSubmit(prompt);
-    }
+    setPromptText(prompt);
+    setShowNewChatModal(false);
   };
 
   // Handle download prompt file
@@ -360,13 +353,172 @@ export default function Workspace() {
     );
   }
 
-  const selectedFileData = workspace.files.find((f) => f.path === selectedFile);
-
   const deviceWidths = {
     desktop: "100%",
     tablet: "768px",
     mobile: "375px",
   };
+
+  // Left Pane Content
+  const leftPane = (
+    <div className="h-full flex flex-col">
+      {/* File Tree Header */}
+      <div className="p-3 border-b border-border flex-shrink-0">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-sm">{workspace.manifest.name}</h3>
+          <FileToolbar
+            onNewChat={() => setShowNewChatModal(true)}
+            onUpload={handleFileUpload}
+            onSaveFile={() => {}}
+            onNewFolder={() => setShowNewFolderDialog(true)}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">{workspace.manifest.description}</p>
+      </div>
+      
+      {/* Prompts & AI Messages Area */}
+      <ScrollArea className="flex-1">
+        <FileTree
+          files={workspace.files}
+          selectedFile={selectedFile}
+          onFileSelect={setSelectedFile}
+          onPromptFileClick={handlePromptFileClick}
+        />
+      </ScrollArea>
+
+      {/* Prompt Bar at Bottom */}
+      <PromptBar
+        jobId={jobId || ""}
+        promptText={promptText}
+        onPromptChange={setPromptText}
+        onSubmit={handlePromptSubmit}
+        onFileUpload={handleFileUpload}
+        onNewChat={() => setShowNewChatModal(true)}
+        onRemoveFile={handleRemoveFile}
+        uploadedFiles={uploadedFiles}
+        isLoading={buildMutation.isPending || workspace$.isPromptToFileLoading}
+        agentButton={
+          <AgentButton
+            settings={agentSettings}
+            onChange={setAgentSettings}
+          />
+        }
+      />
+    </div>
+  );
+
+  // Right Pane Content
+  const rightPane = (
+    <div className="h-full flex flex-col">
+      <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "preview" | "console")} className="flex-1 flex flex-col">
+        <div className="flex items-center justify-between border-b border-border px-4 flex-shrink-0">
+          <TabsList className="h-12 bg-transparent">
+            <TabsTrigger value="preview" className="gap-2" data-testid="tab-preview">
+              <Monitor className="h-4 w-4" />
+              PREVIEW
+            </TabsTrigger>
+            <TabsTrigger value="console" className="gap-2" data-testid="tab-console">
+              CONSOLE
+            </TabsTrigger>
+          </TabsList>
+
+          {rightTab === "preview" && (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Button
+                  variant={deviceMode === "desktop" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setDeviceMode("desktop")}
+                  data-testid="button-device-desktop"
+                >
+                  <Monitor className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={deviceMode === "tablet" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setDeviceMode("tablet")}
+                  data-testid="button-device-tablet"
+                >
+                  <Tablet className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={deviceMode === "mobile" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setDeviceMode("mobile")}
+                  data-testid="button-device-mobile"
+                >
+                  <Smartphone className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <Separator orientation="vertical" className="h-6" />
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => {
+                  const iframe = document.querySelector('iframe[data-testid="iframe-preview"]') as HTMLIFrameElement;
+                  if (iframe) iframe.src = iframe.src;
+                }}
+                data-testid="button-refresh-preview"
+              >
+                <RotateCw className="h-4 w-4" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => window.open(`/previews/${jobId}/index.html`, "_blank")}
+                data-testid="button-open-preview-new-tab"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setShowPageToolSheet(true)}
+                data-testid="button-page-tool"
+              >
+                <FileCode className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <TabsContent value="preview" className="flex-1 m-0 overflow-hidden">
+          <div className="flex items-center justify-center h-full bg-muted/10">
+            <div
+              style={{
+                width: deviceWidths[deviceMode],
+                height: "100%",
+                maxWidth: "100%",
+                transition: "width 0.3s ease",
+              }}
+              className="bg-white shadow-lg"
+            >
+              <iframe
+                src={`/previews/${jobId}/${workspace.manifest.entryPoint}`}
+                className="w-full h-full border-0"
+                title="Live Preview"
+                data-testid="iframe-preview"
+              />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="console" className="flex-1 m-0 overflow-hidden">
+          <ConsolePanel jobId={jobId || ""} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -394,6 +546,13 @@ export default function Workspace() {
         onOpenChange={setShowPromptFileModal}
         file={selectedPromptFile}
         onDownload={handleDownloadPromptFile}
+      />
+      <PageToolSheet
+        open={showPageToolSheet}
+        onOpenChange={setShowPageToolSheet}
+        jobId={jobId || ""}
+        indexHtmlContent={indexHtmlFile?.content || ""}
+        onSave={async (content) => await saveIndexMutation.mutateAsync(content)}
       />
       
       {/* New Folder Dialog */}
@@ -435,216 +594,15 @@ export default function Workspace() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex-1 flex pt-16">
-        {/* Left Sidebar - File Tree */}
-        <div className="w-80 border-r border-border flex flex-col">
-          {/* File Tree Header */}
-          <div className="p-3 border-b border-border">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold text-sm">{workspace.manifest.name}</h3>
-              <FileToolbar
-                onNewChat={() => setShowNewChatModal(true)}
-                onUpload={handleFileUpload}
-                onSaveFile={handleDownloadFile}
-                onNewFolder={() => setShowNewFolderDialog(true)}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">{workspace.manifest.description}</p>
-          </div>
-          
-          {/* File Tree */}
-          <FileTree
-            files={workspace.files}
-            selectedFile={selectedFile}
-            onFileSelect={setSelectedFile}
-            onPromptFileClick={handlePromptFileClick}
-          />
-
-          {/* Prompt Bar at Bottom */}
-          <PromptBar
-            jobId={jobId || ""}
-            onSubmit={handlePromptSubmit}
-            onFileUpload={handleFileUpload}
-            isLoading={buildMutation.isPending || workspace$.isPromptToFileLoading}
-            agentButton={
-              <AgentButton
-                settings={agentSettings}
-                onChange={setAgentSettings}
-              />
-            }
-          />
-        </div>
-
-        {/* Editor */}
-        <div className="flex-1 flex flex-col">
-          <div className="h-12 border-b border-border flex items-center justify-between px-4">
-            <div className="flex items-center gap-2">
-              <File className="w-4 h-4" />
-              <span className="text-sm font-medium">{selectedFile || "No file selected"}</span>
-            </div>
-            <Button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || !selectedFile}
-              size="sm"
-              variant="outline"
-              data-testid="button-save"
-            >
-              Save
-            </Button>
-          </div>
-
-          <div className="flex-1 overflow-hidden">
-            {selectedFile && selectedFileData ? (
-              <Editor
-                height="100%"
-                language={selectedFileData.language}
-                value={fileContent}
-                onChange={(value) => setFileContent(value || "")}
-                theme="vs-dark"
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  lineNumbers: "on",
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                }}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                Select a file to edit
-              </div>
-            )}
-          </div>
-
-          {showBuildTrace && (
-            <div className="h-64 border-t border-border">
-              <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30">
-                <h4 className="text-sm font-semibold">Build Trace</h4>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowBuildTrace(false)}
-                  data-testid="button-close-trace"
-                >
-                  Close
-                </Button>
-              </div>
-              <ScrollArea className="h-[calc(100%-40px)]">
-                <BuildTraceViewer jobId={jobId || ""} />
-              </ScrollArea>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column - Preview + Console */}
-        <div className="w-[600px] border-l border-border flex flex-col">
-          <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "preview" | "console")} className="flex-1 flex flex-col">
-            <div className="flex items-center justify-between border-b border-border px-4">
-              <TabsList className="h-12 bg-transparent">
-                <TabsTrigger value="preview" className="gap-2" data-testid="tab-preview">
-                  <Monitor className="h-4 w-4" />
-                  PREVIEW
-                </TabsTrigger>
-                <TabsTrigger value="console" className="gap-2" data-testid="tab-console">
-                  CONSOLE
-                </TabsTrigger>
-              </TabsList>
-
-              {rightTab === "preview" && (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant={deviceMode === "desktop" ? "secondary" : "ghost"}
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setDeviceMode("desktop")}
-                      data-testid="button-device-desktop"
-                    >
-                      <Monitor className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant={deviceMode === "tablet" ? "secondary" : "ghost"}
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setDeviceMode("tablet")}
-                      data-testid="button-device-tablet"
-                    >
-                      <Tablet className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant={deviceMode === "mobile" ? "secondary" : "ghost"}
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setDeviceMode("mobile")}
-                      data-testid="button-device-mobile"
-                    >
-                      <Smartphone className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  <Separator orientation="vertical" className="h-6" />
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => {
-                      const iframe = document.querySelector('iframe[data-testid="iframe-preview"]') as HTMLIFrameElement;
-                      if (iframe) iframe.src = iframe.src;
-                    }}
-                    data-testid="button-refresh-preview"
-                  >
-                    <RotateCw className="h-4 w-4" />
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => window.open(`/previews/${jobId}/index.html`, "_blank")}
-                    data-testid="button-open-preview-new-tab"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    data-testid="button-screenshot"
-                  >
-                    <Camera className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <TabsContent value="preview" className="flex-1 m-0 overflow-hidden">
-              <div className="flex items-center justify-center h-full bg-muted/10">
-                <div
-                  style={{
-                    width: deviceWidths[deviceMode],
-                    height: "100%",
-                    maxWidth: "100%",
-                    transition: "width 0.3s ease",
-                  }}
-                  className="bg-white shadow-lg"
-                >
-                  <iframe
-                    src={`/previews/${jobId}/${workspace.manifest.entryPoint}`}
-                    className="w-full h-full border-0"
-                    title="Live Preview"
-                    data-testid="iframe-preview"
-                  />
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="console" className="flex-1 m-0 overflow-hidden">
-              <ConsolePanel jobId={jobId || ""} />
-            </TabsContent>
-          </Tabs>
-        </div>
+      <div className="flex-1 pt-16">
+        <ResizableSplitter
+          leftPane={leftPane}
+          rightPane={rightPane}
+          defaultLeftPercent={33}
+          minLeftWidth={240}
+          minRightWidth={560}
+          storageKey="workspaceSplit"
+        />
       </div>
     </div>
   );

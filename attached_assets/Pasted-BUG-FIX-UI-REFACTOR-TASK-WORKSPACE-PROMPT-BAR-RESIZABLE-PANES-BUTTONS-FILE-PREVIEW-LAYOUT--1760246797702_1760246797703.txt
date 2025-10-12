@@ -1,0 +1,140 @@
+BUG FIX & UI REFACTOR TASK — WORKSPACE PROMPT BAR, RESIZABLE PANES, BUTTONS, FILE PREVIEW & LAYOUT
+
+CONTEXT
+Workspace currently: prompt bar is far too compact (text cramped), Build button partly outside its container, Agent button oversized, prompt input sometimes won’t accept typing, file uploads show only a toast (no visible file), and an `index.html` editor pane is embedded awkwardly. Desired: a usable prompt bar (slightly larger), draggable resizable panes, correct button layout and sizing, visible prompt-file items, and a cleaner left/right layout: left 1/3 for AI prompt & message chat, right 2/3 for Preview/Console tabs + options bar. Remove camera button and move index.html into a bottom popup tool inside Console tab.
+
+SCOPE — do **only** these UI/UX changes (don’t touch other pages):
+- Prompt bar resizing and behavior fixes
+- Draggable vertical splitter (resizable panes)
+- Build & Agent button sizing/placement and behavior
+- Prompt → file visibility and upload preview
+- Replace embedded index.html editor with a Console popup tool
+- Remove camera button & shift toolbar icons
+- Layout: left 1/3 prompt/messages, right 2/3 preview/console/options bar
+- Accessibility, keyboard handling, and mobile responsiveness
+
+PROBLEM SUMMARY (what to fix)
+1. Prompt bar too small and text cramped; Enter key not reliably sending; Shift+Enter newline behavior must work.
+2. Build button is half outside its container; Agent button oversized and misaligned.
+3. File upload only shows toast — uploaded file must appear in the prompt bar area and top of FileTree under Prompts.
+4. The inline `index.html` pane should be removed from main editor area and provided as an on-demand popup tool inside Console/Preview tab bar (bottom popup).
+5. Camera button is useless — remove it and shift the other icons to keep toolbar alignment consistent.
+6. No window resizing — panes must be resizable with a draggable vertical splitter (and store size in localStorage per user).
+
+DETAILED DESIGN & BEHAVIOR (copy/pasteable spec)
+
+A) Layout & sizing
+- Overall workspace main area: horizontal split with a draggable vertical splitter.
+  - Left column width default: 33% (min 240px), right column default: 67% (min 560px).
+  - Add a visible slim drag handle (8px wide) with hover cursor `col-resize` and touch support.
+  - Persist user width in `localStorage.workspaceSplit = { leftPct }`.
+- Left column content:
+  - Top: “Prompts & AI messages” area (scrollable). This is the “AI chat / thinking” column.
+  - Bottom: PromptBar (sticky to bottom of left column) — larger and comfortable:
+    - Height: 64px on desktop, 56px on tablet, 48px on mobile.
+    - Padding: 12px; rounded corners; glass-style background matching theme.
+- Right column content:
+  - Tab bar at top: PREVIEW | CONSOLE | (small options toolbar to right).
+  - Remove embedded `index.html` editor from main view.
+  - Add a tool button in the right toolbar: `Page Tool` (open bottom popup with index.html preview/editor).
+  - Camera button: remove completely.
+
+B) PromptBar (UI & interactions)
+- Structure (left→right):
+  1. Upload icon (small, 28×28).
+  2. Small “New Chat” button (plus icon) to open New Chat modal (prebuilt actions).
+  3. Text input area (textarea) — stretches to use remaining width.
+  4. Agent button (small, 40–44px wide).
+  5. Build (Send) button (primary) — 48–56px wide — aligned fully inside bar.
+- Text input behavior:
+  - Use a `<textarea>` (not contentEditable) to avoid focus issues.
+  - `Enter` sends (if single-line send mode on) OR `Ctrl/Cmd+Enter` sends; `Shift+Enter` inserts newline.
+    - Default: Enter = send, Shift+Enter = newline. Support user preference toggle in Settings.
+  - On focus show placeholder instructions: "Press Enter to send, Shift+Enter for new line".
+  - Ensure `tabindex=0` and accessible `aria-label`.
+- Sizes:
+  - Text area font-size 15–16px, vertical padding 8px; not cramped.
+  - Buttons visible and comfortably tappable (min 40px height).
+- Button placements & fixes:
+  - Agent button: reduce to 40×40 with icon + small label (or tooltip on hover). When screen small, hide label.
+  - Build button: primary color/contrast, inside bar, with right padding; ensure no overflow. If area too narrow, shrink label to icon only.
+- Focus & keyboard:
+  - On Enter send: capture keydown, prevent default only when sending.
+  - After successful send: clear textarea, focus remains in textarea.
+  - On file upload: inject the file as a new prompt file (see below) and show its pill inside the bar (left of textarea) with filename and small `x` to remove.
+
+C) Prompt→File & Upload workflow
+- Upload behavior:
+  - Clicking upload icon opens file picker (accept all mime types). On drop also accept files.
+  - After upload, server `/api/upload` returns `{ url, name, mime, parsedPreview }`.
+  - Client then calls `/api/workspace/:jobId/prompt-to-file` (or `POST /api/workspace/:jobId/file` with meta) to create a prompt file under `prompts/`.
+  - PromptBar shows a small pill for the new file at its left showing filename; clicking the pill opens a modal with file content / preview.
+  - Also update FileTree top "Prompts" group immediately (optimistic UI).
+- If user types text and clicks Build:
+  - Create a prompt-file on server and add same pill + file tree entry, then enqueue build.
+- Visual feedback:
+  - Show small pill animations and success toasts but importantly **display** file in PromptBar and FileTree; do not only show toast.
+
+D) Agent options compacted into popover
+- Agent button opens popover with:
+  - Autonomy (Low/Medium/High/Max) — radio or segmented small pills.
+  - Auto-Apply toggle
+  - Safety toggle
+  - Compute tier selector (small)
+- Popover should be small (max-width 320px) and not push other UI.
+
+E) Resizable windows & popup tool
+- Implement a vertical draggable splitter between left & right columns. Support:
+  - mouse, touch, keyboard accessibility (arrow keys adjust when splitter focused).
+  - minimum widths, persistent state.
+- Remove inline `index.html` editor pane:
+  - Add a "Page Tool" icon in right options toolbar. Clicking opens a bottom-docked popup panel (slides up) for `index.html` preview/editor (like a modal anchored to bottom).
+  - That popup shows the page preview + small editor area, with Save/Export actions.
+- Console tab:
+  - When Console selected, the Page Tool button still opens the bottom popup for the `index.html` file; this keeps main right area for logs & preview.
+
+F) Toolbar & icons reorganization
+- Remove camera icon.
+- Shift remaining icons to keep even spacing; ensure the tool for opening Console & Page Tool is visible at right end.
+- Provide hover tooltips and keyboard shortcuts.
+
+G) Bug fixes to implement (developer checklist)
+- Ensure `<textarea>` is not covered by any overlay element. Check z-index and pointer-events on surrounding elements — common cause of "can't type".
+- Ensure event listeners for keydown are attached to the textarea, not to parent containers which might block.
+- Ensure Build handler uses current textarea value (not stale state) — use controlled component.
+- When Build is clicked, disable the button until network response comes back to prevent duplicate calls.
+- Ensure `POST /api/workspace/:jobId/prompt-to-file` returns new file metadata and `GET /api/workspace/:jobId/files` includes it; fix server if it doesn't.
+- Ensure file pill insertion doesn't rely on toast-only UX.
+
+H) Accessibility & responsiveness
+- All buttons at least 40px target size.
+- Use ARIA roles for popovers and splitters (`role="separator" aria-orientation="vertical"`).
+- Respect `prefers-reduced-motion`.
+- Mobile: prompt bar should condense but keep textarea usable (expandable).
+
+I) Acceptance tests (what I’ll check when you deliver)
+1. Prompt bar visually larger (64px) and comfortable for typing; Enter sends; Shift+Enter newline.
+2. Build & Agent buttons fully inside bar, aligned and tappable.
+3. Dragging the vertical splitter resizes left/right; sizes persist after reload.
+4. Uploading a file shows a pill in the prompt bar and creates a prompt-file in FileTree; clicking pill opens file modal with content.
+5. Clicking Build creates prompt-file, enqueues build, and BuildTrace/Console stream logs.
+6. Camera icon removed and toolbar icons visually aligned.
+7. Index.html not present inline; Page Tool opens bottom popup with preview/editor.
+8. No input-focus bugs — typing in the prompt works reliably on first click.
+9. Console and Preview still function correctly with logs streaming.
+
+IMPLEMENTATION HINTS (copy/pasteable dev notes)
+- Use a simple splitter implementation or accessible library (e.g., `react-split-pane` or custom div with `onPointerDown` handling). Save percent to `localStorage`.
+- PromptBar as controlled `<textarea>` with `value` bound to state; onChange updates state; onKeyDown handles Enter vs Shift+Enter.
+- File pill: small inline `button` element with `title`, clickable to open preview modal.
+- For upload, use multipart form `fetch` or `FormData` to `/api/upload`; server must return saved path and preview text; then `POST /api/workspace/:jobId/prompt-to-file`.
+- For bottom Page Tool popup, use a slide-up panel (`position: fixed; bottom: 0; left: 0; right: 0; max-height: 50vh`), not a full modal.
+
+DELIVERABLE (what to return)
+- A single patch that replaces the PromptBar and Build/Agent button layout; adds draggable splitter; removes inline index editor; adds bottom Page Tool popup; wires upload → prompt-file flow and makes prompt-file pill visible; removes camera button and reflows the toolbar; and includes a short QA checklist proving acceptance tests pass.
+
+FINALLY
+- Please be defensive: if server cannot immediately write the prompt-file, return `{ pending:true, fileTempId }` and show temporary pill with pending state; when server finishes update UI.
+- Add console logs for promptToFile and splitter events for debugging.
+
+End of task.

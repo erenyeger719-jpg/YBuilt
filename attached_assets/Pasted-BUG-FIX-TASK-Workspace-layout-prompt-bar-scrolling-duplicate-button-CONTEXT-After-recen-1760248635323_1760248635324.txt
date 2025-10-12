@@ -1,0 +1,191 @@
+BUG-FIX TASK — Workspace layout / prompt-bar / scrolling / duplicate '+' button
+
+CONTEXT
+After recent UI changes the workspace left/right split looks correct, but:
+- Left column (1/3) and right column (2/3) leave a BLACK empty strip at the bottom (~1/6 of height).
+- The prompt input is squeezed vertically between too many buttons; buttons are overlapping/too close.
+- The prompt pills / uploaded-files area grows vertically and pushes the prompt bar downward instead of staying fixed — this pushes content out of the viewport.
+- There is a duplicated "+" (New Chat) button: one in the header and another inside the prompt bar; remove the duplicate in the prompt bar.
+- The `index.html` pop-up tool and Preview/Console must use full available height — no blank bottom strip.
+- Need an option to minimize/maximize or drag-resize the prompt or message area (collapsible / resizable panels).
+
+GOAL
+Make layout full-height, make left/right columns fill the viewport, ensure the prompt-bar is fixed to the bottom of the left column and never pushed down, make prompt-file pills and AI chat area scroll internally (not expand container), remove duplicate "+", and make build/agent buttons sized/positioned so they don’t squeeze the text area. Add a small minimize/expand control for the prompt area.
+
+PATCH INSTRUCTIONS (what to change — exact, copy/paste)
+
+1) Global layout: force full-height columns
+- Ensure the workspace container uses `min-height: 100vh` and the main split uses `height: calc(100vh - var(--header-height))`.
+- Example CSS to apply to workspace root:
+
+```css
+/* client/src/styles/workspace.css */
+:root {
+  --header-height: 64px; /* adjust if header different */
+  --left-min: 240px;
+  --right-min: 560px;
+}
+
+/* main workspace shell */
+.workspace-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* below the header, the split area uses remaining viewport */
+.workspace-split {
+  display: flex;
+  height: calc(100vh - var(--header-height));
+  overflow: hidden; /* children manage their own scrolling */
+}
+
+/* left and right columns */
+.column-left {
+  width: 33%;
+  min-width: var(--left-min);
+  max-width: 80%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* keep prompt bar pinned */
+}
+
+.column-right {
+  flex: 1 1 auto;
+  min-width: var(--right-min);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+  	2	Make prompt area fixed (sticky) at bottom of left column; messages scroll internally
+* Key idea: left column has two parts: .ai-messages (scrollable) and .prompt-bar (fixed).
+* CSS:
+  /* left column internals */
+.ai-messages {
+  flex: 1 1 auto; /* take all available vertical space above prompt */
+  overflow-y: auto;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.prompt-bar {
+  flex: 0 0 auto; /* fixed height */
+  height: 72px; /* slightly larger for readability */
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255,255,255,0.02); /* glass */
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+/* ensure prompt pills area doesn't push the bar */
+.prompt-pills {
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  max-height: 44px; /* prevents vertical growth */
+  align-items:center;
+}
+  	3	Prompt text area: ensure textarea is roomy and not squeezed by buttons
+* Use a controlled <textarea> that flexes horizontally; set its max-height and allow vertical scroll within it when content big.
+* Example JSX structure (PromptBar):
+  // client/src/components/PromptBar.jsx (simplified)
+export default function PromptBar({ jobId, onSend, onUpload }) {
+  const [value, setValue] = useState('');
+  return (
+    <div className="prompt-bar" role="region" aria-label="Prompt input">
+      <button className="icon-btn upload-btn" onClick={onUpload} aria-label="Upload file">📤</button>
+      <div className="prompt-pills" aria-hidden={false} />
+      <textarea
+        className="prompt-input"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(value); setValue(''); }
+        }}
+        placeholder="Type a command or paste a file. Press Enter to send, Shift+Enter for newline."
+        rows={2}
+      />
+      <button className="agent-btn" aria-label="Agent">🤖</button>
+      <button className="build-btn" aria-label="Build" onClick={() => { onSend(value); setValue(''); }}>Build</button>
+    </div>
+  );
+}
+  Add CSS:  .prompt-input {
+  flex: 1 1 auto;
+  min-height: 44px;
+  max-height: 160px;
+  resize: none; /* prevent manual resize, provide drag handle instead */
+  overflow-y: auto;
+  padding: 10px;
+  font-size: 15px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.35);
+  color: var(--text-main);
+}
+.agent-btn, .build-btn, .upload-btn {
+  flex: 0 0 auto;
+  min-width: 44px;
+  height: 44px;
+}
+  	4	Keep prompt-file pills horizontal, not vertical (prevents pushing)
+* Pills must be display:flex with overflow-x:auto so large number of files scroll horizontally.
+* Ensure pill creation updates .prompt-pills and .ai-messages but does not change bar height.
+1. Remove duplicate "+" inside the prompt-bar
+* Remove the New Chat plus inside the PromptBar if there is already one in the header. If both exist keep header one only.
+* Quick dev instruction: in PromptBar.jsx remove the + button element OR conditionally render only when !headerHasPlus.
+1. Ensure right column (Preview/Console) uses full height and bottom popup for index.html
+* Make preview area flex:1 and overflow:auto so it stretches to fill container.
+* Remove any hard-coded bottom black area by eliminating any min-height or stray margin-bottom on right column children.
+* Example CSS:
+  .preview-area {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 12px;
+}
+.console-area {
+  height: 45%; /* or make flexible with tabs */
+  overflow: auto;
+}
+.page-tool-popup {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 46vh;
+  background: var(--bg);
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  box-shadow: 0 -6px 30px rgba(0,0,0,0.6);
+  transform: translateY(100%);
+  transition: transform .28s ease;
+}
+.page-tool-popup.open { transform: translateY(0); }
+  
+Add a small minimize/expand control for prompt or message area
+Provide a tiny chevron icon in the top-right of the prompt area or top-right of left column to collapse the prompt bar to 40px high (icon only) and expand back.
+Example logic: toggle .prompt-bar.collapsed changing height from 72px to 40px; store state in localStorage.promptCollapsed.
+Fix input focus bug & ensure text is typed
+Ensure textarea not overlapped by any absolutely positioned element. Dev checklist:
+Verify z-index of .prompt-bar greater than .ai-messages overlays.
+Remove pointer-events:none on parent containers.
+Ensure no invisible element is above textarea (use devtools to inspect).
+In React ensure value and onChange bound to state; avoid reading stale refs on keydown.
+Acceptance tests for QA
+A. Open workspace: left column exact vertical height equals right column height (no black strip).
+B. Prompt-bar height is 72px, text is readable, Enter sends, Shift+Enter newline works.
+C. Upload a file: pill appears in .prompt-pills and shows in FileTree; prompt bar not displaced.
+D. Add many pills: pills scroll horizontally, prompt bar height stays the same.
+E. Click build: Build button fully inside bar; no overflow. Agent button next to it small and aligned.
+F. Collapse/expand prompt bar via icon; width and scroll states persist across reload.
+G. Page tool popup opens from right toolbar and not as an inline pane; preview occupies remaining vertical space.
+DELIVERABLE (what to return)
+A small patch: updated CSS file (workspace.css), updated PromptBar.jsx with controlled textarea and pills horizontal scrolling, remove duplicate + rendering, and small JS to persist splitter and collapsed state in localStorage.
+A one-paragraph confirmation the dev ran acceptance tests A–G above and which exact files were edited.
+NOTES FOR DEVS (copy/paste)
+Use the flex layout correctly: left column display:flex; flex-direction:column, messages flex:1; overflow:auto, prompt-bar flex:0 0 auto.
+If you use a library for split panes, ensure it writes percent to localStorage so height persists.
+When debugging invisible input, check elementFromPoint(x,y) to see what DOM element is above the textarea.
+Add console.debug('promptHeight', promptBar.offsetHeight) temporarily to verify sizing during dev.
+End of task.

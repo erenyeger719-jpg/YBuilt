@@ -1,28 +1,48 @@
 import { useState, useRef, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Send } from "lucide-react";
+import { Upload, Plus, X } from "lucide-react";
+
+export interface UploadedFile {
+  id: string;
+  name: string;
+  path: string;
+}
 
 interface PromptBarProps {
   jobId: string;
+  promptText?: string;
+  onPromptChange?: (text: string) => void;
   onSubmit: (promptText: string) => void;
   onFileUpload: (file: File) => void;
+  onNewChat?: () => void;
+  onRemoveFile?: (fileId: string) => void;
+  uploadedFiles?: UploadedFile[];
   isLoading?: boolean;
   agentButton?: React.ReactNode;
 }
 
 export default function PromptBar({
   jobId,
+  promptText: controlledPromptText,
+  onPromptChange,
   onSubmit,
   onFileUpload,
+  onNewChat,
+  onRemoveFile,
+  uploadedFiles = [],
   isLoading = false,
   agentButton,
 }: PromptBarProps) {
   const { toast } = useToast();
-  const [promptText, setPromptText] = useState("");
+  const [internalPromptText, setInternalPromptText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Use controlled value if provided, otherwise use internal state
+  const promptText = controlledPromptText !== undefined ? controlledPromptText : internalPromptText;
+  const setPromptText = onPromptChange || setInternalPromptText;
 
   const handleSubmit = () => {
     if (!promptText.trim()) {
@@ -34,19 +54,18 @@ export default function PromptBar({
       return;
     }
 
+    // Call onSubmit - parent (Workspace) will clear promptText on success
     onSubmit(promptText);
-    setPromptText("");
+    
+    // If using internal state (uncontrolled), clear immediately
+    if (controlledPromptText === undefined) {
+      setPromptText("");
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter without shift submits
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-    
-    // Ctrl/Cmd+Enter also submits
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSubmit();
     }
@@ -75,9 +94,35 @@ export default function PromptBar({
   };
 
   return (
-    <div className="border-t border-border bg-background p-3">
-      <div className="flex items-end gap-2">
-        {/* File Upload Button */}
+    <div className="border-t border-border bg-background">
+      {/* File Pills Row (if there are uploaded files) */}
+      {uploadedFiles.length > 0 && (
+        <div className="px-3 pt-2 pb-1 flex flex-wrap gap-1">
+          {uploadedFiles.map((file) => (
+            <Badge
+              key={file.id}
+              variant="secondary"
+              className="gap-1 pr-1 text-xs"
+              data-testid={`pill-file-${file.id}`}
+            >
+              <span className="max-w-[120px] truncate">{file.name}</span>
+              {onRemoveFile && (
+                <button
+                  onClick={() => onRemoveFile(file.id)}
+                  className="ml-1 rounded-sm hover:bg-muted p-0.5"
+                  data-testid={`button-remove-file-${file.id}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* Main Input Row - Heights: 48px mobile, 56px tablet, 64px desktop */}
+      <div className="px-3 h-12 sm:h-14 lg:h-16 flex items-center gap-2">
+        {/* Upload Icon Button */}
         <div className="flex-shrink-0">
           <input
             ref={fileInputRef}
@@ -89,7 +134,7 @@ export default function PromptBar({
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9"
+            className="h-7 w-7"
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading}
             data-testid="button-upload-file-prompt"
@@ -98,22 +143,43 @@ export default function PromptBar({
           </Button>
         </div>
 
-        {/* Text Input */}
-        <div className="flex-1">
-          <Textarea
+        {/* New Chat Button */}
+        {onNewChat && (
+          <div className="flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={onNewChat}
+              disabled={isLoading}
+              data-testid="button-new-chat"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+
+        {/* Textarea - Flex-1 */}
+        <div className="flex-1 min-w-0">
+          <textarea
             ref={textareaRef}
             value={promptText}
             onChange={(e) => setPromptText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a command or drop a file — will convert to file."
-            className="resize-none border-0 focus-visible:ring-1 min-h-[36px] max-h-32 text-sm"
+            placeholder="Press Enter to send, Shift+Enter for new line"
+            className="
+              w-full resize-none bg-transparent border-0
+              focus:outline-none focus:ring-0
+              text-sm placeholder:text-muted-foreground
+              min-h-[36px] max-h-24 overflow-y-auto
+              disabled:opacity-50 disabled:cursor-not-allowed
+            "
             rows={1}
+            tabIndex={0}
+            aria-label="Build prompt"
             disabled={isLoading}
             data-testid="input-prompt-text"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Press Enter to send, Shift+Enter for new line
-          </p>
         </div>
 
         {/* Agent Button (passed as prop) */}
@@ -123,15 +189,15 @@ export default function PromptBar({
           </div>
         )}
 
-        {/* Build/Send Button */}
+        {/* Build Button */}
         <div className="flex-shrink-0">
           <Button
             onClick={handleSubmit}
             disabled={isLoading || !promptText.trim()}
             size="default"
+            className="h-9 px-4"
             data-testid="button-build-prompt"
           >
-            <Send className="h-4 w-4 mr-2" />
             {isLoading ? "Building..." : "Build"}
           </Button>
         </div>
