@@ -393,7 +393,6 @@ export default function Workspace() {
         onPromptChange={setPromptText}
         onSubmit={handlePromptSubmit}
         onFileUpload={handleFileUpload}
-        onNewChat={() => setShowNewChatModal(true)}
         onRemoveFile={handleRemoveFile}
         uploadedFiles={uploadedFiles}
         isLoading={buildMutation.isPending || workspace$.isPromptToFileLoading}
@@ -521,7 +520,7 @@ export default function Workspace() {
   );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       <Header
         showPublish={true}
         logSummary={{
@@ -594,7 +593,7 @@ export default function Workspace() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex-1 pt-16">
+      <div className="flex-1 overflow-hidden">
         <ResizableSplitter
           leftPane={leftPane}
           rightPane={rightPane}

@@ -79,3 +79,13 @@
 {"timestamp":"2025-10-12T05:56:48.469Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
 {"timestamp":"2025-10-12T05:56:48.470Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
 {"timestamp":"2025-10-12T05:56:48.471Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T06:09:12.905Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"test prompt\n"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-12T06:09:12.909Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-12T06:09:15.271Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T06:09:15.272Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T06:09:15.272Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T06:20:53.947Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"test newline prompt\n"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-12T06:20:53.954Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-12T06:20:57.558Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T06:20:57.559Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T06:20:57.561Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}

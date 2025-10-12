@@ -1,8 +1,8 @@
-import { useState, useRef, KeyboardEvent } from "react";
+import { useState, useRef, KeyboardEvent, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Plus, X } from "lucide-react";
+import { Upload, Plus, X, ChevronDown, ChevronUp } from "lucide-react";
 
 export interface UploadedFile {
   id: string;
@@ -37,12 +37,21 @@ export default function PromptBar({
 }: PromptBarProps) {
   const { toast } = useToast();
   const [internalPromptText, setInternalPromptText] = useState("");
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const saved = localStorage.getItem("promptBarCollapsed");
+    return saved === "true";
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Use controlled value if provided, otherwise use internal state
   const promptText = controlledPromptText !== undefined ? controlledPromptText : internalPromptText;
   const setPromptText = onPromptChange || setInternalPromptText;
+
+  // Persist collapsed state
+  useEffect(() => {
+    localStorage.setItem("promptBarCollapsed", isCollapsed.toString());
+  }, [isCollapsed]);
 
   const handleSubmit = () => {
     if (!promptText.trim()) {
@@ -94,34 +103,54 @@ export default function PromptBar({
   };
 
   return (
-    <div className="border-t border-border bg-background">
-      {/* File Pills Row (if there are uploaded files) */}
-      {uploadedFiles.length > 0 && (
-        <div className="px-3 pt-2 pb-1 flex flex-wrap gap-1">
-          {uploadedFiles.map((file) => (
-            <Badge
-              key={file.id}
-              variant="secondary"
-              className="gap-1 pr-1 text-xs"
-              data-testid={`pill-file-${file.id}`}
-            >
-              <span className="max-w-[120px] truncate">{file.name}</span>
-              {onRemoveFile && (
-                <button
-                  onClick={() => onRemoveFile(file.id)}
-                  className="ml-1 rounded-sm hover:bg-muted p-0.5"
-                  data-testid={`button-remove-file-${file.id}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </Badge>
-          ))}
-        </div>
-      )}
+    <div className="border-t border-border bg-background flex-shrink-0">
+      {/* Collapse/Expand Header */}
+      <div className="px-3 py-1 flex items-center justify-between border-b border-border/50">
+        <span className="text-xs text-muted-foreground font-medium">
+          {isCollapsed ? "Prompt Bar (Click to expand)" : "Prompt Bar"}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          data-testid="button-toggle-prompt-bar"
+          aria-label={isCollapsed ? "Expand prompt bar" : "Collapse prompt bar"}
+        >
+          {isCollapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </Button>
+      </div>
 
-      {/* Main Input Row - Heights: 48px mobile, 56px tablet, 64px desktop */}
-      <div className="px-3 h-12 sm:h-14 lg:h-16 flex items-center gap-2">
+      {/* Collapsible Content */}
+      {!isCollapsed && (
+        <>
+          {/* File Pills Row (if there are uploaded files) - Horizontal scroll */}
+          {uploadedFiles.length > 0 && (
+            <div className="px-3 pt-2 pb-1 flex gap-1 overflow-x-auto max-h-12 items-center">
+              {uploadedFiles.map((file) => (
+                <Badge
+                  key={file.id}
+                  variant="secondary"
+                  className="gap-1 pr-1 text-xs flex-shrink-0"
+                  data-testid={`pill-file-${file.id}`}
+                >
+                  <span className="max-w-[120px] truncate whitespace-nowrap">{file.name}</span>
+                  {onRemoveFile && (
+                    <button
+                      onClick={() => onRemoveFile(file.id)}
+                      className="ml-1 rounded-sm hover:bg-muted p-0.5"
+                      data-testid={`button-remove-file-${file.id}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {/* Main Input Row - Heights: 56px mobile, 64px tablet, 72px desktop */}
+          <div className="px-3 h-14 sm:h-16 lg:h-18 flex items-center gap-2">
         {/* Upload Icon Button */}
         <div className="flex-shrink-0">
           <input
@@ -134,7 +163,7 @@ export default function PromptBar({
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
+            className="h-9 w-9"
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading}
             data-testid="button-upload-file-prompt"
@@ -143,22 +172,6 @@ export default function PromptBar({
           </Button>
         </div>
 
-        {/* New Chat Button */}
-        {onNewChat && (
-          <div className="flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={onNewChat}
-              disabled={isLoading}
-              data-testid="button-new-chat"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-
         {/* Textarea - Flex-1 */}
         <div className="flex-1 min-w-0">
           <textarea
@@ -166,15 +179,15 @@ export default function PromptBar({
             value={promptText}
             onChange={(e) => setPromptText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Press Enter to send, Shift+Enter for new line"
+            placeholder="Type a command or paste a file. Press Enter to send, Shift+Enter for newline."
             className="
               w-full resize-none bg-transparent border-0
               focus:outline-none focus:ring-0
               text-sm placeholder:text-muted-foreground
-              min-h-[36px] max-h-24 overflow-y-auto
+              min-h-[44px] max-h-32 overflow-y-auto
               disabled:opacity-50 disabled:cursor-not-allowed
             "
-            rows={1}
+            rows={2}
             tabIndex={0}
             aria-label="Build prompt"
             disabled={isLoading}
@@ -195,13 +208,15 @@ export default function PromptBar({
             onClick={handleSubmit}
             disabled={isLoading || !promptText.trim()}
             size="default"
-            className="h-9 px-4"
+            className="h-10 px-5"
             data-testid="button-build-prompt"
           >
             {isLoading ? "Building..." : "Build"}
           </Button>
         </div>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
