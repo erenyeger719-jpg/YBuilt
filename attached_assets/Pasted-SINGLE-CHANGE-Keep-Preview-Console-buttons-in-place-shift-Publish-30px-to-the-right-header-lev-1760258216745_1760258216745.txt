@@ -1,0 +1,54 @@
+SINGLE CHANGE: Keep Preview & Console buttons in place — shift Publish 30px to the right (header-level CSS tweak)
+
+Goal
+Do not move Preview or Console buttons. Keep their DOM and visual placement unchanged. Only shift the Publish pill 30px to the right so it appears separated by 30px from its current neighbor, remains in the header/top layer (not under panels), and stays fully clickable and keyboard-accessible.
+
+Exact instructions (copy/paste for dev)
+
+1) Do not relocate Preview/Console in the DOM — leave them as-is.
+
+2) Apply only this CSS to nudge Publish to the right by 30px and ensure it stays above panels:
+
+```css
+/* place in header CSS file (e.g., header.css or workspace.css) */
+.header-right .publish-pill {
+  margin-left: 30px;            /* create the 30px gap */
+  position: relative;           /* keep it in document flow */
+  z-index: 9999 !important;     /* ensure top-layer visibility */
+  pointer-events: auto;         /* ensure clickable */
+  transition: transform .12s ease, margin .12s ease;
+}
+
+/* ensure header doesn't clip the pill */
+.header, .header-right {
+  overflow: visible;
+}
+
+/* responsive: keep a smaller gap on narrow screens */
+@media (max-width: 720px) {
+  .header-right .publish-pill { margin-left: 12px; }
+}
+  	3	Safety / layering checks
+* Make sure no parent element (header or right-pane) has overflow:hidden that would clip the pill; if so, set overflow: visible on the header container only.
+* Do not absolute-position Publish (keep it in normal flow) — margin-left is preferred to avoid layout shifts.
+* Keep aria-label="Publish" and tabindex="0" so Publish remains keyboard accessible.
+Acceptance tests (quick)
+1. Open workspace header — Preview and Console buttons remain exactly where they were.
+2. Publish pill is visually 30px to the right of its neighbor (or 12px on small screens).
+3. Publish is not covered by any panel and is clickable (mouse + keyboard).
+4. Resizing panes does not clip Publish — it stays in header and on top.
+Deliverable
+* One small CSS update (above). No DOM moves. Confirm when checks 1–4 pass.
+End.
+1. Safety / layering checks
+* Make sure no parent element (header or right-pane) has overflow:hidden that would clip the pill; if so, set overflow: visible on the header container only.
+* Do not absolute-position Publish (keep it in normal flow) — margin-left is preferred to avoid layout shifts.
+* Keep aria-label="Publish" and tabindex="0" so Publish remains keyboard accessible.
+Acceptance tests (quick)
+1. Open workspace header — Preview and Console buttons remain exactly where they were.
+2. Publish pill is visually 30px to the right of its neighbor (or 12px on small screens).
+3. Publish is not covered by any panel and is clickable (mouse + keyboard).
+4. Resizing panes does not clip Publish — it stays in header and on top.
+Deliverable
+* One small CSS update (above). No DOM moves. Confirm when checks 1–4 pass.
+End.

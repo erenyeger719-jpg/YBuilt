@@ -27,7 +27,13 @@ import {
   Smartphone,
   RotateCw,
   FileCode,
+  Upload,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import Header from "@/components/Header";
 import ConsolePanel from "@/components/ConsolePanel";
 import CommandPalette from "@/components/CommandPalette";
@@ -416,15 +422,38 @@ export default function Workspace() {
     <div className="h-full flex flex-col overflow-hidden">
       <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "preview" | "console")} className="flex-1 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-4 flex-shrink-0 h-14 bg-background sticky top-0 z-50 overflow-visible">
-          <TabsList className="h-12 bg-transparent">
-            <TabsTrigger value="preview" className="gap-2" data-testid="tab-preview">
-              <Monitor className="h-4 w-4" />
-              PREVIEW
-            </TabsTrigger>
-            <TabsTrigger value="console" className="gap-2" data-testid="tab-console">
-              CONSOLE
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex items-center gap-0 overflow-visible">
+            <TabsList className="h-12 bg-transparent">
+              <TabsTrigger value="preview" className="gap-2" data-testid="tab-preview">
+                <Monitor className="h-4 w-4" />
+                PREVIEW
+              </TabsTrigger>
+              <TabsTrigger value="console" className="gap-2 mr-0 console-button" data-testid="tab-console">
+                CONSOLE
+              </TabsTrigger>
+            </TabsList>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="gap-2 relative publish-pill ml-[30px] max-[720px]:ml-3"
+                  style={{ zIndex: 9999, pointerEvents: 'auto' }}
+                  onClick={() => setShowPublishModal(true)}
+                  data-testid="button-publish"
+                  aria-label="Publish"
+                  role="button"
+                >
+                  <Upload className="h-4 w-4" />
+                  <span className="max-[720px]:hidden">Publish</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Publish your website</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
 
           {rightTab === "preview" && (
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -533,12 +562,10 @@ export default function Workspace() {
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       <Header
-        showPublish={true}
         logSummary={{
           status: "success",
           lastBuild: "2m ago",
         }}
-        onPublish={() => setShowPublishModal(true)}
       />
       <CommandPalette />
       <PublishModal

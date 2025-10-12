@@ -15,15 +15,13 @@ import {
 import { useState, useEffect } from "react";
 
 interface HeaderProps {
-  showPublish?: boolean;
   logSummary?: {
     status: "success" | "error" | "building";
     lastBuild: string;
   };
-  onPublish?: () => void;
 }
 
-export default function Header({ showPublish, logSummary, onPublish }: HeaderProps) {
+export default function Header({ logSummary }: HeaderProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [lowGloss, setLowGloss] = useState(false);
   const [currency, setCurrency] = useState<"INR" | "USD">("INR");
@@ -80,49 +78,23 @@ export default function Header({ showPublish, logSummary, onPublish }: HeaderPro
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 backdrop-blur-md bg-background/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4 overflow-visible">
-          {/* Left controls group */}
-          <div className="flex items-center gap-2 overflow-visible">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link href="/" data-testid="link-home-logo">
-                  <Logo />
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Ybuilt — Home</p>
-              </TooltipContent>
-            </Tooltip>
-            
-            {/* Publish button - moved to left region */}
-            {isWorkspace && showPublish && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="gap-2 relative z-[80] ml-2.5 mr-4"
-                    onClick={onPublish}
-                    data-testid="button-publish"
-                    aria-label="Publish"
-                    role="button"
-                  >
-                    <Upload className="h-4 w-4" />
-                    <span className="hidden sm:inline">Publish</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Publish your website</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
-            
-            {/* Build status badge - shifted left by 10px */}
+        <div className="flex items-center justify-between h-16 gap-4">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/" data-testid="link-home-logo">
+                <Logo />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Ybuilt — Home</p>
+            </TooltipContent>
+          </Tooltip>
+          
+          <div className="flex items-center gap-2">
             {isWorkspace && logSummary && (
               <Badge 
                 variant={logSummary.status === "success" ? "default" : logSummary.status === "error" ? "destructive" : "secondary"}
-                className="gap-1.5 relative z-[85]"
-                style={{ transform: "translateX(-10px)" }}
+                className="gap-1.5"
                 data-testid="badge-log-summary"
               >
                 <span className="text-xs">
@@ -130,10 +102,7 @@ export default function Header({ showPublish, logSummary, onPublish }: HeaderPro
                 </span>
               </Badge>
             )}
-          </div>
-          
-          {/* Right controls group */}
-          <div className="flex items-center gap-2">
+            
             <Button
               variant="ghost"
               size="sm"

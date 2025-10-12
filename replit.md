@@ -42,12 +42,13 @@ The frontend is built with React, TypeScript, and Vite, utilizing `shadcn/ui` fo
 The system is designed to be fully functional in a mock mode without external API keys for Razorpay and AI generation, simulating delays and outcomes. It includes a simple in-memory job queue with a mock worker for processing AI generation requests. The architecture supports user persistence across server restarts and provides immediate visual feedback for appearance setting changes via CSS variable updates.
 
 ### Recent Changes (October 2025)
-- **Header Layout Fix - Publish Button & Build Badge (Completed Oct 12)**: Moved Publish button to header left region and adjusted Build status badge positioning:
-  - **Publish Button Relocation**: Moved from right controls to left region of header (after logo), z-index 80, responsive with icon-only on mobile, wrapped in tooltip
-  - **Build Status Badge Shift**: Shifted left by 10px using transform, z-index 85, proper spacing to prevent overlap
-  - **Header Structure**: Left group (Logo → Publish → Build Badge), Right group (Library, Payment, Theme controls)
-  - **Accessibility**: aria-label="Publish", role="button", keyboard navigation (Tab), Enter/Space activation
-  - **Acceptance Tests Passed**: All 5 criteria verified - Publish visible at min/max pane widths, no overlap, keyboard accessible, mobile responsive with icon-only
+- **Publish Button Repositioned to Console Tab (Completed Oct 12)**: Moved Publish button to workspace toolbar, right of Console tab:
+  - **DOM Placement**: Publish now in workspace toolbar (right pane), immediately after Console TabsTrigger, before preview controls
+  - **Spacing**: 30px gap between Console and Publish on desktop (`ml-[30px]`), 12px on mobile (`max-[720px]:ml-3`)
+  - **Top Layer**: z-index 9999 with `pointer-events: auto`, `overflow-visible` on containers prevents clipping
+  - **Responsive**: Desktop shows icon + "Publish" text, mobile (<720px) shows icon-only via `max-[720px]:hidden`
+  - **Accessibility**: aria-label="Publish", role="button", tooltip "Publish your website", keyboard Tab focus, Enter/Space activation
+  - **Acceptance Tests Passed**: All safety checks verified - DOM order correct, 30px gap maintained, no clipping with pane resize, keyboard accessible, mobile icon-only
 
 - **Responsive Workspace UI Fix (Completed Oct 12)**: Fixed left pane clipping and squeezing issues when resizing:
   - **ResizableSplitter**: Changed width clamp from 20-50% to 18-50%, added real-time compact mode detection at 26% threshold using `currentLeftPercent` state for immediate UI updates during drag
