@@ -1,0 +1,95 @@
+URGENT FIX NOTE — Prevent left-pane cropping, keep Prompt Bar usable when minimized, keep Build/Agent visible, move Publish to right
+
+CONTEXT — what’s broken
+- When the left pane is shrunk horizontally, the left pane’s top controls (New file / New folder / + quick actions etc.) get cropped.  
+- The prompt input becomes vertically squeezed between the left upload and the right Agent/Build buttons — unusable.  
+- Agent / Build buttons get visually clipped when left pane gets narrow.  
+- The Publish button should live to the right near the Preview/Console toolbar, not float over the left pane.  
+- Buttons that were in the left AI interaction area (+ quick-actions like "Check my app for bugs", "Add payment processing", etc.) are cut off at the top when the pane is small.
+
+GOAL — one sentence
+Make the left pane truly responsive and safe: when minimized it must never clip controls — instead controls should collapse cleanly (icon-only or move to an overflow menu or to header), the prompt bar must stay usable and centered between buttons, and Publish must be reliably located on the right side near Preview/Console.
+
+APPLY THESE CHANGES (copy/paste instructions)
+
+1) Clamp left width and provide graceful collapse
+- Enforce left width percent clamp: `min 18%` — `max 50%` of viewport width. (User asked 50/50 max.)
+- If left width ≤ 26% (threshold), switch **left-pane** to `compact` mode (CSS class `.left--compact`). In compact mode:
+  - Replace toolbar labels with icons-only.
+  - Move lower-priority controls into an overflow menu (three dots) that appears in the left pane header or in the top header if left width < 20%.
+  - Do **not** hide Build / Agent — keep them accessible via overflow menu or pinned header.
+
+CSS snippet:
+```css
+/* workspace root */
+.workspace-split { --left-pct: 33%; display:flex; height: calc(100vh - var(--header-h)); }
+.column-left { width: calc(var(--left-pct)); min-width: 240px; max-width: 50vw; display:flex; flex-direction:column; }
+.column-left.left--compact .toolbar .label { display:none; } /* icon-only */
+.column-left.left--compact .low-priority { display:none; } /* use overflow menu instead */
+ 
+2. Fix prompt bar layout: keep it fixed, roomy, and never visually cropped
+Structure the left column as:
+.ai-messages (flex:1; overflow:auto)
+.prompt-bar (flex:0 0 auto) — fixed height 64–72px
+Make .prompt-pills horizontally scrollable (overflow-x:auto) and LIMITED height so they don’t push .prompt-bar.
+Make the prompt input a <textarea> with flex:1 1 auto so it always gets remaining space.
+JS/HTML pattern:  <div className="column-left">
+  <div className="header toolbar"> ...top icons... </div>
+  <div className="ai-messages"> ...scrollable chat & pills... </div>
+  <div className="prompt-bar">
+    <button className="upload-btn" />
+    <div className="prompt-pills" />  {/* overflow-x:auto; max-height:46px */}
+    <textarea className="prompt-input" rows={2} />
+    <button className="agent-btn" />
+    <button className="build-btn" />
+  </div>
+</div>
+ KEY CSS: 
+.prompt-bar { height:72px; display:flex; align-items:center; gap:8px; padding:8px; box-sizing:border-box; }
+.prompt-pills { display:flex; gap:8px; overflow-x:auto; max-height:48px; align-items:center; }
+.prompt-input { flex:1 1 auto; min-width:120px; max-height:140px; overflow-y:auto; resize:none; }
+.agent-btn, .build-btn { flex:0 0 56px; min-width:56px; height:44px; }
+  	3	Avoid clipping: overflow strategy and overflow menu
+* Add an overflow detector (ResizeObserver) on the left header/toolbar:
+    * If scrollWidth > clientWidth, move lower-priority controls into .toolbar-overflow popover.
+    * Always keep primary actions (Upload, Agent/Build, Save) reachable — either visible or inside the overflow menu.
+Overflow pseudo: const ro = new ResizeObserver(() => { if (toolbar.scrollWidth > toolbar.clientWidth) openOverflow(); else closeOverflow(); });
+ro.observe(toolbar);
+  
+4. Don’t crop Agent/Build when resizing — collapse labels, not icons
+When .left--compact is active hide labels only; keep icon buttons same size.
+If even icon-only doesn’t fit, move Agent/Build into header or into an always-visible side overflow toggle (so user can tap to open).
+5. Make Publish sit on the right (header) near Preview/Console
+Remove Publish from left area.
+Add/ensure header .publish-pill exists at top-right next to Preview/Console controls.
+CSS: .header .publish-pill { margin-left: 12px; }
+  	•	If Publish used to be anchored to left, remove that DOM placement and mount the component into header on workspace load.
+6. Fix splitter smoothness & reversibility (brief)
+* Use pointer capture + requestAnimationFrame to update a CSS variable --left-pct.
+* Persist final value on pointerup; do not set React state on every pointermove — only on pointerup.
+7. Prevent vertical shift of prompt bar when new files/pills are added
+* Pills go into .prompt-pills which is horizontally scrollable; do not render them above the prompt bar in a way that increases height.
+* If a new uploaded file needs preview/metadata, open a modal or append a line inside .ai-messages (not inside the .prompt-bar).
+8. Ensure top-left tools (New file, New folder, + quick actions) remain visible
+* These live in .column-left .toolbar and are part of the header area that must be sticky and not scrolled away.
+* CSS:
+* .column-left .toolbar { position: sticky; top: 0; z-index: 40; background: var(--bg); }
+  
+In compact mode, if toolbar cannot show all controls, move extras to overflow, but leave the toolbar itself visible (not cropped).
+ACCEPTANCE CHECKS (test these after patch)
+Shrink left pane to compact: toolbar still visible at top (sticky), labels hidden but icons visible. No cropping of icons. Agent/Build accessible via icon or overflow.
+Expand left pane back to 40–50%: toolbar restores labels; prompt bar stays same height and input usable.
+Uploaded files produce pills inside .prompt-pills and do not push prompt bar downward. Pills scroll horizontally.
+Publish button is in header/right area next to Preview/Console and not overlapping left pane.
+Dragging splitter to shrink/expand is smooth and reversible; left width clamps between 18%–50%.
+All top-left quick-action buttons (New file, New folder, + quick-list) are visible or reachable through overflow; they are not clipped.
+Prompt input never becomes <120px width; Enter sends; Shift+Enter newline.
+DELIVERABLE
+Patch the workspace UI with:
+Add .left--compact behavior and overflow logic.
+Make .prompt-bar fixed and stable (height 64–72px).
+Move Publish to header right.
+Resize handler uses CSS var + rAF and persists on pointerup.
+FINAL NOTE TO DEVS
+This is primarily a responsive/layout issue — not a data issue. The fix is to stop hiding controls by shrinking containers; instead collapse labels, use overflow menus, or relocate actions to the header. Fix the splitter to update a CSS var in rAF and persist final sizes only on pointerup. Run the seven acceptance checks above and report status.
+End of note.
