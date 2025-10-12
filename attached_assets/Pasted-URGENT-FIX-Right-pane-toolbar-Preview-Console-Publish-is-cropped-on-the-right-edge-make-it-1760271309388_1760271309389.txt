@@ -1,0 +1,93 @@
+URGENT FIX — Right-pane toolbar (Preview / Console / Publish) is cropped on the right edge — make it fully visible without changing other workspace areas
+
+CONTEXT
+The Preview / Console / Publish tab header (the small toolbar at the top of the right pane) is visually cropped on the right edge inside the workspace. Everything else should stay exactly as-is. Fix only the right-pane header so the three controls are visible, clickable, keyboard-accessible, and never clipped by the pane’s container or by overflow rules.
+
+GOAL
+Make the right-pane toolbar fully visible at all widths (within reasonable responsive rules). Do not move toolbar out of the right pane or change layout elsewhere. Ensure toolbar sits above content (z-index), allows overflow-visible for its children, and respects device scrollbars. Keep Publish next to Console as previously requested.
+
+STEP-BY-STEP FIX (copy/paste into code)
+
+1) Identify the right-pane toolbar container
+- Typical selectors: `.column-right .toolbar`, `.preview-toolbar`, `.preview-header`, `.preview-controls`.
+- We will put fixes in the right-pane toolbar CSS and, if necessary, a small wrapper change in JSX.
+
+2) Make toolbar sticky / top-layer and visible
+- Add or update CSS so the toolbar is visually at top of pane and not clipped:
+
+```css
+/* ensure right toolbar container is in its own stacking context & visible */
+.column-right { display:flex; flex-direction:column; min-width: 320px; overflow: hidden; }
+
+/* toolbar sits at top of right pane, above iframe/preview/console content */
+.column-right .preview-toolbar,
+.column-right .toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;               /* above the preview content */
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 12px;          /* give breathing room so icons don't touch the edge */
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
+  box-sizing: border-box;
+  overflow: visible;         /* critical: allow toolbar children to be visible */
+}
+
+/* child controls must not be clipped */
+.column-right .preview-toolbar > * {
+  flex: 0 0 auto;
+  min-width: 40px;
+  height: 40px;
+}
+
+/* ensure publish pill not clipped and is above content */
+.preview-toolbar .publish-pill {
+  margin-left: 12px;
+  position: relative;
+  z-index: 80 !important;
+}
+
+/* ensure preview iframe area scrolls independently */
+.column-right .preview-area {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0; /* prevents flex children from forcing overflow clipping */
+}
+Fix parent clipping (remove overflow:hidden where it clips toolbar)
+If the toolbar is still clipped, one of its ancestors likely has overflow: hidden or a constrained height. Add this safe rule so only content scrolls, not the toolbar:
+/* make sure only the preview area scrolls, not the toolbar */
+.column-right > *:not(.preview-toolbar) { overflow: auto; }
+
+/* If a parent has overflow:hidden used elsewhere, explicitly allow visible for toolbar */
+.header, .workspace-split, .column-right { overflow: visible; }
+Add small right padding / safe-area so icons don't butt against the window edge (handles scrollbars)
+This prevents the OS/browser scrollbar from visually clipping the controls:
+.column-right { padding-right: 12px; }          /* small buffer */
+.preview-toolbar { padding-right: calc(12px + env(safe-area-inset-right)); }
+React/JSX guard (minimal change, only if needed)
+If toolbar markup sits inside a scrollable container that reflows children, wrap preview content (iframe/console) so toolbar remains its own sibling:
+<div className="column-right">
+  <div className="preview-toolbar"> ...controls... </div>
+  <div className="preview-area"> ...iframe / console (scrolls) ... </div>
+</div>
+Keep Publish / Console order & keyboard accessibility
+Ensure DOM order in .preview-toolbar is: other preview controls → ConsoleButton → Publish → other controls.
+Add tabindex="0" and aria-label to each toolbar item if missing.
+Acceptance tests (verify these after patch)
+A: At default desktop width, the entire preview-toolbar row is fully visible — no cropping of Preview, Console or Publish buttons.
+B: Resize the left pane and right pane — toolbar remains visible and not clipped.
+C: Publish button is clickable and focusable by keyboard (Tab) and not under other panes.
+D: Preview / Console / Publish icons remain in their current order and positions relative to each other.
+E: Scrolling content in the preview-area does not move or clip the toolbar (toolbar stays sticky at top of right pane).
+F: On narrow screens the toolbar wraps or collapses elegantly (icon-only) but still shows all primary controls using overflow menu if needed.
+Debug tips (if toolbar still clipped)
+In devtools: inspect computed overflow and z-index of ancestors of the toolbar. The first overflow:hidden ancestor should be adjusted to overflow: visible or restructured so toolbar sits outside the scrollable region.
+Check that .preview-area has min-height:0 when using flex columns. Missing this often causes children to overflow and clip sibling sticky elements.
+Use document.elementFromPoint(x,y) to see which element is on top of the toolbar area.
+Deliverable
+Minimal change: CSS updates (above) and, if required, a small JSX adjustment to ensure .preview-toolbar is a direct sibling of .preview-area (no heavy refactor).
+QA: Confirm acceptance tests A–F and reply with the single file(s) changed and short pass/fail for tests.
+
+Do not change header layout or other panes — only adjust right-pane toolbar visibility and stacking.
+END 

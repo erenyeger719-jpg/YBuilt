@@ -485,9 +485,9 @@ export default function Workspace() {
 
   // Right Pane Content
   const rightPane = (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col">
       <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "preview" | "console")} className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border px-4 flex-shrink-0 h-14 bg-background sticky top-0 z-50 overflow-visible">
+        <div className="flex items-center justify-between border-b border-border pl-4 pr-3 flex-shrink-0 h-14 bg-background sticky top-0 z-[60] overflow-visible">
           <div className="flex items-center gap-0 overflow-visible">
             <TabsList className="h-12 bg-transparent">
               <TabsTrigger value="preview" className="gap-2" data-testid="tab-preview">
@@ -501,7 +501,7 @@ export default function Workspace() {
           </div>
 
           {rightTab === "preview" && (
-            <div className="flex items-center gap-2 flex-shrink-0 overflow-visible preview-toolbar">
+            <div className="flex items-center gap-2 flex-shrink-0 overflow-visible preview-toolbar pr-1">
               <div className="flex items-center gap-1">
                 <Button
                   variant={deviceMode === "desktop" ? "secondary" : "ghost"}
@@ -556,8 +556,7 @@ export default function Workspace() {
                   <Button
                     variant="default"
                     size="sm"
-                    className="gap-2 relative publish-pill mr-3.5"
-                    style={{ zIndex: 9999, pointerEvents: 'auto' }}
+                    className="gap-2 relative z-[80] publish-pill"
                     onClick={() => setShowPublishModal(true)}
                     data-testid="button-publish"
                     aria-label="Publish"
