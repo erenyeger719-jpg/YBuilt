@@ -529,5 +529,20 @@
     "error": null,
     "createdAt": "2025-10-12T04:12:11.384Z",
     "updatedAt": "2025-10-12T04:12:20.507Z"
+  },
+  "a1cf0db8-d2f5-4632-9f8a-dca511527c1b": {
+    "id": "a1cf0db8-d2f5-4632-9f8a-dca511527c1b",
+    "userId": "demo",
+    "prompt": "qwffw",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/a1cf0db8-d2f5-4632-9f8a-dca511527c1b/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"\",\"description\":\"\",\"theme\":\"monochrome\",\"heroText\":\"qwffw\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-12T04:19:50.202Z",
+    "updatedAt": "2025-10-12T04:20:09.323Z"
   }
 }
