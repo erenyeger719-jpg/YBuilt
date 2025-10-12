@@ -41,6 +41,9 @@ The frontend is built with React, TypeScript, and Vite, utilizing `shadcn/ui` fo
 ### System Design Choices
 The system is designed to be fully functional in a mock mode without external API keys for Razorpay and AI generation, simulating delays and outcomes. It includes a simple in-memory job queue with a mock worker for processing AI generation requests. The architecture supports user persistence across server restarts and provides immediate visual feedback for appearance setting changes via CSS variable updates.
 
+### Recent Bug Fixes (October 2025)
+- **Select & Open Workspace Flow (Fixed)**: Resolved race condition and JSON parsing bug where clicking "Select & Open Workspace" on Finalize page showed "Workspace not ready" error. Fix includes: (1) POST /api/jobs/:jobId/select now returns `workspaceReady: true` field, (2) Finalize.tsx properly parses JSON response with `res.json()`, (3) Query refetch disabled during navigation with `enabled: !!jobId && !selectMutation.isPending` to prevent status change from blocking navigation.
+
 ## External Dependencies
 - **React 18 + TypeScript**: Frontend framework.
 - **Express.js + TypeScript**: Backend framework.
