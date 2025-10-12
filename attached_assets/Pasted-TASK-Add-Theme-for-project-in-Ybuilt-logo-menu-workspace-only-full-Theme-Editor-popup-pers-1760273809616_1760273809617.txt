@@ -1,0 +1,132 @@
+TASK — Add “Theme for project” in Ybuilt logo menu (workspace-only) + full Theme Editor popup + persistence & API
+
+OBJECTIVE
+Add a small **Theme** entry to the workspace-only Ybuilt logo dropdown labeled **“Theme for project”**. Clicking it opens a modal/popup theme editor that exposes the full list of theme controls below (colors, fonts, border radius, etc.), allows creating/saving/exporting/importing presets, live-applies changes to the workspace preview using CSS variables, runs contrast/accessibility checks, and persists per-project theme to `data/projects/{projectId}/theme.json`. Provide backend endpoints, frontend components, and QA checks.
+
+HIGH-LEVEL UX
+- Where: In the workspace only, the existing Logo dropdown (workspaces). Add a new item: **Theme for project** (3rd-party menu unchanged).
+- Behavior: Clicking **Theme for project** opens `ThemeModal` anchored centered (modal), trap focus while open.
+- Live preview: Changes apply immediately in the workspace UI via CSS variables; user can toggle preview on/off before saving.
+- Persistence: Save per-project (and optional global defaults). Provide Save, Save as Preset, Export JSON, Import JSON, Reset to Defaults, Revert Unsaved.
+- Access: Only available in Workspace; on Home/Library clicking Logo still navigates Home.
+
+FRONTEND — COMPONENTS TO ADD/UPDATE
+1. `client/src/components/ThemeButton.jsx`  
+   - Small icon-sized button rendered in the Logo menu only for workspace. Label: `Theme for project`. `aria-haspopup="dialog"`.
+2. `client/src/components/ThemeModal.jsx` (modal/popup)  
+   - Sections: App Theme (global surface colors & text), Core Visual Settings (Primary/Secondary/Accent/Destructive/Inputs/Borders/Focus/Card/Popover/Charts), Typography (Sans/Serif/Monospace selections), Border Radius slider, Custom Colors list (add/remove), Presets (selectable thumbnails), Live Preview toggle, Contrast Checker area, Save/Export/Import/Reset controls, Help tooltip.
+   - UI elements:
+     - Color pickers (hex + alpha) for each color field listed below.
+     - Font selects with preview (Valmeria is already used for headings; offer fallback list: Inter, Poppins, Open Sans, Georgia, Menlo).
+     - Border radius numeric input and range slider (0–3rem).
+     - Add Color button: opens mini modal to add `{ name, hex }` and adds to custom palette.
+     - Preset gallery: show saved presets + system presets (Dark, Light, High-Contrast, Minimal).
+     - Export/Import JSON: export current theme as JSON; import validates shape and previews before applying.
+     - Accessibility/Contrast: show pass/fail for main text vs primary background and warning badges for failing pairs; provide suggestions.
+     - Keyboard accessible; escape closes; focus returns to ThemeButton.
+3. `client/src/components/ColorPickerInline.jsx` — compact color picker with hex input, eyedropper (if available), contrast ratio display.
+4. `client/src/hooks/useTheme.js` — manages CSS vars, live apply, preview toggle, undo/redo of theme edits, and sync with server.
+5. `client/src/styles/theme.css` — define CSS variable names (prefixed `--theme-...`) and default mapping.
+   - Example variables (must match fields below): `--theme-bg`, `--theme-text`, `--theme-muted-bg`, `--theme-muted-text`, `--theme-primary-bg`, `--theme-primary-text`, `--theme-secondary-bg`, `--theme-secondary-text`, `--theme-accent-bg`, `--theme-accent-text`, `--theme-destructive-bg`, `--theme-destructive-text`, `--theme-input`, `--theme-border`, `--theme-focus-border`, `--theme-card-bg`, `--theme-card-text`, `--theme-popover-bg`, `--theme-popover-text`, `--theme-chart-1` ... `--theme-chart-5`, `--theme-border-radius`, `--theme-font-sans`, `--theme-font-serif`, `--theme-font-mono`.
+6. Live application: `useTheme` writes to `document.documentElement.style.setProperty('--theme-...', value)` for immediate effect. Also add a small `data-theme-preview="true"` attribute while in preview.
+7. `client/src/components/ThemePresetManager.jsx` — save/load presets UI.
+8. Add small UI notification/toast for unsaved changes and Save confirmation.
+
+BACKEND — ROUTES & STORAGE
+1. `GET /api/projects/:projectId/theme` — return saved theme JSON or 404 → return default.
+2. `POST /api/projects/:projectId/theme` — accepts theme JSON, validates schema, writes to `data/projects/{projectId}/theme.json`, returns 200 + theme.
+3. `GET /api/themes/presets` — return array of built-in presets and user-saved presets (if stored server-side).
+4. `POST /api/themes/presets` — optional: save preset server-side for user (saves to `data/users/{userId}/themes.json`).
+5. Security: verify user owns or has edit rights for projectId; MOCK_MODE allows demo user.
+
+THEME DATA SCHEMA (JSON)
+- Minimal required fields (example; all keys optional; use defaults if missing):
+```json
+{
+  "meta": { "name":"Project Theme", "createdAt":"…", "author":"userId" },
+  "fonts": { "sans":"Open Sans", "serif":"Georgia", "mono":"Menlo" },
+  "borderRadius": "0.5rem",
+  "colors": {
+    "background": "#ffffff",
+    "text": "#000000",
+    "mutedBackground": "#ebebeb",
+    "mutedText": "#666666",
+    "primaryBackground":"#141414",
+    "primaryText":"#fafafa",
+    "secondaryBackground":"#e6e6e6",
+    "secondaryText":"#1a1a1a",
+    "accentBackground":"#f2f2f2",
+    "accentText":"#1a1a1a",
+    "destructiveBackground":"#8c1717",
+    "destructiveText":"#fafafa",
+    "input":"#b3b3b3",
+    "border":"#d9d9d9",
+    "focusBorder":"#3d3d3d",
+    "cardBackground":"#fafafa",
+    "cardText":"#0d0d0d",
+    "popoverBackground":"#ebebeb",
+    "popoverText":"#242424",
+    "chart1":"#383838",
+    "chart2":"#474747",
+    "chart3":"#575757",
+    "chart4":"#666666",
+    "chart5":"#757575"
+  },
+  "customColors":[ { "name":"brand", "hex":"#abc123" } ]
+}
+LIVE PREVIEW & APPLY FLOW
+When ThemeModal opens, useTheme fetches /api/projects/:id/theme (or uses local defaults) and copies to local edit state.
+On change: update CSS vars immediately (live apply). If user toggles Preview Off, revert to previous theme.
+Save: POST /api/projects/:id/theme with body; server writes data/projects/{id}/theme.json. After save, show toast "Theme saved".
+Reset: Revert to default preset or project's last saved theme.
+CUSTOM COLOR MANAGEMENT
+User can “Add color” — enters name + hex. Color is added to customColors array in the theme JSON and shown as a swatch in the modal and quick-swap in pickers.
+Allow drag-to-reorder custom color swatches; allow rename/delete.
+Provide quick “apply color to” dropdown for assigning a custom color to any named slot.
+ACCESSIBILITY & CONTRAST CHECKER
+For each important text/background pair (main text vs background, primary text vs primary background, card text vs card background), compute WCAG contrast ratio and show PASS/WARN/FAIL with numeric ratio. Provide suggestions (lighter/darker hex) to meet AA/AAA.
+Show accessible swatches with small icon indicating pass/fail.
+PRESETS, EXPORT & IMPORT
+Provide built-in presets: Light, Dark, High Contrast, Minimal.
+Save as Preset: name + thumbnail (rendered preview snapshot via CSS variables, can be a small canvas or CSS preview).
+Export JSON: downloads theme JSON via browser.
+Import JSON: validate shape, preview before applying, allow cancel.
+STORAGE & PERMISSIONS
+Save per-project under data/projects/{projectId}/theme.json.
+Optionally allow per-user presets saved to data/users/{userId}/themes.json.
+If user lacks permission to save (read-only), modal shows Preview-only with disabled Save.
+NOTIFICATIONS & AUDIT
+Emit telemetry theme_changed with {projectId, userId, changedKeys} when saved.
+Log basic change entries in data/projects/{projectId}/theme-log.json.
+DEVELOPMENT & QA CHECKS (Acceptance)
+Theme menu item appears in Logo dropdown only on workspace pages.
+Clicking Theme for project opens modal; default theme loaded and applied to preview.
+Editing a color/font/border updates workspace immediately (CSS vars), and toggling Preview Off reverts.
+Save persists theme to data/projects/{projectId}/theme.json; reloading workspace loads saved theme.
+Export downloads a valid JSON; Import validates and previews before applying.
+Custom colors can be added, renamed, reordered, and assigned.
+Contrast checker reports correct WCAG ratios for main pairs and indicates PASS/WARN/FAIL.
+Accessibility: modal trap focus, keyboard navigation, aria labels for controls.
+Permissions: read-only users cannot Save; Save button disabled.
+Telemetry event theme_changed fired on save; server logs created.
+PERFORMANCE & SECURITY NOTES
+Avoid heavy DOM reflows: apply theme changes by updating CSS variables only.
+Limit uploaded or stored assets to JSON (no binary data).
+Validate incoming theme JSON server-side to avoid injection (only accept hex color strings, allowed font names, numeric border radius).
+FILES TO ADD / MODIFY (suggested)
+client/src/components/ThemeButton.jsx
+client/src/components/ThemeModal.jsx
+client/src/components/ColorPickerInline.jsx
+client/src/hooks/useTheme.js
+client/src/styles/theme.css (CSS var defaults)
+server/routes/theme.js — GET/POST /api/projects/:projectId/theme
+data/projects/{projectId}/theme.json (example default)
+README.md update: how to create presets, import/export, and where themes persist.
+DELIVERABLE
+One commit that:
+Adds ThemeButton to LogoMenu (workspace-only)
+Implements ThemeModal with full controls and live preview
+Adds backend persistence endpoints and default theme file examples
+Adds accessibility/contrast checking and preset management
+QA passes acceptance tests 1–10 above
+End of task —  Do not broaden scope beyond the Theme feature described above.

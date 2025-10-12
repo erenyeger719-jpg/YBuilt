@@ -2,9 +2,9 @@
   "userId": "demo",
   "appearance": {
     "theme": "dark",
-    "glassIntensity": 0,
+    "glassIntensity": 10,
     "glossFinish": true,
-    "parallaxIntensity": 20,
+    "parallaxIntensity": 30,
     "motion": "full",
     "lowPower": false,
     "lowBandwidth": false,

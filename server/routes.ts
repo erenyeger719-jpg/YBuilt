@@ -635,6 +635,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get workspace theme
+  app.get("/api/workspace/:jobId/theme", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      
+      if (!jobId) {
+        return res.status(400).json({ error: "Job ID is required" });
+      }
+
+      const theme = await storage.getProjectTheme(jobId);
+      
+      // Theme is always returned (default theme if no custom theme exists)
+      res.json(theme);
+    } catch (error) {
+      console.error("Error fetching workspace theme:", error);
+      res.status(500).json({ error: "Failed to fetch workspace theme" });
+    }
+  });
+
+  // Save workspace theme
+  app.post("/api/workspace/:jobId/theme", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      
+      if (!jobId) {
+        return res.status(400).json({ error: "Job ID is required" });
+      }
+
+      // Validate theme data
+      const { projectThemeSchema } = await import("@shared/schema");
+      const theme = projectThemeSchema.parse(req.body);
+
+      await storage.saveProjectTheme(jobId, theme);
+
+      res.json({ success: true, theme });
+    } catch (error: any) {
+      console.error("Error saving workspace theme:", error);
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: "Invalid theme data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to save workspace theme" });
+    }
+  });
+
   // OAuth Mock Endpoints
   app.get("/api/auth/:provider", async (req, res) => {
     const { provider } = req.params;

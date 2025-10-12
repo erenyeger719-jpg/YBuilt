@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset } from "@shared/schema";
+import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset, type ProjectTheme, projectThemeSchema, themePresets } from "@shared/schema";
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
@@ -57,6 +57,10 @@ export interface IStorage {
   createInvoice(invoice: Invoice): Promise<Invoice>;
   getInvoices(userId: string): Promise<Invoice[]>;
   deductCredits(userId: string, amount: number): Promise<void>;
+  
+  // Theme methods
+  getProjectTheme(projectId: string): Promise<ProjectTheme | null>;
+  saveProjectTheme(projectId: string, theme: ProjectTheme): Promise<void>;
 }
 
 export interface Invoice {
@@ -512,6 +516,68 @@ export class MemStorage implements IStorage {
     const newCredits = currentCredits + amount;
     this.userCredits.set(userId, newCredits);
     await this.saveUsers();
+  }
+
+  // Theme methods
+  async getProjectTheme(projectId: string): Promise<ProjectTheme | null> {
+    try {
+      const themeFile = path.join(process.cwd(), "data", "workspaces", projectId, "theme.json");
+      const data = await fs.readFile(themeFile, "utf-8");
+      const theme = JSON.parse(data);
+      // Validate with schema
+      return projectThemeSchema.parse(theme);
+    } catch (error) {
+      // Theme file doesn't exist or invalid, return default theme
+      const DEFAULT_THEME: ProjectTheme = {
+        meta: { 
+          name: "Default", 
+          createdAt: new Date().toISOString(), 
+          author: "system" 
+        },
+        fonts: { 
+          sans: "Inter", 
+          serif: "Georgia", 
+          mono: "Menlo" 
+        },
+        borderRadius: "0.5rem",
+        colors: {
+          background: "#ffffff",
+          text: "#000000",
+          mutedBackground: "#f5f5f5",
+          mutedText: "#666666",
+          primaryBackground: "#141414",
+          primaryText: "#fafafa",
+          secondaryBackground: "#e5e5e5",
+          secondaryText: "#0a0a0a",
+          accentBackground: "#f2f2f2",
+          accentText: "#1a1a1a",
+          destructiveBackground: "#8c1717",
+          destructiveText: "#fafafa",
+          input: "#b3b3b3",
+          border: "#d9d9d9",
+          focusBorder: "#3d3d3d",
+          cardBackground: "#fafafa",
+          cardText: "#0d0d0d",
+          popoverBackground: "#ebebeb",
+          popoverText: "#232323",
+          chart1: "#383838",
+          chart2: "#474747",
+          chart3: "#575757",
+          chart4: "#666666",
+          chart5: "#757575",
+        },
+        customColors: [],
+      };
+      return DEFAULT_THEME;
+    }
+  }
+
+  async saveProjectTheme(projectId: string, theme: ProjectTheme): Promise<void> {
+    const workspaceDir = path.join(process.cwd(), "data", "workspaces", projectId);
+    await fs.mkdir(workspaceDir, { recursive: true });
+    
+    const themeFile = path.join(workspaceDir, "theme.json");
+    await fs.writeFile(themeFile, JSON.stringify(theme, null, 2));
   }
 }
 

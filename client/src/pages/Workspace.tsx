@@ -46,6 +46,7 @@ import NewChatModal from "@/components/NewChatModal";
 import PromptFileModal from "@/components/PromptFileModal";
 import ResizableSplitter from "@/components/ResizableSplitter";
 import PageToolSheet from "@/components/PageToolSheet";
+import ThemeModal from "@/components/ThemeModal";
 
 interface WorkspaceFile {
   path: string;
@@ -79,6 +80,7 @@ export default function Workspace() {
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState("");
   const [showPageToolSheet, setShowPageToolSheet] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
@@ -98,6 +100,53 @@ export default function Workspace() {
     enabled: !!jobId,
     retry: 2,
   });
+
+  // Fetch and apply theme on workspace load
+  const { data: theme } = useQuery({
+    queryKey: ["/api/workspace", jobId, "theme"],
+    enabled: !!jobId,
+  });
+
+  // Apply theme CSS variables when theme loads or changes
+  useEffect(() => {
+    if (theme) {
+      const root = document.documentElement;
+      
+      // Apply fonts
+      root.style.setProperty("--theme-font-sans", theme.fonts.sans);
+      root.style.setProperty("--theme-font-serif", theme.fonts.serif);
+      root.style.setProperty("--theme-font-mono", theme.fonts.mono);
+      
+      // Apply border radius
+      root.style.setProperty("--theme-radius", theme.borderRadius);
+      
+      // Apply colors
+      Object.entries(theme.colors).forEach(([key, value]) => {
+        root.style.setProperty(`--theme-${key}`, value);
+      });
+    }
+
+    // Cleanup: reset to defaults on unmount
+    return () => {
+      const root = document.documentElement;
+      root.style.removeProperty("--theme-font-sans");
+      root.style.removeProperty("--theme-font-serif");
+      root.style.removeProperty("--theme-font-mono");
+      root.style.removeProperty("--theme-radius");
+      
+      // Remove all theme color variables
+      const themeColorKeys = [
+        "background", "text", "mutedBackground", "mutedText",
+        "primaryBackground", "primaryText", "secondaryBackground", "secondaryText",
+        "accentBackground", "accentText", "destructiveBackground", "destructiveText",
+        "input", "border", "focusBorder", "cardBackground", "cardText",
+        "popoverBackground", "popoverText", "chart1", "chart2", "chart3", "chart4", "chart5"
+      ];
+      themeColorKeys.forEach(key => {
+        root.style.removeProperty(`--theme-${key}`);
+      });
+    };
+  }, [theme]);
 
   // Auto-select first non-prompt file when workspace loads
   useEffect(() => {
@@ -633,6 +682,7 @@ export default function Workspace() {
           lastBuild: "2m ago",
         }}
         workspaceName={workspace.manifest.name}
+        onThemeModalOpen={() => setShowThemeModal(true)}
       />
       <CommandPalette />
       <PublishModal
@@ -644,6 +694,11 @@ export default function Workspace() {
         open={showNewChatModal}
         onOpenChange={setShowNewChatModal}
         onSelectAction={handleNewChatAction}
+      />
+      <ThemeModal
+        open={showThemeModal}
+        onOpenChange={setShowThemeModal}
+        projectId={jobId || ""}
       />
       <PromptFileModal
         open={showPromptFileModal}

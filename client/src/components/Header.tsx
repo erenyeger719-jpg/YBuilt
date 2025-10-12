@@ -21,9 +21,10 @@ interface HeaderProps {
     lastBuild: string;
   };
   workspaceName?: string;
+  onThemeModalOpen?: () => void;
 }
 
-export default function Header({ logSummary, workspaceName }: HeaderProps) {
+export default function Header({ logSummary, workspaceName, onThemeModalOpen }: HeaderProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [lowGloss, setLowGloss] = useState(false);
   const [currency, setCurrency] = useState<"INR" | "USD">("INR");
@@ -95,6 +96,8 @@ export default function Header({ logSummary, workspaceName }: HeaderProps) {
               currentProjectPath={currentProjectPath}
               onThemeToggle={toggleTheme}
               onLogout={handleLogout}
+              isWorkspace={isWorkspace}
+              onThemeModalOpen={onThemeModalOpen}
             />
           ) : (
             <Link 

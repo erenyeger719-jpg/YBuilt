@@ -16,6 +16,8 @@ interface LogoButtonProps {
   currentProjectPath?: string;
   onThemeToggle?: () => void;
   onLogout?: () => void;
+  isWorkspace?: boolean;
+  onThemeModalOpen?: () => void;
 }
 
 export default function LogoButton({
@@ -23,6 +25,8 @@ export default function LogoButton({
   currentProjectPath,
   onThemeToggle,
   onLogout,
+  isWorkspace = false,
+  onThemeModalOpen,
 }: LogoButtonProps) {
   const [, setLocation] = useLocation();
 
@@ -167,10 +171,10 @@ export default function LogoButton({
         </DropdownMenuSub>
 
         <DropdownMenuItem
-          onClick={handleThemeToggle}
+          onClick={isWorkspace && onThemeModalOpen ? onThemeModalOpen : handleThemeToggle}
           data-testid="menuitem-theme"
         >
-          Toggle Theme
+          {isWorkspace ? "Theme for project" : "Toggle Theme"}
         </DropdownMenuItem>
 
         <DropdownMenuItem
