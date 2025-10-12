@@ -81,6 +81,15 @@ The system is designed to be fully functional in a mock mode without external AP
   - **Initial Clamp Bug Fix**: Critical fix to clamp persisted localStorage values on load, preventing >50% violations on first render
   - **Full Regression Testing**: All 8 acceptance criteria verified (toolbar visible, columns fill viewport, prompt comfortable, pills scroll horizontally, buttons not overlapping, splitter clamps, smooth/reversible, no cropping)
 
+- **Performance Optimizations - Splitter & Toolbar (Completed Oct 12)**: Eliminated horizontal splitter lag and button cropping with Pointer Events and CSS variables:
+  - **Pointer Events API**: Replaced separate mouse/touch handlers with unified Pointer Events using setPointerCapture/releasePointerCapture for reliable tracking
+  - **CSS Variable Approach**: Update `--left-width-pct` in requestAnimationFrame (no React re-render during drag), only update React state + localStorage on pointerup for persistence
+  - **rAF Queuing Prevention**: rafId ref ensures max 1 layout update per frame, preventing layout thrashing
+  - **CSS Variable Initialization**: Added useEffect to set CSS variable on mount from clamped leftPercent, prevents stale values and visual jump on initial render
+  - **PromptBar Simplification**: Removed ResizeObserver, isCompact state, and responsive breakpoints; shows Upload/Textarea/Agent/Build always with no conditional rendering
+  - **Textarea Min-Width**: Restored to 200px (from 120px) for comfortable usability at all widths
+  - **Performance Result**: Silky smooth resize in both directions, <16ms per frame, no lag or jank, buttons never cropped
+
 - **Select & Open Workspace Flow (Fixed)**: Resolved race condition and JSON parsing bug where clicking "Select & Open Workspace" on Finalize page showed "Workspace not ready" error. Fix includes: (1) POST /api/jobs/:jobId/select now returns `workspaceReady: true` field, (2) Finalize.tsx properly parses JSON response with `res.json()`, (3) Query refetch disabled during navigation with `enabled: !!jobId && !selectMutation.isPending` to prevent status change from blocking navigation.
 
 ## External Dependencies
