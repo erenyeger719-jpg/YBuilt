@@ -1,0 +1,219 @@
+MASTER PROMPT — YBUILT: HEADER REDIRECT + PUBLISH MODAL + COMMAND PALETTE + FULL WORKSPACE (FRONTEND + SERVER + WORKER)
+
+OBJECTIVE
+Implement the remaining workspace features for **ybuilt** so the product is Replit-level (and then some). This includes:
+
+A) Header + Ybuilt logo redirect to Home + Publish modal (UPI/Razorpay) + Command/Search palette (⌘K), and  
+B) Full Workspace (file tree, code editor, WYSIWYG, Preview tab & Console tab, BuildTrace viewer, Agent Tools with autonomy levels, Extension/Integration panels), plus back-end routes, worker behavior, and persistency to support the whole flow end-to-end in MOCK_MODE.
+
+Deliver a runnable, well-commented scaffold (full file tree + exact file contents) that runs locally or on Replit with:
+
+  npm install && npm run dev
+
+PRINCIPLES
+- Keep the existing glossy/monochrome aesthetic and polished motion.  
+- Expose **structured logs** only (no chain-of-thought).  
+- Default `MOCK_MODE=true` so payments, OAuth, OpenAI are simulated. Clear README instructions on swapping to production keys.
+
+---
+
+I — UX / UI Requirements (explicit)
+
+1) Header & Logo
+- Top-left: Ybuilt SVG logo. Clicking it must always redirect to `/` (home). Add tooltip “Ybuilt — Home”.
+- Header center: editable project name and breadcrumbs.
+- Header right cluster: CommandPalette icon (⌘K), “Buy Creator Plan ₹799” CTA, currency display (INR), theme toggle, profile avatar (dropdown).
+- Next to CTA show a compact **Publish** pill when workspace loaded: shows plan/credits and is clickable to open Publish modal.
+
+2) Command / Search Palette (⌘K)
+- Global palette (open via ⌘/Ctrl+K) with sections and items replicating the screenshots:
+  - Files, Search, Stop, Open dev URL, Open in desktop app, Open in VS Code, Copy SSH Command, My Apps, Remix, Settings, Preview, Console, Assistant, Publishing, App Storage, Auth, Code Search, Database, Developer, Extension Store, Git, Integrations, Playground, Replit Key-Value Store, Secrets, Security Scanner, Shell, User Settings, VNC, Workflows.
+- Each entry has an icon, optional shortcut hint, and performs the action (route open, open panel, run dev server, etc).
+- Palette must be keyboard navigable and filterable.
+
+3) Publish Modal & Flow
+- Publish modal (inline): shows current plan, credits, publish cost, and UPI/Razorpay checkout.  
+- In MOCK_MODE, Razorpay returns `rzp_test_mock_key_12345`; UI shows successful payment and credits increase in `data/users.json`.  
+- On success, trigger `POST /api/jobs/:jobId/publish` which marks job published and returns `publishedUrl`. Show banner and copyable URL.
+- Persist invoices to `data/billing.json`.
+
+4) Workspace Layout `/workspace/:jobId` (Replit-like, enhanced)
+- Left column (collapsible):
+  - File tree (create, rename, delete), Upload, New Folder.
+  - Below file tree: **Build Prompt** panel (original prompt editable), Agent Tools (Autonomy: Low / Medium / High / Max), App Testing, Extension store link, Secrets (managed).
+- Center content:
+  - Code editor (Monaco or similar) with tabs, split view, quick actions (Run, Debug, Format).
+  - Top toolbar: Run / Build / Publish / Versions / Share.
+- Right column:
+  - Two main tabs: PREVIEW and CONSOLE.
+    - PREVIEW: iframe sandbox of `/previews/{jobId}/index.html` with device selector, refresh, new tab, screenshot.
+    - CONSOLE: multi-stream console viewer with filters (source, level), search, download transcript, clear. Show lines like your example with expand-to-json.
+- Bottom (dock):
+  - BuildTrace viewer: structured stage logs (GENERATION, ASSEMBLY, BUNDLING, LINT, TEST).
+  - Versions panel: snapshot list, diff/rollback.
+- Top-right near preview: small live log summary pill and Publish button.
+
+5) Console/Logs exact features
+- Accept and render seeded example lines; parse timestamp, source, message, meta JSON.
+- Controls: filter (source: [express], [worker], [browser]), level (info/warn/error), search across messages, tail/pause, download logs.
+- Show last N lines in mini log widget pinned to preview.
+
+6) Agent Tools & Autonomy
+- Autonomy levels:
+  - Low: suggestions only.
+  - Medium: apply minor edits, propose tests.
+  - High: run tests, auto-fix lint warnings.
+  - Max: run full build & prepare for publish (must ask final confirmation).
+- Agent run creates structured steps stored as logs (no chain-of-thought). Agent can optionally auto-apply per user toggle.
+
+---
+
+II — Backend / API Requirements (explicit)
+
+1) New / Updated endpoints
+- `GET /api/workspace/:jobId/files` → lists files, directories and metadata.
+- `GET /api/workspace/:jobId/file?path=` → get file contents.
+- `POST /api/workspace/:jobId/file` → create/update a file (body: {path, content}).
+- `POST /api/workspace/:jobId/run` → start dev server for that workspace, return `{ processId, port }`, stream logs.
+- `GET /api/jobs/:jobId/logs/stream` → SSE/WebSocket for live structured logs.
+- `GET /api/jobs/:jobId/logs` → historical logs (JSON lines).
+- `POST /api/jobs/:jobId/build` → enqueue build (worker).
+- `POST /api/jobs/:jobId/publish` → perform publish flow (check credits/plan, if ok produce published record).
+- `GET /api/razorpay_key` → return test key in MOCK_MODE.
+- `POST /api/create_order` → create order (mock).
+- `POST /webhooks/razorpay` → verify and add credits.
+- `GET /api/search/palette` → palette suggestions.
+- `GET /api/extensions` → list extensions.
+
+2) Authentication & Authorization
+- Routes must verify ownership or team access. MOCK_MODE accepts demo token/session.
+
+3) Data persistence
+- `data/jobs.json`, `data/builds/`, `data/users.json` (library + credits), `data/billing.json`, `data/jobs/{jobId}/logs.jsonl`, `public/previews/{jobId}/index.html`, `public/uploads/{userId}/{jobId}/...`
+
+4) Logging format (structured JSON per line)
+- `{ "ts": "...", "level":"info|warn|error", "source":"express|worker|browser|agent", "msg":"...", "meta": { ... } }`
+
+---
+
+III — Worker Behavior (detailed)
+
+1) Accept tasks: `generate`, `regenerate(scope)`, `build`, `run-dev`.
+2) Emit structured logs to `data/jobs/{jobId}/logs.jsonl` and publish to SSE endpoint.
+3) For `run-dev` create a dev server process (e.g., `node server.js`) and stream stdout/stderr lines into workspace console (label `[express]`).
+4) Support compute tiers and autonomy options: vary durations & simulated costs.
+5) For `publish`, package preview into `public/published/{jobId}-{ts}/` and return `publishedUrl`.
+6) In MOCK_MODE, simulate OpenAI/image API outputs, but still produce valid HTML/CSS artifacts under `public/previews/{jobId}/index.html`.
+
+---
+
+IV — Frontend Component List (to create / update)
+
+Create/Update these components/pages with detailed behavior and comments:
+
+- `client/src/components/Header.jsx` — logo redirect and header cluster
+- `client/src/components/CommandPalette.jsx` — full palette with items
+- `client/src/components/PublishModal.jsx` — purchase & publish flow
+- `client/src/pages/Workspace.jsx` — main workspace page (file tree / editor / preview / console)
+- `client/src/components/FileTree.jsx` — explorer UI
+- `client/src/components/Editor.jsx` — Monaco integration or simple code editor fallback
+- `client/src/components/PreviewPanel.jsx` — iframe + device selector
+- `client/src/components/ConsolePanel.jsx` — multi-stream console UI
+- `client/src/components/BuildTraceViewer.jsx` — structured logs viewer
+- `client/src/components/AgentTools.jsx` — autonomy controls + run agent
+- `client/src/components/VersionPanel.jsx` — versions / rollback
+- `client/src/hooks/useLogStream.js` — SSE/WebSocket hook for logs
+- `client/src/styles/workspace.css` — layout + glass tokens
+
+Each component must connect to API endpoints above, handle errors, be accessible, and honor `prefers-reduced-motion`.
+
+---
+
+V — UX Examples & Seeded Logs (include these lines verbatim so Console shows realistic output by default)
+
+Seed logs (include in `data/jobs/{sampleJobId}/logs.jsonl`):
+  6:16:13 PM [express] serving on port 5000
+6:16:18 PM [express] GET /api/razorpay_key 304 in 3ms :: {"key":"rzp_test_mock_key_12345","isMockMode":true}
+6:16:18 PM [express] GET /api/settings 304 in 14ms :: {"userId":"demo","appearance":{"theme":"dark",...}}
+6:18:41 PM [express] POST /api/generate 200 in 25ms :: {"jobId":"3844fad4-fbb8-4568-9cef-32af2560c42f"}
+6:18:45 PM [express] GET /api/jobs/3844fad4-fbb8-4568-9cef-32af2560c42f 200 in 9ms :: {"id":"3844fad4-..."}
+6:18:55 PM [express] POST /api/drafts 200 in 3ms :: {"ok":true,"draftId":"c601b3c5-2481-4940-9eaf-1e..."}
+6:19:02 PM [express] GET /api/workspace/6cd7b853-bebc-482b-a13b-c1b140d06892/files 200 in 3ms :: {"files":[...]}   
+Console UI must parse these; allow expanding `:: { ... }` JSON into a readable tree.
+
+---
+
+VI — Tests & QA
+
+Provide these tests / scripts:
+- `test/workflow.test.js` — node script to simulate: create job → generate (mock) → finalize edits → save draft → select workspace → run dev → build → publish (mock payment).
+- Unit tests for `GET/POST /api/workspace/:jobId/files`, `POST /api/jobs/:jobId/build`, `POST /api/jobs/:jobId/publish` (mock assertions).
+- Manual QA checklist: opening CommandPalette, running Agent in Max with Auto-Apply off, building and publishing in MOCK_MODE, viewing logs and downloading transcript.
+
+---
+
+VII — File Tree & Delivery (expected)
+
+ ybuilt-workspace/
+├─ package.json
+├─ .env.example
+├─ README.md
+├─ data/
+│ ├─ users.json
+│ ├─ jobs.json
+│ ├─ builds/
+│ └─ jobs/{jobId}/logs.jsonl
+├─ public/
+│ ├─ previews/{jobId}/index.html
+│ └─ uploads/{userId}/{jobId}/...
+├─ client/
+│ ├─ package.json
+│ ├─ src/
+│ │ ├─ main.jsx
+│ │ ├─ App.jsx
+│ │ ├─ pages/Workspace.jsx
+│ │ ├─ components/{Header,CommandPalette,PublishModal,FileTree,Editor,PreviewPanel,ConsolePanel,BuildTraceViewer,AgentTools,VersionPanel}.jsx
+│ │ └─ hooks/useLogStream.js
+│ └─ styles/workspace.css
+├─ server/
+│ ├─ package.json
+│ ├─ server.js
+│ ├─ routes/{workspace.js,jobs.js,billing.js,logs.js,razorpay.js,auth.js}.js
+│ └─ utils/{queue.js,storage.js,logger.js}.js
+├─ worker/
+│ ├─ package.json
+│ └─ worker.js
+└─ test/
+└─ workflow.test.js    
+---
+
+VIII — Priority (what must work in first demo)
+1. Header logo redirects to `/`.  
+2. Command palette (⌘K) opens and triggers at least 10 actions (Files, Preview, Console, Settings, Publishing, Search).  
+3. Workspace loads `/workspace/:jobId` with file list, editor stub, preview iframe and Console panel streaming seeded logs.  
+4. Publish modal works in MOCK_MODE (Razorpay simulated), updates credits and allows publish.  
+5. Agent Tools UI present and creating an agent run emits structured logs.  
+6. `POST /api/jobs/:jobId/build` enqueues worker and worker writes logs into `data/jobs/{jobId}/logs.jsonl`.
+
+---
+
+IX — Mock Mode & Production Notes
+- Default `MOCK_MODE=true` in `.env.example`. Document what to replace to enable real services (Razorpay keys, Redis URL, OpenAI key).
+- Document where to plug real auth providers and how to secure endpoints.
+
+---
+
+X — Deliverables
+- Full repo tree with exact file contents (pasteable).  
+- README with run instructions, MOCK_MODE guide, sample commands.  
+- Test script `test/workflow.test.js` that walks through the flow.  
+- Clear comments in code pointing to where to insert production keys and services.
+
+---
+
+END: Implementation prompt for the generator/developer
+
+Implement everything above and return one complete pasteable repository (file tree + file contents) that satisfies the spec. If anything in the environment prevents building a full feature (e.g., headless chrome unavailable for thumbnail generation), provide a safe fallback and document it in README.
+
+Do not output chain-of-thought. Provide code, assets, and instructions only.
+
