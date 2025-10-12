@@ -39,6 +39,7 @@ interface LogoButtonProps {
   onThemeModalOpen?: () => void;
   isHome?: boolean;
   isLibrary?: boolean;
+  isSettings?: boolean;
 }
 
 export default function LogoButton({
@@ -50,6 +51,7 @@ export default function LogoButton({
   onThemeModalOpen,
   isHome = false,
   isLibrary = false,
+  isSettings = false,
 }: LogoButtonProps) {
   const [, setLocation] = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -113,6 +115,9 @@ export default function LogoButton({
     setDropdownOpen(!dropdownOpen);
   };
 
+  // Use premium workspace styling for both workspace AND settings pages
+  const usePremiumStyle = isWorkspace || isSettings;
+
   return (
     <DropdownMenu 
       open={dropdownOpen} 
@@ -141,7 +146,7 @@ export default function LogoButton({
       <DropdownMenuContent
         align="start"
         side="bottom"
-        className={isWorkspace ? "logo-menu workspace" : "w-56"}
+        className={usePremiumStyle ? "logo-menu workspace" : "w-56"}
         style={{ zIndex: 9999 }}
         data-testid="menu-logo-dropdown"
         aria-label="Ybuilt menu"
@@ -151,7 +156,7 @@ export default function LogoButton({
           data-testid="menuitem-home"
         >
           <span className="menu-label">Home</span>
-          {isWorkspace && <Home className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <Home className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
@@ -159,7 +164,7 @@ export default function LogoButton({
           data-testid="menuitem-recent"
         >
           <span className="menu-label">Recent</span>
-          {isWorkspace && <Clock className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <Clock className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
@@ -168,7 +173,7 @@ export default function LogoButton({
           data-testid="menuitem-current-project"
         >
           <span className="menu-label">{currentProjectName ? truncateProjectName(currentProjectName) : "No Workspace"}</span>
-          {isWorkspace && <FileCode className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <FileCode className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
@@ -176,7 +181,7 @@ export default function LogoButton({
           data-testid="menuitem-library"
         >
           <span className="menu-label">Library</span>
-          {isWorkspace && <Library className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <Library className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
@@ -184,10 +189,10 @@ export default function LogoButton({
           data-testid="menuitem-account"
         >
           <span className="menu-label">Account</span>
-          {isWorkspace && <UserCircle className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <UserCircle className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
-        {!isWorkspace && (
+        {!usePremiumStyle && (
           <DropdownMenuItem
             onClick={() => handleNavigation("/core")}
             data-testid="menuitem-core"
@@ -201,7 +206,7 @@ export default function LogoButton({
           data-testid="menuitem-profile"
         >
           <span className="menu-label">Profile</span>
-          {isWorkspace && <User className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <User className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
@@ -209,10 +214,10 @@ export default function LogoButton({
           data-testid="menuitem-notifications"
         >
           <span className="menu-label">Notifications</span>
-          {isWorkspace && <Bell className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <Bell className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
-        {!isWorkspace && (
+        {!usePremiumStyle && (
           <DropdownMenuItem
             onClick={() => handleNavigation("/notifications?filter=unread")}
             data-testid="menuitem-notifications-unread"
@@ -226,7 +231,7 @@ export default function LogoButton({
           data-testid="menuitem-create-team"
         >
           <span className="menu-label">Create Team</span>
-          {isWorkspace && <Users className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <Users className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuSub>
@@ -237,7 +242,7 @@ export default function LogoButton({
             onPointerEnter={(e) => e.preventDefault()}
           >
             <span className="menu-label">CLUI</span>
-            {isWorkspace && <Terminal className="menu-icon h-5 w-5" aria-hidden="true" />}
+            {usePremiumStyle && <Terminal className="menu-icon h-5 w-5" aria-hidden="true" />}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
             style={{ zIndex: 9999 }}
@@ -269,7 +274,7 @@ export default function LogoButton({
           data-testid="menuitem-theme"
         >
           <span className="menu-label">{isWorkspace ? "Theme for project" : "Toggle Theme"}</span>
-          {isWorkspace && <Palette className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <Palette className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuItem
@@ -277,7 +282,7 @@ export default function LogoButton({
           data-testid="menuitem-settings"
         >
           <span className="menu-label">Settings</span>
-          {isWorkspace && <Settings className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <Settings className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
 
         <DropdownMenuSub>
@@ -286,7 +291,7 @@ export default function LogoButton({
             data-testid="menuitem-help"
           >
             <span className="menu-label">Help</span>
-            {isWorkspace && <HelpCircle className="menu-icon h-5 w-5" aria-hidden="true" />}
+            {usePremiumStyle && <HelpCircle className="menu-icon h-5 w-5" aria-hidden="true" />}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
             className="help-side-popup"
@@ -317,7 +322,7 @@ export default function LogoButton({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        {!isWorkspace && (
+        {!usePremiumStyle && (
           <DropdownMenuItem
             onClick={handleBack}
             data-testid="menuitem-back"
@@ -333,7 +338,7 @@ export default function LogoButton({
           data-testid="menuitem-logout"
         >
           <span className="menu-label">Log out</span>
-          {isWorkspace && <LogOut className="menu-icon h-5 w-5" aria-hidden="true" />}
+          {usePremiumStyle && <LogOut className="menu-icon h-5 w-5" aria-hidden="true" />}
         </DropdownMenuItem>
       </DropdownMenuContent>
       <GetHelpModal open={helpModalOpen} onOpenChange={setHelpModalOpen} />

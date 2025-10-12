@@ -1,0 +1,116 @@
+TASK — Fix CLUI popover, repair Help side-popup stacking, and replace Settings-page logo dropdown with workspace-style menu
+
+SCOPE (do only these)
+1. Remove the CLUI right-side popover (both hover-trigger and side-popover) and replace it with a standard dropdown behavior (no side popup).  
+2. Fix the Help side-popup which is currently cropped — make it always render above toolbars and headers (use a portal/fixed positioning, anchor properly, close competing overlays).  
+3. Replace the old logo dropdown used on the Settings page with the **new workspace-style** premium dropdown (same design and icons as the workspace menu).  
+Do not change other page behaviors, not global header layout, not other popovers except CLUI/Help, and keep accessibility intact.
+
+DETAILED INSTRUCTIONS (copy/paste into code task)
+
+PART 1 — REMOVE CLUI SIDE POPOVER (DELETE hover & side popup; keep click => inline/dropdown)
+1. Locate the CLUI menu/button component and any popover component it uses (likely `CluiButton`, `CluiPopover`, `SidePopover`, or similar).
+2. Remove all hover/pointer listeners that open the side-popover:
+   - Remove `onMouseEnter`, `onMouseOver`, `onPointerEnter`, `onMouseMove` handlers that trigger popover open.
+   - If hover behavior is implemented globally, add a conditional to prevent hover for the CLUI item only:
+     ```js
+     if (item.key === 'clui') {
+       // do NOT attach hover listeners
+     }
+     ```
+3. Remove the side-popover rendering for CLUI entirely. Replace with a simple inline dropdown that appears below the CLUI button on click (or open submenu inline within the parent menu):
+   - Keep `onClick` and keyboard behavior; clicking CLUI should open a standard submenu rendered **below/under** the CLUI item or as a modal-style dropdown — **not** as a right-side floating panel.
+   - Example replacement JSX:
+     ```jsx
+     // previously: <CluiPopover anchor={...} side="right"> ... </CluiPopover>
+     // now:
+     <li className="menu-item clui" role="menuitem" tabIndex={0} onClick={toggleCluiSubmenu}>
+       <span className="menu-label">CLUI</span>
+       <svg className="menu-icon">...</svg>
+       {cluiOpen && (
+         <ul className="submenu clui-inline" role="menu">
+           <li role="menuitem">Option A</li>
+           <li role="menuitem">Option B</li>
+         </ul>
+       )}
+     </li>
+     ```
+4. CSS: style `.clui-inline` as an inline dropdown below the item and ensure it cannot overflow or create a new stacking context:
+   ```css
+   .submenu.clui-inline { position: absolute; left: 0; top: calc(100% + 6px); z-index: 100; }
+(Place relative positioning on the parent so it’s anchored properly.)
+Acceptance for CLUI:
+Hovering near CLUI never opens any side/popover.
+Clicking CLUI opens an inline dropdown/submenu below the item (or a standard dropdown), keyboard accessible.
+No other menu items lose hover behavior.
+PART 2 — FIX HELP SIDE-POPUP CROPPING (portals, fixed, anchor math)
+Render Help side-popup via a portal to document.body (or #modal-root directly under <body>).
+import { createPortal } from 'react-dom';
+if (!helpOpen) return null;
+return createPortal(
+  <div className="help-side-popup" data-help-popup role="menu"> ... </div>,
+  document.body
+);
+Position the popup fixed in the viewport and compute coordinates from the Help menu item bounding rect. Use safe-viewport math and flipping if it would go off-screen:
+const rect = helpAnchor.getBoundingClientRect();
+const left = rect.right + 8; // prefer right side
+const top = rect.top;
+// flip to left side if left + popupWidth > innerWidth
+CSS:
+.help-side-popup {
+  position: fixed !important;
+  z-index: 2147483601 !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(8px) saturate(120%);
+  box-shadow: 0 18px 40px rgba(0,0,0,.6);
+  border-radius: 10px;
+  max-width: 360px;
+  overflow: auto;
+}
+Close competing overlays before opening Help popup:
+function openHelpPopup(anchor) {
+  closeLogoDropdown(); // ensure parent dropdown closed if needed
+  closeOtherPopovers();
+  setHelpAnchor(anchor);
+  setHelpOpen(true);
+}
+(Or keep logo dropdown open but ensure only one overlay is active; prefer closing parent dropdown to avoid fights.)
+Defensive stack-context detection (QA only): include helper to log stacking-context ancestors around header if problem persists (dev-only).
+Accessibility:
+Use role="menu" and role="menuitem" for entries.
+Trap focus if popup is modal-like; otherwise ensure arrow-key navigation works.
+Acceptance for Help popup:
+Help popup fully visible (not cropped) when opened in workspace menu.
+Popup anchors correctly to Help item, flips if near edge, keyboard navigable.
+No parts hidden behind headers/toolbar.
+PART 3 — USE NEW WORKSPACE STYLE LOGO DROPDOWN IN SETTINGS PAGE
+Find the component that renders the logo dropdown in the Settings page context (it currently uses the old/ugly menu).
+Replace the Settings-page logo dropdown rendering with the exact same component / markup / CSS used by the Workspace logo dropdown (the new premium menu), so the menu looks and behaves the same in Settings as in Workspace.
+If the workspace menu is WorkspaceLogoMenu.jsx, import and reuse it with context="settings":
+{isSettingsPage ? <WorkspaceLogoMenu context="settings" /> : <LogoMenu /> }
+Make sure the Settings variant has the right project info disabled/non-dynamic as needed.
+Ensure the removed CLUI side-popover behavior and Help popup fixes apply in the Settings menu as well.
+Acceptance for Settings:
+Click the Ybuilt logo on Settings page opens the new premium dropdown (icons, spacing, glossy style identical to Workspace).
+Menu items route correctly (Account → /settings/account, Profile → /settings/profile, etc.).
+CLUI no longer spawns a side popover; Help popup is not cropped in Settings either.
+GENERAL SAFETY RULES (must follow)
+Do not change global header layout or other dropdowns except CLUI and Help.
+Add feature flags / conditional guards if needed: if (context === 'workspace' || context === 'settings') applyNewMenuStyle().
+Keep all keyboard and ARIA semantics intact.
+Write minimal changes; prefer replacing popover rendering with portal + inline dropdowns rather than large structural refactors.
+QA / ACCEPTANCE CHECKLIST (run these before merge)
+CLUI: hover near CLUI does NOT open a side popover. Click CLUI opens inline submenu below item and accessible by keyboard.
+Help: open Help from logo menu — popup fully visible above header/toolbars, not cropped; anchored correctly; keyboard accessible.
+Settings page: clicking Ybuilt logo opens the new premium dropdown identical to Workspace menu (icons, spacing, glossy effect).
+No console errors and no regressions in other pages (Home, Library, Workspace).
+Cross-browser quick check: Chrome + Firefox desktop; mobile basic sanity check.
+If popup still clipped, run stacking-context debug helper and report the first ancestor with transform/filter/opacity.
+DELIVERABLE
+One PR that:
+Removes CLUI hover/side-popover and implements inline submenu on click.
+Changes Help side-popup to portal-based fixed popup with anchor math and very-high z-index.
+Swaps Settings-page logo menu to the new Workspace menu component & ensures consistency.
+Adds a short QA note confirming Checklist passes.
+END — paste this verbatim into Replit AI or hand it to the frontend dev. This fixes the cropped popups, removes the annoying CLUI side pane, and gives Settings the same polished menu as Workspace. Do not alter anything else
