@@ -41,6 +41,9 @@ export default function ResizableSplitter({
     return initial;
   });
   
+  // Track current width during drag for immediate compact mode updates
+  const [currentLeftPercent, setCurrentLeftPercent] = useState(leftPercent);
+  
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const splitterRef = useRef<HTMLDivElement>(null);
@@ -85,6 +88,9 @@ export default function ResizableSplitter({
 
         // Update CSS variable (cheap, no React re-render)
         containerRef.current.style.setProperty('--left-width-pct', `${leftPct}%`);
+        
+        // Update current percent for immediate compact mode detection
+        setCurrentLeftPercent(leftPct);
       });
     },
     [isDragging, minLeftWidth, minRightWidth]
@@ -176,8 +182,15 @@ export default function ResizableSplitter({
 
   const transitionStyle = prefersReducedMotion || isDragging ? {} : { transition: "width 0.1s ease" };
   
-  // Determine if we're in compact mode
-  const isCompact = leftPercent <= compactThreshold;
+  // Determine if we're in compact mode - use currentLeftPercent during drag for immediate updates
+  const isCompact = currentLeftPercent <= compactThreshold;
+  
+  // Sync currentLeftPercent with leftPercent when not dragging
+  useEffect(() => {
+    if (!isDragging) {
+      setCurrentLeftPercent(leftPercent);
+    }
+  }, [leftPercent, isDragging]);
 
   return (
     <div 
