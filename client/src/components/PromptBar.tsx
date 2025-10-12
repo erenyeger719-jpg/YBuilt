@@ -150,9 +150,9 @@ export default function PromptBar({
           )}
 
           {/* Main Input Row - Heights: 56px mobile, 64px tablet, 72px desktop */}
-          <div className="px-3 h-14 sm:h-16 lg:h-18 flex items-center gap-2">
+          <div className="px-3 h-14 sm:h-16 lg:h-18 flex items-center gap-2 overflow-visible">
         {/* Upload Icon Button */}
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 flex-grow-0" style={{ flexBasis: '44px' }}>
           <input
             ref={fileInputRef}
             type="file"
@@ -172,8 +172,8 @@ export default function PromptBar({
           </Button>
         </div>
 
-        {/* Textarea - Flex-1 */}
-        <div className="flex-1 min-w-0">
+        {/* Textarea - Flex-1 with min-width to prevent squeeze */}
+        <div className="flex-1 min-w-[200px]">
           <textarea
             ref={textareaRef}
             value={promptText}
@@ -197,18 +197,18 @@ export default function PromptBar({
 
         {/* Agent Button (passed as prop) */}
         {agentButton && (
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex-grow-0" style={{ flexBasis: '54px' }}>
             {agentButton}
           </div>
         )}
 
         {/* Build Button */}
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 flex-grow-0" style={{ flexBasis: 'auto', minWidth: '80px' }}>
           <Button
             onClick={handleSubmit}
             disabled={isLoading || !promptText.trim()}
             size="default"
-            className="h-10 px-5"
+            className="h-10 px-5 whitespace-nowrap"
             data-testid="button-build-prompt"
           >
             {isLoading ? "Building..." : "Build"}

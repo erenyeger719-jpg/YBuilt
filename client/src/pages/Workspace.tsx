@@ -408,9 +408,9 @@ export default function Workspace() {
 
   // Right Pane Content
   const rightPane = (
-    <div className="h-full flex flex-col">
-      <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "preview" | "console")} className="flex-1 flex flex-col">
-        <div className="flex items-center justify-between border-b border-border px-4 flex-shrink-0">
+    <div className="h-full flex flex-col overflow-hidden">
+      <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "preview" | "console")} className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-4 flex-shrink-0 h-14 bg-background sticky top-0 z-50 overflow-visible">
           <TabsList className="h-12 bg-transparent">
             <TabsTrigger value="preview" className="gap-2" data-testid="tab-preview">
               <Monitor className="h-4 w-4" />
@@ -422,7 +422,7 @@ export default function Workspace() {
           </TabsList>
 
           {rightTab === "preview" && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <div className="flex items-center gap-1">
                 <Button
                   variant={deviceMode === "desktop" ? "secondary" : "ghost"}
@@ -430,6 +430,7 @@ export default function Workspace() {
                   className="h-8 w-8"
                   onClick={() => setDeviceMode("desktop")}
                   data-testid="button-device-desktop"
+                  aria-label="Desktop view"
                 >
                   <Monitor className="h-4 w-4" />
                 </Button>
@@ -439,6 +440,7 @@ export default function Workspace() {
                   className="h-8 w-8"
                   onClick={() => setDeviceMode("tablet")}
                   data-testid="button-device-tablet"
+                  aria-label="Tablet view"
                 >
                   <Tablet className="h-4 w-4" />
                 </Button>
@@ -448,6 +450,7 @@ export default function Workspace() {
                   className="h-8 w-8"
                   onClick={() => setDeviceMode("mobile")}
                   data-testid="button-device-mobile"
+                  aria-label="Mobile view"
                 >
                   <Smartphone className="h-4 w-4" />
                 </Button>
@@ -464,6 +467,7 @@ export default function Workspace() {
                   if (iframe) iframe.src = iframe.src;
                 }}
                 data-testid="button-refresh-preview"
+                aria-label="Refresh preview"
               >
                 <RotateCw className="h-4 w-4" />
               </Button>
@@ -474,6 +478,7 @@ export default function Workspace() {
                 className="h-8 w-8"
                 onClick={() => window.open(`/previews/${jobId}/index.html`, "_blank")}
                 data-testid="button-open-preview-new-tab"
+                aria-label="Open in new tab"
               >
                 <ExternalLink className="h-4 w-4" />
               </Button>
@@ -484,6 +489,7 @@ export default function Workspace() {
                 className="h-8 w-8"
                 onClick={() => setShowPageToolSheet(true)}
                 data-testid="button-page-tool"
+                aria-label="Edit page HTML"
               >
                 <FileCode className="h-4 w-4" />
               </Button>

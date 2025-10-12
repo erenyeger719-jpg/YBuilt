@@ -89,3 +89,13 @@
 {"timestamp":"2025-10-12T06:20:57.558Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
 {"timestamp":"2025-10-12T06:20:57.559Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
 {"timestamp":"2025-10-12T06:20:57.561Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T06:51:53.149Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"test newline prompt\nnewline-line"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-12T06:51:53.156Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-12T06:51:55.563Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T06:51:55.566Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T06:51:55.572Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T07:02:49.218Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"Test prompt: verify prompt submission"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-12T07:02:49.221Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-12T07:02:51.423Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T07:02:51.423Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T07:02:51.424Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}

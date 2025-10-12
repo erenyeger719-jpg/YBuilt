@@ -28,7 +28,15 @@ export default function ResizableSplitter({
 }: ResizableSplitterProps) {
   const [leftPercent, setLeftPercent] = useState(() => {
     const saved = localStorage.getItem(storageKey);
-    return saved ? parseFloat(saved) : defaultLeftPercent;
+    let initial = saved ? parseFloat(saved) : defaultLeftPercent;
+    
+    // Clamp initial value to 20%-50% range
+    initial = Math.max(20, Math.min(50, initial));
+    
+    // Save clamped value back to localStorage
+    localStorage.setItem(storageKey, initial.toString());
+    
+    return initial;
   });
   
   const [isDragging, setIsDragging] = useState(false);
@@ -51,21 +59,25 @@ export default function ResizableSplitter({
     (e: MouseEvent) => {
       if (!isDragging || !containerRef.current) return;
 
-      const container = containerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      
-      // Calculate position relative to container
-      const mouseX = e.clientX - containerRect.left;
-      let newLeftPercent = (mouseX / containerWidth) * 100;
+      requestAnimationFrame(() => {
+        if (!containerRef.current) return;
+        
+        const container = containerRef.current;
+        const containerRect = container.getBoundingClientRect();
+        const containerWidth = containerRect.width;
+        
+        // Calculate position relative to container
+        const mouseX = e.clientX - containerRect.left;
+        let newLeftPercent = (mouseX / containerWidth) * 100;
 
-      // Apply min width constraints
-      const minLeftPercent = (minLeftWidth / containerWidth) * 100;
-      const minRightPercent = 100 - (minRightWidth / containerWidth) * 100;
+        // Apply constraints: 20% min, 50% max for left pane
+        const minLeftPercent = Math.max(20, (minLeftWidth / containerWidth) * 100);
+        const maxLeftPercent = Math.min(50, 100 - (minRightWidth / containerWidth) * 100);
 
-      newLeftPercent = Math.max(minLeftPercent, Math.min(minRightPercent, newLeftPercent));
+        newLeftPercent = Math.max(minLeftPercent, Math.min(maxLeftPercent, newLeftPercent));
 
-      setLeftPercent(newLeftPercent);
+        setLeftPercent(newLeftPercent);
+      });
     },
     [isDragging, minLeftWidth, minRightWidth]
   );
@@ -82,21 +94,25 @@ export default function ResizableSplitter({
     (e: TouchEvent) => {
       if (!isDragging || !containerRef.current) return;
 
-      const container = containerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      
-      const touch = e.touches[0];
-      const touchX = touch.clientX - containerRect.left;
-      let newLeftPercent = (touchX / containerWidth) * 100;
+      requestAnimationFrame(() => {
+        if (!containerRef.current) return;
+        
+        const container = containerRef.current;
+        const containerRect = container.getBoundingClientRect();
+        const containerWidth = containerRect.width;
+        
+        const touch = e.touches[0];
+        const touchX = touch.clientX - containerRect.left;
+        let newLeftPercent = (touchX / containerWidth) * 100;
 
-      // Apply min width constraints
-      const minLeftPercent = (minLeftWidth / containerWidth) * 100;
-      const minRightPercent = 100 - (minRightWidth / containerWidth) * 100;
+        // Apply constraints: 20% min, 50% max for left pane
+        const minLeftPercent = Math.max(20, (minLeftWidth / containerWidth) * 100);
+        const maxLeftPercent = Math.min(50, 100 - (minRightWidth / containerWidth) * 100);
 
-      newLeftPercent = Math.max(minLeftPercent, Math.min(minRightPercent, newLeftPercent));
+        newLeftPercent = Math.max(minLeftPercent, Math.min(maxLeftPercent, newLeftPercent));
 
-      setLeftPercent(newLeftPercent);
+        setLeftPercent(newLeftPercent);
+      });
     },
     [isDragging, minLeftWidth, minRightWidth]
   );
@@ -123,11 +139,11 @@ export default function ResizableSplitter({
         newLeftPercent = leftPercent + step;
       }
 
-      // Apply min width constraints
-      const minLeftPercent = (minLeftWidth / containerWidth) * 100;
-      const minRightPercent = 100 - (minRightWidth / containerWidth) * 100;
+      // Apply constraints: 20% min, 50% max for left pane
+      const minLeftPercent = Math.max(20, (minLeftWidth / containerWidth) * 100);
+      const maxLeftPercent = Math.min(50, 100 - (minRightWidth / containerWidth) * 100);
 
-      newLeftPercent = Math.max(minLeftPercent, Math.min(minRightPercent, newLeftPercent));
+      newLeftPercent = Math.max(minLeftPercent, Math.min(maxLeftPercent, newLeftPercent));
 
       if (newLeftPercent !== leftPercent) {
         setLeftPercent(newLeftPercent);

@@ -1,0 +1,93 @@
+URGENT UI FIX — top toolbar cropped, prompt input squeezed, splitter bugs, restore toolbar icons, enforce 50/50 max split
+
+CONTEXT / PROBLEM
+After the last workspace changes the layout has multiple regressions:
+1. The top toolbar (preview/console tabs, import/save/new-folder icons) is clipped/cropped and not visible.
+2. The prompt input is vertically squeezed between the Upload (left) and Agent/Build (right) buttons — it's too small to type comfortably.
+3. Prompt chips / uploaded-file pills are expanding vertically and pushing the prompt bar downward instead of scrolling horizontally; prompt bar is not fixed.
+4. The vertical splitter resizing is buggy: after shrinking the left pane it often cannot be expanded back; behavior is jerky. You requested a maximum split limit of **50/50** (left ≤ 50% of viewport).
+5. `index.html` tool popup and preview/console toolbar icons appear misaligned or hidden.
+6. Duplicate "+" removed previously but top tool icons disappeared — bring them back and ensure they are not clipped.
+
+GOAL (single line)
+Fix the workspace layout so the header/top toolbar is fully visible, the prompt input is centered and usable, pills scroll horizontally without growing height, the splitter resizes smoothly and clamps left width to ≤50% (and right width ≥50%), and all toolbar icons are restored and clickable.
+
+WHAT TO DO — exact steps (apply in order)
+
+A — Fix header/top toolbar clipping
+1. Make the top header height explicit and ensure workspace split uses remaining viewport:
+   - CSS:
+   ```css
+   :root { --header-h: 64px; }
+   .workspace-shell { display:flex; flex-direction:column; min-height:100vh; }
+   .workspace-split { display:flex; height: calc(100vh - var(--header-h)); overflow:hidden; }
+   .top-toolbar { height: var(--header-h); position:relative; z-index: 60; }
+   /* ensure right column top controls are visible */
+   .column-right .toolbar { position: sticky; top: 0; z-index: 50; background: transparent; }
+ 	2	Remove any overflow: hidden or clip-path from elements above the toolbar that could clip children. Check parent elements of .column-right and .workspace-split.
+B — Make left/right full height and remove bottom-black gap
+1. Ensure left and right columns stretch:
+ .column-left { display:flex; flex-direction:column; min-width:240px; max-width:50vw; width: 33%; overflow:hidden; }
+.column-right { flex:1 1 auto; display:flex; flex-direction:column; overflow:hidden; }
+.ai-messages { flex:1 1 auto; overflow:auto; }
+.preview-area { flex:1 1 auto; overflow:auto; }
+  	3	Confirm height: calc(100vh - var(--header-h)) is used so nothing leaves a bottom gap.
+C — Prompt bar fixed to bottom, pills scroll horizontally, do NOT push layout
+1. Structure: left column -> .ai-messages (scrollable) + .prompt-bar (fixed).
+2. CSS:
+ .prompt-bar { flex:0 0 auto; height:72px; display:flex; align-items:center; gap:10px; padding:10px; box-sizing:border-box; }
+.prompt-pills { display:flex; gap:8px; overflow-x:auto; max-height:46px; align-items:center; white-space:nowrap; }
+.prompt-input { flex:1 1 auto; min-height:44px; max-height:160px; overflow-y:auto; resize:none; }
+  	3	JS: ensure when new pills are added, you append them into .prompt-pills and DO NOT change .prompt-barheight.
+D — Fix textarea squeeze and button spacing (layout)
+1. Make prompt input a real <textarea> controlled by React state. Layout example:
+<div className="prompt-bar">
+  <button className="upload-btn">📤</button>
+  <div className="prompt-pills">/* pills go here */</div>
+  <textarea className="prompt-input" rows={2} ... />
+  <button className="agent-btn" aria-label="Agent">🤖</button>
+  <button className="build-btn" aria-label="Build">Build</button>
+</div>
+  Use CSS gap and flex so the textarea expands to fill available width; set min-width on agent/build buttons so they don't compress textarea to unusable size:  .agent-btn, .build-btn { flex: 0 0 54px; height:44px; min-width:54px; }
+.upload-btn { flex:0 0 44px; }
+  	3	If viewport narrow, collapse Build label to icon only — implement responsive CSS.
+E — Restore toolbar icons & top controls (uncrop)
+1. Ensure the toolbar area is not overlapped by any absolutely positioned element — check z-index.
+2. Make toolbar a flex container with align-items:center and white-space:nowrap. If icons overflow, collapse into overflow menu rather than clipping:
+  .column-right .toolbar { display:flex; gap:8px; align-items:center; padding:8px; overflow:visible; }
+.toolbar .overflow { display:none; } /* show only when needed */
+  	3	If a parent had overflow:hidden, set it to overflow: visible for the toolbar area only.
+F — Fix splitter behavior and clamp to 50/50
+1. Implement pointer handlers that clamp percentage between 20 and 50 for left, i.e leftWidth% ∈ [20,50].
+2. Example JS skeleton (insert in splitter component):
+ const onPointerMove = (e) => {
+  const total = container.offsetWidth;
+  let leftPx = e.clientX - container.getBoundingClientRect().left;
+  let leftPct = (leftPx / total) * 100;
+  leftPct = Math.max(20, Math.min(50, leftPct)); // clamp 20%-50%
+  leftColumn.style.width = `${leftPct}%`;
+  rightColumn.style.width = `${100-leftPct}%`;
+};
+// ensure onPointerUp removes listeners and sets localStorage
+ 	3	Provide keyboard controls for accessibility: when focus on splitter, arrow keys adjust leftPct by 2% steps within clamp.
+G — Ensure resizing is smooth and reversible
+1. Remove debounce that prevents immediate resizing; use requestAnimationFrame to set style while dragging.
+2. Persist to localStorage.workspaceSplit = { leftPct } and reapply on mount.
+3. On resize end ensure layout re-renders (set state).
+H — Acceptance tests (what I will check)
+1. Top toolbar fully visible (preview/console tab labels + icon actions exist and clickable).
+2. Left column and right column fill the viewport height (no black gap).
+3. Prompt input is comfortable: 72px bar, 44px textarea, Enter sends, Shift+Enter newline.
+4. Uploaded file pill appears in .prompt-pills and does not push the bar; pills scroll horizontally.
+5. Build and Agent buttons inside bar, not overlapping textarea; responsive label → icon behavior at narrow widths.
+6. Splitting works both ways: you can shrink and then expand; left width never exceeds 50% or goes under 20% (clamped).
+7. Splitting is smooth; dragging uses requestAnimationFrame and returns to previous values if aborting drag.
+8. Toolbar icons restored and not cropped; if overflow occurs they go into an overflow menu instead of being clipped.
+DELIVERABLE (what to paste back to me)
+* A short dev reply listing which files were changed (PromptBar.jsx / workspace.css / Splitter.js / Toolbar.css), plus the new clamp logic for the splitter.
+* One-line regression verification: All 8 acceptance tests above pass.
+DEBUGGING TIPS (if any problems persist)
+* In browser devtools use document.elementFromPoint(x,y) at the toolbar area to see what node is on top.
+* Check computed height and overflow for all ancestors of the toolbar; a single overflow:hidden on an ancestor is a frequent cause of clipping.
+* If resizing still stutters, temporarily log pointer coordinates to ensure events are firing properly.
+End of instruction.
