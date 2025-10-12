@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "name": "Custom Theme",
+    "createdAt": "2025-10-12T13:32:41.180Z",
+    "author": "demo"
+  },
+  "fonts": {
+    "sans": "Inter",
+    "serif": "Georgia",
+    "mono": "Menlo"
+  },
+  "borderRadius": "0.5rem",
+  "colors": {
+    "background": "#000000",
+    "text": "#000000",
+    "mutedBackground": "#f5f5f5",
+    "mutedText": "#666666",
+    "primaryBackground": "#141414",
+    "primaryText": "#000000",
+    "secondaryBackground": "#e5e5e5",
+    "secondaryText": "#0a0a0a",
+    "accentBackground": "#fafafa",
+    "accentText": "#0a0a0a",
+    "destructiveBackground": "#dc2626",
+    "destructiveText": "#fafafa",
+    "input": "#b3b3b3",
+    "border": "#d9d9d9",
+    "focusBorder": "#3d3d3d",
+    "cardBackground": "#000000",
+    "cardText": "#0d0d0d",
+    "popoverBackground": "#ebebeb",
+    "popoverText": "#232323",
+    "chart1": "#383838",
+    "chart2": "#474747",
+    "chart3": "#575757",
+    "chart4": "#666666",
+    "chart5": "#757575"
+  },
+  "customColors": []
+}

@@ -177,18 +177,58 @@ export default function ThemeModal({ open, onOpenChange, projectId }: ThemeModal
   const applyTheme = (themeData: ProjectTheme) => {
     const root = document.documentElement;
     
-    // Apply fonts
-    root.style.setProperty("--theme-font-sans", themeData.fonts.sans);
-    root.style.setProperty("--theme-font-serif", themeData.fonts.serif);
-    root.style.setProperty("--theme-font-mono", themeData.fonts.mono);
+    // Helper to convert hex to HSL
+    const hexToHSL = (hex: string): string => {
+      // Remove # if present
+      hex = hex.replace(/^#/, '');
+      
+      // Convert hex to RGB
+      const r = parseInt(hex.substr(0, 2), 16) / 255;
+      const g = parseInt(hex.substr(2, 2), 16) / 255;
+      const b = parseInt(hex.substr(4, 2), 16) / 255;
+      
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      let h = 0, s = 0, l = (max + min) / 2;
+      
+      if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        
+        switch(max) {
+          case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+          case g: h = ((b - r) / d + 2) / 6; break;
+          case b: h = ((r - g) / d + 4) / 6; break;
+        }
+      }
+      
+      h = Math.round(h * 360);
+      s = Math.round(s * 100);
+      l = Math.round(l * 100);
+      
+      return `${h} ${s}% ${l}%`;
+    };
+    
+    // Apply colors (convert to HSL and map to existing variables)
+    root.style.setProperty("--background", hexToHSL(themeData.colors.background));
+    root.style.setProperty("--foreground", hexToHSL(themeData.colors.text));
+    root.style.setProperty("--primary", hexToHSL(themeData.colors.primaryBackground));
+    root.style.setProperty("--primary-foreground", hexToHSL(themeData.colors.primaryText));
+    root.style.setProperty("--accent", hexToHSL(themeData.colors.accentBackground));
+    root.style.setProperty("--accent-foreground", hexToHSL(themeData.colors.accentText));
+    root.style.setProperty("--destructive", hexToHSL(themeData.colors.destructiveBackground));
+    root.style.setProperty("--destructive-foreground", hexToHSL(themeData.colors.destructiveText));
+    root.style.setProperty("--border", hexToHSL(themeData.colors.border));
+    root.style.setProperty("--card", hexToHSL(themeData.colors.cardBackground));
+    root.style.setProperty("--card-foreground", hexToHSL(themeData.colors.cardText));
+    
+    // Apply fonts (these don't need conversion)
+    root.style.setProperty("--font-sans", themeData.fonts.sans);
+    root.style.setProperty("--font-serif", themeData.fonts.serif);
+    root.style.setProperty("--font-mono", themeData.fonts.mono);
     
     // Apply border radius
-    root.style.setProperty("--theme-radius", themeData.borderRadius);
-    
-    // Apply colors
-    Object.entries(themeData.colors).forEach(([key, value]) => {
-      root.style.setProperty(`--theme-${key}`, value);
-    });
+    root.style.setProperty("--radius", themeData.borderRadius);
   };
 
   // Reset theme to default

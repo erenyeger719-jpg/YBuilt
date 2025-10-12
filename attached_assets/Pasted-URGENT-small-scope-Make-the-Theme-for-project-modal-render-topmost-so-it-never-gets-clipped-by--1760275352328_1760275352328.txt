@@ -1,0 +1,80 @@
+URGENT (small scope): Make the “Theme for project” modal render topmost so it never gets clipped by toolbars — DO NOT move or re-layout any workspace elements
+
+Problem (one line)
+The Theme modal (opened via Logo → Theme for project) is being layered under toolbars/taskbars in the workspace — parts of the modal are visually hidden. Fix only the stacking/layering so the modal displays above everything else. Do **not** change positions, sizes, placement, or layout of any workspace controls.
+
+Exactly what to do (follow these steps; do only these)
+
+1) Render modal at top of DOM (use a React portal)
+- If not already using a portal, render `ThemeModal` into `document.body` (or a dedicated `#modal-root` that is a direct child of `<body>`). This prevents ancestor overflow/clipping.
+- Example (React):
+```jsx
+// ThemeModal.jsx
+import { createPortal } from 'react-dom';
+export default function ThemeModal({ open, children }) {
+  if (!open) return null;
+  return createPortal(
+    <div className="theme-modal-backdrop" role="dialog" aria-modal="true">
+      <div className="theme-modal">{children}</div>
+    </div>,
+    document.body
+  );
+}
+DO NOT change the visual DOM structure of the modal content — only where it is mounted.
+Force safe, very-high z-index for modal and backdrop only
+Add/override the following CSS (put in theme.css or global stylesheet). These values must be high enough to be above any toolbar/panes but not interfere with system modals:
+/* ensure the modal/backdrop sit above workspace toolbars */
+.theme-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: rgba(0,0,0,0.35); /* keep existing backdrop style */
+  z-index: 2147483000; /* very high but avoid exact system reserved max */
+}
+
+/* the modal panel */
+.theme-modal {
+  position: relative;
+  z-index: 2147483001; /* ensure panel sits above backdrop and everything else */
+  max-width: 1100px;
+  width: calc(100% - 48px);
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  background: var(--theme-card-bg, #fff);
+}
+Notes:
+Use a dedicated, very-high z-index so the modal cannot be covered by workspace toolbars or sticky headers.
+Keep z-index only on the modal/backdrop; do not alter z-index values of any other workspace elements.
+Ensure focus and keyboard accessibility remain correct
+When modal is opened from the logo menu, ensure:
+Focus moves into the modal (first focusable element).
+Focus is trapped inside the modal.
+Escape closes modal and returns focus to the Theme menu item in the logo dropdown.
+Do not change tab order of other workspace elements.
+If the logo menu is open when Theme modal opens, ensure the logo menu closes first
+Prevent two overlays from fighting each other: when Theme modal opens, programmatically close the logo dropdown so only the Theme modal is visible (but do not change the logo dropdown placement or content).
+Defensive override (only if clipping persists)
+If some aggressive CSS elsewhere is !important and still clips, add a small defensive rule for the modal container:
+.theme-modal-backdrop, .theme-modal {
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+Acceptance tests (must pass)
+A. Open workspace → Logo → Theme for project → Theme modal opens and is fully visible (no parts behind toolbars).
+B. The modal appears above all workspace toolbars, including the Buy Creator Plan / Library bar and preview/console toolbar.
+C. Opening the Theme modal does not move or change the placement of any other UI element; only stacking order changed.
+D. Keyboard: Tab cycles within modal; Esc closes modal and returns focus to Theme menu item.
+E. Closing modal returns to previous UI state; no toolbars remain hidden or altered.
+F. On mobile the modal still centers and is scrollable; no clipping occurs.
+Deliverable
+Small patch:
+Use React portal to mount ThemeModal to document.body (or #modal-root).
+Add the CSS z-index/backdrop rules above.
+Ensure logo dropdown closes when modal opens.
+Short QA note confirming Acceptance tests A–F pass and listing the files changed.
+IMPORTANT: DO NOT change placements, sizes, or layout rules of header, toolbars, panes, or other workspace elements. This change is strictly about where the Theme modal is mounted and its stacking order.
+End of instruction.

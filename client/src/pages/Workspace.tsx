@@ -112,39 +112,80 @@ export default function Workspace() {
     if (theme) {
       const root = document.documentElement;
       
-      // Apply fonts
-      root.style.setProperty("--theme-font-sans", theme.fonts.sans);
-      root.style.setProperty("--theme-font-serif", theme.fonts.serif);
-      root.style.setProperty("--theme-font-mono", theme.fonts.mono);
+      // Helper to convert hex to HSL
+      const hexToHSL = (hex: string): string => {
+        // Remove # if present
+        hex = hex.replace(/^#/, '');
+        
+        // Convert hex to RGB
+        const r = parseInt(hex.substr(0, 2), 16) / 255;
+        const g = parseInt(hex.substr(2, 2), 16) / 255;
+        const b = parseInt(hex.substr(4, 2), 16) / 255;
+        
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        let h = 0, s = 0, l = (max + min) / 2;
+        
+        if (max !== min) {
+          const d = max - min;
+          s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+          
+          switch(max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+            case g: h = ((b - r) / d + 2) / 6; break;
+            case b: h = ((r - g) / d + 4) / 6; break;
+          }
+        }
+        
+        h = Math.round(h * 360);
+        s = Math.round(s * 100);
+        l = Math.round(l * 100);
+        
+        return `${h} ${s}% ${l}%`;
+      };
+      
+      // Apply colors (convert to HSL and map to existing variables)
+      root.style.setProperty("--background", hexToHSL(theme.colors.background));
+      root.style.setProperty("--foreground", hexToHSL(theme.colors.text));
+      root.style.setProperty("--primary", hexToHSL(theme.colors.primaryBackground));
+      root.style.setProperty("--primary-foreground", hexToHSL(theme.colors.primaryText));
+      root.style.setProperty("--accent", hexToHSL(theme.colors.accentBackground));
+      root.style.setProperty("--accent-foreground", hexToHSL(theme.colors.accentText));
+      root.style.setProperty("--destructive", hexToHSL(theme.colors.destructiveBackground));
+      root.style.setProperty("--destructive-foreground", hexToHSL(theme.colors.destructiveText));
+      root.style.setProperty("--border", hexToHSL(theme.colors.border));
+      root.style.setProperty("--card", hexToHSL(theme.colors.cardBackground));
+      root.style.setProperty("--card-foreground", hexToHSL(theme.colors.cardText));
+      
+      // Apply fonts (these don't need conversion)
+      root.style.setProperty("--font-sans", theme.fonts.sans);
+      root.style.setProperty("--font-serif", theme.fonts.serif);
+      root.style.setProperty("--font-mono", theme.fonts.mono);
       
       // Apply border radius
-      root.style.setProperty("--theme-radius", theme.borderRadius);
-      
-      // Apply colors
-      Object.entries(theme.colors).forEach(([key, value]) => {
-        root.style.setProperty(`--theme-${key}`, value);
-      });
+      root.style.setProperty("--radius", theme.borderRadius);
     }
 
-    // Cleanup: reset to defaults on unmount
+    // Cleanup: reset to light mode defaults on unmount
     return () => {
       const root = document.documentElement;
-      root.style.removeProperty("--theme-font-sans");
-      root.style.removeProperty("--theme-font-serif");
-      root.style.removeProperty("--theme-font-mono");
-      root.style.removeProperty("--theme-radius");
       
-      // Remove all theme color variables
-      const themeColorKeys = [
-        "background", "text", "mutedBackground", "mutedText",
-        "primaryBackground", "primaryText", "secondaryBackground", "secondaryText",
-        "accentBackground", "accentText", "destructiveBackground", "destructiveText",
-        "input", "border", "focusBorder", "cardBackground", "cardText",
-        "popoverBackground", "popoverText", "chart1", "chart2", "chart3", "chart4", "chart5"
-      ];
-      themeColorKeys.forEach(key => {
-        root.style.removeProperty(`--theme-${key}`);
-      });
+      // Reset to light mode defaults from index.css
+      root.style.setProperty("--background", "0 0% 100%");
+      root.style.setProperty("--foreground", "0 0% 0%");
+      root.style.setProperty("--primary", "0 0% 8%");
+      root.style.setProperty("--primary-foreground", "0 0% 98%");
+      root.style.setProperty("--accent", "0 0% 95%");
+      root.style.setProperty("--accent-foreground", "0 0% 10%");
+      root.style.setProperty("--destructive", "0 72% 32%");
+      root.style.setProperty("--destructive-foreground", "0 0% 98%");
+      root.style.setProperty("--border", "0 0% 85%");
+      root.style.setProperty("--card", "0 0% 98%");
+      root.style.setProperty("--card-foreground", "0 0% 5%");
+      root.style.setProperty("--font-sans", "Open Sans, sans-serif");
+      root.style.setProperty("--font-serif", "Georgia, serif");
+      root.style.setProperty("--font-mono", "Menlo, monospace");
+      root.style.setProperty("--radius", ".5rem");
     };
   }, [theme]);
 
