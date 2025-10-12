@@ -1,0 +1,92 @@
+URGENT: Restore & Pin Left-Pane Icons (New Chat +, Save File, New Folder) — place them visibly in left pane header and ensure full functionality
+
+Problem (one line)
+Three left-pane icons (New Chat/+, Save file, New Folder) are currently cropped/unreachable. They used to be in the top of the left workspace pane. Restore them there, make them sticky/visible, and ensure their behaviors work: New Chat opens the quick-presets modal, Save triggers a download/save on device, New Folder creates a folder in the workspace.
+
+Exact specification — do all items below
+
+1) DOM placement (must do exactly)
+- Render the three controls inside the left column header as the first row (sticky header). Example JSX placement:
+
+```jsx
+<div className="column-left">
+  <div className="left-header toolbar" role="toolbar" aria-label="Workspace left controls">
+    <button id="new-chat-btn" className="icon new-chat" aria-label="New chat">+</button>
+    <button id="save-file-btn" className="icon save-file" aria-label="Save file">💾</button>
+    <button id="new-folder-btn" className="icon new-folder" aria-label="New folder">📁</button>
+    <!-- keep other header elements -->
+  </div>
+
+  <div className="ai-messages"> ... </div>
+  <div className="prompt-area"> ... </div>
+</div>
+CSS: make header visible and non-clipped
+Add/ensure these CSS rules (paste into toolbar/header CSS):
+.left-header {
+  position: sticky;
+  top: var(--header-h, 64px); /* below main header */
+  z-index: 60;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px;
+  background: inherit;
+  overflow: visible; /* do not clip children */
+}
+
+/* make icons tappable & accessible */
+.left-header .icon {
+  width:44px; height:44px; min-width:44px;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:8px; cursor:pointer;
+  background: rgba(255,255,255,0.02);
+}
+Overflow / responsive behavior (don’t let them be cropped)
+Implement a simple overflow guard: if the .left-header clientWidth < scrollWidth, collapse labels to icon-only or move lesser-priority items into an overflow menu. Use ResizeObserver for this. Example logic:
+const ro = new ResizeObserver(() => {
+  const header = document.querySelector('.left-header');
+  if (header.scrollWidth > header.clientWidth) header.classList.add('compact');
+  else header.classList.remove('compact');
+});
+ro.observe(document.querySelector('.left-header'));
+CSS for compact mode:
+.left-header.compact .label { display:none; } /* icon-only */
+Behaviors to (re)implement exactly
+#new-chat-btn (New Chat / +):
+On click: open Quick Actions modal with these six options shown as tappable buttons:
+Check my app for bugs
+Add payment processing
+Connect with an AI Assistant
+Add SMS message sending
+Add a database
+Add authenticated user login
+Clicking a preset populates the prompt area with the corresponding template and does not auto-send; user may edit and press Build.
+#save-file-btn (Save file):
+When clicked with a file selected/open in workspace, invoke client download flow (GET /api/workspace/:jobId/file?path=...) and trigger browser save dialog (use Blob + a.download).
+If no file selected, show a small toast: "No file open — select a file to save."
+#new-folder-btn (New Folder):
+On click: open a small prompt/modal that asks for folder path/name (default assets/new-folder). On confirm, POST /api/workspace/:jobId/folder (body { path }) and refresh file tree.
+Show success toast and auto-select the created folder in file tree.
+Visual feedback & accessibility
+All three buttons must have aria-label, keyboard focus styles, and be reachable by Tab.
+Show a small success / error toast for each action.
+The header area must remain visible when the left pane is scrolled.
+Acceptance tests (must pass)
+A. The three icons appear in top of left pane header and are never clipped at default widths.
+B. Shrink left pane width — icons either remain visible, collapse to icon-only, or move into overflow, but are always reachable (not clipped).
+C. Click New Chat: quick-actions modal opens containing exactly the six presets; choose a preset and verify the prompt area is populated with that preset text.
+D. Click Save File when a file is open: browser save dialog appears and file downloads with correct contents.
+E. Click New Folder: modal appears → create folder → folder exists in file tree and is selected.
+F. No other UI elements move or become clipped as a result.
+Implementation note to devs (do this, not hacks)
+Do not absolute-position these icons outside .column-left. They must be in the left pane DOM so they remain logically grouped and in tab order.
+Avoid overflow:hidden on ancestor elements of .left-header. If unavoidable, wrap .left-header in an overflow: visible container.
+Use position: sticky rather than position: fixed so header respects header height and scroll context.
+Keep the quick-actions modal implemented as a proper modal (trap focus while open).
+Deliverable
+One commit / change that:
+Moves the three icons into .left-header.
+Adds the CSS above and the ResizeObserver compact guard.
+Implements the three button behaviors (New Chat modal, Save download, New Folder endpoint call).
+Runs acceptance tests A–F and reports pass.
+End of note.

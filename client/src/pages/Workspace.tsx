@@ -250,6 +250,43 @@ export default function Workspace() {
     setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
+  const handleSaveFile = () => {
+    if (!selectedFile || !workspace?.files) {
+      toast({
+        title: "No File Selected",
+        description: "Please select a file to save",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const file = workspace.files.find(f => f.path === selectedFile);
+    if (!file) {
+      toast({
+        title: "File Not Found",
+        description: "Selected file not found in workspace",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Create blob and download
+    const blob = new Blob([file.content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.path.split('/').pop() || 'file.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "File Saved",
+      description: `Downloaded ${a.download}`,
+    });
+  };
+
   const handleNewFolder = async () => {
     if (!newFolderPath.trim()) {
       toast({
@@ -377,7 +414,7 @@ export default function Workspace() {
           <FileToolbar
             onNewChat={() => setShowNewChatModal(true)}
             onUpload={handleFileUpload}
-            onSaveFile={() => {}}
+            onSaveFile={handleSaveFile}
             onNewFolder={() => setShowNewFolderDialog(true)}
             isCompact={isCompact}
           />
