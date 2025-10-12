@@ -124,3 +124,8 @@
 {"timestamp":"2025-10-12T08:21:45.332Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
 {"timestamp":"2025-10-12T08:21:45.334Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
 {"timestamp":"2025-10-12T08:21:45.335Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T09:20:50.133Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"te553"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-12T09:20:50.134Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-12T09:20:52.219Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T09:20:52.220Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T09:20:52.221Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
