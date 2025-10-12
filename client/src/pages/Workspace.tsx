@@ -102,91 +102,88 @@ export default function Workspace() {
   });
 
   // Fetch and apply theme on workspace load
-  const { data: theme } = useQuery({
+  const { data: theme } = useQuery<any>({
     queryKey: ["/api/workspace", jobId, "theme"],
     enabled: !!jobId,
   });
 
-  // Apply theme CSS variables when theme loads or changes
+  // Apply theme CSS variables ONLY to iframe preview (not global site)
   useEffect(() => {
-    if (theme) {
-      const root = document.documentElement;
-      
-      // Helper to convert hex to HSL
-      const hexToHSL = (hex: string): string => {
-        // Remove # if present
-        hex = hex.replace(/^#/, '');
-        
-        // Convert hex to RGB
-        const r = parseInt(hex.substr(0, 2), 16) / 255;
-        const g = parseInt(hex.substr(2, 2), 16) / 255;
-        const b = parseInt(hex.substr(4, 2), 16) / 255;
-        
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        let h = 0, s = 0, l = (max + min) / 2;
-        
-        if (max !== min) {
-          const d = max - min;
-          s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-          
-          switch(max) {
-            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-            case g: h = ((b - r) / d + 2) / 6; break;
-            case b: h = ((r - g) / d + 4) / 6; break;
-          }
-        }
-        
-        h = Math.round(h * 360);
-        s = Math.round(s * 100);
-        l = Math.round(l * 100);
-        
-        return `${h} ${s}% ${l}%`;
-      };
-      
-      // Apply colors (convert to HSL and map to existing variables)
-      root.style.setProperty("--background", hexToHSL(theme.colors.background));
-      root.style.setProperty("--foreground", hexToHSL(theme.colors.text));
-      root.style.setProperty("--primary", hexToHSL(theme.colors.primaryBackground));
-      root.style.setProperty("--primary-foreground", hexToHSL(theme.colors.primaryText));
-      root.style.setProperty("--accent", hexToHSL(theme.colors.accentBackground));
-      root.style.setProperty("--accent-foreground", hexToHSL(theme.colors.accentText));
-      root.style.setProperty("--destructive", hexToHSL(theme.colors.destructiveBackground));
-      root.style.setProperty("--destructive-foreground", hexToHSL(theme.colors.destructiveText));
-      root.style.setProperty("--border", hexToHSL(theme.colors.border));
-      root.style.setProperty("--card", hexToHSL(theme.colors.cardBackground));
-      root.style.setProperty("--card-foreground", hexToHSL(theme.colors.cardText));
-      
-      // Apply fonts (these don't need conversion)
-      root.style.setProperty("--font-sans", theme.fonts.sans);
-      root.style.setProperty("--font-serif", theme.fonts.serif);
-      root.style.setProperty("--font-mono", theme.fonts.mono);
-      
-      // Apply border radius
-      root.style.setProperty("--radius", theme.borderRadius);
-    }
+    if (!theme) return;
 
-    // Cleanup: reset to light mode defaults on unmount
-    return () => {
-      const root = document.documentElement;
+    // Helper to convert hex to HSL
+    const hexToHSL = (hex: string): string => {
+      hex = hex.replace(/^#/, '');
+      const r = parseInt(hex.substr(0, 2), 16) / 255;
+      const g = parseInt(hex.substr(2, 2), 16) / 255;
+      const b = parseInt(hex.substr(4, 2), 16) / 255;
       
-      // Reset to light mode defaults from index.css
-      root.style.setProperty("--background", "0 0% 100%");
-      root.style.setProperty("--foreground", "0 0% 0%");
-      root.style.setProperty("--primary", "0 0% 8%");
-      root.style.setProperty("--primary-foreground", "0 0% 98%");
-      root.style.setProperty("--accent", "0 0% 95%");
-      root.style.setProperty("--accent-foreground", "0 0% 10%");
-      root.style.setProperty("--destructive", "0 72% 32%");
-      root.style.setProperty("--destructive-foreground", "0 0% 98%");
-      root.style.setProperty("--border", "0 0% 85%");
-      root.style.setProperty("--card", "0 0% 98%");
-      root.style.setProperty("--card-foreground", "0 0% 5%");
-      root.style.setProperty("--font-sans", "Open Sans, sans-serif");
-      root.style.setProperty("--font-serif", "Georgia, serif");
-      root.style.setProperty("--font-mono", "Menlo, monospace");
-      root.style.setProperty("--radius", ".5rem");
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      let h = 0, s = 0, l = (max + min) / 2;
+      
+      if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        
+        switch(max) {
+          case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+          case g: h = ((b - r) / d + 2) / 6; break;
+          case b: h = ((r - g) / d + 4) / 6; break;
+        }
+      }
+      
+      h = Math.round(h * 360);
+      s = Math.round(s * 100);
+      l = Math.round(l * 100);
+      
+      return `${h} ${s}% ${l}%`;
     };
+
+    // Apply theme to iframe content (NOT to global document)
+    const applyThemeToIframe = () => {
+      const iframe = document.querySelector('iframe[data-testid="iframe-preview"]') as HTMLIFrameElement;
+      if (!iframe || !iframe.contentWindow) return;
+
+      try {
+        const iframeDoc = iframe.contentWindow.document.documentElement;
+        
+        // Apply colors (convert to HSL)
+        iframeDoc.style.setProperty("--background", hexToHSL(theme.colors.background));
+        iframeDoc.style.setProperty("--foreground", hexToHSL(theme.colors.text));
+        iframeDoc.style.setProperty("--primary", hexToHSL(theme.colors.primaryBackground));
+        iframeDoc.style.setProperty("--primary-foreground", hexToHSL(theme.colors.primaryText));
+        iframeDoc.style.setProperty("--accent", hexToHSL(theme.colors.accentBackground));
+        iframeDoc.style.setProperty("--accent-foreground", hexToHSL(theme.colors.accentText));
+        iframeDoc.style.setProperty("--destructive", hexToHSL(theme.colors.destructiveBackground));
+        iframeDoc.style.setProperty("--destructive-foreground", hexToHSL(theme.colors.destructiveText));
+        iframeDoc.style.setProperty("--border", hexToHSL(theme.colors.border));
+        iframeDoc.style.setProperty("--card", hexToHSL(theme.colors.cardBackground));
+        iframeDoc.style.setProperty("--card-foreground", hexToHSL(theme.colors.cardText));
+        
+        // Apply fonts
+        iframeDoc.style.setProperty("--font-sans", theme.fonts.sans);
+        iframeDoc.style.setProperty("--font-serif", theme.fonts.serif);
+        iframeDoc.style.setProperty("--font-mono", theme.fonts.mono);
+        
+        // Apply border radius
+        iframeDoc.style.setProperty("--radius", theme.borderRadius);
+      } catch (error) {
+        console.error("Failed to apply theme to iframe:", error);
+      }
+    };
+
+    // Try to apply theme immediately
+    applyThemeToIframe();
+
+    // Also apply when iframe loads/reloads
+    const iframe = document.querySelector('iframe[data-testid="iframe-preview"]') as HTMLIFrameElement;
+    if (iframe) {
+      iframe.addEventListener('load', applyThemeToIframe);
+      return () => {
+        iframe.removeEventListener('load', applyThemeToIframe);
+      };
+    }
   }, [theme]);
 
   // Auto-select first non-prompt file when workspace loads

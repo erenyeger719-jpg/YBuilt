@@ -1,0 +1,96 @@
+URGENT FIX — Restore global theme, scope "Theme for project" to project preview only, and force Theme modal to topmost layer
+
+PROBLEM SUMMARY (short)
+- The Theme editor mistakenly overwrote the global/site theme when project themes were edited. That must be undone: site-wide theme must be restored to what it was before this feature.
+- The correct behavior: "Theme for project" should only change the **project's workspace preview and project-level output**, not global `:root` CSS vars or other pages.
+- The Theme modal also still suffers stacking/visibility issues — it must render topmost via a portal without changing UI layout.
+
+INSTRUCTIONS (apply exactly and in this order)
+
+STEP A — RESTORE THE OLD GLOBAL SITE THEME (undo accidental changes)
+1. If a server-side backup exists (e.g. `data/site_theme_backup.json`, `data/theme_defaults.json`, or a git commit), restore it and reapply to `:root`. If such file exists at `data/site_theme_backup.json`, load and apply it as the global theme.
+   - Server-side endpoint suggestion (devs): `GET /api/theme/site-default` returns default theme JSON.
+2. If no backup file exists, reset `:root` to the known safe defaults that were used prior to the bug. Apply these exact fallback values to `:root` immediately (these are conservative defaults — adjust to product's real defaults if you have them):
+```css
+:root{
+  --bg-left: #000000;
+  --bg-mid: #5a5a5a;
+  --bg-right: #ffffff;
+  --text-main: #eaeaea;
+  --muted: #bdbdbd;
+  --theme-card-bg: #111111;
+  --theme-card-text: #f5f5f5;
+  --theme-border-radius: 0.5rem;
+  /* other critical defaults... */
+}
+Restart or reload CSS variables so the whole site returns to the pre-feature appearance. Confirm via a smoke-check: visit Home, Library, Workspace — the global colors and fonts must match the previous site baseline. If you have a visual reference or QA screenshot, compare to confirm.
+STEP B — MAKE “THEME FOR PROJECT” NON-INTRUSIVE: SCOPE IT TO PROJECT ONLY
+Do not write to :root when editing or previewing a project theme. Implement one of the two precise approaches below — choose whichever fits the current codebase easiest — but do one of these exactly:
+OPTION 1 — Apply theme to the Workspace Container (preferred when preview is in-page)
+
+When ThemeModal changes, write CSS variables only to the workspace root element, not document.documentElement.
+Example:
+// safeThemeApply(themeObj, projectId)
+const workspaceEl = document.querySelector(`#workspace-root-${projectId}`) || document.querySelector('.workspace-root');
+Object.entries(themeObj.colors).forEach(([k, v]) => {
+  workspaceEl.style.setProperty(`--theme-${k}`, v);
+});
+workspaceEl.style.setProperty('--theme-border-radius', themeObj.borderRadius || '0.5rem');
+Ensure the workspace UI and preview panels read those variables from workspaceEl (via var(--theme-...) where appropriate).
+When saving, persist to data/projects/{projectId}/theme.json, but do not copy to global theme file.
+OPTION 2 — Sandbox via preview iframe (preferred when preview runs in iframe)
+If project preview is served in an iframe, inject theme into the iframe only (postMessage or server-side file generation).
+On theme editing: iframe.contentWindow.postMessage({ type:'apply-theme', theme }, iframeOrigin)
+In preview iframe code, listen for message and apply theme to the iframe's document.documentElement or to the preview container (safe because it's sandboxed).
+Do not ever set parent.document.documentElement.style from this action.
+Additional rules:
+While editing a theme, provide a "Live Preview" toggle that applies the project theme only in the workspace preview (not site-wide). When Live Preview is OFF, do not apply anything to workspace (show saved theme).
+Never use document.documentElement.style.setProperty for project theme edits.
+Re-run a quick audit to find any code that was setting :root during theme edits and remove or alter it to use the workspace element/iframe approach above.
+STEP C — FIX THE THEME MODAL LAYERING (portal + fixed + close other overlays)
+Render ThemeModal with a React portal to document.body (or #modal-root as direct child of <body>).
+return createPortal(
+  <div className="theme-modal-backdrop" data-theme-modal> ... </div>,
+  document.body
+);
+Ensure the modal/backdrop use position:fixed and an extremely high z-index so it is above any stacking context the workspace creates. Example CSS:
+.theme-modal-backdrop {
+  position: fixed !important;
+  inset: 0;
+  z-index: 2147483600 !important;
+  background: rgba(0,0,0,0.45);
+}
+.theme-modal {
+  position: relative;
+  z-index: 2147483601 !important;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+}
+Before opening the ThemeModal, explicitly close the logo dropdown and any other open popovers so overlays don't compete:
+closeLogoDropdown();
+closeOtherPopovers(); // tooltips, popovers, side menus
+openThemeModal();
+Add the dev debug helper (temporary) to detect stacking-context issues if they reappear:
+function stackingContextCheck(el) { /* log ancestors with transform/filter/opacity/will-change */ }
+Run it during QA if problems persist.
+STEP D — QA / ACCEPTANCE TESTS (must pass)
+
+Global site restored: Navigate to Home & Library — site colors/fonts must equal the pre-theme-editor baseline. (Visual confirmation)
+Project theme edits do NOT affect site: Edit a project's theme → Home/Library must NOT change color/font. Only the project workspace preview (or its iframe) should show changed theme.
+Preview/Workspace applies project theme only: With Live Preview ON, the workspace preview updates immediately; Live Preview OFF = no preview change.
+Persistence: Save theme → data/projects/{projectId}/theme.json updated; reloading the workspace reapplies that theme to the project preview only.
+Modal layering: Open Theme modal → the modal is fully visible above all headers/toolbars; no part of it is hidden. Use document.elementFromPoint(x,y) at top modal area to ensure modal element is returned.
+No :root writes: Grep the codebase for document.documentElement.style.setProperty('--theme' (or similar) — must not be used by theme editor. If found, replace with workspace-scope setter.
+Accessibility & focus: Modal traps focus and returns focus to Theme menu item on close.
+Rollback check: Provide a short step describing how to revert to previous global theme (e.g., restore data/site_theme_backup.json or revert commit).
+IMPLEMENTATION NOTE (very important — do NOT skip)
+This is mostly a scoping bug: switching from :root to workspace-scoped CSS variables or iframe-only injection is the correct fix. Make the change atomically — first restore global, then change project-theme application code to scoped approach, then test.
+DELIVERABLE (what to commit)
+1 commit that:
+Restores global theme file or sets :root defaults back.
+Changes theme-editor code so project theme applies only to .workspace-root or the preview iframe (no :root writes).
+Ensures ThemeModal is mounted via portal and uses fixed positioning with high z-index.
+Adds small QA script to detect any remaining :root writes and stacking-context issues.
+Adds acceptance test results.
+If anything is ambiguous in the codebase (e.g., where the workspace root ID is), pick a safe selector: .workspace-root or #workspace-root-{projectId} and document it in your PR.
+END 

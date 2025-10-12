@@ -1,7 +1,7 @@
 {
   "meta": {
     "name": "Dark",
-    "createdAt": "2025-10-12T13:37:59.329Z",
+    "createdAt": "2025-10-12T13:46:34.597Z",
     "author": "demo"
   },
   "fonts": {
@@ -11,7 +11,7 @@
   },
   "borderRadius": "0.5rem",
   "colors": {
-    "background": "#000000",
+    "background": "#ff00ff",
     "text": "#ffffff",
     "mutedBackground": "#0a0a0a",
     "mutedText": "#999999",

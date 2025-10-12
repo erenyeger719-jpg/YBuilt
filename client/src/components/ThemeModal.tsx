@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Dialog,
@@ -173,16 +174,11 @@ export default function ThemeModal({ open, onOpenChange, projectId }: ThemeModal
     },
   });
 
-  // Apply theme to CSS variables
+  // Apply theme ONLY to iframe preview (not global site)
   const applyTheme = (themeData: ProjectTheme) => {
-    const root = document.documentElement;
-    
     // Helper to convert hex to HSL
     const hexToHSL = (hex: string): string => {
-      // Remove # if present
       hex = hex.replace(/^#/, '');
-      
-      // Convert hex to RGB
       const r = parseInt(hex.substr(0, 2), 16) / 255;
       const g = parseInt(hex.substr(2, 2), 16) / 255;
       const b = parseInt(hex.substr(4, 2), 16) / 255;
@@ -208,27 +204,37 @@ export default function ThemeModal({ open, onOpenChange, projectId }: ThemeModal
       
       return `${h} ${s}% ${l}%`;
     };
-    
-    // Apply colors (convert to HSL and map to existing variables)
-    root.style.setProperty("--background", hexToHSL(themeData.colors.background));
-    root.style.setProperty("--foreground", hexToHSL(themeData.colors.text));
-    root.style.setProperty("--primary", hexToHSL(themeData.colors.primaryBackground));
-    root.style.setProperty("--primary-foreground", hexToHSL(themeData.colors.primaryText));
-    root.style.setProperty("--accent", hexToHSL(themeData.colors.accentBackground));
-    root.style.setProperty("--accent-foreground", hexToHSL(themeData.colors.accentText));
-    root.style.setProperty("--destructive", hexToHSL(themeData.colors.destructiveBackground));
-    root.style.setProperty("--destructive-foreground", hexToHSL(themeData.colors.destructiveText));
-    root.style.setProperty("--border", hexToHSL(themeData.colors.border));
-    root.style.setProperty("--card", hexToHSL(themeData.colors.cardBackground));
-    root.style.setProperty("--card-foreground", hexToHSL(themeData.colors.cardText));
-    
-    // Apply fonts (these don't need conversion)
-    root.style.setProperty("--font-sans", themeData.fonts.sans);
-    root.style.setProperty("--font-serif", themeData.fonts.serif);
-    root.style.setProperty("--font-mono", themeData.fonts.mono);
-    
-    // Apply border radius
-    root.style.setProperty("--radius", themeData.borderRadius);
+
+    // Apply theme to iframe content ONLY (NOT to global document)
+    const iframe = document.querySelector('iframe[data-testid="iframe-preview"]') as HTMLIFrameElement;
+    if (!iframe || !iframe.contentWindow) return;
+
+    try {
+      const iframeDoc = iframe.contentWindow.document.documentElement;
+      
+      // Apply colors (convert to HSL)
+      iframeDoc.style.setProperty("--background", hexToHSL(themeData.colors.background));
+      iframeDoc.style.setProperty("--foreground", hexToHSL(themeData.colors.text));
+      iframeDoc.style.setProperty("--primary", hexToHSL(themeData.colors.primaryBackground));
+      iframeDoc.style.setProperty("--primary-foreground", hexToHSL(themeData.colors.primaryText));
+      iframeDoc.style.setProperty("--accent", hexToHSL(themeData.colors.accentBackground));
+      iframeDoc.style.setProperty("--accent-foreground", hexToHSL(themeData.colors.accentText));
+      iframeDoc.style.setProperty("--destructive", hexToHSL(themeData.colors.destructiveBackground));
+      iframeDoc.style.setProperty("--destructive-foreground", hexToHSL(themeData.colors.destructiveText));
+      iframeDoc.style.setProperty("--border", hexToHSL(themeData.colors.border));
+      iframeDoc.style.setProperty("--card", hexToHSL(themeData.colors.cardBackground));
+      iframeDoc.style.setProperty("--card-foreground", hexToHSL(themeData.colors.cardText));
+      
+      // Apply fonts
+      iframeDoc.style.setProperty("--font-sans", themeData.fonts.sans);
+      iframeDoc.style.setProperty("--font-serif", themeData.fonts.serif);
+      iframeDoc.style.setProperty("--font-mono", themeData.fonts.mono);
+      
+      // Apply border radius
+      iframeDoc.style.setProperty("--radius", themeData.borderRadius);
+    } catch (error) {
+      console.error("Failed to apply theme to iframe:", error);
+    }
   };
 
   // Reset theme to default
@@ -311,21 +317,29 @@ export default function ThemeModal({ open, onOpenChange, projectId }: ThemeModal
     saveMutation.mutate(theme);
   };
 
-  if (isLoading) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl" data-testid="modal-theme">
-          <div className="flex items-center justify-center p-8">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  // Don't render if not open or if document.body not available
+  if (!open) return null;
+  if (typeof document === 'undefined' || !document.body) return null;
 
-  return (
+  const modalContent = isLoading ? (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh]" data-testid="modal-theme">
+      <DialogContent 
+        className="max-w-3xl" 
+        style={{ zIndex: 2147483600 }}
+        data-testid="modal-theme"
+      >
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      </DialogContent>
+    </Dialog>
+  ) : (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent 
+        className="max-w-3xl max-h-[80vh]" 
+        style={{ zIndex: 2147483600 }}
+        data-testid="modal-theme"
+      >
         <DialogHeader>
           <DialogTitle data-testid="text-theme-title">Theme for Project</DialogTitle>
           <DialogDescription>
@@ -625,4 +639,6 @@ export default function ThemeModal({ open, onOpenChange, projectId }: ThemeModal
       </DialogContent>
     </Dialog>
   );
+
+  return createPortal(modalContent, document.body);
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import Logo from "./Logo";
 import {
@@ -29,6 +30,7 @@ export default function LogoButton({
   onThemeModalOpen,
 }: LogoButtonProps) {
   const [, setLocation] = useLocation();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const handleNavigation = (path: string) => {
     setLocation(path);
@@ -50,8 +52,19 @@ export default function LogoButton({
     return name.length > 30 ? name.substring(0, 30) + "..." : name;
   };
 
+  const handleThemeClick = () => {
+    setDropdownOpen(false); // Close dropdown first
+    setTimeout(() => {
+      if (isWorkspace && onThemeModalOpen) {
+        onThemeModalOpen(); // Then open theme modal for workspace
+      } else {
+        handleThemeToggle(); // Or toggle global theme
+      }
+    }, 100);
+  };
+
   return (
-    <DropdownMenu>
+    <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
       <DropdownMenuTrigger
         className="focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
         data-testid="button-logo-menu"
@@ -171,7 +184,7 @@ export default function LogoButton({
         </DropdownMenuSub>
 
         <DropdownMenuItem
-          onClick={isWorkspace && onThemeModalOpen ? onThemeModalOpen : handleThemeToggle}
+          onClick={handleThemeClick}
           data-testid="menuitem-theme"
         >
           {isWorkspace ? "Theme for project" : "Toggle Theme"}
