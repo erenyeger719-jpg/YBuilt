@@ -1,0 +1,219 @@
+TASK — Implement fully-functional Settings sections: Notifications, Workspace, Editor
+GOAL
+Add production-ready, Replit-like settings UX for **Notifications**, **Workspace**, and **Editor**. Each control must persist to the server, update the app behavior live (or on next relevant action), support MOCK_MODE, and be keyboard/ARIA accessible. Provide backend endpoints, storage, and QA steps. Keep styling consistent with the app’s premium/glass aesthetic.
+
+SCOPE
+- Frontend: new/updated Settings subpages/components:
+  - Settings/Notifications.jsx
+  - Settings/Workspace.jsx
+  - Settings/Editor.jsx
+  - Shared components: Toggle, Select, NumberInput, ConfirmModal, SaveToast, WebhookEditor
+- Backend: server routes for settings persistence:
+  - GET /api/users/:userId/settings
+  - POST /api/users/:userId/settings  (accepts partial update)
+  - GET /api/projects/:projectId/settings
+  - POST /api/projects/:projectId/settings
+  - POST /api/users/:userId/notifications/test (send test notification in MOCK_MODE)
+- Storage: persist to `data/users/{userId}/settings.json` and `data/projects/{projectId}/settings.json`
+- Feature flags: respect `MOCK_MODE` and `FEATURE_FLAGS` for paid features.
+
+GENERAL RULES (must follow)
+1. UI controls must **actually change** behavior:
+   - Toggle → updates local UI immediately (optimistic), POSTs update to server, shows toast on success/fail.
+   - Select / numeric input → same flow.
+   - For editor/workspace behaviors that require runtime change (theme, linting, auto-save, agent auto-apply), update client runtime in-memory and persist.
+2. All endpoints must authenticate (or allow demo user in MOCK_MODE).
+3. Accessibility: keyboard navigable, aria-labels, focus management, contrast checks.
+4. Telemetry: emit event for major changes (e.g., `settings_updated:{namespace}`).
+5. Document defaults and where values are read (app startup reads `GET /api/users/:id/settings` and merges with project-level settings).
+
+DETAIL: NOTIFICATIONS SETTINGS (user-level)
+UI Controls & Behavior (Settings → Notifications)
+A. Channels (toggles)
+  - Email (transactional) — toggle
+  - Email (marketing) — toggle
+  - In-app (toast/notification center) — toggle
+  - Push/browser push — toggle (request permission when enabling)
+  - SMS (optional) — toggle + phone number input
+  - Webhooks — list of webhook endpoints (add/edit/delete); include secret signing (HMAC) settings
+
+B. Granular events (multi-select / checkboxes)
+  - Build complete / fail
+  - Publish complete / fail
+  - Credit/billing alerts
+  - Agent requires confirmation (autonomy gate)
+  - Security alerts (suspected abuse)
+  - System status changes (All systems operational → degraded)
+  - New team invite
+
+C. Digest & Rate limits
+  - Daily digest (time picker)
+  - Weekly summary (weekday selector)
+  - Quiet hours (start/end, timezone)
+  - Immediate vs batched (radio)
+
+D. Test & Delivery
+  - “Send test notification” button — calls POST /api/users/:id/notifications/test and shows result (MOCK_MODE simulates).
+  - When enabling Push: request permission and register service-worker endpoint (simulate in MOCK_MODE).
+
+E. Persist & Server behavior
+  - Endpoint: POST /api/users/:id/settings body example:
+    `{ notifications: { email_transactional: true, channels: {...}, digest: { daily: "08:00" } } }`
+  - Server writes to `data/users/{id}/settings.json`.
+  - Server uses these settings for event dispatch (mock worker will check and simulate deliveries).
+
+F. Acceptance tests — Notifications
+  1. Toggle email transactional: change persists to server; test button triggers `/notifications/test` and returns success.
+  2. Add webhook URL: webhook saved to settings and receives a simulated POST on a mock event.
+  3. Enabling push prompts permission; mock registration returns simulated push token and persists.
+  4. Quiet hours prevent immediate in-app toasts during quiet window.
+  5. Digest schedule triggers mock digest job (worker simulates sending).
+
+DETAIL: WORKSPACE SETTINGS (project-level & user defaults)
+Purpose: control runtime defaults for projects and the behaviour of the AI-agent/build pipeline.
+
+Scope: Project-level settings override user defaults. Implement UI on Settings → Workspace (project selection at top).
+
+A. Sections & Controls
+  1. General
+    - Project visibility: Public / Unlisted / Private (select; affects publish defaults)
+    - Default branch for preview: `main` / `dev` (select)
+    - Project region: Auto / Asia / EU / US (select) — affects build placement & billing
+    - Default template: select from templates (Landing, E-commerce, Blog, SPA, API)
+
+  2. Runtime & Resources
+    - Compute tier: Small / Balanced / Performance (affects worker simulated time & credit usage)
+    - Memory limit (MB slider; 128–4096)
+    - Concurrency slots (number of concurrent dev processes)
+    - Auto-scaling toggle (on/off)
+
+  3. Agent & Build Pipeline (AI-first controls)
+    - Agent Autonomy Default: Low / Medium / High / Max (select) — default for new agent runs
+      * Low = suggestions only; Medium = propose & local edits; High = auto-apply lint/test fixes; Max = build+optional publish (still gated)
+    - Auto-Apply Edits: Off / Review only / Auto-apply for Medium+ (toggle + select)
+      * If enabling Auto-Apply, the worker must label applied diffs in `data/jobs/{jobId}/logs.jsonl`
+    - Build Trace Verbosity: Minimal / Normal / Full (select) — affects log detail
+    - Safety Scan: Off / On (content/security scan before publish)
+    - Auto-save drafts to Library: On / Off
+
+  4. Preview & Sandbox
+    - Preview sandbox mode: Strict (no scripts) / Lenient (allow scripts) / Custom (user chooses)
+    - Device preset: Desktop / Tablet / Mobile default
+    - Snapshot thumbnails toggle (generate snapshot after each publish)
+
+  5. Integrations & Secrets
+    - Allow project-level webhooks (toggle)
+    - Default environment variables (key/value editor) — persists to project settings
+    - Enable/disable paid integrations (Razorpay/UPI) — toggle, show required plan
+
+B. Behavior & Runtime hooks
+  - Changing Compute tier or Memory updates the worker simulation config (affects subsequent builds).
+  - Changing Agent Autonomy Default updates the UI in Workspace (agent tools UI reflects default).
+  - Toggle Auto-save: when ON, Save Draft button performs automatic save to `data/users/{id}/library` on each build step.
+  - Preview sandbox change toggles iframe sandbox attributes (e.g., `sandbox="allow-scripts"` toggled off for strict).
+  - When "Safety Scan" enabled, publish flow must run a mock security check and block publish on fail.
+
+C. Server API & persistence
+  - GET /api/projects/:projectId/settings
+  - POST /api/projects/:projectId/settings
+  - Server writes `data/projects/{projectId}/settings.json`
+  - Worker reads `data/projects/{projectId}/settings.json` before building.
+
+D. Acceptance tests — Workspace
+  1. Change Agent Autonomy Default to High: new `POST /projects/:id/settings` should store `agent.autonomy: "high"` and the Workspace AgentTools UI shows High preselected for new runs.
+  2. Toggle Auto-save: when ON, run a generate → the draft is automatically saved into Library; when OFF, Save must be manual.
+  3. Change Preview sandbox to Strict: iframe rendered with restrictive sandbox attribute.
+  4. Change Compute tier: worker build time simulation changes accordingly and billing credits are adjusted.
+  5. Safety scan ON blocks a publish that fails mock scan and surfaces an error.
+
+DETAIL: EDITOR SETTINGS (user-level; Replit-style + AI-first)
+Purpose: configure code editing surface and AI-integration behavior.
+
+A. Core Editor Options (must apply immediately)
+  - Theme: Light / Dark / System / Custom (select). *Changing theme changes editor theme instantly and persists.*
+  - Font family: Inter, Poppins, Menlo, Open Sans, Custom (free text)
+  - Font size: 12–20 px (number input)
+  - Line height: 1.0–1.8 (range)
+  - Tab size: 2 / 4 / 8 (select)
+  - Indent with tabs: toggle
+  - Cursor style: block / line / underline (select)
+  - Word wrap: off / on
+
+B. Code Assist & Linting (AI + dev tooling)
+  - Auto-complete: On / Off (affects editor autocompletion)
+  - Inline AI Suggestions: Off / Suggest / Auto-insert (select)
+    - Suggest = show suggestions but require accept
+    - Auto-insert = apply small fixes automatically (treat like Auto-Apply but for editor)
+  - Format on save: Off / On (when On, invoke configured formatter, persist, and run on file save)
+  - Default formatter: Prettier / ESLint / None (select)
+  - Linter: Enable/Disable; Linter ruleset dropdown (ESLint config options)
+  - CodeLens / Minimap: toggle
+  - Keymap: Default / VSCode / Sublime / Emacs (applies keyboard shortcuts)
+  - Autosave interval: Off / 5s / 15s / 60s (if set, file changes saved to project)
+
+C. AI Integration settings
+  - Preferred model for edits: (dropdown) — e.g., `gpt-coder`, `mistral-codestral`, `claude-sonnet` (mock names). Save as `editor.aiModel`.
+  - Compute tier for AI edits: Low / Balanced / Fast
+  - Max tokens or cost-per-edit threshold (numeric)
+  - Auto-run tests after AI edits: toggle
+  - Accept inline suggestions with Enter vs Tab (radio)
+  - Code generation privacy: send code to hosted LLM / run against self-hosted model (radio)
+  - Telemetry opt-out for code data (toggle)
+
+D. Behavior & runtime changes
+  - Format-on-save triggers actual format routine (client-side Prettier/ESLint or worker call) and updates file content on save.
+  - Inline AI Suggestions: when turned On, the editor calls the configured AI model for suggestions on keystrokes or on demand. If Auto-insert is selected, accept and apply changes automatically (respect Auto-Apply policy).
+  - Keymap change must update keyboard handlers and persist.
+
+E. Server API & persistence
+  - GET /api/users/:userId/settings (returns editor settings)
+  - POST /api/users/:userId/settings (partial update)
+  - Server persists to `data/users/{userId}/settings.json` under `editor` namespace.
+
+F. Acceptance tests — Editor
+  1. Change theme → editor theme updates immediately.
+  2. Enable Format on Save → save a JS file and confirm formatting applied (client-side or via mock worker).
+  3. Toggle Inline AI suggestions to Suggest → invoke suggestion with shortcut and display suggestion popup.
+  4. Change keymap to VSCode → shortcut hints update and key handlers reflect change (Ctrl/Cmd + P, etc).
+  5. Change preferred model → subsequent AI edit requests use that model name in request payload (mocked).
+
+IMPLEMENTATION HINTS & PATTERNS (developer-friendly)
+- Use a shared `SettingsService` on client to `GET` user+project settings and merge:
+  - Effective config = merge(defaults, userSettings, projectSettings)
+- Optimistic UI: apply changes locally first, POST to server, rollback on error with toast.
+- Debounce numeric/select changes (300–800ms) before POST to reduce churn.
+- Use SSE or WebSocket to push setting-change events to other open tabs (e.g., change theme in one tab updates others).
+- For editor runtime changes, use the editor API (Monaco) to update options programmatically: `editor.updateOptions({ tabSize, fontSize, wordWrap })`.
+- For agent/autonomy behavior, have worker read project settings and include them in job metadata.
+- For Webhooks & notifications, validate URL on server and support HMAC secret; simulate deliveries in MOCK_MODE.
+- Use `data/users/{id}/settings.json` and `data/projects/{id}/settings.json` as single sources-of-truth; include migration version in file.
+
+SECURITY, PRIVACY & VALIDATION
+- Validate all incoming settings on server (types, ranges). Reject invalid values with 400 and meaningful message.
+- For secrets (API keys), store encrypted (or base64 in MOCK_MODE) and do not echo raw values in API responses.
+- For AI model selection, enforce allowed model list server-side to prevent arbitrary endpoints.
+- Rate limit third-party webhook test calls.
+
+DELIVERABLES (what to commit)
+1. Frontend: `Settings/Notifications.jsx`, `Settings/Workspace.jsx`, `Settings/Editor.jsx`, shared UI components, and small adjustments to Workspace/Editor runtime hooks to read settings.
+2. Backend: routes listed above + validation + persistence to `data/`.
+3. Worker: read project settings for build simulation and autonomy behavior.
+4. README: explain where settings persist, how MOCK_MODE works, and how to test each acceptance item.
+5. Tests:
+   - `test/settings.update.test.js` — programmatically POST changes and assert persisted file changes.
+   - `test/editor.format-on-save.test.js` — simulate file save and assert formatting applied.
+   - `test/notifications.webhook.test.js` — add webhook and assert mock delivery on simulated event.
+
+ACCEPTANCE CHECKLIST (run these before merging)
+- Notifications: toggles persist and test events behave as described (email/webhook/push mock).
+- Workspace: agent/autonomy defaults and sandbox settings effect actual build/preview behavior.
+- Editor: theme, format-on-save, keymaps, inline-AI settings change runtime behavior.
+- All changes are accessible, keyboard-friendly, and persist to data files.
+- No console exceptions and server validates inputs.
+- README updated with instructions to test each flow in MOCK_MODE.
+
+PR & QA NOTES
+- Keep commits small and documented. Each major section (Notifications/Workspace/Editor) can be a logical commit.
+- Provide a short QA guide and sample CURL commands to update and verify settings.
+
+END

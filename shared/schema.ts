@@ -129,19 +129,80 @@ export const settingsSchema = z.object({
     emailVerified: z.boolean().default(false),
   }).default({}),
   workspace: z.object({
-    defaultVisibility: z.enum(["public", "private"]).default("private"),
-    defaultTemplate: z.enum(["starter", "app", "game", "landing"]).default("starter"),
+    // General
+    projectVisibility: z.enum(["public", "unlisted", "private"]).default("private"),
+    defaultBranch: z.enum(["main", "dev"]).default("main"),
+    projectRegion: z.enum(["auto", "asia", "eu", "us"]).default("auto"),
+    defaultTemplate: z.enum(["landing", "ecommerce", "blog", "spa", "api"]).default("landing"),
+    
+    // Runtime & Resources
+    computeTier: z.enum(["small", "balanced", "performance"]).default("balanced"),
+    memoryLimit: z.number().min(128).max(4096).default(512), // MB
+    concurrencySlots: z.number().min(1).max(10).default(2),
+    autoScaling: z.boolean().default(false),
+    
+    // Agent & Build Pipeline
+    agentAutonomyDefault: z.enum(["low", "medium", "high", "max"]).default("medium"),
+    autoApplyEdits: z.enum(["off", "review", "auto-medium-plus"]).default("review"),
+    buildTraceVerbosity: z.enum(["minimal", "normal", "full"]).default("normal"),
+    safetyScan: z.boolean().default(true),
+    autoSaveDrafts: z.boolean().default(true),
+    
+    // Preview & Sandbox
+    previewSandboxMode: z.enum(["strict", "lenient", "custom"]).default("lenient"),
+    devicePreset: z.enum(["desktop", "tablet", "mobile"]).default("desktop"),
+    snapshotThumbnails: z.boolean().default(true),
+    
+    // Integrations & Secrets
+    allowProjectWebhooks: z.boolean().default(true),
+    envVariables: z.array(z.object({
+      key: z.string(),
+      value: z.string(),
+    })).default([]),
+    paidIntegrations: z.boolean().default(false),
+    
+    // Legacy fields for compatibility
     autoCreatePreview: z.boolean().default(true),
     storageRegion: z.enum(["india", "eu", "us"]).default("india"),
   }).default({}),
   editor: z.object({
+    // Core Editor Options
+    theme: z.enum(["light", "dark", "system", "custom"]).default("dark"),
+    fontFamily: z.enum(["Inter", "Poppins", "Menlo", "Open Sans", "Custom"]).default("Inter"),
+    fontSize: z.number().min(12).max(20).default(14),
+    lineHeight: z.number().min(1.0).max(1.8).default(1.5),
+    tabSize: z.number().min(2).max(8).default(2),
+    indentWithTabs: z.boolean().default(false),
+    cursorStyle: z.enum(["block", "line", "underline"]).default("line"),
+    wordWrap: z.boolean().default(true),
+    
+    // Code Assist & Linting
+    autoComplete: z.boolean().default(true),
+    inlineAiSuggestions: z.enum(["off", "suggest", "auto-insert"]).default("suggest"),
+    formatOnSave: z.boolean().default(true),
+    defaultFormatter: z.enum(["prettier", "eslint", "none"]).default("prettier"),
+    linterEnabled: z.boolean().default(true),
+    linterRuleset: z.enum(["recommended", "strict", "custom"]).default("recommended"),
+    codeLens: z.boolean().default(true),
+    minimap: z.boolean().default(true),
+    keymap: z.enum(["default", "vscode", "sublime", "emacs"]).default("default"),
+    autosaveInterval: z.enum(["off", "5s", "15s", "60s"]).default("15s"),
+    
+    // AI Integration
+    aiModel: z.enum(["gpt-coder", "mistral-codestral", "claude-sonnet"]).default("claude-sonnet"),
+    aiComputeTier: z.enum(["low", "balanced", "fast"]).default("balanced"),
+    maxTokens: z.number().min(100).max(8000).default(2000),
+    autoRunTests: z.boolean().default(false),
+    suggestionTrigger: z.enum(["enter", "tab"]).default("tab"),
+    codePrivacy: z.enum(["hosted-llm", "self-hosted"]).default("hosted-llm"),
+    telemetryOptOut: z.boolean().default(false),
+    
+    // Legacy fields for compatibility
     template: z.string().default("starter"),
     language: z.enum(["js", "ts", "python", "other"]).default("js"),
-    autosave: z.number().default(15), // seconds, 0 = off
+    autosave: z.number().default(15),
     previewResolution: z.enum(["auto", "720p", "1080p", "4k"]).default("auto"),
     keybindings: z.enum(["default", "vscode", "vim", "emacs"]).default("default"),
-    tabSize: z.number().min(2).max(8).default(2),
-    fontSize: z.number().min(10).max(24).default(14),
     lineWrap: z.boolean().default(true),
     lintOnSave: z.boolean().default(true),
     editorTheme: z.enum(["dark", "light"]).default("dark"),
@@ -229,17 +290,56 @@ export const settingsSchema = z.object({
     projectSharingDefault: z.enum(["public", "private"]).default("private"),
   }).default({}),
   notifications: z.object({
-    email: z.object({
-      jobCompleted: z.boolean().default(true),
-      billing: z.boolean().default(true),
-      security: z.boolean().default(true),
+    // Channels
+    channels: z.object({
+      emailTransactional: z.boolean().default(true),
+      emailMarketing: z.boolean().default(false),
+      inApp: z.boolean().default(true),
+      push: z.boolean().default(false),
+      sms: z.boolean().default(false),
     }).default({}),
-    inApp: z.object({
-      jobCompleted: z.boolean().default(true),
-      billing: z.boolean().default(true),
-      security: z.boolean().default(true),
+    smsPhone: z.string().optional(),
+    pushToken: z.string().optional(),
+    
+    // Granular events
+    events: z.object({
+      buildComplete: z.boolean().default(true),
+      buildFail: z.boolean().default(true),
+      publishComplete: z.boolean().default(true),
+      publishFail: z.boolean().default(true),
+      creditAlert: z.boolean().default(true),
+      billingAlert: z.boolean().default(true),
+      agentConfirmation: z.boolean().default(true),
+      securityAlert: z.boolean().default(true),
+      systemStatus: z.boolean().default(true),
+      teamInvite: z.boolean().default(true),
     }).default({}),
-    frequency: z.enum(["instant", "daily", "weekly"]).default("instant"),
+    
+    // Digest & Rate limits
+    digest: z.object({
+      enabled: z.boolean().default(false),
+      dailyTime: z.string().default("08:00"), // HH:MM format
+      weeklyDay: z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]).default("monday"),
+      timezone: z.string().default("UTC"),
+    }).default({}),
+    
+    quietHours: z.object({
+      enabled: z.boolean().default(false),
+      start: z.string().default("22:00"), // HH:MM
+      end: z.string().default("08:00"), // HH:MM
+      timezone: z.string().default("UTC"),
+    }).default({}),
+    
+    delivery: z.enum(["immediate", "batched"]).default("immediate"),
+    
+    // Webhooks
+    webhooks: z.array(z.object({
+      id: z.string(),
+      url: z.string().url(),
+      secret: z.string().optional(),
+      events: z.array(z.string()).default([]),
+      enabled: z.boolean().default(true),
+    })).default([]),
   }).default({}),
   export: z.object({
     retentionDays: z.number().default(30),
@@ -274,19 +374,59 @@ export const defaultSettings: Settings = {
     emailVerified: false,
   },
   workspace: {
-    defaultVisibility: "private",
-    defaultTemplate: "starter",
+    projectVisibility: "private",
+    defaultBranch: "main",
+    projectRegion: "auto",
+    defaultTemplate: "landing",
+    computeTier: "balanced",
+    memoryLimit: 512,
+    concurrencySlots: 2,
+    autoScaling: false,
+    agentAutonomyDefault: "medium",
+    autoApplyEdits: "review",
+    buildTraceVerbosity: "normal",
+    safetyScan: true,
+    autoSaveDrafts: true,
+    previewSandboxMode: "lenient",
+    devicePreset: "desktop",
+    snapshotThumbnails: true,
+    allowProjectWebhooks: true,
+    envVariables: [],
+    paidIntegrations: false,
     autoCreatePreview: true,
     storageRegion: "india",
   },
   editor: {
+    theme: "dark",
+    fontFamily: "Inter",
+    fontSize: 14,
+    lineHeight: 1.5,
+    tabSize: 2,
+    indentWithTabs: false,
+    cursorStyle: "line",
+    wordWrap: true,
+    autoComplete: true,
+    inlineAiSuggestions: "suggest",
+    formatOnSave: true,
+    defaultFormatter: "prettier",
+    linterEnabled: true,
+    linterRuleset: "recommended",
+    codeLens: true,
+    minimap: true,
+    keymap: "default",
+    autosaveInterval: "15s",
+    aiModel: "claude-sonnet",
+    aiComputeTier: "balanced",
+    maxTokens: 2000,
+    autoRunTests: false,
+    suggestionTrigger: "tab",
+    codePrivacy: "hosted-llm",
+    telemetryOptOut: false,
     template: "starter",
     language: "js",
     autosave: 15,
     previewResolution: "auto",
     keybindings: "default",
-    tabSize: 2,
-    fontSize: 14,
     lineWrap: true,
     lintOnSave: true,
     editorTheme: "dark",
@@ -337,17 +477,39 @@ export const defaultSettings: Settings = {
     projectSharingDefault: "private",
   },
   notifications: {
-    email: {
-      jobCompleted: true,
-      billing: true,
-      security: true,
+    channels: {
+      emailTransactional: true,
+      emailMarketing: false,
+      inApp: true,
+      push: false,
+      sms: false,
     },
-    inApp: {
-      jobCompleted: true,
-      billing: true,
-      security: true,
+    events: {
+      buildComplete: true,
+      buildFail: true,
+      publishComplete: true,
+      publishFail: true,
+      creditAlert: true,
+      billingAlert: true,
+      agentConfirmation: true,
+      securityAlert: true,
+      systemStatus: true,
+      teamInvite: true,
     },
-    frequency: "instant",
+    digest: {
+      enabled: false,
+      dailyTime: "08:00",
+      weeklyDay: "monday",
+      timezone: "UTC",
+    },
+    quietHours: {
+      enabled: false,
+      start: "22:00",
+      end: "08:00",
+      timezone: "UTC",
+    },
+    delivery: "immediate",
+    webhooks: [],
   },
   export: {
     retentionDays: 30,
