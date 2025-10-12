@@ -2,3 +2,8 @@
 {"timestamp":"2025-10-11T18:18:45.176Z","stage":"ASSEMBLY","message":"Assembling components"}
 {"timestamp":"2025-10-11T18:18:45.177Z","stage":"LINT","message":"Running linting checks"}
 {"timestamp":"2025-10-11T18:18:45.178Z","stage":"STATIC-BUILD","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T04:04:15.676Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"a epic games like"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-12T04:04:15.677Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-12T04:04:18.282Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T04:04:18.282Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T04:04:18.284Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}

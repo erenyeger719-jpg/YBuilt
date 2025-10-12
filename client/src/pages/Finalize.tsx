@@ -35,10 +35,42 @@ export default function Finalize() {
   const [designData, setDesignData] = useState<any>({});
   const [regenerationScope, setRegenerationScope] = useState<string>("full-site");
 
-  // Fetch job details
+  // Select and open workspace mutation (defined before useQuery to use in enabled condition)
+  const selectMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/select`, {
+        draftEdits: designData || {},
+      });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      if (data.workspaceReady === true && data.workspaceUrl) {
+        toast({
+          title: "Success",
+          description: "Opening workspace...",
+        });
+        window.location.href = data.workspaceUrl;
+      } else {
+        toast({
+          title: "Error",
+          description: "Workspace not ready",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to open workspace",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Fetch job details (disable refetch when navigating to prevent race condition)
   const { data: job, isLoading } = useQuery<Job>({
     queryKey: ["/api/jobs", jobId],
-    enabled: !!jobId,
+    enabled: !!jobId && !selectMutation.isPending,
     refetchInterval: 3000,
   });
 
@@ -66,28 +98,6 @@ export default function Finalize() {
     },
   });
 
-  // Select and open workspace mutation
-  const selectMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("POST", `/api/jobs/${jobId}/select`, {
-        draftEdits: designData || {},
-      });
-    },
-    onSuccess: (data: any) => {
-      toast({
-        title: "Success",
-        description: "Opening workspace...",
-      });
-      setLocation(data.workspaceUrl);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to open workspace",
-        variant: "destructive",
-      });
-    },
-  });
 
   // Regenerate with scope mutation
   const regenerateMutation = useMutation({

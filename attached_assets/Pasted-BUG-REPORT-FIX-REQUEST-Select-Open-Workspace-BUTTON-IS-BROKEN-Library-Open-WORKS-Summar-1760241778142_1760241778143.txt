@@ -1,0 +1,187 @@
+BUG REPORT & FIX REQUEST — "Select & Open Workspace" BUTTON IS BROKEN (Library → Open WORKS)
+
+Summary
+The workspace already exists and opens correctly when launched from Library’s **Open** button, but the **Select & Open Workspace** button on the Finalize page fails: clicking it loops to the "Draft not ready or not found" page or does nothing. This is a UI/flow bug (frontend) or a small endpoint/response mismatch (server). Please fix the Select button flow so it behaves exactly like the Library → Open flow and reliably opens the existing workspace.
+
+Observed
+- Library → Open (for demo/mock projects) opens workspace correctly.
+- Finalize → Select & Open Workspace repeatedly redirects to a page that says: "Draft not ready or not found" and loops, or shows empty page.
+- Worker and public preview artifacts exist for the job (workspace has been created).
+- Likely root causes: incorrect POST payload / missing headers, wrong jobId, stale response handling, response parsing bug, or the frontend auto-redirect logic misinterprets a pending response.
+
+Expected
+- Clicking **Select & Open Workspace** should:
+  1. Call `POST /api/jobs/:jobId/select`.
+  2. Receive `{ ok:true, workspaceUrl:'/workspace/:jobId', workspaceReady:true }` (or workspaceReady:false + pending).
+  3. If workspaceReady===true navigate to `/workspace/:jobId`.
+  4. If workspaceReady===false show progress UI and subscribe to logs; auto-enable link when ready.
+  5. Not loop or land on "Draft not ready" unless server responds an explicit error.
+
+Repro steps (developer-friendly)
+1. Go to Finalize for a generated job: `/finalize/:jobId`.
+2. Open browser devtools → Network & Console.
+3. Click **Select & Open Workspace**.
+4. Observe the network call(s): which endpoint is called, payload, headers, response body and status.
+5. Compare the network call(s) for Library → Open (that works) vs Finalize → Select (that fails). Note any differences in:
+   - URL (jobId mismatch)
+   - Method (POST vs GET)
+   - Body payload
+   - Auth headers / cookies
+   - Response status or JSON structure
+6. Check the server logs for the POST `/api/jobs/:jobId/select` call and the worker logs for any errors.
+
+Immediate checks to run (quick debug checklist)
+- Compare the exact request of Library → Open vs Finalize → Select in Network tab.
+- Check `GET /api/jobs/:jobId` right after clicking select; does it show `state: 'editing'`?
+- Inspect server logs for `POST /api/jobs/:jobId/select` — is it invoked? Does it return 200 with proper JSON?
+- Verify frontend code is reading and acting on `workspaceReady` field, not just truthy `ok`.
+- Confirm there’s no client-side redirect loop logic that re-calls Select repeatedly.
+
+Concrete fixes (copy-paste)
+
+A) Frontend — replace the current Select click handler with this defensive, idempotent implementation.
+(React / fetch — paste into Finalize component)
+
+```jsx
+// Finalize.jsx — Select button handler (replace existing)
+async function handleSelectAndOpen(e) {
+  try {
+    setSelecting(true);           // show spinner/disable button
+    const res = await fetch(`/api/jobs/${jobId}/select`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',    // ensure cookies/auth sent
+      body: JSON.stringify({ draftEdits: draftState || {} })
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(()=>null);
+      throw new Error(`Select failed: ${res.status} ${txt}`);
+    }
+
+    const json = await res.json();
+
+    // Defensive: validate shape
+    if (!json || json.ok !== true || !json.workspaceUrl) {
+      throw new Error('Unexpected select response: ' + JSON.stringify(json));
+    }
+
+    // If workspace is ready, navigate immediately
+    if (json.workspaceReady === true) {
+      window.location.href = json.workspaceUrl;
+      return;
+    }
+
+    // If workspace not ready, show progress UI and subscribe to logs
+    if (json.workspaceReady === false && json.pendingTaskId) {
+      // show a modal or in-page progress UI
+      showPendingWorkspaceModal(json.pendingTaskId, json.workspaceUrl);
+      // optionally poll status or subscribe to SSE
+      pollWorkspaceReady(json.pendingTaskId, json.workspaceUrl);
+      return;
+    }
+
+    // Fallback: if no workspaceReady provided, try a server-side check
+    // call GET /api/jobs/:jobId to confirm
+    const job = await (await fetch(`/api/jobs/${jobId}`, {credentials:'include'})).json();
+    if (job && job.state === 'editing') {
+      window.location.href = json.workspaceUrl || `/workspace/${jobId}`;
+      return;
+    }
+
+    throw new Error('Workspace not ready yet. Please retry or check logs.');
+
+  } catch (err) {
+    console.error('Select & Open Workspace failed', err);
+    notifyUser(`Could not open workspace: ${err.message}`);
+  } finally {
+    setSelecting(false);
+  }
+}
+
+// Helpers (simple polling example)
+function pollWorkspaceReady(pendingTaskId, wsUrl) {
+  const interval = setInterval(async () => {
+    try {
+      const r = await fetch(`/api/tasks/${pendingTaskId}`, { credentials: 'include' });
+      if (!r.ok) return;
+      const status = await r.json();
+      if (status.complete) {
+        clearInterval(interval);
+        window.location.href = wsUrl;
+      }
+    } catch (e) {
+      console.warn('pollWorkspaceReady error', e);
+    }
+  }, 2000);
+}
+  Key frontend notes:
+* Use credentials: 'include' to ensure cookies/session are sent.
+* Disable the button while selecting to prevent duplicate calls.
+* Always check workspaceReady boolean explicitly; do not assume ok:true means ready.
+* If server returns pending, show progress UI and poll/subscribe to SSE rather than immediately redirecting.
+B) Server — ensure POST /api/jobs/:jobId/select is idempotent and returns the correct JSON shape: (Pseudo Node/Express snippet — place in routes/workspace.js or update jobs route)
+  // routes/workspace.js
+router.post('/:jobId/select', async (req, res) => {
+  const { jobId } = req.params;
+  const userId = getUserIdFromReq(req); // auth
+  // Validate ownership
+  const job = await readJob(jobId);
+  if(!job) return res.status(404).json({ ok:false, error:'job-not-found' });
+  if(job.ownerId !== userId && !userIsTeamMember(userId, job.teamId)) {
+    return res.status(403).json({ ok:false, error:'forbidden' });
+  }
+
+  try {
+    // If workspace already prepared, return ready
+    const wsPath = path.join(WORKSPACE_ROOT, jobId);
+    if (await exists(path.join(wsPath,'manifest.json'))) {
+      // ensure job state set
+      job.state = 'editing';
+      await writeJob(jobId, job);
+      return res.json({ ok:true, workspaceUrl:`/workspace/${jobId}`, workspaceReady:true });
+    }
+
+    // Try fast path: if preview exists copy it synchronously to workspace
+    const previewPath = path.join(PREVIEWS_ROOT, jobId);
+    if (await exists(path.join(previewPath,'index.html'))) {
+      await copyPreviewToWorkspace(previewPath, wsPath);
+      job.state = 'editing';
+      await writeJob(jobId, job);
+      return res.json({ ok:true, workspaceUrl:`/workspace/${jobId}`, workspaceReady:true });
+    }
+
+    // Else spawn a short background worker to prepare workspace
+    const task = await enqueueWorkspacePrepare(jobId, userId);
+    // return pending (non-blocking)
+    return res.json({ ok:true, workspaceUrl:`/workspace/${jobId}`, workspaceReady:false, pendingTaskId:task.id });
+  } catch (err) {
+    console.error('select workspace error', err);
+    return res.status(500).json({ ok:false, error: err.message });
+  }
+});
+  Server notes:
+* Make endpoint idempotent: repeated POSTs should return the same result.
+* If heavy work is required, return workspaceReady:false with a pendingTaskId and publish progress logs to /api/jobs/:jobId/logs/stream.
+* Log each invocation (request id, userId, jobId) for comparability.
+C) Compare working flow (Library → Open) vs broken flow (Finalize → Select) If Library → Open works, record the exact sequence there and replicate it in the Select handler. Key differences to watch:
+* Request method and URL (is Select calling the same endpoint? same jobId string?)
+* Auth: is the cookie or header missing for Select?
+* Payload: does Library send extra body data (like draftId) that Select omits?
+* Response handling: Library likely expects a simple redirect to /workspace/:jobId. Match that behavior.
+D) Extra logging (temporarily add for debug)
+* On server, log incoming select requests with headers, body, and result: console.debug('SELECT', { jobId, headers: { cookie: req.headers.cookie }, body: req.body, result }).
+* In frontend, before calling select, log console.info('Selecting workspace', jobId, draftState) and log the response JSON.
+E) Tests to include
+1. Unit test for POST /api/jobs/:jobId/select to assert:
+    * returns 200 and workspaceReady:true when workspace exists
+    * returns 200 workspaceReady:false + pendingTaskId when no preview exists
+2. Manual test:
+    * Generate job from home → Finalize → click Select. Confirm network request, server response (workspaceReady true) and successful navigation.
+    * Repeat selecting the same job multiple times to test idempotency.
+Acceptance criteria (for you to verify)
+* After patching, clicking Select & Open Workspace opens the existing workspace (no "Draft not ready" page), without loops.
+* The console/network shows a single POST /api/jobs/:jobId/select and a 200 response with workspaceReady:true and workspaceUrl.
+* If a pending state occurs, the UI displays progress and auto-opens when ready.
+* No credential/auth mismatch; the session is honored when calling select.
+ 

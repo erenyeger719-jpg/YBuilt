@@ -148,12 +148,12 @@
     "status": "ready_for_finalization",
     "result": "/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html",
     "artifacts": null,
-    "settings": null,
+    "settings": "{\"autonomy\":\"medium\"}",
     "versionIds": null,
     "logsPath": null,
     "error": null,
     "createdAt": "2025-10-11T18:18:41.481Z",
-    "updatedAt": "2025-10-11T18:18:45.178Z"
+    "updatedAt": "2025-10-12T04:04:18.285Z"
   },
   "2f0b60b3-b103-44b0-b10f-f386a03d5447": {
     "id": "2f0b60b3-b103-44b0-b10f-f386a03d5447",
@@ -469,5 +469,65 @@
     "error": null,
     "createdAt": "2025-10-12T03:49:47.857Z",
     "updatedAt": "2025-10-12T03:49:56.733Z"
+  },
+  "692fa488-201b-44ee-9d41-6f740dd3354c": {
+    "id": "692fa488-201b-44ee-9d41-6f740dd3354c",
+    "userId": "demo",
+    "prompt": "rrf",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/692fa488-201b-44ee-9d41-6f740dd3354c/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"Test\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-12T03:59:40.942Z",
+    "updatedAt": "2025-10-12T04:07:23.743Z"
+  },
+  "844851a0-08d9-49d5-b1fe-f8820b0a598c": {
+    "id": "844851a0-08d9-49d5-b1fe-f8820b0a598c",
+    "userId": "demo",
+    "prompt": "test portfolio website",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/844851a0-08d9-49d5-b1fe-f8820b0a598c/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"\",\"description\":\"\",\"theme\":\"monochrome\",\"heroText\":\"test portfolio website\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-12T04:09:14.911Z",
+    "updatedAt": "2025-10-12T04:09:56.883Z"
+  },
+  "73876308-d3e7-4737-b00d-8a30e6da7ed0": {
+    "id": "73876308-d3e7-4737-b00d-8a30e6da7ed0",
+    "userId": "demo",
+    "prompt": "modern portfolio site",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/73876308-d3e7-4737-b00d-8a30e6da7ed0/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"\",\"description\":\"\",\"theme\":\"monochrome\",\"heroText\":\"modern portfolio site\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-12T04:12:07.559Z",
+    "updatedAt": "2025-10-12T04:13:05.811Z"
+  },
+  "39cd250d-1dc5-4381-a8cc-bb4f7eddbd7a": {
+    "id": "39cd250d-1dc5-4381-a8cc-bb4f7eddbd7a",
+    "userId": "demo",
+    "prompt": "3wf",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/39cd250d-1dc5-4381-a8cc-bb4f7eddbd7a/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"\",\"description\":\"\",\"theme\":\"monochrome\",\"heroText\":\"3wf\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-12T04:12:11.384Z",
+    "updatedAt": "2025-10-12T04:12:20.507Z"
   }
 }

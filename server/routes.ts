@@ -285,7 +285,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         JSON.stringify(manifest, null, 2)
       );
 
-      res.json({ ok: true, workspaceUrl: `/workspace/${req.params.jobId}` });
+      // Verify preview files exist before returning
+      const previewDir = path.join(process.cwd(), "public", "previews", req.params.jobId);
+      const indexPath = path.join(previewDir, "index.html");
+      
+      try {
+        await fs.access(indexPath);
+        res.json({ 
+          ok: true, 
+          workspaceUrl: `/workspace/${req.params.jobId}`,
+          workspaceReady: true 
+        });
+      } catch (error) {
+        res.status(404).json({ error: "Preview files not found" });
+      }
     } catch (error) {
       console.error("Error selecting job:", error);
       res.status(500).json({ error: "Failed to select" });
