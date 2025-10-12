@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { File, ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
 
 interface FileItem {
@@ -64,8 +63,7 @@ export default function FileTree({
   };
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="p-2 space-y-1">
+    <div className="p-2 space-y-1">
         {/* Prompts & Chat Files Section */}
         {promptFiles.length > 0 && (
           <div className="mb-2">
@@ -123,6 +121,5 @@ export default function FileTree({
           </div>
         )}
       </div>
-    </ScrollArea>
   );
 }

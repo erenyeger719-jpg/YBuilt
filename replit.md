@@ -42,6 +42,12 @@ The frontend is built with React, TypeScript, and Vite, utilizing `shadcn/ui` fo
 The system is designed to be fully functional in a mock mode without external API keys for Razorpay and AI generation, simulating delays and outcomes. It includes a simple in-memory job queue with a mock worker for processing AI generation requests. The architecture supports user persistence across server restarts and provides immediate visual feedback for appearance setting changes via CSS variable updates.
 
 ### Recent Changes (October 2025)
+- **Responsive Workspace UI Fix (Completed Oct 12)**: Fixed left pane clipping and squeezing issues when resizing:
+  - **ResizableSplitter**: Changed width clamp from 20-50% to 18-50%, added real-time compact mode detection at 26% threshold using `currentLeftPercent` state for immediate UI updates during drag
+  - **FileToolbar Compact Mode**: Added overflow menu system - shows all buttons inline when width > 26%, collapses to New Chat + overflow menu (three dots) when <= 26%
+  - **PromptBar Stability**: Fixed layout with `min-h-[56px]` container, `min-w-[120px]` textarea constraint, fixed button sizes to prevent squeezing, file pills scroll horizontally
+  - **Sticky Header Fix**: Removed nested ScrollArea from FileTree, made header properly sticky relative to left pane container
+  - **Acceptance Testing**: All criteria verified - no cropping during resize, smooth compact mode transitions, toolbar accessible via overflow, splitter clamps correctly
 - **Workspace UI Overhaul (Completed Oct 12)**: Replaced large BuildPromptPanel and AgentTools panels with compact, keyboard-first interface:
   - **PromptBar**: Bottom-anchored compact prompt input with file upload (25MB limit), Enter to submit, Shift+Enter for newline
   - **AgentButton**: Compact popover with autonomy level (Low/Med/High/Max), auto-apply toggle, safety filter, compute tier selector
