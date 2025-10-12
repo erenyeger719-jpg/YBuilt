@@ -42,13 +42,15 @@ The frontend is built with React, TypeScript, and Vite, utilizing `shadcn/ui` fo
 The system is designed to be fully functional in a mock mode without external API keys for Razorpay and AI generation, simulating delays and outcomes. It includes a simple in-memory job queue with a mock worker for processing AI generation requests. The architecture supports user persistence across server restarts and provides immediate visual feedback for appearance setting changes via CSS variable updates.
 
 ### Recent Changes (October 2025)
-- **Publish Button Repositioned to Console Tab (Completed Oct 12)**: Moved Publish button to workspace toolbar, right of Console tab:
-  - **DOM Placement**: Publish now in workspace toolbar (right pane), immediately after Console TabsTrigger, before preview controls
-  - **Spacing**: 40px gap between Console and Publish on desktop (`ml-[40px]`), 12px on mobile (`max-[720px]:ml-3`)
-  - **Top Layer**: z-index 9999 with `pointer-events: auto`, `overflow-visible` on containers prevents clipping
-  - **Responsive**: Desktop shows icon + "Publish" text, mobile (<720px) shows icon-only via `max-[720px]:hidden`
-  - **Accessibility**: aria-label="Publish", role="button", tooltip "Publish your website", keyboard Tab focus, Enter/Space activation
-  - **Acceptance Tests Passed**: All safety checks verified - DOM order correct, 40px gap maintained, no clipping with pane resize, keyboard accessible, mobile icon-only
+- **Publish Button Moved to Preview Toolbar (Completed Oct 12)**: Relocated Publish button to Preview toolbar, before fullscreen button; shifted Build-status badge:
+  - **DOM Placement**: Publish now in Preview toolbar, immediately BEFORE "Open in new tab" (fullscreen) button
+  - **Preview Toolbar Order**: Device mode buttons → Separator → Refresh → **Publish** → Open in new tab → Page Tool
+  - **Build-status Badge Shift**: Moved 35px LEFT using Tailwind `-translate-x-[35px]`, mobile reduced to 18px (`max-[720px]:-translate-x-[18px]`)
+  - **Top Layer**: z-index 9999, `pointer-events: auto`, `overflow-visible` on toolbar container
+  - **Conditional Display**: Publish ONLY visible when Preview tab active, hidden when Console tab active
+  - **Responsive**: Desktop shows icon + text, mobile (<720px) icon-only, Build-status reduces shift on mobile
+  - **Accessibility**: aria-label="Publish", role="button", tabIndex="0", keyboard activation (Enter/Space)
+  - **Acceptance Tests Passed**: DOM order verified, Publish before fullscreen, Build-status shifted 35px left, no clipping, keyboard accessible
 
 - **Responsive Workspace UI Fix (Completed Oct 12)**: Fixed left pane clipping and squeezing issues when resizing:
   - **ResizableSplitter**: Changed width clamp from 20-50% to 18-50%, added real-time compact mode detection at 26% threshold using `currentLeftPercent` state for immediate UI updates during drag

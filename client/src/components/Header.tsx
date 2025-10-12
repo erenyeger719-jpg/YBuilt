@@ -94,7 +94,8 @@ export default function Header({ logSummary }: HeaderProps) {
             {isWorkspace && logSummary && (
               <Badge 
                 variant={logSummary.status === "success" ? "default" : logSummary.status === "error" ? "destructive" : "secondary"}
-                className="gap-1.5"
+                className="gap-1.5 relative build-status -translate-x-[35px] max-[720px]:-translate-x-[18px]"
+                style={{ zIndex: 9999 }}
                 data-testid="badge-log-summary"
               >
                 <span className="text-xs">

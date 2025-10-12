@@ -1,0 +1,90 @@
+EXACT CHANGE — Move Publish to LEFT of Fullscreen in the Preview toolbar; shift Build-status 35px LEFT
+
+Objective (one sentence)
+Do not move Preview or Fullscreen. Render the **Publish** pill immediately **before** the Fullscreen button inside the Preview toolbar, ensure it lives in the header/top layer (not under panes), and move the Build-status badge 35px to the left. **Only** perform these two changes.
+
+Important constraints (read and follow exactly)
+- Do **not** relocate Preview or Fullscreen in the DOM.
+- Do **not** move Publish to the left header or any other header cluster — it must be placed immediately **before** the Fullscreen button inside the Preview toolbar.
+- Do **not** change other DOM order except what is described below.
+- Ensure Publish and Build-status remain keyboard-accessible and visible above panels (z-index).
+- Keep responsiveness: on small screens (<=720px) Publish becomes icon-only; Build-status stacks or truncates safely.
+
+Step-by-step (copy/paste into code):
+
+1) Insert Publish into Preview toolbar JSX (DOM order)
+Find the toolbar component that renders preview controls (example `PreviewToolbar.jsx` or similar). Update its JSX so Publish appears immediately before Fullscreen.
+
+Example (edit this file and place Publish here — exact semantics):
+```jsx
+// PreviewToolbar.jsx  (or equivalent)
+function PreviewToolbar(props) {
+  return (
+    <div className="preview-toolbar" role="toolbar" aria-label="Preview controls">
+      {/* ...existing preview controls... */}
+      <ZoomButton />            {/* example existing control */}
+      <DeviceSelector />
+      <Publish />               /* ← INSERT Publish here (immediately BEFORE Fullscreen) */
+      <FullscreenButton />      /* ← Fullscreen button must remain here */
+      <OtherControl />
+    </div>
+  );
+}
+Important: Ensure Publish is rendered as a normal child of .preview-toolbar directly before the FullscreenButton element. Do not absolutely position Publish outside of this container.
+CSS: spacing, layering, responsiveness
+Add or update CSS (put into workspace.css or header/toolbar CSS file). Copy-paste exactly:
+/* Ensure toolbar allows visible overflow for the pill */
+.preview-toolbar { display:flex; align-items:center; gap:8px; overflow: visible; }
+
+/* Publish pill styling: sits to left of Fullscreen, visible above other panels */
+.preview-toolbar .publish-pill {
+  margin-right: 14px;               /* space between Publish and Fullscreen if needed */
+  margin-left: 0;                   /* ensure no extra left margin */
+  position: relative;
+  z-index: 9999 !important;         /* ensure top-layer visibility */
+  pointer-events: auto;
+  transition: transform .12s ease, opacity .12s ease;
+}
+
+/* If you need exact 30/35px visual spacing, adjust Fullscreen margin instead of absolute positioning.
+   Here we keep Publish to left and Fullscreen at normal place; margin-right on Publish will create gap. */
+
+/* Build-status badge — shift left by 35px visually (use translate so layout stays consistent) */
+.build-status {
+  position: relative;
+  transform: translateX(-35px);     /* moves badge 35px to the LEFT */
+  z-index: 9999 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 720px) {
+  .preview-toolbar .publish-pill .label { display: none; } /* icon-only */
+  .build-status { transform: translateX(-18px); } /* reduce shift on small screens */
+  .preview-toolbar { gap:6px; }
+}
+Layering safety: ensure header / toolbar not clipped
+Ensure header/toolbar parent(s) do not have overflow: hidden that would clip Publish or the Build-status. If any ancestor uses overflow: hidden, set that ancestor to overflow: visible only for the toolbar area or wrap toolbar in a div with overflow: visible.
+Example:
+.header, .toolbar-wrapper { overflow: visible; }
+Accessibility and keyboard
+Ensure Publish has aria-label="Publish" and tabIndex="0". Ensure Fullscreen remains focusable. Tab order should be: previous controls → Publish → Fullscreen → next controls.
+Ensure Enter/Space activate Publish.
+Acceptance checklist (verify after change)
+A. DOM order: Inspect toolbar DOM and confirm <Publish /> node appears immediately before <FullscreenButton />.
+B. Visual: Publish appears on the left of Fullscreen (i.e., Publish then Fullscreen), with a comfortable gap — use the margin-right:14px on Publish (adjust if visual tuning needed).
+C. Build-status: badge shifted exactly 35px left (verify computed transform).
+D. Layer: Publish and Build-status are on top (clickable) and not cropped by resizable panes.
+E. Keyboard: Tab reaches Publish before Fullscreen; Enter activates Publish.
+F. Responsive: <=720px Publish collapses to icon-only and Build-status reduces left shift.
+G. No other toolbar controls moved or re-ordered.
+If anything goes wrong — quick rollback
+Revert the single file you edited (PreviewToolbar.jsx) and the single CSS block added. Confirm Publish returns to prior place. Then reapply carefully.
+Extra note to developer/agent (do not ignore)
+Use DOM insertion (render Publish in PreviewToolbar) — do not attempt to reposition Publish purely via absolute CSS with left or transform relative to viewport; that introduces clipping and tab-order bugs.
+The Build-status shift should be done with transform: translateX(-35px) rather than changing margins of neighbors, to avoid reflow issues.
+Deliverable
+One commit that:
+Edits the preview toolbar component to render <Publish /> immediately before <FullscreenButton />.
+Adds the CSS block above (or merges into the toolbar CSS).
+Confirms acceptance checklist A–G.
+End of instruction 

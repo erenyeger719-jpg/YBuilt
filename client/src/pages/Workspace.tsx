@@ -432,31 +432,10 @@ export default function Workspace() {
                 CONSOLE
               </TabsTrigger>
             </TabsList>
-            
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="gap-2 relative publish-pill ml-[40px] max-[720px]:ml-3"
-                  style={{ zIndex: 9999, pointerEvents: 'auto' }}
-                  onClick={() => setShowPublishModal(true)}
-                  data-testid="button-publish"
-                  aria-label="Publish"
-                  role="button"
-                >
-                  <Upload className="h-4 w-4" />
-                  <span className="max-[720px]:hidden">Publish</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Publish your website</p>
-              </TooltipContent>
-            </Tooltip>
           </div>
 
           {rightTab === "preview" && (
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0 overflow-visible preview-toolbar">
               <div className="flex items-center gap-1">
                 <Button
                   variant={deviceMode === "desktop" ? "secondary" : "ghost"}
@@ -505,6 +484,28 @@ export default function Workspace() {
               >
                 <RotateCw className="h-4 w-4" />
               </Button>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="gap-2 relative publish-pill mr-3.5"
+                    style={{ zIndex: 9999, pointerEvents: 'auto' }}
+                    onClick={() => setShowPublishModal(true)}
+                    data-testid="button-publish"
+                    aria-label="Publish"
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <Upload className="h-4 w-4" />
+                    <span className="max-[720px]:hidden">Publish</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Publish your website</p>
+                </TooltipContent>
+              </Tooltip>
 
               <Button
                 variant="ghost"
