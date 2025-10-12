@@ -706,49 +706,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update user profile
-  app.post("/api/users/:userId/profile", async (req, res) => {
-    try {
-      const user = await storage.getUser(req.params.userId);
-      
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      const { firstName, lastName, bio, publicProfile } = req.body;
-
-      // Validate bio length
-      if (bio && bio.length > 140) {
-        return res.status(400).json({ error: "Bio must be 140 characters or less" });
-      }
-
-      const updatedUser = await storage.updateUser(req.params.userId, {
-        firstName,
-        lastName,
-        bio,
-        publicProfile,
-      });
-
-      res.json({
-        success: true,
-        user: {
-          id: updatedUser.id,
-          username: updatedUser.username,
-          email: updatedUser.email,
-          firstName: updatedUser.firstName || "",
-          lastName: updatedUser.lastName || "",
-          bio: updatedUser.bio || "",
-          avatar: updatedUser.avatar || null,
-          publicProfile: updatedUser.publicProfile || false,
-          emailVerified: updatedUser.emailVerified || false,
-          roles: updatedUser.roles || [],
-        }
-      });
-    } catch (error) {
-      console.error("Error updating user profile:", error);
-      res.status(500).json({ error: "Failed to update user profile" });
-    }
-  });
 
   // Upload avatar
   const avatarUpload = multer({
@@ -1524,46 +1481,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/users/:userId/avatar - Upload avatar
-  const avatarUpload = multer({
-    dest: "public/uploads/avatars/",
-    limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-      if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(new Error("Invalid file type. Only images allowed."));
-      }
-    }
-  });
-
-  app.post("/api/users/:userId/avatar", avatarUpload.single("avatar"), async (req, res) => {
-    try {
-      const { userId } = req.params;
-      
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
-
-      const ext = path.extname(req.file.originalname);
-      const avatarDir = path.join(process.cwd(), "public", "uploads", "avatars");
-      await fs.mkdir(avatarDir, { recursive: true });
-      
-      const avatarPath = path.join(avatarDir, `${userId}${ext}`);
-      await fs.rename(req.file.path, avatarPath);
-
-      const avatarUrl = `/uploads/avatars/${userId}${ext}`;
-      
-      // Update user avatar
-      await storage.updateUser(userId, { avatar: avatarUrl });
-
-      res.json({ avatarUrl });
-    } catch (error) {
-      console.error("Error uploading avatar:", error);
-      res.status(500).json({ error: "Failed to upload avatar" });
-    }
-  });
 
   // POST /api/users/:userId/projects/:projectId/export - Export project as zip
   app.post("/api/users/:userId/projects/:projectId/export", async (req, res) => {

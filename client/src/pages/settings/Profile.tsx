@@ -114,10 +114,8 @@ export default function Profile() {
   // Update profile mutation
   const updateProfileMutation = useMutation({
     mutationFn: async (data: ProfileFormData) => {
-      return apiRequest(`/api/users/${userId}/profile`, {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      const res = await apiRequest("POST", `/api/users/${userId}/profile`, data);
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "profile"] });
@@ -169,9 +167,8 @@ export default function Profile() {
   // Delete project mutation
   const deleteProjectMutation = useMutation({
     mutationFn: async (projectId: string) => {
-      return apiRequest(`/api/projects/${projectId}`, {
-        method: "DELETE",
-      });
+      const res = await apiRequest("DELETE", `/api/projects/${projectId}`);
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "profile"] });
