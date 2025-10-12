@@ -270,12 +270,41 @@ export default function Workspace() {
       return;
     }
 
-    // Create blob and download
-    const blob = new Blob([file.content], { type: 'text/plain' });
+    // Get MIME type from file extension
+    const getMimeType = (path: string): string => {
+      const ext = path.split('.').pop()?.toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        'html': 'text/html',
+        'css': 'text/css',
+        'js': 'application/javascript',
+        'json': 'application/json',
+        'xml': 'application/xml',
+        'txt': 'text/plain',
+        'md': 'text/markdown',
+        'ts': 'application/typescript',
+        'tsx': 'application/typescript',
+        'jsx': 'application/javascript',
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'svg': 'image/svg+xml',
+        'webp': 'image/webp',
+        'ico': 'image/x-icon',
+        'pdf': 'application/pdf',
+        'zip': 'application/zip',
+      };
+      return mimeTypes[ext || ''] || 'application/octet-stream';
+    };
+
+    // Create blob with correct MIME type
+    const mimeType = getMimeType(file.path);
+    const blob = new Blob([file.content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = file.path.split('/').pop() || 'file.txt';
+    // Use full filename preserving extension
+    a.download = file.path.split('/').pop() || file.path;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
