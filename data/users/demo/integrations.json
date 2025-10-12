@@ -1,0 +1,34 @@
+[
+  {
+    "provider": "github",
+    "connected": true,
+    "connectedAt": "2025-10-12T18:06:25.641Z",
+    "username": "demo_github"
+  },
+  {
+    "provider": "gitlab",
+    "connected": false
+  },
+  {
+    "provider": "bitbucket",
+    "connected": false
+  },
+  {
+    "provider": "google",
+    "connected": true,
+    "connectedAt": "2025-10-12T18:06:27.661Z",
+    "username": "demo_google"
+  },
+  {
+    "provider": "facebook",
+    "connected": true,
+    "connectedAt": "2025-10-12T18:06:28.951Z",
+    "username": "demo_facebook"
+  },
+  {
+    "provider": "apple",
+    "connected": true,
+    "connectedAt": "2025-10-12T18:06:30.323Z",
+    "username": "demo_apple"
+  }
+]
