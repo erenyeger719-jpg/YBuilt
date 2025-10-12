@@ -1,0 +1,106 @@
+TASK — Restore Ybuilt logo in header (left-most corner) + clickable dropdown menu with full routing
+
+OBJECTIVE
+Add the Ybuilt logo back into the **left-most corner of the workspace header**. When clicked the logo should open a dropdown menu containing the exact items below. Each menu item must be functional (routes or actions) and keyboard accessible. The currently-open project name must appear dynamically in the list. The dropdown must be visually anchored to the logo and live in the header/top layer (not clipped by panes).
+
+MENU (exact order & labels — implement exactly)
+Home
+Recent
+{nameOfCurrentOpenedProject}    ← dynamic text showing current project name; clickable to open that project
+library
+Account
+Core
+Profile
+Notifications
+1
+Create Team
+> CLUI    ← treat as a submenu indicator (open a nested submenu on hover/click)
+Theme
+৫
+? Help
+←
+Log out
+
+REQUIREMENTS (do these exactly)
+1) DOM placement (React)
+- Render the logo component as the **first child** inside the header left cluster:
+```jsx
+// Header.jsx (or equivalent)
+<header className="header">
+  <div className="header-left">
+    <LogoButton />          // NEW - clickable logo with dropdown
+    {/* existing header items (project name, nav, etc.) should follow */}
+  </div>
+  <div className="header-right"> ... </div>
+</header>
+LogoButton must contain the SVG (logo.svg) and open a dropdown anchored to its bottom-left corner.
+Dropdown structure & behavior
+Build a dropdown structured like:
+<ul className="logo-menu" role="menu" aria-label="Ybuilt menu">
+  <li role="menuitem" data-action="home">Home</li>
+  <li role="menuitem" data-action="recent">Recent</li>
+  <li role="menuitem" data-action="open-current">{currentProjectName}</li>
+  <li role="menuitem" data-action="library">library</li>
+  <li role="menuitem" data-action="account">Account</li>
+  <li role="menuitem" data-action="core">Core</li>
+  <li role="menuitem" data-action="profile">Profile</li>
+  <li role="menuitem" data-action="notifications">Notifications</li>
+  <li role="menuitem" data-action="one">1</li>
+  <li role="menuitem" data-action="create-team">Create Team</li>
+  <li role="menuitem" aria-haspopup="true" data-action="clui">> CLUI</li>   // submenu
+  <li role="menuitem" data-action="theme">Theme</li>
+  <li role="menuitem" data-action="৫">৫</li>
+  <li role="menuitem" data-action="help">? Help</li>
+  <li role="menuitem" data-action="back">←</li>
+  <li role="menuitem" data-action="logout">Log out</li>
+</ul>
+> CLUI must open a nested submenu (keyboard & mouse accessible) with placeholder items or the actual small list the product requires.
+Routing / action mapping (exact)
+Wire each data-action to the following behavior:
+home → navigate to / (home/dashboard).
+recent → open the Recent projects listing (/recent).
+open-current → open the currently opened project workspace route (use its canonical route, e.g. /workspace/:jobId or /project/:projectId).
+library → /library
+account → /account
+core → /core
+profile → /profile
+notifications → /notifications
+one (label 1) → open /notifications?filter=1 or show a lightweight info panel (implement same as product expects).
+create-team → /teams/new (open team creation modal).
+clui → open submenu (route /clui or show submenu UI).
+theme → open theme picker (toggle dark/light or open /settings/appearance).
+৫ → map to the expected action (if this is a language toggle or special setting, open the relevant modal or settings page). If ambiguous, open /settings.
+help → open help center: /help or open support modal.
+back (←) → navigate back in app history (history.back()).
+logout → sign the user out via existing auth flow and redirect to login page.
+Visual & UX rules
+The dropdown must:
+Anchor bottom-left of the logo, have subtle glass/monochrome styling consistent with the app.
+Be keyboard accessible: logo button focusable; Enter/Space toggles; arrow keys navigate items; Enter selects; Esc closes.
+Trap focus while submenu open; return focus to logo when closed.
+Add hover + active states; indicate submenu for > CLUI with an arrow glyph.
+Close on outside click or Esc.
+The dynamic currentProjectName must sanitize long names and truncate with ellipsis; clicking opens that project.
+Responsiveness & layering
+Keep dropdown in top layer: .logo-menu { z-index: 9999; }.
+Ensure the header and its containers have overflow: visible where needed so menu is not clipped.
+On small screens collapse the menu into the existing mobile header menu if appropriate (but still accessible).
+Analytics & audit
+Emit a lightweight telemetry event on menu item selection (e.g., menu_click: { action }) so we can track usage.
+Testing & acceptance (must pass)
+A. Logo visible in left-most corner of header.
+B. Clicking the logo toggles the dropdown; items appear in the exact order above.
+C. Arrow keys navigate; Enter triggers correct route/action; Esc closes.
+D. open-current shows the exact current project name string; clicking opens that project.
+E. > CLUI opens a submenu (hover or keyboard opens it).
+F. Dropdown not clipped by panes; z-index ensures visibility.
+G. Clicking Logout triggers sign-out flow and redirects.
+H. Accessibility: role="menu" and role="menuitem" present; items have ARIA properties for submenu items.
+Implementation hint to devs (do this, not hacks)
+Render LogoButton in Header component. Use an existing routing helper (React Router / wouter) to navigate() on click.
+Implement menu as a controlled component with keyboard handling (do not rely solely on HTML select).
+For mobile, tie into existing mobile header behavior.
+For ৫ and 1 ensure product owner defines exact action; if ambiguous, map to /settings.
+DELIVERABLE
+One commit implementing LogoButton + logo-menu + routing for each action + small CSS. Attach a short QA report confirming acceptance tests A–H.
+End of task.
