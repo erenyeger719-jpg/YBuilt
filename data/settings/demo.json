@@ -1,10 +1,10 @@
 {
   "userId": "demo",
   "appearance": {
-    "theme": "dark",
-    "glassIntensity": 10,
+    "theme": "system",
+    "glassIntensity": 15,
     "glossFinish": true,
-    "parallaxIntensity": 30,
+    "parallaxIntensity": 40,
     "motion": "full",
     "lowPower": false,
     "lowBandwidth": false,
@@ -21,22 +21,59 @@
     "emailVerified": false
   },
   "workspace": {
-    "defaultVisibility": "private",
-    "defaultTemplate": "starter",
+    "projectVisibility": "private",
+    "defaultBranch": "main",
+    "projectRegion": "asia",
+    "defaultTemplate": "landing",
+    "computeTier": "balanced",
+    "memoryLimit": 1024,
+    "concurrencySlots": 2,
+    "autoScaling": true,
+    "agentAutonomyDefault": "medium",
+    "autoApplyEdits": "review",
+    "buildTraceVerbosity": "normal",
+    "safetyScan": true,
+    "autoSaveDrafts": true,
+    "previewSandboxMode": "lenient",
+    "devicePreset": "desktop",
+    "snapshotThumbnails": true,
+    "allowProjectWebhooks": true,
+    "envVariables": [],
+    "paidIntegrations": false,
     "autoCreatePreview": true,
     "storageRegion": "india"
   },
   "editor": {
+    "theme": "light",
+    "fontFamily": "Menlo",
+    "fontSize": 18,
+    "lineHeight": 1.5,
+    "tabSize": 2,
+    "indentWithTabs": false,
+    "cursorStyle": "line",
+    "wordWrap": false,
+    "autoComplete": false,
+    "inlineAiSuggestions": "suggest",
+    "formatOnSave": true,
+    "defaultFormatter": "prettier",
+    "linterEnabled": true,
+    "linterRuleset": "recommended",
+    "codeLens": true,
+    "minimap": true,
+    "keymap": "vscode",
+    "autosaveInterval": "15s",
+    "aiModel": "claude-sonnet",
+    "aiComputeTier": "balanced",
+    "maxTokens": 2000,
+    "autoRunTests": false,
+    "suggestionTrigger": "tab",
+    "codePrivacy": "hosted-llm",
+    "telemetryOptOut": false,
     "template": "starter",
     "language": "js",
     "autosave": 15,
     "previewResolution": "auto",
-    "keybindings": "default",
-    "tabSize": 2,
-    "fontSize": 14,
-    "lineWrap": true,
-    "lintOnSave": true,
-    "editorTheme": "dark"
+    "lintOnSave": true
   },
   "ai": {
     "model": "gpt-5-x",
@@ -90,17 +127,39 @@
     "projectSharingDefault": "private"
   },
   "notifications": {
-    "email": {
-      "jobCompleted": true,
-      "billing": true,
-      "security": true
+    "channels": {
+      "emailTransactional": true,
+      "emailMarketing": false,
+      "inApp": true,
+      "push": false,
+      "sms": false
     },
-    "inApp": {
-      "jobCompleted": true,
-      "billing": true,
-      "security": true
+    "events": {
+      "buildComplete": true,
+      "buildFail": true,
+      "publishComplete": true,
+      "publishFail": true,
+      "creditAlert": true,
+      "billingAlert": true,
+      "agentConfirmation": true,
+      "securityAlert": true,
+      "systemStatus": true,
+      "teamInvite": true
     },
-    "frequency": "instant"
+    "digest": {
+      "enabled": false,
+      "dailyTime": "08:00",
+      "weeklyDay": "monday",
+      "timezone": "UTC"
+    },
+    "quietHours": {
+      "enabled": false,
+      "start": "22:00",
+      "end": "08:00",
+      "timezone": "UTC"
+    },
+    "delivery": "immediate",
+    "webhooks": []
   },
   "export": {
     "retentionDays": 30,

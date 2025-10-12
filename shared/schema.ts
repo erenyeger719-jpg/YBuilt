@@ -197,15 +197,12 @@ export const settingsSchema = z.object({
     codePrivacy: z.enum(["hosted-llm", "self-hosted"]).default("hosted-llm"),
     telemetryOptOut: z.boolean().default(false),
     
-    // Legacy fields for compatibility
+    // Legacy fields for compatibility (non-duplicate only)
     template: z.string().default("starter"),
     language: z.enum(["js", "ts", "python", "other"]).default("js"),
     autosave: z.number().default(15),
     previewResolution: z.enum(["auto", "720p", "1080p", "4k"]).default("auto"),
-    keybindings: z.enum(["default", "vscode", "vim", "emacs"]).default("default"),
-    lineWrap: z.boolean().default(true),
     lintOnSave: z.boolean().default(true),
-    editorTheme: z.enum(["dark", "light"]).default("dark"),
   }).default({}),
   ai: z.object({
     model: z.enum(["gpt-5-x", "gpt-5-mini", "vision-capable"]).default("gpt-5-x"),
@@ -350,6 +347,12 @@ export const settingsSchema = z.object({
 export type Settings = z.infer<typeof settingsSchema>;
 export type SettingsSection = keyof Omit<Settings, "userId">;
 
+// Project Settings type (separate from user settings)
+export interface ProjectSettings {
+  workspace: z.infer<typeof settingsSchema.shape.workspace>;
+  editor: z.infer<typeof settingsSchema.shape.editor>;
+}
+
 // Default settings for new users
 export const defaultSettings: Settings = {
   userId: "",
@@ -426,10 +429,7 @@ export const defaultSettings: Settings = {
     language: "js",
     autosave: 15,
     previewResolution: "auto",
-    keybindings: "default",
-    lineWrap: true,
     lintOnSave: true,
-    editorTheme: "dark",
   },
   ai: {
     model: "gpt-5-x",

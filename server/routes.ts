@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { jobQueue } from "./queue";
-import { insertJobSchema, insertUserSchema, jobFinalizationSchema, draftSchema, regenerationScopeSchema, insertSupportTicketSchema } from "@shared/schema";
+import { insertJobSchema, insertUserSchema, jobFinalizationSchema, draftSchema, regenerationScopeSchema, insertSupportTicketSchema, defaultSettings, settingsSchema } from "@shared/schema";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
@@ -1615,6 +1615,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/users/:userId/notifications/test - Test notification
+  app.post("/api/users/:userId/notifications/test", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { channel, eventType } = req.body;
+      
+      if (!channel || !eventType) {
+        return res.status(400).json({ error: "Channel and eventType are required" });
+      }
+
+      // Mock notification test - in production would send actual notification
+      res.json({ 
+        success: true, 
+        message: `Test notification sent to ${channel} for ${eventType}`,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error sending test notification:", error);
+      res.status(500).json({ error: "Failed to send test notification" });
+    }
+  });
+
   // POST /api/users/:userId/export-apps - Export all user projects
   app.post("/api/users/:userId/export-apps", async (req, res) => {
     try {
@@ -1900,6 +1922,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting domain:", error);
       res.status(500).json({ error: "Failed to delete domain" });
+    }
+  });
+
+  // ========== PROJECT SETTINGS ENDPOINTS ==========
+  
+  // GET /api/projects/:projectId/settings - Get project settings
+  app.get("/api/projects/:projectId/settings", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      
+      // Load from storage or return defaults
+      const projectSettings = await storage.getProjectSettings(projectId);
+      
+      if (projectSettings) {
+        res.json(projectSettings);
+      } else {
+        // Return default settings if none saved yet
+        const defaultProjectSettings = {
+          workspace: defaultSettings.workspace,
+          editor: defaultSettings.editor
+        };
+        res.json(defaultProjectSettings);
+      }
+    } catch (error) {
+      console.error("Error fetching project settings:", error);
+      res.status(500).json({ error: "Failed to fetch project settings" });
+    }
+  });
+
+  // POST /api/projects/:projectId/settings - Update project settings
+  app.post("/api/projects/:projectId/settings", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { workspace, editor } = req.body;
+      
+      // Validate workspace settings if provided
+      if (workspace) {
+        const workspaceValidation = settingsSchema.shape.workspace.safeParse(workspace);
+        if (!workspaceValidation.success) {
+          return res.status(400).json({ 
+            error: "Invalid workspace settings", 
+            details: workspaceValidation.error.errors 
+          });
+        }
+      }
+      
+      // Validate editor settings if provided
+      if (editor) {
+        const editorValidation = settingsSchema.shape.editor.safeParse(editor);
+        if (!editorValidation.success) {
+          return res.status(400).json({ 
+            error: "Invalid editor settings", 
+            details: editorValidation.error.errors 
+          });
+        }
+      }
+      
+      // Save to storage
+      const settings = {
+        workspace: workspace || defaultSettings.workspace,
+        editor: editor || defaultSettings.editor
+      };
+      
+      await storage.saveProjectSettings(projectId, settings);
+      
+      res.json({ 
+        success: true, 
+        settings 
+      });
+    } catch (error) {
+      console.error("Error updating project settings:", error);
+      res.status(500).json({ error: "Failed to update project settings" });
     }
   });
 

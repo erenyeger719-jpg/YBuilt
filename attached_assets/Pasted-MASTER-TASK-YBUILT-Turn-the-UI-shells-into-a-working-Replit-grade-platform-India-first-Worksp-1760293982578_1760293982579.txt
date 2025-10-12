@@ -1,0 +1,150 @@
+MASTER TASK — YBUILT: Turn the UI shells into a working Replit-grade platform (India-first) — Workspace runtime, worker queue, agent controls, publish/payments, persistence, logs, and QA
+
+OBJECTIVE
+Complete the remaining core functionality so Ybuilt is a fully working developer platform. The deliverable is a runnable scaffold (client + server + worker + data) that implements:
+
+- Workspace file system + Monaco editor integration
+- Run-dev simulation and console streaming
+- Job queue and worker that generates preview artifacts and structured logs
+- Save Drafts/Library persistence and reliable "Select → Open Workspace" flow
+- Agent run pipeline (Low/Medium/High/Max) and Build Trace viewer
+- Publish flow with mock Razorpay + UPI (test key) and webhook handling that updates credits
+- Profile/Account settings fully wired (SSH keys, secrets, billing view, exports)
+- Theme scoping (project-only) and modal layering fixes
+- Help/CLUI popover fixes and UI bug fixes (prompt bar/resizing)
+- Tests, README, and QA checklist
+
+PRIORITY DESIGN RULES
+- UI palette: strictly monochrome cinematic — black, greys, white only for the app shell and controls. Preview artifacts may use richer colors.
+- Typography: Valmeria for display headings; fallback Inter/Poppins. Include font-face.
+- MOCK_MODE=true default. Provide clear knobs to swap in Redis, OpenAI, and real Razorpay keys.
+- Security: preview served in sandboxed iframes; sanitize files prior to rendering in host.
+
+SCOPE & FEATURES — DEFINITIVE
+
+1) Workspace file system & editor
+- Implement a persisted project file-store per project:
+  - API: 
+    - GET `/api/workspace/:projectId/files` → returns tree: `{ path, type, size, mtime }`
+    - GET `/api/workspace/:projectId/file?path=` → returns file content
+    - POST `/api/workspace/:projectId/file` → create/update `{ path, content }`
+    - DELETE `/api/workspace/:projectId/file?path=`
+    - POST `/api/workspace/:projectId/upload` → accept file uploads (images/assets), store under `public/uploads/{userId}/{projectId}/...`
+- Client:
+  - FileTree component: create file/folder, rename, delete, upload.
+  - Editor component: Monaco editor (or lightweight fallback), tabs, autosave option, format on save integration.
+  - Save Draft button: when clicked must persist the current open files to `data/users/{userId}/library/{draftId}` and appear in `/api/library/:userId`.
+  - Fix the "Select → Open Workspace" flow so it loads files from the saved draft and initializes the workspace. Ensure no race conditions: create draft → wait for file writes → open workspace.
+
+Acceptance: creating/updating/deleting files persists to disk; opening a saved draft loads files exactly.
+
+2) Run-dev, process manager, and console stream
+- API:
+  - POST `/api/workspace/:projectId/run` → spawn a simulated dev server process (returns `{ processId, port }`)
+  - POST `/api/workspace/:projectId/stop` → terminates process
+  - GET `/api/workspace/:projectId/processes` → list running processes
+  - GET `/api/jobs/:jobId/logs/stream` — SSE endpoint for structured logs for job or running process
+- Worker/Server:
+  - When run starts, spawn child process (node simple static server) or simulate via worker → stream stdout/stderr back to `/api/jobs/:jobId/logs/stream` tagged `[express]` or `[worker]`.
+- Client:
+  - ConsolePanel receives logs via SSE or WebSocket, formats lines, filter by source & level, tail/pause, download transcript.
+
+Acceptance: Run-dev returns a port and console shows live lines like sample logs; stopping process ends stream.
+
+3) Job queue + worker pipeline
+- Implement `utils/queue.js`:
+  - If `REDIS_URL` is present, use BullMQ; else use an in-process FIFO queue with persistence to `data/queue.json`.
+- Worker behavior:
+  - Accept `generate` jobs: simulate 2–6s work, generate `public/previews/{jobId}/index.html`, write `data/jobs.json` update: `status: completed`, produce `previewUrl`.
+  - Write `data/jobs/{jobId}/logs.jsonl` with structured JSON lines: `{ ts, level, source, msg, meta }`.
+  - Support autonomy parameter: `autonomy: low|medium|high|max` that affects what the worker does (more steps or simulated fixes).
+  - Provide flags `MOCK_JOB` and `--mock` for local demo.
+- Sample artifact generation:
+  - Worker should generate polished HTML with hero, generated copy from the `prompt` (mocked), a CSS file, and at least one webp image in 2k/4k resolution placeholder.
+- Add a commented code block showing where to call an LLM (OpenAI / Gemini) to generate HTML/CSS and images.
+
+Acceptance: creating a job via `POST /api/generate` returns jobId; polling `/api/jobs/:jobId` moves to `completed` and `/previews/{jobId}/index.html` loads.
+
+4) Agent Tools & BuildTrace
+- API:
+  - POST `/api/jobs/:jobId/build` — trigger a build with autonomy level; worker returns structured logs.
+  - GET `/api/jobs/:jobId/build-trace` — structured trace (stages + outputs)
+- Worker:
+  - Emit Build Trace stages: `Generation -> Assembly -> Lint -> Test -> Bundle -> Publish` (if requested).
+  - For each stage, write logs and create artifact artifacts (e.g., lint report).
+- UI:
+  - AgentTools component: autonomy selector; Run Agent button; Auto-Apply toggle.
+  - BuildTraceViewer: show readable steps, artifacts, and allow expanding stage metadata (no chain-of-thought).
+  - When Auto-Apply is ON and autonomy >= High, the worker should apply simulated file edits via POST `/workspace/:projectId/file`.
+
+Acceptance: Run Agent produces staged trace and UI shows each stage; Auto-Apply changes files when turned on.
+
+5) Publish flow & payments (India-first)
+- Server:
+  - GET `/api/razorpay_key` — returns test key: `rzp_test_mock_key_12345`.
+  - POST `/api/create_order` — create mock Razorpay order (return `order_id`, amount).
+  - POST `/webhooks/razorpay` — accept webhook; verify `x-razorpay-signature` if `RAZORPAY_KEY_SECRET` present; on `payment.captured` increment user credits in `data/users.json` and add invoice in `data/billing.json`.
+  - POST `/api/jobs/:jobId/publish` — check credits -> deduct cost -> package preview into `public/published/{jobId}-{ts}` -> return published URL.
+- Client:
+  - Publish modal shows credits, price, triggers `/api/create_order` and simulates Razorpay checkout (MOCK_MODE).
+  - UPI simulation: provide a UPI deeplink flow for demo; allow "simulate success" in local UI to trigger webhook.
+- Acceptance: simulate a successful payment and confirm credits increment and publish completes, giving a public URL.
+
+6) Profile, Account, and Settings wiring
+- Implement endpoints: `GET /api/users/:id/profile`, `POST /api/users/:id/profile`, `GET/POST` for settings, SSH keys, secrets, domains.
+- Client should show Profile: avatar upload, edit name/bio, list of projects with open/export/delete.
+- Account page: change email/password (mock), server region, notification toggles, export apps button that bundles projects into zip under `public/exports/{userId}`.
+- Persist user settings into `data/users/{id}/settings.json`.
+- Acceptance: changing settings persists and affects behavior (e.g., server region affects worker simulation selection).
+
+7) Library / Drafts features
+- `GET /api/library/:userId`, `POST /api/library/:userId` add draft, `DELETE /api/library/:userId/:draftId`.
+- When a user clicks "Open" from a Library item, the workspace must initialize with the draft’s files exactly.
+- Acceptance: Save Draft writes to `data/users/{id}/library/{draftId}` and Open loads it.
+
+8) Theme scoping & modal layering
+- Project themes must apply only to `.workspace-root` or via postMessage to preview iframe — **never** write to `:root`.
+- ThemeModal must be mounted via a React portal to `document.body` and use fixed positioning + very high z-index so it never clips under header/toolbars.
+- Acceptance: editing theme preview affects only workspace preview/iframe; site home/library remain unchanged.
+
+9) Help & CLUI popover fixes
+- Remove CLUI hover-trigger to the right; replace with click-open inline submenu.
+- Help side-popup must render via portal and be fully visible; do not clip under headers.
+- Acceptance: no cropping; keyboard accessible.
+
+10) Tests, QA & docs
+- Add a `test/generate.test.js` script that hits `/api/generate` in MOCK_MODE and asserts job finished and preview reachable.
+- Add `test/workflow.test.js` that goes: demo-login → create project → generate → poll → open workspace → publish (mock).
+- README: how to run in MOCK_MODE, how to switch on Redis, OpenAI, live Razorpay.
+
+EXPECTED FILES / FILE TREE (deliver)
+- Top-level: package.json, .env.example, README.md, deploy.md
+- data/: users.json, projects.json, jobs.json, billing.json, drafts.json
+- public/: previews/sample/, uploads/, background-2k.webp, published/
+- client/: vite + src/pages/Home.jsx Studio.jsx Library.jsx Workspace.jsx components (Header, FileTree, Editor, ConsolePanel, AgentTools, PublishModal, ThemeModal)
+- server/: server.js, routes/*.js (auth, workspace, generate, jobs, razorpay, users, library), utils/queue.js, utils/storage.js
+- worker/: worker.js
+- test/: generate.test.js workflow.test.js
+
+ACCEPTANCE CRITERIA (must pass)
+1. Full create → generate → poll → open preview → open workspace flow works end-to-end in MOCK_MODE.
+2. Save Draft writes to Library and Open Workspace loads it exactly.
+3. Run-dev process starts and streams logs to Console panel.
+4. Agent build trace available with staged logs; Auto-Apply writes edits to files when permitted.
+5. Publish flow with mock Razorpay/UPI increases credits and can publish a preview to `public/published/*`.
+6. Theme for project edits only affect workspace preview; Theme modal never clips.
+7. CLUI no longer opens right-side hover popover; Help popup is not cropped.
+8. Tests in test/ pass locally.
+9. README covers how to switch to production keys (Razorpay/OpenAI/Redis).
+
+IMPLEMENTATION NOTES TO DEVS
+- Keep worker code explicitly modular; add clear TODO comments where to plug LLM.
+- Make the queue pluggable — if `REDIS_URL` is missing, use process queue persisted under `data/queue.json`.
+- Use SSE for logs first — it’s simple and reliable for a demo.
+- Sanitize any user HTML injected into preview pages. When allowing scripts, only allow inside iframe origin.
+- For payments: store `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in env; implement HMAC-SHA256 signature check in webhook handler.
+
+DELIVERABLE
+- Pasteable repo tree + exact files/content OR a working Replit project generated by the AI. Include a short QA report that confirms acceptance criteria.
+
+END OF MASTER TASK

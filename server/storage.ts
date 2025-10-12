@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset, type ProjectTheme, projectThemeSchema, themePresets, type SupportTicket, type InsertSupportTicket, type SystemStatus, type SSHKey, type InsertSSHKey, type Secret, type InsertSecret, type Integration, type Domain, type InsertDomain } from "@shared/schema";
+import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset, type ProjectTheme, projectThemeSchema, themePresets, type ProjectSettings, type SupportTicket, type InsertSupportTicket, type SystemStatus, type SSHKey, type InsertSSHKey, type Secret, type InsertSecret, type Integration, type Domain, type InsertDomain } from "@shared/schema";
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
@@ -65,6 +65,10 @@ export interface IStorage {
   getProjectTheme(projectId: string): Promise<ProjectTheme | null>;
   saveProjectTheme(projectId: string, theme: ProjectTheme): Promise<void>;
   
+  // Project Settings methods
+  getProjectSettings(projectId: string): Promise<ProjectSettings | null>;
+  saveProjectSettings(projectId: string, settings: ProjectSettings): Promise<void>;
+  
   // Support methods
   getSupportTickets(userId: string): Promise<SupportTicket[]>;
   createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket>;
@@ -117,6 +121,7 @@ export class MemStorage implements IStorage {
   private uploads: Map<string, UploadedAsset[]>;
   private invoices: Map<string, Invoice>;
   private supportTickets: Map<string, SupportTicket>;
+  private projectSettings: Map<string, ProjectSettings>;
 
   constructor() {
     this.users = new Map();
@@ -128,6 +133,7 @@ export class MemStorage implements IStorage {
     this.uploads = new Map();
     this.invoices = new Map();
     this.supportTickets = new Map();
+    this.projectSettings = new Map();
     this.loadJobs();
     this.loadUsers();
     this.loadBuilds();
@@ -193,7 +199,18 @@ export class MemStorage implements IStorage {
       id,
       username: insertUser.username,
       email: insertUser.email,
-      password: insertUser.password
+      password: insertUser.password,
+      avatar: null,
+      region: null,
+      roles: null,
+      emailVerified: false,
+      firstName: null,
+      lastName: null,
+      bio: null,
+      publicProfile: false,
+      referralCode: randomUUID().substring(0, 8),
+      referralCredits: 0,
+      notificationSettings: null,
     };
     this.users.set(id, user);
     this.userCredits.set(id, 0);
@@ -633,6 +650,44 @@ export class MemStorage implements IStorage {
     
     const themeFile = path.join(workspaceDir, "theme.json");
     await fs.writeFile(themeFile, JSON.stringify(theme, null, 2));
+  }
+
+  // Project Settings methods
+  async getProjectSettings(projectId: string): Promise<ProjectSettings | null> {
+    // Check if settings exist in Map
+    if (this.projectSettings.has(projectId)) {
+      return this.projectSettings.get(projectId)!;
+    }
+
+    // If not in Map, try to load from file
+    try {
+      const settingsFile = path.join(process.cwd(), "data", "projects", projectId, "settings.json");
+      const data = await fs.readFile(settingsFile, "utf-8");
+      const settings = JSON.parse(data);
+      
+      // Validate and cache in Map
+      const workspace = settingsSchema.shape.workspace.parse(settings.workspace);
+      const editor = settingsSchema.shape.editor.parse(settings.editor);
+      const projectSettings: ProjectSettings = { workspace, editor };
+      
+      this.projectSettings.set(projectId, projectSettings);
+      return projectSettings;
+    } catch (error) {
+      // Settings file doesn't exist or invalid
+      return null;
+    }
+  }
+
+  async saveProjectSettings(projectId: string, settings: ProjectSettings): Promise<void> {
+    // Save to Map
+    this.projectSettings.set(projectId, settings);
+    
+    // Persist to file
+    const projectDir = path.join(process.cwd(), "data", "projects", projectId);
+    await fs.mkdir(projectDir, { recursive: true });
+    
+    const settingsFile = path.join(projectDir, "settings.json");
+    await fs.writeFile(settingsFile, JSON.stringify(settings, null, 2));
   }
 
   // Support ticket methods
