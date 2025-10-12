@@ -1,0 +1,119 @@
+TASK — Make the Logo → Help item behave like Replit: hover opens submenu; first item shows live status "All systems operational"; "? Get help" opens a modal with options and quick-actions
+
+GOAL (one sentence)
+Implement a Help menu that (A) opens on hover in the Logo dropdown, (B) shows a live status line (“All systems operational”), and (C) opens a full “Get help” modal when the user clicks “? Get help” with the exact controls and routes below. Make everything keyboard-accessible and functional.
+
+SCOPE (do only these)
+• Modify Logo dropdown + implement Help submenu + implement GetHelp modal and wire the listed actions/routes.  
+• Do not change other menu items, layout, or placement.  
+• Keep styling consistent with current glass/monochrome theme.
+
+UX SPEC — exact behavior
+1. In the Logo dropdown, the **Help** list item behaves like this:
+   - When the mouse cursor moves over the Help list item (or it is focused via keyboard), the Help submenu opens automatically (no click required). Hovering out closes it after 200ms unless focused or submenu open.
+   - First visible row inside the Help submenu (top) must be a non-interactive status row with a green dot and the text **“All systems operational”** (live). Clicking the status can optionally open a status page `/status`.
+   - Below the status row, show `? Get help` as a clickable menu item (role=menuitem). Clicking it opens the Get Help modal (see modal spec).
+   - The submenu must be anchored to the Help menu item, with `role="menu"` and the items `role="menuitem"`. Use keyboard navigation (arrow keys) to move; Enter activates; Esc closes.
+
+2. Live status row
+   - Text: **All systems operational**
+   - Icon: small green circle at left.
+   - Fetch freshness: poll `/api/status` every 30s (or use existing status endpoint). If any service degraded, change text to e.g. **Partial outage** and color to amber/red.
+   - Clicking the status row navigates to `/status` (or opens status modal) if available.
+
+3. Get Help modal (open on clicking `? Get help`)
+   - Title: **Get help**
+   - Greeting line: `Hi there, {userDisplayName}! How can we help?` (use logged-in name; fallback "Hi there! How can we help?")
+   - Under the greeting: a select/dropdown labelled **Choose an option** (default collapsed). Options (exact): `Billing`, `Account`, `Technical`.
+     - Selecting an option changes the help form below (or pre-fills the support ticket type).
+     - Selecting `Billing` opens billing help flow: route `/support/billing` or opens inline billing support panel.
+     - Selecting `Account` → `/support/account`.
+     - Selecting `Technical` → `/support/technical` (or opens technical diagnostics panel).
+   - Below the dropdown show three quick-action buttons (icon + label) in a single row:
+     1. **Report abuse** — opens `/report-abuse` or an in-app report form.
+     2. **Read the docs** — opens `/docs` in a new tab.
+     3. **Check the community** — opens `/community` in a new tab.
+   - The modal must include a small free-text area for the user to type a message, a file upload control (attach logs/screenshots), and a Submit button that POSTs to `/api/support/tickets` with `{ userId, type, subject, message, attachments }`.
+   - On submit: show success toast and ticket ID; store ticket to `data/support/tickets.json` in MOCK_MODE.
+   - Keyboard & accessibility: modal traps focus, close with Esc, Enter submits from the message field (Ctrl/Cmd+Enter also submit). Provide aria labels.
+
+ROUTES / ACTION MAPPING (wire exactly)
+- `/api/status` — returns JSON `{ ok: true/false, summary: "All systems operational" }`. Poll every 30s for the status row.
+- Clicking status row → `navigate('/status')`.
+- Get Help modal submit → POST `/api/support/tickets` (demo server accepts and returns `{ ticketId, status }`).
+- Quick actions:
+  - Report abuse → `navigate('/report-abuse')` (or open inline report modal).
+  - Read the docs → open `/docs` in new tab.
+  - Check the community → open `/community` in new tab.
+- Dropdown options:
+  - Billing → `navigate('/support/billing')` or show billing help panel.
+  - Account → `navigate('/support/account')`.
+  - Technical → `navigate('/support/technical')`.
+
+IMPLEMENTATION DETAILS (copy/paste safe snippets)
+
+A) Logo dropdown hover submenu (React pseudo)
+```jsx
+<li role="menuitem" className="logo-menu-item help" onMouseEnter={openHelpSubmenu} onFocus={openHelpSubmenu} onMouseLeave={closeHelpSubmenu}>
+  <span>Help</span>
+  {helpOpen && (
+    <ul className="help-submenu" role="menu" aria-label="Help menu">
+      <li role="none" className="status-row" aria-hidden="false">
+        <span className="dot dot-green" aria-hidden="true"></span>
+        <span>All systems operational</span>
+      </li>
+      <li role="menuitem" tabIndex={0} onClick={openGetHelpModal}>? Get help</li>
+      <!-- optional other help links -->
+    </ul>
+  )}
+</li>
+openHelpSubmenu must set a small hover delay guard to prevent flicker.
+B) Poll status endpoint
+useEffect(()=> {
+  let mounted=true;
+  async function fetchStatus(){
+    const res = await fetch('/api/status');
+    const j = await res.json();
+    if(!mounted) return;
+    setStatus(j);
+  }
+  fetchStatus();
+  const id = setInterval(fetchStatus, 30000);
+  return ()=> { mounted=false; clearInterval(id); };
+}, []);
+C) Get Help Modal UI skeleton
+Title, greeting (use user.name), Choose dropdown with Billing/Account/Technical, textarea, attachments, Submit.
+Submit handler POSTs JSON and files to /api/support/tickets.
+Save ticket server-side to data/support/tickets.json in MOCK_MODE.
+ACCESSIBILITY & UX RULES (must follow)
+Submenu opens on hover and focus. Use aria-expanded on the parent item.
+All interactive elements must have aria-label and be reachable by keyboard.
+Modal must trap focus and return focus to the ? Get help menu item when closed.
+Use semantic role="menu" / role="menuitem" for menu lists; use role="dialog" and aria-modal="true" for modal.
+TELEMETRY
+Emit lightweight events:
+help_menu_open (when submenu opens)
+help_status_clicked (when user clicks status)
+help_modal_open (when modal opens)
+support_ticket_submitted (with { type, ticketId })
+quick_action_clicked (report-abuse/docs/community)
+ACCEPTANCE CHECKLIST (manual QA)
+Hovering (mouse) over Help in Logo menu opens the submenu automatically. Keyboard focus does the same.
+The top row shows a green dot + text All systems operational. If /api/status returns degraded, the row updates color/text accordingly.
+Clicking the status row opens /status.
+? Get help opens the modal described (greeting, dropdown with Billing/Account/Technical, message box, file upload, Submit).
+Selecting Billing/Account/Technical navigates to the mapped routes or pre-fills the modal form accordingly.
+Quick actions (Report abuse, Read the docs, Check community) open their routes (docs/community open in new tabs).
+Submenu and modal are keyboard-accessible, trap focus, Esc closes, focus returns to opener.
+In MOCK_MODE, submitting the form writes a ticket to data/support/tickets.json and shows a success message.
+Telemetry events fire for open/modal/submit actions.
+DEVELOPER NOTES / HINTS
+Keep the submenu and modal mounted via portal if necessary to avoid clipping by header/toolbars.
+Use small hover delay (100–200ms) before open/close to avoid flicker when moving mouse.
+For file uploads, accept common log/image types and limit size to a safe value (e.g., 5MB).
+Use existing auth/user info API to display the greeting name.
+DELIVERABLE
+Frontend: help submenu in logo menu + GetHelp modal + polling status + quick actions.
+Backend: /api/status (mockable) and /api/support/tickets (mockable; persist to data/support/tickets.json).
+QA checklist passes.
+END —    Make the Help flow feel immediate and reliable; don’t change other menu behavior.

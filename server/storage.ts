@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset, type ProjectTheme, projectThemeSchema, themePresets } from "@shared/schema";
+import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset, type ProjectTheme, projectThemeSchema, themePresets, type SupportTicket, type InsertSupportTicket, type SystemStatus } from "@shared/schema";
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
@@ -9,6 +9,8 @@ const BUILDS_FILE = path.join(process.cwd(), "data", "builds.json");
 const VERSIONS_FILE = path.join(process.cwd(), "data", "versions.json");
 const SETTINGS_DIR = path.join(process.cwd(), "data", "settings");
 const LIBRARY_DIR = path.join(process.cwd(), "data", "library");
+const SUPPORT_DIR = path.join(process.cwd(), "data", "support");
+const SUPPORT_TICKETS_FILE = path.join(SUPPORT_DIR, "tickets.json");
 
 export interface IStorage {
   // User methods
@@ -61,6 +63,11 @@ export interface IStorage {
   // Theme methods
   getProjectTheme(projectId: string): Promise<ProjectTheme | null>;
   saveProjectTheme(projectId: string, theme: ProjectTheme): Promise<void>;
+  
+  // Support methods
+  getSupportTickets(userId: string): Promise<SupportTicket[]>;
+  createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket>;
+  getSystemStatus(): Promise<SystemStatus>;
 }
 
 export interface Invoice {
@@ -84,6 +91,7 @@ export class MemStorage implements IStorage {
   private drafts: Map<string, Draft>;
   private uploads: Map<string, UploadedAsset[]>;
   private invoices: Map<string, Invoice>;
+  private supportTickets: Map<string, SupportTicket>;
 
   constructor() {
     this.users = new Map();
@@ -94,12 +102,14 @@ export class MemStorage implements IStorage {
     this.drafts = new Map();
     this.uploads = new Map();
     this.invoices = new Map();
+    this.supportTickets = new Map();
     this.loadJobs();
     this.loadUsers();
     this.loadBuilds();
     this.loadVersions();
     this.loadDrafts();
     this.loadInvoices();
+    this.loadSupportTickets();
   }
 
   private async loadJobs() {
@@ -578,6 +588,67 @@ export class MemStorage implements IStorage {
     
     const themeFile = path.join(workspaceDir, "theme.json");
     await fs.writeFile(themeFile, JSON.stringify(theme, null, 2));
+  }
+
+  // Support ticket methods
+  private async loadSupportTickets() {
+    try {
+      const data = await fs.readFile(SUPPORT_TICKETS_FILE, "utf-8");
+      const ticketsData = JSON.parse(data);
+      Object.entries(ticketsData).forEach(([id, ticket]) => {
+        this.supportTickets.set(id, ticket as SupportTicket);
+      });
+    } catch (error) {
+      // File doesn't exist yet, that's ok
+    }
+  }
+
+  private async saveSupportTickets() {
+    try {
+      await fs.mkdir(SUPPORT_DIR, { recursive: true });
+      const ticketsObj = Object.fromEntries(this.supportTickets);
+      await fs.writeFile(SUPPORT_TICKETS_FILE, JSON.stringify(ticketsObj, null, 2));
+    } catch (error) {
+      console.error("Error saving support tickets:", error);
+    }
+  }
+
+  async getSupportTickets(userId: string): Promise<SupportTicket[]> {
+    return Array.from(this.supportTickets.values()).filter(
+      ticket => ticket.userId === userId
+    );
+  }
+
+  async createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket> {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const newTicket: SupportTicket = {
+      ...ticket,
+      id,
+      status: "open",
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    this.supportTickets.set(id, newTicket);
+    await this.saveSupportTickets();
+    
+    return newTicket;
+  }
+
+  async getSystemStatus(): Promise<SystemStatus> {
+    // Mock system status - always operational
+    return {
+      ok: true,
+      summary: "All systems operational",
+      services: [
+        { name: "API", status: "operational" },
+        { name: "Build Pipeline", status: "operational" },
+        { name: "Storage", status: "operational" },
+        { name: "AI Generation", status: "operational" },
+      ],
+      lastUpdated: new Date().toISOString(),
+    };
   }
 }
 

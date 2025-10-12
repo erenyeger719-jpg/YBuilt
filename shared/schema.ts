@@ -459,6 +459,40 @@ export const projectThemeSchema = z.object({
 
 export type ProjectTheme = z.infer<typeof projectThemeSchema>;
 
+// Support Ticket Schema
+export const supportTicketSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  type: z.enum(["billing", "account", "technical"]),
+  subject: z.string().default(""),
+  message: z.string(),
+  attachments: z.array(z.object({
+    name: z.string(),
+    url: z.string(),
+    size: z.number(),
+  })).default([]),
+  status: z.enum(["open", "pending", "resolved", "closed"]).default("open"),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const insertSupportTicketSchema = supportTicketSchema.omit({ id: true, createdAt: true, updatedAt: true, status: true });
+export type SupportTicket = z.infer<typeof supportTicketSchema>;
+export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
+
+// System Status Schema
+export const systemStatusSchema = z.object({
+  ok: z.boolean(),
+  summary: z.string(),
+  services: z.array(z.object({
+    name: z.string(),
+    status: z.enum(["operational", "degraded", "outage"]),
+  })).default([]),
+  lastUpdated: z.string(),
+});
+
+export type SystemStatus = z.infer<typeof systemStatusSchema>;
+
 // Theme presets
 export const themePresets = {
   light: {

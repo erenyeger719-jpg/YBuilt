@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { jobQueue } from "./queue";
-import { insertJobSchema, insertUserSchema, jobFinalizationSchema, draftSchema, regenerationScopeSchema } from "@shared/schema";
+import { insertJobSchema, insertUserSchema, jobFinalizationSchema, draftSchema, regenerationScopeSchema, insertSupportTicketSchema } from "@shared/schema";
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
@@ -23,6 +23,24 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error("Invalid file type"));
+    }
+  }
+});
+
+const supportUpload = multer({
+  dest: "data/support/attachments/",
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for support attachments
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "image/jpeg", "image/png", "image/gif", "image/webp",
+      "application/pdf",
+      "text/plain",
+      "video/mp4", "video/webm"
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type for support attachment"));
     }
   }
 });
@@ -676,6 +694,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid theme data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to save workspace theme" });
+    }
+  });
+
+  // System Status
+  app.get("/api/status", async (req, res) => {
+    try {
+      const status = await storage.getSystemStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("Error fetching system status:", error);
+      res.status(500).json({ error: "Failed to fetch system status" });
+    }
+  });
+
+  // Support Tickets
+  app.post("/api/support/tickets", supportUpload.array("attachments", 5), async (req, res) => {
+    try {
+      const { userId, type, subject, message } = req.body;
+      
+      if (!userId || !type || !message) {
+        return res.status(400).json({ error: "Missing required fields: userId, type, message" });
+      }
+
+      // Process uploaded attachments
+      const attachments = [];
+      if (req.files && Array.isArray(req.files)) {
+        for (const file of req.files) {
+          const attachmentDir = path.join(process.cwd(), "data", "support", "attachments");
+          await fs.mkdir(attachmentDir, { recursive: true });
+          
+          const fileName = `${Date.now()}-${file.originalname}`;
+          const filePath = path.join(attachmentDir, fileName);
+          await fs.rename(file.path, filePath);
+          
+          attachments.push({
+            name: file.originalname,
+            url: `/support/attachments/${fileName}`,
+            size: file.size,
+          });
+        }
+      }
+
+      // Validate and create ticket
+      const ticketData = {
+        userId,
+        type,
+        subject: subject || "",
+        message,
+        attachments,
+      };
+
+      const validation = insertSupportTicketSchema.safeParse(ticketData);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: "Invalid ticket data", 
+          details: validation.error.errors 
+        });
+      }
+
+      const ticket = await storage.createSupportTicket(validation.data);
+
+      res.json({
+        ticketId: ticket.id,
+        status: ticket.status,
+        message: "Support ticket created successfully",
+      });
+    } catch (error) {
+      console.error("Error creating support ticket:", error);
+      res.status(500).json({ error: "Failed to create support ticket" });
+    }
+  });
+
+  app.get("/api/support/tickets/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      if (!userId) {
+        return res.status(400).json({ error: "User ID is required" });
+      }
+
+      const tickets = await storage.getSupportTickets(userId);
+      res.json(tickets);
+    } catch (error) {
+      console.error("Error fetching support tickets:", error);
+      res.status(500).json({ error: "Failed to fetch support tickets" });
     }
   });
 
