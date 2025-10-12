@@ -41,7 +41,18 @@ The frontend is built with React, TypeScript, and Vite, utilizing `shadcn/ui` fo
 ### System Design Choices
 The system is designed to be fully functional in a mock mode without external API keys for Razorpay and AI generation, simulating delays and outcomes. It includes a simple in-memory job queue with a mock worker for processing AI generation requests. The architecture supports user persistence across server restarts and provides immediate visual feedback for appearance setting changes via CSS variable updates.
 
-### Recent Bug Fixes (October 2025)
+### Recent Changes (October 2025)
+- **Workspace UI Overhaul (Completed Oct 12)**: Replaced large BuildPromptPanel and AgentTools panels with compact, keyboard-first interface:
+  - **PromptBar**: Bottom-anchored compact prompt input with file upload (25MB limit), Enter to submit, Shift+Enter for newline
+  - **AgentButton**: Compact popover with autonomy level (Low/Med/High/Max), auto-apply toggle, safety filter, compute tier selector
+  - **FileTree**: Organized file view with "Prompts & Chat Files" section at top (newest first) and regular files below
+  - **FileToolbar**: Quick access to New Chat (+), Upload, Save/Download, New Folder actions
+  - **NewChatModal**: Quick action presets (Check bugs, Add payment, Connect AI, Add SMS, Add DB, Add auth) for rapid workflows
+  - **PromptFileModal**: View/download/delete prompt files with metadata display
+  - **Prompt→File Conversion**: User prompts automatically saved as markdown files in `workspaces/{jobId}/prompts/` directory
+  - **useWorkspace Hook**: Centralized workspace operations (promptToFile, createFolder, saveFile, downloadFile) with optimistic updates
+  - **Agent Settings Propagation Fix**: Build requests now properly send all agent settings (autonomyLevel, autoApply, safetyFilter, computeTier) to backend, previously only sent autonomy level
+
 - **Select & Open Workspace Flow (Fixed)**: Resolved race condition and JSON parsing bug where clicking "Select & Open Workspace" on Finalize page showed "Workspace not ready" error. Fix includes: (1) POST /api/jobs/:jobId/select now returns `workspaceReady: true` field, (2) Finalize.tsx properly parses JSON response with `res.json()`, (3) Query refetch disabled during navigation with `enabled: !!jobId && !selectMutation.isPending` to prevent status change from blocking navigation.
 
 ## External Dependencies

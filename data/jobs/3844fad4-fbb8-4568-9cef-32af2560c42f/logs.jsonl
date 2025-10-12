@@ -7,3 +7,20 @@
 {"timestamp":"2025-10-12T04:04:18.282Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
 {"timestamp":"2025-10-12T04:04:18.282Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
 {"timestamp":"2025-10-12T04:04:18.284Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T05:07:28.351Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"Add an AI assistant feature to my application that can chat with users and answer questions."},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-12T05:07:28.352Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-12T05:07:32.006Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T05:07:32.007Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T05:07:32.008Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T05:08:37.382Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"Review my application code and check for bugs, security issues, and potential improvements."},"metadata":{"autonomy":"high"}}
+{"timestamp":"2025-10-12T05:08:37.390Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with high autonomy","metadata":{"autonomy":"high","mode":"assisted"}}
+{"timestamp":"2025-10-12T05:08:41.209Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T05:08:41.210Z","level":"info","stage":"AGENT","source":"agent","message":"Running lint check...","metadata":{"autonomy":"high","action":"auto-lint"}}
+{"timestamp":"2025-10-12T05:08:41.211Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T05:08:41.212Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T05:09:05.784Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":" and fix any issues found"},"metadata":{"autonomy":"high"}}
+{"timestamp":"2025-10-12T05:09:05.788Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with high autonomy","metadata":{"autonomy":"high","mode":"assisted"}}
+{"timestamp":"2025-10-12T05:09:08.581Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T05:09:08.581Z","level":"info","stage":"AGENT","source":"agent","message":"Running lint check...","metadata":{"autonomy":"high","action":"auto-lint"}}
+{"timestamp":"2025-10-12T05:09:08.581Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T05:09:08.582Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
