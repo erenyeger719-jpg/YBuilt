@@ -204,7 +204,7 @@ export default function ResizableSplitter({
           width: 'var(--left-width-pct)',
           ...transitionStyle,
         }}
-        className={`overflow-hidden ${isCompact ? 'left--compact' : ''}`}
+        className={`overflow-x-hidden ${isCompact ? 'left--compact' : ''}`}
       >
         {typeof leftPane === 'function' ? leftPane(isCompact) : leftPane}
       </div>

@@ -1,0 +1,86 @@
+URGENT UI FIX — restore left-top toolbar icons & reposition prompt input vertically between uploaded-files and Agent/Build
+
+Context (short)
+Three left-toolbar icons (New Chat/+ quick actions, Save file, New folder) are currently cropped and not visible. The prompt typing area (“Type a command or paste a file…”) is squeezed and sitting in the wrong vertical spot — it should be placed **between** the uploaded-files/pills row (above) and the Agent/Build controls (below). Fix both UI issues so they’re stable, non-cropping, and responsive.
+
+Required outcome (one line)
+Make the three toolbar icons visible in the **left pane header** (sticky), and re-layout the prompt bar so: top = uploaded-files pills (scroll x), middle = typing area (textarea), bottom = small control row (Agent button, Build button). Ensure no cropping at any pane width, and make buttons collapse to icon-only or overflow when space is limited.
+
+Exact changes to implement (do this — copy/paste)
+
+1) Move the three icons to the left pane header and make them sticky / visible
+- Ensure these icons are rendered in the left column header toolbar (not inside prompt-bar). Example DOM:
+```jsx
+<div className="column-left">
+  <div className="left-header toolbar">
+    <button className="icon new-chat" aria-label="New chat">+</button>
+    <button className="icon save-file" aria-label="Save file">💾</button>
+    <button className="icon new-folder" aria-label="New folder">📁</button>
+    <!-- other header controls -->
+  </div>
+  <div className="ai-messages">...</div>
+  <div className="prompt-area">...</div>
+</div>
+CSS: make header sticky so it never scrolls out of view:
+.left-header { position: sticky; top: var(--header-h); z-index:50; display:flex; gap:10px; align-items:center; padding:8px; background:inherit; overflow: visible; }
+These three buttons must execute their functions unchanged:
+new-chat opens the quick-actions modal with the six presets (Check bugs, Add payments, Connect assistant, Add SMS, Add DB, Add auth).
+save-file triggers client download/save dialog for currently-selected file.
+new-folder opens small folder name dialog and creates folder in workspace.
+Do not let any ancestor container have overflow:hidden that clips the header; set overflow:visible on header parents if needed.
+Re-layout the prompt area so typing sits between pills and controls
+Replace compact single-row prompt with vertical mini-layout (three rows):
+Row A (top): .prompt-pills — horizontal scroll, shows uploaded/created prompt files (max-height 48px).
+Row B (middle): .prompt-input-wrap — the textarea where user types (visible, roomy).
+Row C (bottom): .prompt-controls — small buttons: Upload, Agent, Build (icon + optional label).
+Example HTML structure:
+<div className="prompt-area">
+  <div className="prompt-pills" role="list" />            <!-- scroll-x -->
+  <div className="prompt-input-wrap">
+    <textarea className="prompt-input" placeholder="Type a command or paste a file. Press Enter to send, Shift+Enter for newline." />
+  </div>
+  <div className="prompt-controls">
+    <button className="upload-btn" aria-label="Upload file">📤</button>
+    <button className="agent-btn" aria-label="Agent">🤖</button>
+    <button className="build-btn" aria-label="Build">Build</button>
+  </div>
+</div>
+CSS (copy/paste):
+.prompt-area { display:flex; flex-direction:column; gap:8px; padding:8px; box-sizing:border-box; background: rgba(255,255,255,0.02); }
+.prompt-pills { display:flex; gap:8px; overflow-x:auto; max-height:48px; align-items:center; white-space:nowrap; }
+.prompt-input-wrap { flex: 0 0 auto; } /* fixed visible area */
+.prompt-input { width:100%; min-height:48px; max-height:140px; font-size:15px; padding:10px; resize:none; border-radius:8px; background: rgba(0,0,0,0.35); color:var(--text-main); }
+.prompt-controls { display:flex; gap:10px; justify-content:flex-end; align-items:center; }
+.upload-btn, .agent-btn, .build-btn { min-width:44px; height:44px; flex:0 0 auto; }
+Keep buttons visible & avoid cropping when pane narrows
+When left width falls below threshold (e.g., 320px) enable compact mode:
+Header icons become icon-only (labels hidden).
+Prompt-controls collapse to icons and/or move lower-priority items into an overflow menu.
+Implement overflow detection using ResizeObserver on the left-header and prompt-controls. If scrollWidth > clientWidth, move excess items into .toolbar-overflow popover.
+CSS compact snippet:
+.column-left.compact .left-header .label, .column-left.compact .prompt-controls .label { display:none; }
+Ensure file upload / prompt->file flow visually visible
+When a user uploads a file or the system creates a prompt-file, append a pill element into .prompt-pills immediately (optimistic UI) with name and a small preview icon; clicking opens modal/editor.
+Do not push the prompt-area height; pills must scroll horizontally.
+Accessibility & Keyboard
+Textarea: Enter sends (unless Shift+Enter), Ctrl/Cmd+Enter also sends. After send, keep focus in textarea.
+All toolbar icons must be reachable by Tab and include aria-label and focus outline.
+Acceptance checklist (verify these)
+Top-left header shows three icons (New chat +, Save, New folder) visible and clickable at all left pane widths (or in overflow menu if extremely narrow).
+Prompt area vertical layout: pills on top, textarea in middle, controls bottom — typing area sits directly above Agent/Build.
+Uploading a file immediately creates a pill in .prompt-pills (no toast-only).
+Adding many pills scrolls horizontally; prompt area height remains constant.
+Agent and Build buttons do not get cropped when the left pane narrows — they collapse to icons or move into overflow but remain reachable.
+New chat + quick-actions modal works and contains those six preset options.
+Save file prompts download and actually saves current file.
+New folder creates folder in workspace and is visible in file tree.
+Responsive: mobile keeps layout usable (textarea remains visible and above controls).
+No ancestor has overflow:hidden that clips header or toolbar; header is sticky.
+Extra dev hints (do not ignore)
+Use position: sticky for .left-header to keep icons visible.
+Keep prompt-area as a separate flex column with internal scroll only on .ai-messages, not on prompt-area.
+Use minimal JavaScript for overflow—ResizeObserver is lightweight and robust.
+Apply z-index to header/toolbars if panels overlap, but prefer layout fixes (overflow: visible) first.
+Deliverable
+One small patch: move the three icon buttons into .left-header, replace prompt-bar single-row with prompt-area vertical layout, add ResizeObserver overflow logic, ensure prompt->file pills are visible, and update CSS as above. Confirm acceptance checklist passes.
+End of note.
