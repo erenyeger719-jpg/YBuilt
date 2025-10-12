@@ -1,0 +1,111 @@
+REBUILD WORKSPACE WINDOW — START FRESH (ONLY WORKSPACE, FIX LOOP / DRAFT-NOT-FOUND BUGS)
+
+CONTEXT
+The rest of YBUILT is working. The Finalize → Select & Open Workspace flow currently loops to an empty page showing "Draft not ready or not found". Stop that. Remove the old Workspace window entirely and create a fresh Workspace implementation for route `/workspace/:jobId` only. Do not change other pages, endpoints, or UI outside the workspace. Preserve existing libraries, auth, drafts, publish, and worker systems — but reimplement the workspace UI and the small API surface it requires.
+
+GOAL (single line)
+Replace the broken workspace with a brand new, defensive, Replit-quality Workspace that reliably opens when the user clicks **Select & Open Workspace**, loads job data and files, streams logs, allows editing, preview and console, and does not loop or show false “not ready” states.
+
+SCOPE (only these deliverables)
+1. Frontend: `client/src/pages/Workspace.jsx` (new, from scratch) and small related components used only by the workspace:
+   - `WorkspaceHeader.jsx` (logo area, project title + Publish pill)
+   - `FileTree.jsx` (read/write files UI)
+   - `EditorPane.jsx` (code editor stub w/ save)
+   - `PreviewPanel.jsx` (iframe + device selector)
+   - `ConsolePanel.jsx` (SSE/WebSocket console reader)
+   - `BuildTraceDock.jsx` (structured logs viewer)
+   - `AgentToolsPanel.jsx` (autonomy controls)
+   - `WorkspaceErrorRecovery.jsx` (friendly fallback UI)
+   - A small `useWorkspace` hook to centralize API calls and state.
+
+2. Server APIs (only the minimal endpoints the new workspace needs; keep existing implementations if present — otherwise create robust versions):
+   - `GET /api/jobs/:jobId` — returns job metadata, including `state`, `draftFields`, `ownerId`, `artifacts`, `previewUrl`, `workspaceReady` boolean.
+   - `GET /api/workspace/:jobId/files` — lists files (return empty array if none).
+   - `GET /api/workspace/:jobId/file?path=` — file contents.
+   - `POST /api/workspace/:jobId/file` — create or update file.
+   - `GET /api/jobs/:jobId/logs` — static list of structured logs (JSON array) and `GET /api/jobs/:jobId/logs/stream` (SSE) for live streaming.
+   - (Optional) `POST /api/jobs/:jobId/build` — enqueue build if workspace triggers build.
+   - `POST /api/jobs/:jobId/select` — the endpoint the Finalize page calls when user clicks Select & Open Workspace: **must** atomically create the workspace folder/files if missing, set `job.state = 'editing'`, and return `{ ok:true, workspaceUrl: '/workspace/:jobId' }` or meaningful error.
+
+3. Worker adjustments: When `POST /api/jobs/:jobId/select` is invoked, do **not** assume artifacts already exist. The server must create a workspace scaffold (basic index.html / src files or copy existing preview artifacts) synchronously or spawn a short worker task and return a `workspaceReady` boolean:
+   - Preferred: `POST /api/jobs/:jobId/select` creates workspace synchronously (fast path) by copying current preview artifacts into `workspaces/{jobId}/` and writing `manifest.json`. If heavy processing is required, it should start a background task and return `{ ok:true, workspaceUrl: '/workspace/:jobId', workspaceReady:false, pending:true }` with an immediate SSE endpoint for progress. The frontend must handle both cases gracefully.
+
+ACCEPTANCE CRITERIA (must pass)
+- Clicking **Select & Open Workspace** from Finalize:
+  1. Calls `POST /api/jobs/:jobId/select` and receives `{ ok:true, workspaceUrl:'/workspace/:jobId', workspaceReady:true }`. Then browser navigates to that URL and Workspace loads with files, editor, preview and console. **No redirect loops**.
+  2. If server returns `workspaceReady:false` (pending), the frontend shows a friendly progress screen with a live progress bar and a "Notify me when ready" CTA. When ready, it auto-navigates or allows manual "Open Workspace".
+  3. If `GET /api/jobs/:jobId` returns job not found or user unauthorized, show user-friendly error UI with buttons: Back to Home, Retry, Contact Support. Do not loop.
+
+- Workspace must display seeded logs from `data/jobs/{jobId}/logs.jsonl` via `GET /api/jobs/:jobId/logs` and subscribe to live stream `GET /api/jobs/:jobId/logs/stream` (SSE) for updates. The Console must parse and render the sample lines you provided and support filter/search.
+
+- Save in Editor must call `POST /api/workspace/:jobId/file` and return success. Saved files appear in `GET /api/workspace/:jobId/files`.
+
+- Preview iframe must point to `/previews/{jobId}/index.html` if present; if not present, show an in-UI placeholder with "Preview unavailable — build required" and an action to trigger `POST /api/jobs/:jobId/build`.
+
+- Any old workspace window artifacts (old DOM nodes, globals, leftover routes) must be removed; the new workspace is a fresh SPA shell with robust null checks and safe fallbacks.
+
+DETAILED FRONTEND BEHAVIOR (how Workspace should behave)
+- On mount, `useWorkspace(jobId)` does:
+  1. Call `GET /api/jobs/:jobId`. If 404 → show WorkspaceErrorRecovery.
+  2. If `job.state` is `'editing'` or `'building'` proceed. If `job.state === 'ready_for_finalization'` show CTA: “Job requires Finalize step — return to Finalize page” (link).
+  3. Call `GET /api/workspace/:jobId/files`. Render tree (if empty show “No files yet — create new”).
+  4. Subscribe to `GET /api/jobs/:jobId/logs/stream` (SSE). Render incoming structured logs in ConsolePanel and BuildTraceDock.
+  5. Load preview URL into iframe if `previewUrl` exists.
+
+- `POST /api/jobs/:jobId/select` semantics (server):
+  - Validate owner or team membership.
+  - If `workspaces/{jobId}` exists and looks valid (contains manifest.json) set `workspaceReady=true`.
+  - Else try to create workspace scaffold:
+    - If `public/previews/{jobId}/index.html` exists, copy to `workspaces/{jobId}/` and create `manifest.json` mapping files.
+    - If no preview exists, create minimal scaffold: `index.html`, `styles.css`, `app.js` with placeholder content.
+  - Set `job.state='editing'` and persist.
+  - Return `{ ok:true, workspaceUrl:'/workspace/{jobId}', workspaceReady:true }` or `{ ok:true, workspaceUrl:'/workspace/{jobId}', workspaceReady:false, pendingTaskId }` if a background task is required. In the latter case, server must publish progress to `GET /api/jobs/:jobId/logs/stream`.
+
+ERROR HANDLING & DEFENSIVE CODING RULES (must be applied)
+- Always optional-chain arrays and objects on client to avoid "cannot read property '0' of undefined".
+- If any API returns non-200, workspace shows user-friendly fallback and a clear retry path.
+- Never auto-redirect to workspace unless `select` API returned success with `workspaceReady=true` or `pending` status (then show progress UI).
+- When workspace loads, if it finds no files and no preview, show a prominent “Create starter files” button — do not crash.
+- Console and BuildTrace must handle malformed JSON log lines gracefully (show raw text line).
+
+TESTS TO RUN (automated scripts or manual steps)
+- Test 1 (happy path): Finalize → Select & Open Workspace. Expect navigation to `/workspace/:jobId` and workspace shell loaded, file list shown (or empty state), editor loads, console streams seeded logs. No 404 page or “Draft not ready” messages.
+- Test 2 (no preview): Finalize → Select (server creates minimal scaffold) → Workspace loads with placeholder index.html in file tree and preview shows placeholder. Editor save works.
+- Test 3 (pending build): If server returns `workspaceReady:false`, workspace shows progress UI and logs stream; once worker signals done, auto-enable Open Workspace button.
+- Test 4 (error): corrupt `data/jobs/{jobId}.json` or missing job → WorkspaceErrorRecovery appears and user can click Back Home or Retry.
+- Test 5: SSE stream broken/closed — Console shows “Live logs disconnected” and a Retry button; reconnect attempts on user action.
+
+BACK-END IMPLEMENTATION NOTES (developer hints)
+- Implement `POST /api/jobs/:jobId/select` with atomic behavior and idempotency: repeated calls produce same result and return `{ ok:true }` without creating duplicate files.
+- When copying preview artifacts, preserve relative paths; write `workspaces/{jobId}/manifest.json` listing all files for quick `GET /api/workspace/:jobId/files` queries.
+- If heavy processing is needed, create a background worker job but **return immediately** with `workspaceReady:false` and publish progress to logs stream so the UI can display progress. Avoid blocking the request.
+
+LOG STREAM (SSE) sample message format:
+data: {"ts":"2025-10-11T18:16:18.000Z","level":"info","source":"express","msg":"GET /api/jobs/3844... 200 in 9ms","meta":{"jobId":"3844..."}}  
+FRONTEND IMPLEMENTATION NOTES (developer hints)
+- Implement `useLogStream(jobId)` hook that connects to `/api/jobs/:jobId/logs/stream` using SSE; fall back to polling `/api/jobs/:jobId/logs` every 2s if SSE unsupported.
+- Workspace must be fully client-side routed and accessible at `/workspace/:jobId` (React Router or equivalent).
+- Put all workspace DOM inside a dedicated root element and ensure server-side code does not try to reuse old workspace scaffolding.
+
+DELIVERABLES (exact)
+- New files (pasteable):
+  - `client/src/pages/Workspace.jsx`
+  - `client/src/components/{WorkspaceHeader,FileTree,EditorPane,PreviewPanel,ConsolePanel,BuildTraceDock,AgentToolsPanel,WorkspaceErrorRecovery}.jsx`
+  - `client/src/hooks/useWorkspace.js` and `useLogStream.js`
+  - Server changes: `routes/jobs.js` update to include `POST /api/jobs/:jobId/select` (or new `routes/workspace.js`) and `GET /api/workspace/:jobId/files`
+  - Worker: small helper to create workspace scaffold if needed (`worker/prepareWorkspace.js`).
+  - Tests: `test/workspace-select.test.js` (node script that POSTs select and asserts workspaceReady or pending).
+- README snippet describing how to test the select → open flow.
+
+PRIORITY (what to do first)
+1. Implement `POST /api/jobs/:jobId/select` properly (atomic, idempotent, copies or scaffolds files).
+2. Build the new `Workspace.jsx` to call GET job, GET files, subscribe to logs, and only navigate when server returns workspaceReady true or show progress if pending.
+3. Replace any old workspace route/component with the new one; remove previous implementation from routing.
+4. Add robust error handling and the WorkspaceErrorRecovery UI; ensure no redirect loops.
+
+FINAL NOTE (tone to generator)
+- This is surgical: rebuild only the workspace window. Keep everything else untouched. Ship a workspace that never loops on “Draft not ready”, that either opens immediately or shows clear progress. Be defensive — expect missing files, missing preview, intermittent log streams, and bad job data. Provide clear user actions instead of crashes.
+
+Return: a single patch (file list + exact file contents) that I can paste into the repo to replace the old workspace. Also include the minimal tests (Test 1–4) and a README snippet describing how to validate the functionality.
+
+End.

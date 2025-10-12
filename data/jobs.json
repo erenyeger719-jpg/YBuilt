@@ -454,5 +454,20 @@
     "error": null,
     "createdAt": "2025-10-11T19:44:47.064Z",
     "updatedAt": "2025-10-11T19:44:56.222Z"
+  },
+  "984d6191-c527-4c25-afab-6888ce5ac1f2": {
+    "id": "984d6191-c527-4c25-afab-6888ce5ac1f2",
+    "userId": "demo",
+    "prompt": "fff",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/984d6191-c527-4c25-afab-6888ce5ac1f2/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"\",\"description\":\"\",\"theme\":\"monochrome\",\"heroText\":\"fff\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-12T03:49:47.857Z",
+    "updatedAt": "2025-10-12T03:49:56.733Z"
   }
 }
