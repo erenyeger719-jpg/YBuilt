@@ -130,15 +130,15 @@
     "userId": "demo",
     "prompt": "Create a landing page for a coffee shop",
     "templateId": null,
-    "status": "editing",
+    "status": "ready_for_finalization",
     "result": "/previews/6cd7b853-bebc-482b-a13b-c1b140d06892/index.html",
     "artifacts": null,
-    "settings": "{\"title\":\"\",\"description\":\"\",\"theme\":\"monochrome\",\"heroText\":\"Create a landing page for a coffee shop\"}",
+    "settings": "{\"autonomy\":\"medium\"}",
     "versionIds": null,
     "logsPath": null,
     "error": null,
     "createdAt": "2025-10-11T18:12:44.191Z",
-    "updatedAt": "2025-10-11T18:14:04.262Z"
+    "updatedAt": "2025-10-12T03:57:54.564Z"
   },
   "3844fad4-fbb8-4568-9cef-32af2560c42f": {
     "id": "3844fad4-fbb8-4568-9cef-32af2560c42f",
