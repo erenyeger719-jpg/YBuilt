@@ -129,3 +129,18 @@
 {"timestamp":"2025-10-12T09:20:52.219Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
 {"timestamp":"2025-10-12T09:20:52.220Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
 {"timestamp":"2025-10-12T09:20:52.221Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T09:24:14.945Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"test command"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-12T09:24:14.948Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-12T09:24:18.696Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T09:24:18.697Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T09:24:18.699Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T09:28:52.162Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"test command"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-12T09:28:52.164Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-12T09:28:55.667Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T09:28:55.667Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T09:28:55.671Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
+{"timestamp":"2025-10-12T09:30:30.390Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"run build"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-12T09:30:30.392Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-12T09:30:34.268Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-12T09:30:34.268Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-12T09:30:34.269Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3844fad4-fbb8-4568-9cef-32af2560c42f/index.html"}}
