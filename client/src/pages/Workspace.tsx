@@ -5,39 +5,48 @@ import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import {
   File,
-  Folder,
-  Play,
-  Save,
-  ChevronDown,
-  ChevronRight,
   ExternalLink,
   Monitor,
   Tablet,
   Smartphone,
   RotateCw,
   Camera,
-  Plus,
-  FileUp,
-  FolderPlus,
 } from "lucide-react";
 import Header from "@/components/Header";
 import BuildTraceViewer from "@/components/BuildTraceViewer";
 import ConsolePanel from "@/components/ConsolePanel";
-import AgentTools from "@/components/AgentTools";
-import BuildPromptPanel from "@/components/BuildPromptPanel";
 import CommandPalette from "@/components/CommandPalette";
 import PublishModal from "@/components/PublishModal";
+import PromptBar from "@/components/PromptBar";
+import AgentButton, { type AgentSettings } from "@/components/AgentButton";
+import FileTree from "@/components/FileTree";
+import FileToolbar from "@/components/FileToolbar";
+import NewChatModal from "@/components/NewChatModal";
+import PromptFileModal from "@/components/PromptFileModal";
 
 interface WorkspaceFile {
   path: string;
   content: string;
   language: string;
+  type?: string;
+  createdAt?: string;
 }
 
 interface WorkspaceData {
@@ -53,6 +62,7 @@ export default function Workspace() {
   const { jobId } = useParams<{ jobId: string }>();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const workspace$ = useWorkspace(jobId || "");
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
@@ -60,6 +70,19 @@ export default function Workspace() {
   const [rightTab, setRightTab] = useState<"preview" | "console">("preview");
   const [deviceMode, setDeviceMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [showPromptFileModal, setShowPromptFileModal] = useState(false);
+  const [selectedPromptFile, setSelectedPromptFile] = useState<WorkspaceFile | null>(null);
+  const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
+  const [newFolderPath, setNewFolderPath] = useState("");
+  
+  // Agent settings
+  const [agentSettings, setAgentSettings] = useState<AgentSettings>({
+    autonomyLevel: "medium",
+    autoApply: false,
+    safetyFilter: true,
+    computeTier: "standard",
+  });
 
   // Fetch workspace data with error handling
   const { data: workspace, isLoading, error } = useQuery<WorkspaceData>({
@@ -92,10 +115,16 @@ export default function Workspace() {
     },
   });
 
-  // Build mutation
+  // Build mutation with agent settings
   const buildMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("POST", `/api/jobs/${jobId}/build`, {});
+    mutationFn: async (data: { prompt?: string }) => {
+      return apiRequest("POST", `/api/jobs/${jobId}/build`, {
+        autonomy: agentSettings.autonomyLevel,
+        autoApply: agentSettings.autoApply,
+        safetyFilter: agentSettings.safetyFilter,
+        computeTier: agentSettings.computeTier,
+        prompt: data.prompt,
+      });
     },
     onSuccess: () => {
       setShowBuildTrace(true);
@@ -123,12 +152,165 @@ export default function Workspace() {
     }
   }, [selectedFile, workspace]);
 
-  // Auto-select first file with defensive checks
+  // Auto-select first NON-PROMPT file with defensive checks
   useEffect(() => {
     if (workspace?.files?.length && !selectedFile) {
-      setSelectedFile(workspace.files[0].path);
+      const firstNonPromptFile = workspace.files.find(f => f.type !== "prompt");
+      if (firstNonPromptFile) {
+        setSelectedFile(firstNonPromptFile.path);
+      }
     }
   }, [workspace, selectedFile]);
+
+  // Handle prompt submission
+  const handlePromptSubmit = async (promptText: string) => {
+    try {
+      // Create prompt file
+      const result = await workspace$.promptToFile({
+        promptText,
+        filenameHint: promptText.slice(0, 30).replace(/[^a-z0-9]/gi, '-'),
+      });
+
+      toast({
+        title: "Prompt Saved",
+        description: `Created ${result.file.name}`,
+      });
+
+      // Start build with the prompt
+      await buildMutation.mutateAsync({ prompt: promptText });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to process prompt",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle file upload from prompt bar
+  const handleFileUpload = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("jobId", jobId || "");
+      formData.append("userId", "demo");
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const asset = await response.json();
+      
+      toast({
+        title: "File Uploaded",
+        description: `${file.name} uploaded successfully`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", jobId, "files"] });
+    } catch (error: any) {
+      toast({
+        title: "Upload Error",
+        description: error.message || "Failed to upload file",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle toolbar actions
+  const handleDownloadFile = async () => {
+    if (!selectedFile) {
+      toast({
+        title: "No File Selected",
+        description: "Please select a file to download",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await workspace$.downloadFile({
+        path: selectedFile,
+        suggestedName: selectedFile.split('/').pop(),
+      });
+      toast({
+        title: "Downloaded",
+        description: "File saved to your device",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Download Error",
+        description: error.message || "Failed to download file",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleNewFolder = async () => {
+    if (!newFolderPath.trim()) {
+      toast({
+        title: "Invalid Path",
+        description: "Please enter a folder path",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await workspace$.createFolder({ path: newFolderPath });
+      toast({
+        title: "Folder Created",
+        description: `Created folder: ${newFolderPath}`,
+      });
+      setShowNewFolderDialog(false);
+      setNewFolderPath("");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create folder",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle prompt file click
+  const handlePromptFileClick = (file: WorkspaceFile) => {
+    setSelectedPromptFile(file);
+    setShowPromptFileModal(true);
+  };
+
+  // Handle new chat action
+  const handleNewChatAction = (prompt: string) => {
+    if (prompt) {
+      handlePromptSubmit(prompt);
+    }
+  };
+
+  // Handle download prompt file
+  const handleDownloadPromptFile = async () => {
+    if (!selectedPromptFile) return;
+
+    try {
+      await workspace$.downloadFile({
+        path: selectedPromptFile.path,
+        suggestedName: selectedPromptFile.path.split('/').pop(),
+      });
+      toast({
+        title: "Downloaded",
+        description: "Prompt file saved to your device",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Download Error",
+        description: error.message || "Failed to download file",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Show error UI if workspace fails to load
   if (error || (workspace && 'error' in workspace)) {
@@ -180,21 +362,6 @@ export default function Workspace() {
 
   const selectedFileData = workspace.files.find((f) => f.path === selectedFile);
 
-  const handlePublish = () => {
-    setShowPublishModal(true);
-    toast({
-      title: "Publishing",
-      description: "Publish modal would open here",
-    });
-  };
-
-  const handleRunAgent = (autonomy: string) => {
-    toast({
-      title: "Running Agent",
-      description: `Agent started with ${autonomy} autonomy`,
-    });
-  };
-
   const deviceWidths = {
     desktop: "100%",
     tablet: "768px",
@@ -209,7 +376,7 @@ export default function Workspace() {
           status: "success",
           lastBuild: "2m ago",
         }}
-        onPublish={handlePublish}
+        onPublish={() => setShowPublishModal(true)}
       />
       <CommandPalette />
       <PublishModal
@@ -217,93 +384,95 @@ export default function Workspace() {
         onOpenChange={setShowPublishModal}
         jobId={jobId || ""}
       />
+      <NewChatModal
+        open={showNewChatModal}
+        onOpenChange={setShowNewChatModal}
+        onSelectAction={handleNewChatAction}
+      />
+      <PromptFileModal
+        open={showPromptFileModal}
+        onOpenChange={setShowPromptFileModal}
+        file={selectedPromptFile}
+        onDownload={handleDownloadPromptFile}
+      />
+      
+      {/* New Folder Dialog */}
+      <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>
+        <DialogContent data-testid="dialog-new-folder">
+          <DialogHeader>
+            <DialogTitle>Create New Folder</DialogTitle>
+            <DialogDescription>
+              Enter the folder path (e.g., assets/icons)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="folder-path">Folder Path</Label>
+              <Input
+                id="folder-path"
+                value={newFolderPath}
+                onChange={(e) => setNewFolderPath(e.target.value)}
+                placeholder="assets/icons"
+                data-testid="input-folder-path"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowNewFolderDialog(false)}
+              data-testid="button-cancel-folder"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleNewFolder}
+              data-testid="button-create-folder"
+            >
+              Create Folder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex-1 flex pt-16">
-        {/* Left Sidebar - File Tree + Tools */}
+        {/* Left Sidebar - File Tree */}
         <div className="w-80 border-r border-border flex flex-col">
           {/* File Tree Header */}
           <div className="p-3 border-b border-border">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-sm">{workspace.manifest.name}</h3>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  data-testid="button-new-file"
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  data-testid="button-upload-file"
-                >
-                  <FileUp className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  data-testid="button-new-folder"
-                >
-                  <FolderPlus className="h-3 w-3" />
-                </Button>
-              </div>
+              <FileToolbar
+                onNewChat={() => setShowNewChatModal(true)}
+                onUpload={handleFileUpload}
+                onSaveFile={handleDownloadFile}
+                onNewFolder={() => setShowNewFolderDialog(true)}
+              />
             </div>
             <p className="text-xs text-muted-foreground">{workspace.manifest.description}</p>
           </div>
           
-          {/* File List */}
-          <ScrollArea className="flex-1">
-            <div className="p-2 space-y-0.5">
-              {workspace.files.map((file) => (
-                <button
-                  key={file.path}
-                  onClick={() => setSelectedFile(file.path)}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover-elevate ${
-                    selectedFile === file.path
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground"
-                  }`}
-                  data-testid={`file-${file.path}`}
-                >
-                  <File className="w-4 h-4" />
-                  {file.path}
-                </button>
-              ))}
-            </div>
+          {/* File Tree */}
+          <FileTree
+            files={workspace.files}
+            selectedFile={selectedFile}
+            onFileSelect={setSelectedFile}
+            onPromptFileClick={handlePromptFileClick}
+          />
 
-            {/* Build Prompt Panel */}
-            <div className="p-2">
-              <BuildPromptPanel
-                jobId={jobId || ""}
-                initialPrompt={workspace.manifest.description}
-                onRunAgent={handleRunAgent}
-                onTestApp={() => toast({ title: "Test", description: "Running tests..." })}
+          {/* Prompt Bar at Bottom */}
+          <PromptBar
+            jobId={jobId || ""}
+            onSubmit={handlePromptSubmit}
+            onFileUpload={handleFileUpload}
+            isLoading={buildMutation.isPending || workspace$.isPromptToFileLoading}
+            agentButton={
+              <AgentButton
+                settings={agentSettings}
+                onChange={setAgentSettings}
               />
-            </div>
-
-            {/* Agent Tools Panel */}
-            <div className="p-2">
-              <AgentTools jobId={jobId || ""} onRunAgent={handleRunAgent} />
-            </div>
-          </ScrollArea>
-
-          {/* Build Button */}
-          <div className="p-2 border-t border-border">
-            <Button
-              onClick={() => buildMutation.mutate()}
-              disabled={buildMutation.isPending}
-              variant="outline"
-              className="w-full"
-              data-testid="button-build"
-            >
-              <Play className="w-4 h-4 mr-2" />
-              {buildMutation.isPending ? "Building..." : "Build"}
-            </Button>
-          </div>
+            }
+          />
         </div>
 
         {/* Editor */}
@@ -320,7 +489,6 @@ export default function Workspace() {
               variant="outline"
               data-testid="button-save"
             >
-              <Save className="w-4 h-4 mr-2" />
               Save
             </Button>
           </div>

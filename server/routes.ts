@@ -325,14 +325,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const content = await fs.readFile(indexPath, "utf-8");
         
+        const files = [
+          {
+            path: "index.html",
+            content,
+            language: "html"
+          }
+        ];
+
+        // Check for prompt files
+        const promptsDir = path.join(process.cwd(), "data", "workspaces", req.params.jobId, "prompts");
+        try {
+          const promptFiles = await fs.readdir(promptsDir);
+          
+          // Read prompt files and add to files array (newest first)
+          const promptFileData = await Promise.all(
+            promptFiles.map(async (fileName) => {
+              try {
+                const filePath = path.join(promptsDir, fileName);
+                const content = await fs.readFile(filePath, "utf-8");
+                const stats = await fs.stat(filePath);
+                
+                return {
+                  path: `prompts/${fileName}`,
+                  content,
+                  language: "markdown",
+                  type: "prompt",
+                  createdAt: stats.mtime.toISOString()
+                };
+              } catch (err) {
+                return null;
+              }
+            })
+          );
+
+          // Filter out nulls and sort by creation time (newest first)
+          const validPromptFiles = promptFileData
+            .filter((f): f is NonNullable<typeof f> => f !== null)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+          // Add prompt files at the beginning
+          files.unshift(...validPromptFiles);
+        } catch (error) {
+          // No prompts directory yet, that's ok
+        }
+        
         res.json({
-          files: [
-            {
-              path: "index.html",
-              content,
-              language: "html"
-            }
-          ],
+          files,
           manifest: {
             name: "Generated Site",
             description: job.prompt,
@@ -875,6 +914,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Prompt to file - convert prompt text to file
+  app.post("/api/workspace/:jobId/prompt-to-file", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { promptText, filenameHint } = req.body;
+
+      if (!promptText) {
+        return res.status(400).json({ error: "Missing prompt text" });
+      }
+
+      const ts = Date.now();
+      const safeName = (filenameHint || `prompt-${ts}`).replace(/[^a-z0-9._-]/gi, '-').slice(0, 80);
+      const promptsDir = path.join(process.cwd(), "data", "workspaces", jobId, "prompts");
+      
+      // Ensure prompts directory exists
+      await fs.mkdir(promptsDir, { recursive: true });
+
+      const fileName = `${safeName}.md`;
+      const filePath = path.join(promptsDir, fileName);
+
+      // Write prompt as markdown file
+      const content = `# Prompt\n\n${promptText}\n\n---\n\n*Created: ${new Date().toISOString()}*`;
+      await fs.writeFile(filePath, content, "utf-8");
+
+      // Log for debugging
+      const auditLog = `${new Date().toISOString()} - Prompt to file: ${fileName}, Job: ${jobId}\n`;
+      await fs.appendFile(
+        path.join(process.cwd(), "data", "audit.log"),
+        auditLog
+      ).catch(() => {}); // Ignore errors for audit log
+
+      const file = {
+        path: `prompts/${fileName}`,
+        name: fileName,
+        url: `/workspaces/${jobId}/prompts/${fileName}`,
+        size: content.length,
+        type: 'prompt'
+      };
+
+      res.json({ file, fileCreated: true });
+    } catch (error) {
+      console.error("Error creating prompt file:", error);
+      res.status(500).json({ error: "Failed to create prompt file" });
+    }
+  });
+
+  // Create folder in workspace
+  app.post("/api/workspace/:jobId/folder", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { path: folderPath } = req.body;
+
+      if (!folderPath || typeof folderPath !== "string") {
+        return res.status(400).json({ error: "Missing folder path" });
+      }
+
+      // Sanitize folder path
+      const safePath = folderPath.replace(/[^a-z0-9/_-]/gi, '-');
+      const fullPath = path.join(process.cwd(), "data", "workspaces", jobId, safePath);
+
+      // Create folder
+      await fs.mkdir(fullPath, { recursive: true });
+
+      // Log for debugging
+      const auditLog = `${new Date().toISOString()} - New folder: ${safePath}, Job: ${jobId}\n`;
+      await fs.appendFile(
+        path.join(process.cwd(), "data", "audit.log"),
+        auditLog
+      ).catch(() => {}); // Ignore errors for audit log
+
+      res.json({ ok: true, path: safePath });
+    } catch (error) {
+      console.error("Error creating folder:", error);
+      res.status(500).json({ error: "Failed to create folder" });
+    }
+  });
+
   // Log streaming (SSE)
   app.get("/api/jobs/:jobId/logs/stream", async (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
@@ -970,28 +1086,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/jobs/:jobId/build", async (req, res) => {
     try {
       const { jobId } = req.params;
-      const { autonomy, prompt } = req.body;
+      const { autonomy, autoApply, safetyFilter, computeTier, prompt } = req.body;
 
       const job = await storage.getJob(jobId);
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
 
-      // Update job with autonomy settings
-      const autonomyLevel = autonomy || "medium";
+      // Collect all agent settings
+      const agentSettings = {
+        autonomy: autonomy || "medium",
+        autoApply: autoApply ?? false,
+        safetyFilter: safetyFilter ?? true,
+        computeTier: computeTier || "standard"
+      };
+
+      // Update job with full agent settings
       await storage.updateJob(jobId, { 
         status: "queued",
-        settings: JSON.stringify({ autonomy: autonomyLevel })
+        settings: JSON.stringify({ agentSettings })
       });
 
-      // Trigger job queue with autonomy level
+      // Trigger job queue with agent settings
       const buildPrompt = prompt || job.prompt || "Rebuild and refine the application";
-      await jobQueue.addJob(jobId, buildPrompt, undefined, autonomyLevel);
+      await jobQueue.addJob(jobId, buildPrompt, undefined, agentSettings.autonomy);
 
       res.json({ 
         success: true, 
         status: "queued",
-        autonomy: autonomyLevel
+        agentSettings
       });
     } catch (error) {
       console.error("Error starting build:", error);
