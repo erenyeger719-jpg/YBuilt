@@ -1,0 +1,169 @@
+TASK: FIX & IMPROVE WORKSPACE PROMPT UX, AGENT TOOLS, FILE ACTIONS, "PROMPT → FILE" FLOW, NEW CHAT
+
+CONTEXT
+Workspace UI mostly works, but the Finalize → Select → Open flow and workspace UX still have these product problems:
+- The left workspace area (where the AI “thinks”) is too large and contains many big controls that should be compact.
+- The **Build Prompt** panel is large and buried; Build action should live in the prompt bar (small).
+- Agent Tools (Autonomy Level, Auto-Apply, Safety, Compute Tier) occupy too much space — they should be compacted into a single Agent button in the prompt bar that opens a small modal/popover with the controls.
+- The prompt input needs to behave like Replit: when user submits a prompt or uploads content, the system converts that prompt/text into a file and places it at the top of the Files tree; a click on that file opens the content in a popup/editor.
+- The toolbar buttons above the Files tree (Add file, Save file, New folder / + icons) are not wired — they must perform useful actions: create file, download current file, create folder.
+- Add a **New message** (plus) button that opens a small “New Chat with Agent” dialog with prebuilt quick actions (Check my app for bugs; Add payment processing; Connect with an AI Assistant; Add SMS; Add DB; Add auth). Those quick actions produce ready-made prompts and send them to the agent when chosen.
+- Make all of the above work reliably, with defensive checks and clear user feedback.
+
+GOAL
+Replace the current large Build Prompt panel and oversized Agent Tools with a compact, keyboard-first Prompt Bar and Agent button; wire file operations (create, save/download, new folder, upload); implement prompt→file conversion and persist it in workspace files list (and in backend `workspaces/{jobId}/`); add New Chat modal with quick-action presets. Do not change unrelated pages.
+
+SCOPE (components / endpoints to implement or update)
+Frontend (patch these files):
+- `client/src/components/PromptBar.jsx` — NEW (small input at bottom-left or bottom-center)
+- `client/src/components/AgentButton.jsx` — NEW (compact button that opens popover for autonomy + auto-apply + safety + compute tier)
+- `client/src/pages/Workspace.jsx` — update to use PromptBar and AgentButton; remove large Build Prompt panel
+- `client/src/components/FileToolbar.jsx` — wire + (New File), Upload, Save File (download), New Folder
+- `client/src/components/NewChatModal.jsx` — NEW for New message quick-actions
+- `client/src/components/FileTree.jsx` — update to accept prompt-created files at top and show in a “Prompts / Chat Files” area
+- `client/src/hooks/useWorkspace.js` — add `promptToFile(jobId, payload)` helper, file API calls and optimistic updates
+
+Server (minimal or update existing):
+- `POST /api/workspace/:jobId/file` — create/update file (body: `{ path, content, metadata }`)
+- `POST /api/workspace/:jobId/folder` — create folder (body `{ path }`)
+- `POST /api/workspace/:jobId/prompt-to-file` — accepts `{ promptText, filenameHint, userId }`, writes file under `workspaces/{jobId}/prompts/{filename}`, returns file metadata and updated file-list
+- `POST /api/upload` — accept file uploads and store under `public/uploads/{userId}/{jobId}/...` and optionally return parsed preview (text for docs, thumb for images)
+- Ensure `GET /api/workspace/:jobId/files` returns prompt files in the top group and respects ordering (newest first)
+
+BEHAVIOR SPEC — exact UX & API contract
+
+1) Prompt bar UI (compact)
+- Location: small bar anchored bottom-left inside workspace (or bottom center as user prefers). Components:
+  - small file upload icon (accept any file types)
+  - text input (single-line expandable to multiline) with placeholder: `Type a command or drop a file — will convert to file.`
+  - agent button (left of Build)
+  - Build (Send) button (bottom-right of prompt bar). On click: POST `/api/workspace/:jobId/prompt-to-file` then POST `/api/jobs/:jobId/build` (or POST `/api/jobs/:jobId/regenerate` depending on context).
+- Keyboard: Enter sends (shift+Enter newline). Ctrl/Cmd+Enter sends as well.
+
+2) Agent button / popover (compact)
+- Shows autonomy level (Low/Med/High/Max) as segmented control, Auto-Apply toggle, Safety/Content toggle, Compute tier selector.
+- Small, accessible, closes when a selection is made.
+- Agent runs use the autonomy setting in the request payload for builds and edits.
+
+3) Prompt → File conversion behavior
+- When user types text and clicks Build:
+  - Call `POST /api/workspace/:jobId/prompt-to-file` with `{ promptText, filenameHint }`.
+  - Server must generate a filename: if prompt contains "Create a landing page for X", use `landingpage-X.md` or `prompt-<timestamp>.md`. Accept `filenameHint`.
+  - Server writes file to `workspaces/{jobId}/prompts/{filename}` and returns `{ file: { path, name, size, url }, fileCreated:true }`.
+  - Client upon success inserts the file at top of FileTree under group "Prompts" and highlights it.
+  - File opens in a modal preview when clicked (Read-only or editable, with Save button).
+
+- When user **uploads a file** via the upload icon:
+  - The file is POSTed to `/api/upload` (multipart). Server returns `{ url, name, mime, size, parsed: { textPreview? } }`.
+  - For parsed text files (pdf/docx/txt/html), server also writes a copy into `workspaces/{jobId}/uploads/{originalName}` and returns `{ filePath }`. Client shows in file tree and allows opening.
+
+4) Save File button functionality (download)
+- When user selects a file and clicks Save (disk icon), open a browser download flow:
+  - Frontend fetches file contents via `GET /api/workspace/:jobId/file?path=...` and then:
+    ```js
+    const blob = new Blob([content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName; // prompt user? let browser choose via save dialog
+    document.body.appendChild(a); a.click(); a.remove();
+    ```
+  - Provide modal to choose name and confirm.
+
+5) New Folder behavior
+- Clicking New Folder opens a tiny dialog for path/name. On confirm POST `/api/workspace/:jobId/folder` with `{ path }`. Server creates folder under `workspaces/{jobId}/{path}` and returns updated file list.
+
+6) New message (+) button
+- Replace existing + behavior with New Chat modal:
+  - Modal title: "New chat with Agent"
+  - Short description: "Agent can make changes, review and debug itself automatically."
+  - Prebuilt buttons: `Check my app for bugs`, `Add payment processing`, `Connect AI Assistant`, `Add SMS sending`, `Add a database`, `Add authenticated login`
+  - Clicking one of those builds a prompt template and sets the prompt input to that text; user may optionally press Send/Build to run.
+  - Also provide a "Start empty chat" option which opens a new chat file (prompt stored) placed at top of Prompts group.
+
+7) Build button location & behavior
+- Build/send button is bottom-right in PromptBar. On click sequence:
+  - Disable button & show spinner
+  - POST `/api/workspace/:jobId/prompt-to-file` (if not already a file)
+  - Enqueue build with `POST /api/jobs/:jobId/build` with body `{ sourceFilePath, agentSettings }`
+  - Subscribe to logs stream; update BuildTraceDock and Console.
+
+8) File tree changes
+- Add a top group "Prompts & Chat Files" that always shows newest prompt-created files first.
+- Clicking a prompt file opens a modal with content and actions: Edit (if allowed), Save, Insert into project (copy to `src/`), Delete.
+- Implement optimistic UI: when prompt->file returns, update file tree instantly and persist.
+
+ACCEPTANCE CRITERIA (tests you can run)
+1. Type a long instruction into the prompt bar, press Build. Result: a new file appears in the top Prompts group with generated filename; file preview opens in modal; build started; logs stream begins.
+2. Drag/drop an arbitrary file (.docx, .pdf, .svg, .zip) onto the upload icon. Result: file stored under `public/uploads/{user}/{jobId}/`; preview shows parsed text or thumbnail; file listed in FileTree.
+3. Click Save File (disk icon) for open file — browser save dialog appears and file downloads with chosen filename.
+4. Click New Folder, specify `assets/icons` — folder created and visible in FileTree; confirm server created path `workspaces/{jobId}/assets/icons/`.
+5. Click New Chat (+) → choose `Add payment processing`, the prompt bar is populated with a ready-made prompt, user clicks Build → new prompt-file created + build enqueued.
+6. Agent button opens compact popover; changing Autonomy to Max and toggling Auto-Apply affects build request body (verify via network).
+
+IMPLEMENTATION NOTES & EXAMPLE CODE SNIPPETS (copy/paste)
+A) Prompt → file request (frontend)
+```js
+// useWorkspace.js
+export async function promptToFile(jobId, { promptText, filenameHint }) {
+  const res = await fetch(`/api/workspace/${jobId}/prompt-to-file`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ promptText, filenameHint })
+  });
+  if(!res.ok) throw new Error('prompt-to-file failed');
+  return res.json(); // { file: { path, name, url }, fileCreated:true }
+}   B) Save file to user device  async function downloadFile(jobId, path, suggestedName){
+  const r = await fetch(`/api/workspace/${jobId}/file?path=${encodeURIComponent(path)}`);
+  const text = await r.text();
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = suggestedName || path.split('/').pop();
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+ C) Server prompt-to-file skeleton (node/express)
+
+
+router.post('/workspace/:jobId/prompt-to-file', authMw, async (req,res)=>{
+  const { jobId } = req.params;
+  const { promptText, filenameHint } = req.body;
+  const ts = Date.now();
+  const safeName = (filenameHint || 'prompt-'+ts).replace(/[^a-z0-9._-]/gi,'-').slice(0,80);
+  const dir = path.join(WORKSPACE_ROOT, jobId, 'prompts');
+  await fs.mkdir(dir, { recursive:true });
+  const fname = `${safeName}.md`;
+  const fpath = path.join(dir, fname);
+  await fs.writeFile(fpath, `# Prompt\n\n${promptText}`);
+  // optionally create a metadata entry and update files index
+  const fileUrl = `/workspaces/${jobId}/prompts/${fname}`;
+  return res.json({ file:{ path:`prompts/${fname}`, name: fname, url: fileUrl }, fileCreated:true });
+});
+  D) New folder server endpoint  router.post('/workspace/:jobId/folder', authMw, async(req,res)=>{
+  const { jobId } = req.params;
+  const { path: folderPath } = req.body; // e.g. assets/icons
+  const abs = path.join(WORKSPACE_ROOT, jobId, folderPath);
+  await fs.mkdir(abs, { recursive:true });
+  return res.json({ ok:true, path: folderPath });
+});
+  NON-FUNCTIONAL REQUIREMENTS
+* Keep the UI visually compact and mobile-friendly: prompt bar must be small and unobtrusive on narrow screens.
+* Respect prefers-reduced-motion.
+* Secure file uploads (size limit 25MB default, scan placeholder) and sanitize any HTML before rendering in iframe.
+* Add logs for promptToFile and new-folder operations for easier debugging (data/audit.log append).
+DELIVERABLES (exact)
+* New/updated frontend components listed above (paste-ready).
+* Server endpoints: /workspace/:jobId/prompt-to-file, /workspace/:jobId/folder, /api/upload (or reuse existing upload), and ensure /workspace/:jobId/files returns new prompt files.
+* Update README with: how prompt-to-file works, where prompt files are stored, and how to test (steps in Acceptance Criteria).
+* Quick tests to run (the 6 acceptance checks above).
+PRIORITY: what to ship first
+1. PromptBar + Build button + promptToFile API + show new file in FileTree. (This fixes the messy prompt flow immediately.)
+2. AgentButton popover with autonomy settings wired into build calls.
+3. Save/Download file action.
+4. New Folder endpoint and UI.
+5. New Chat modal + quick actions.
+Finish this patch with defensive code (null checks; credentials included). If headless services/analysis not available, create clear placeholders and store the prompt file anyway. Return updated file list and success statuses on every call.
+End of task.
+
+
