@@ -406,7 +406,7 @@ export default function Workspace() {
   const leftPane = (isCompact: boolean) => (
     <div className="h-full flex flex-col">
       {/* File Tree Header - Sticky */}
-      <div className="sticky top-0 z-40 p-3 border-b border-border flex-shrink-0 bg-background overflow-visible">
+      <div className="sticky top-0 z-[60] p-3 border-b border-border flex-shrink-0 bg-background overflow-visible" role="toolbar" aria-label="Workspace left controls">
         <div className="flex items-center justify-between mb-2">
           <h3 className={`font-semibold text-sm ${isCompact ? 'truncate' : ''}`}>
             {workspace.manifest.name}
