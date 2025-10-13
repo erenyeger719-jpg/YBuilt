@@ -32,6 +32,17 @@ export interface DownloadFileRequest {
   suggestedName?: string;
 }
 
+export interface UploadFileResponse {
+  success: boolean;
+  file: {
+    id: string;
+    filename: string;
+    url: string;
+    size: number;
+    type: string;
+  };
+}
+
 export function useWorkspace(jobId: string) {
   const queryClient = useQueryClient();
 
@@ -81,6 +92,29 @@ export function useWorkspace(jobId: string) {
     },
   });
 
+  // Upload file to workspace
+  const uploadFileMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const response = await fetch(`/api/workspace/${jobId}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(errorData.error || "Upload failed");
+      }
+      
+      return response.json() as Promise<UploadFileResponse>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", jobId, "files"] });
+    },
+  });
+
   // Download file to user's device
   const downloadFile = async ({ path, suggestedName }: Omit<DownloadFileRequest, 'jobId'>) => {
     try {
@@ -112,9 +146,11 @@ export function useWorkspace(jobId: string) {
     promptToFile: promptToFileMutation.mutateAsync,
     createFolder: createFolderMutation.mutateAsync,
     saveFile: saveFileMutation.mutateAsync,
+    uploadFile: uploadFileMutation.mutateAsync,
     downloadFile,
     isPromptToFileLoading: promptToFileMutation.isPending,
     isCreateFolderLoading: createFolderMutation.isPending,
     isSaveFileLoading: saveFileMutation.isPending,
+    isUploadLoading: uploadFileMutation.isPending,
   };
 }

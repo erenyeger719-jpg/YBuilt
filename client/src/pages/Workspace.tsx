@@ -289,21 +289,8 @@ export default function Workspace() {
   // Handle file upload from prompt bar
   const handleFileUpload = async (file: File) => {
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("jobId", jobId || "");
-      formData.append("userId", "demo");
-
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const asset = await response.json();
+      // Upload file using workspace upload mutation
+      const uploadResult = await workspace$.uploadFile(file);
 
       // Create prompt file for the uploaded asset
       const result = await workspace$.promptToFile({
@@ -322,8 +309,6 @@ export default function Workspace() {
         title: "File Uploaded",
         description: `${file.name} uploaded successfully`,
       });
-
-      queryClient.invalidateQueries({ queryKey: ["/api/workspace", jobId, "files"] });
     } catch (error: any) {
       toast({
         title: "Upload Error",
@@ -534,6 +519,7 @@ export default function Workspace() {
             onSaveFile={handleSaveFile}
             onNewFolder={() => setShowNewFolderDialog(true)}
             isCompact={isCompact}
+            isUploading={workspace$.isUploadLoading}
           />
         </div>
         {!isCompact && (

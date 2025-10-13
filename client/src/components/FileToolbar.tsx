@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, FileUp, Save, FolderPlus, MoreVertical } from "lucide-react";
+import { Plus, FileUp, Save, FolderPlus, MoreVertical, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -16,6 +16,7 @@ interface FileToolbarProps {
   onNewFolder?: () => void;
   onNewChat?: () => void;
   isCompact?: boolean;
+  isUploading?: boolean;
 }
 
 export default function FileToolbar({
@@ -25,6 +26,7 @@ export default function FileToolbar({
   onNewFolder,
   onNewChat,
   isCompact = false,
+  isUploading = false,
 }: FileToolbarProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,13 +89,20 @@ export default function FileToolbar({
             {onUpload && (
               <DropdownMenuItem
                 onClick={() => {
-                  fileInputRef.current?.click();
-                  setOverflowOpen(false);
+                  if (!isUploading) {
+                    fileInputRef.current?.click();
+                    setOverflowOpen(false);
+                  }
                 }}
+                disabled={isUploading}
                 data-testid="menu-item-upload-file"
               >
-                <FileUp className="h-4 w-4 mr-2" />
-                Upload File
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <FileUp className="h-4 w-4 mr-2" />
+                )}
+                {isUploading ? "Uploading..." : "Upload File"}
               </DropdownMenuItem>
             )}
             {onSaveFile && (
@@ -163,16 +172,22 @@ export default function FileToolbar({
             onChange={handleFileSelect}
             className="hidden"
             data-testid="input-toolbar-file-upload"
+            disabled={isUploading}
           />
           <Button
             variant="ghost"
             size="icon"
             className="h-6 w-6"
             onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
             data-testid="button-upload-file"
-            title="Upload file"
+            title={isUploading ? "Uploading..." : "Upload file"}
           >
-            <FileUp className="h-3 w-3" />
+            {isUploading ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <FileUp className="h-3 w-3" />
+            )}
           </Button>
         </>
       )}

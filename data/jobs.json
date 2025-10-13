@@ -649,5 +649,20 @@
     "error": null,
     "createdAt": "2025-10-13T04:53:29.474Z",
     "updatedAt": "2025-10-13T04:53:32.350Z"
+  },
+  "e0851aad-ec99-4fda-8667-fb7802e2c8cf": {
+    "id": "e0851aad-ec99-4fda-8667-fb7802e2c8cf",
+    "userId": "demo",
+    "prompt": "Create a portfolio page",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/e0851aad-ec99-4fda-8667-fb7802e2c8cf/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T05:04:38.684Z",
+    "updatedAt": "2025-10-13T05:04:41.742Z"
   }
 }
