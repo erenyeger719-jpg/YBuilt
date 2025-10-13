@@ -32,8 +32,8 @@ async function testUploadSanitization() {
     headers: form1.getHeaders()
   });
   
-  // Should either sanitize filename or reject
-  assert.ok(uploadRes1.status === 200 || uploadRes1.status === 400);
+  // Should either sanitize filename (200) or reject (400/403)
+  assert.ok([200, 400, 403].includes(uploadRes1.status), `Expected 200, 400, or 403, got ${uploadRes1.status}`);
   
   if (uploadRes1.status === 200) {
     const data1 = await uploadRes1.json();
@@ -52,7 +52,7 @@ async function testUploadSanitization() {
     headers: form2.getHeaders()
   });
   
-  assert.ok(uploadRes2.status === 200 || uploadRes2.status === 400);
+  assert.ok([200, 400, 403].includes(uploadRes2.status), `Expected 200, 400, or 403, got ${uploadRes2.status}`);
   
   if (uploadRes2.status === 200) {
     const data2 = await uploadRes2.json();
@@ -70,8 +70,8 @@ async function testUploadSanitization() {
     headers: form3.getHeaders()
   });
   
-  // Should sanitize or accept
-  assert.ok([200, 400].includes(uploadRes3.status));
+  // Should sanitize (200), reject (400), or forbid (403)
+  assert.ok([200, 400, 403].includes(uploadRes3.status), `Expected 200, 400, or 403, got ${uploadRes3.status}`);
   
   // Test 4: Valid upload should work
   console.log('Test 4: Uploading valid file...');

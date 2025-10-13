@@ -44,9 +44,10 @@ The system supports a mock mode for Razorpay and AI generation, simulating delay
 
 ### CI-Ready Infrastructure (Production)
 **Security Layer:**
-- Multi-layer path validation in `server/utils/paths.ts` (single-decode, backslash/percent rejection, segment validation, containment checks)
+- Multi-layer path validation in `server/utils/paths.ts` and `server/utils/paths.js` (single-decode, backslash/percent rejection, segment validation including 3+ consecutive dots, containment checks)
 - All 5 workspace file endpoints protected with `validateAndResolvePath()` returning proper 400/403 status codes
-- Protection against path traversal, Windows-style attacks, and URL encoding bypasses
+- Protection against path traversal, Windows-style attacks, suspicious dot patterns (e.g., ....//....//etc/passwd), and URL encoding bypasses
+- Enhanced segment validation rejects `.`, `..`, and segments matching `/^\.{3,}$/` (3+ consecutive dots)
 
 **Atomic Operations:**
 - `server/utils/atomicWrite.js` provides fsync + atomic rename pattern for zero partial writes

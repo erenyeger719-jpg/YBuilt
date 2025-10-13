@@ -32,6 +32,7 @@ export function validateAndResolvePath(workspaceDir, requestedPath) {
   const normalized = path.posix.normalize(decoded.replace(/\\/g, '/'));
   // split segments and detect traversal markers
   const segments = normalized.split('/').filter(Boolean);
+  
   if (segments.some(seg => {
     // Exact match for . or ..
     if (seg === '..' || seg === '.') return true;
