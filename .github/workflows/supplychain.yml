@@ -62,6 +62,9 @@ jobs:
       - name: Build application
         run: npm run build
       
+      - name: Prepare artifacts directory
+        run: mkdir -p artifacts
+      
       - name: Create build tarball
         run: tar -czf artifacts/dist.tar.gz dist/
       

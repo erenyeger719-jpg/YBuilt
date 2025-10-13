@@ -15,3 +15,7 @@
 {"timestamp":"2025-10-13T17:59:18.252Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
 {"timestamp":"2025-10-13T17:59:18.254Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
 {"timestamp":"2025-10-13T17:59:18.974Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/c387d0e3-375a-4ebb-b9d0-8c508bf7b43a/index.html"}}
+{"timestamp":"2025-10-13T18:07:51.000Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"dfghuio"},"metadata":{"autonomy":"medium","autoApply":false}}
+{"timestamp":"2025-10-13T18:07:52.410Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-13T18:07:52.414Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-13T18:07:53.139Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/c387d0e3-375a-4ebb-b9d0-8c508bf7b43a/index.html"}}

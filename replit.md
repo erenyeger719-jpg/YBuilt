@@ -45,10 +45,14 @@ The system supports a mock mode for Razorpay and AI generation, simulating delay
 ### CI-Ready Infrastructure (Production)
 - **Security Layer:** Multi-layer path validation protects against path traversal, Windows-style attacks, suspicious dot patterns, and URL encoding bypasses.
 - **Atomic Operations:** `server/utils/atomicWrite.js` provides fsync + atomic rename pattern for zero partial writes, used across all file persistence operations.
-- **Test Infrastructure:** Comprehensive `test/` directory with a harness for server lifecycle management and multipart upload helper. Includes unit tests for path validation and atomic writes.
+- **Test Infrastructure:** Comprehensive `test/` directory with a harness for server lifecycle management and multipart upload helper. Includes unit tests for path validation and atomic writes. Playwright E2E test suite in `test/e2e/` with Docker Compose orchestration for cross-browser smoke tests.
 - **Observability & Configuration:** `LOG_LEVEL` environment variable, centralized logger, Razorpay mode validation, and a metrics endpoint (`GET /api/metrics`) for job stats and queue depth.
-- **CI/Security Hardening:** Production logging with secret redaction, Prometheus telemetry, enhanced path security with symlink protection, atomic write durability with parent directory fsync, GitHub Actions CI with Node.js matrix, security scanning (npm audit, Snyk), Dependabot, and Docker containerization.
+- **CI/Security Hardening:** Production logging with secret redaction, Prometheus telemetry, enhanced path security with symlink protection, atomic write durability with parent directory fsync, GitHub Actions CI with Node.js matrix, security scanning (npm audit, Trivy, Snyk), Dependabot, and Docker containerization.
 - **Enterprise Infrastructure:** Advanced CI/CD with parallel jobs, code coverage enforcement, release automation (semantic-release), OpenTelemetry tracing, Sentry integration, a comprehensive monitoring stack (Grafana/Prometheus), enhanced QA (mutation testing, fuzzing), Kubernetes deployment support with Helm charts, rollback infrastructure, and pre-commit hooks.
+- **Supply Chain Security:** SBOM generation (CycloneDX), GPG artifact signing with verification, SLSA v0.2 provenance attestation, automated workflows in `.github/workflows/supplychain.yml`. Complete verification guide in `docs/supply-chain.md`.
+- **Canary Deployments:** Automated deployment with metric-based promote/rollback in `.github/workflows/canary-promote.yml`. Synthetic health checks, traffic splitting (10-100%), Helm canary templates in `k8s/helm/templates/canary-config.yaml`.
+- **SLO Monitoring:** 5 core SLOs (availability 99.9%, latency p95 < 300ms, error rate < 0.5%, job processing, data durability). 11 Prometheus alerts in `prometheus/alerts.yaml`. Alertmanager config with Slack/PagerDuty in `.monitoring/alerting/alertmanager.yml`.
+- **Quality Tools:** Flaky test detector (`tools/flaky-detector.js`) with retry logic and reporting. Chaos testing harness (`tools/chaos/simple-kill.js`) for resilience testing. Security gates with Trivy image scanning and npm audit enforcement in CI.
 
 ## External Dependencies
 - **React 18 + TypeScript**: Frontend framework.
