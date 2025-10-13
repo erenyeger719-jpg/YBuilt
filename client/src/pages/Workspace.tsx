@@ -108,6 +108,47 @@ export default function Workspace() {
     enabled: !!jobId,
   });
 
+  // Save index.html mutation - moved before early returns to fix hook order
+  const saveIndexMutation = useMutation({
+    mutationFn: async (content: string): Promise<void> => {
+      // Find index.html file at mutation time (not hook definition time)
+      const indexHtmlFile = workspace?.files.find(f => f.path === "index.html" || f.path.endsWith("/index.html"));
+      const path = indexHtmlFile?.path || "index.html";
+      await apiRequest("PUT", `/api/workspace/${jobId}/files/${path}`, {
+        content,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", jobId, "files"] });
+    },
+  });
+
+  // Build mutation with agent settings - moved before early returns to fix hook order
+  const buildMutation = useMutation({
+    mutationFn: async (data: { prompt?: string }) => {
+      return apiRequest("POST", `/api/jobs/${jobId}/build`, {
+        autonomy: agentSettings.autonomyLevel,
+        autoApply: agentSettings.autoApply,
+        safetyFilter: agentSettings.safetyFilter,
+        computeTier: agentSettings.computeTier,
+        prompt: data.prompt,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Building",
+        description: "Build started...",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to start build",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Apply theme CSS variables ONLY to iframe preview (not global site)
   useEffect(() => {
     if (!theme) return;
@@ -211,45 +252,6 @@ export default function Workspace() {
 
   // Get index.html content for PageToolSheet
   const indexHtmlFile = workspace?.files.find(f => f.path === "index.html" || f.path.endsWith("/index.html"));
-
-  // Save index.html mutation
-  const saveIndexMutation = useMutation({
-    mutationFn: async (content: string): Promise<void> => {
-      const path = indexHtmlFile?.path || "index.html";
-      await apiRequest("PUT", `/api/workspace/${jobId}/files/${path}`, {
-        content,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workspace", jobId, "files"] });
-    },
-  });
-
-  // Build mutation with agent settings
-  const buildMutation = useMutation({
-    mutationFn: async (data: { prompt?: string }) => {
-      return apiRequest("POST", `/api/jobs/${jobId}/build`, {
-        autonomy: agentSettings.autonomyLevel,
-        autoApply: agentSettings.autoApply,
-        safetyFilter: agentSettings.safetyFilter,
-        computeTier: agentSettings.computeTier,
-        prompt: data.prompt,
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Building",
-        description: "Build started...",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to start build",
-        variant: "destructive",
-      });
-    },
-  });
 
   // Handle prompt submission
   const handlePromptSubmit = async (promptText: string) => {

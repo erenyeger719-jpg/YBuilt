@@ -68,10 +68,11 @@ The system supports a mock mode for Razorpay and AI generation, simulating delay
 - Metrics endpoint: GET /api/metrics (job stats, queue depth, auto-apply tracking)
 - Periodic metrics logging every 60 seconds
 
-**UI Polish:**
+**UI Polish & Bug Fixes:**
 - CSS variable `--modal-z: 99999` for normalized z-index across all modals
 - Removed legacy z-index values (2147483601) for consistent layering
 - All modals use centralized z-index management
+- Fixed React Hooks violation in Workspace component (moved useMutation hooks before early returns to ensure consistent hook call order)
 
 **Setup Requirements:**
 - See `PACKAGE_JSON_CHANGES.md` for required package.json scripts (test/qa) and tsx dependency
