@@ -273,7 +273,11 @@ YBUILT includes a complete, Replit-style workspace with Monaco editor, multi-str
 - **Publish Button** - Deploy with credit indicator
 
 **📁 Left Panel**
-- **File Tree** - Navigate project files (New/Upload/Rename/Delete)
+- **File Tree** - Navigate project files with full CRUD operations
+  - **New File/Folder** - Create files and directories
+  - **Upload Files** - Drag & drop or button upload (25MB limit)
+  - **Rename/Delete** - Context menu for file management
+  - **Supported Formats** - Images, documents, code files (jpg, png, pdf, txt, js, css, html, etc.)
 - **Build Prompt Panel** - View original prompt, add refinements
 - **Agent Tools** - Autonomy controls and agent settings
 
@@ -297,6 +301,65 @@ YBUILT includes a complete, Replit-style workspace with Monaco editor, multi-str
   - Search across all logs
   - Controls: Clear, Download Transcript, Tail (live/paused)
   - Auto-scroll when tailing
+
+### 🔍 Build Trace Viewer
+
+A comprehensive 5-stage pipeline visualization system that streams build progress in real-time.
+
+**Pipeline Stages:**
+```
+GENERATION → ASSEMBLY → LINT → TEST → BUNDLE
+```
+
+**Key Features:**
+- **Real-time SSE Streaming** - Live updates via `/api/jobs/:jobId/build-trace/stream`
+- **Accordion UI** - Expandable stage details with log entries
+- **Status Indicators:**
+  - 🔄 Running - Animated spinner
+  - ✅ Success - Green checkmark
+  - ❌ Failed - Red X mark
+  - ⏱️ Pending - Clock icon
+- **Stage Progress Bar** - Visual pipeline with chevron separators
+- **Transcript Download** - Export complete build log
+- **Auto-scroll Toggle** - Control scroll behavior for live logs
+- **Artifact Tracking** - Files generated per stage with metadata
+
+**API Endpoints:**
+```typescript
+// Get build trace
+GET /api/jobs/:jobId/build-trace
+→ Returns { stages: {...}, currentStage: "LINT", completedAt: "..." }
+
+// Stream live updates (SSE)
+GET /api/jobs/:jobId/build-trace/stream
+→ Server-Sent Events with real-time stage updates
+
+// Download transcript
+GET /api/jobs/:jobId/build-trace/download
+→ Returns text file with complete build log
+```
+
+**Stage Data Structure:**
+```typescript
+interface BuildStageTrace {
+  status: "pending" | "running" | "success" | "failed";
+  startedAt?: string;
+  completedAt?: string;
+  logs: Array<{
+    timestamp: string;
+    level: "info" | "warn" | "error";
+    message: string;
+    details?: any;
+  }>;
+  artifacts: string[];  // Generated files
+}
+```
+
+**Integration with Console:**
+- Build trace viewer appears in dedicated tab
+- Stages auto-expand on errors
+- Logs sync with workspace console
+- Download includes full trace and console logs
 
 **⌨️ Command Palette (⌘K)**
 - Global keyboard shortcut: Cmd+K / Ctrl+K
@@ -335,6 +398,75 @@ POST /api/jobs/:jobId/build
 }
 → Returns { "success": true, "status": "queued" }
 ```
+
+### 🤖 Auto-Apply System
+
+The Auto-Apply worker automatically executes AI-suggested file operations when autonomy conditions are met.
+
+**Activation Conditions:**
+```typescript
+// Auto-apply enabled when BOTH conditions true:
+1. autoApplyEdits === "auto-medium-plus"  // Workspace setting
+2. autonomy >= "high"                      // Build autonomy level
+```
+
+**File Operations:**
+```typescript
+// Supported operations from AI responses
+interface FileOperation {
+  type: "create" | "update" | "delete";
+  path: string;
+  content?: string;  // For create/update
+}
+
+// Auto-applied via workspace API
+POST /api/workspace/:jobId/files
+PATCH /api/workspace/:jobId/files/:path
+DELETE /api/workspace/:jobId/files/:path
+```
+
+**Retry Logic:**
+- **Exponential Backoff** - 1s → 2s → 4s → 8s delays
+- **Max Attempts** - 3 retries per operation
+- **Error Recovery** - Graceful fallback to manual mode
+- **Build Trace Logging** - All operations logged to ASSEMBLY stage
+
+**Settings Configuration:**
+```typescript
+// In Settings → Workspace
+{
+  "autoApplyEdits": "auto-medium-plus",  // Options: "review", "auto-medium-plus", "always"
+  "agentAutonomyDefault": "high",        // Default autonomy level
+  "autoSaveDelay": 500                   // Debounce for auto-save
+}
+```
+
+**Build Trace Integration:**
+```typescript
+// Auto-apply logs appear in ASSEMBLY stage
+{
+  "stage": "ASSEMBLY",
+  "logs": [
+    { "message": "Auto-applying 3 file operations...", "level": "info" },
+    { "message": "✓ Created: components/DarkModeToggle.tsx", "level": "info" },
+    { "message": "✓ Updated: App.tsx (added import)", "level": "info" },
+    { "message": "⚠ Retry 1/3: Failed to update styles.css", "level": "warn" },
+    { "message": "✓ Updated: styles.css (retry succeeded)", "level": "info" }
+  ]
+}
+```
+
+**Error Handling:**
+- File conflicts → Backup original, apply change, log warning
+- Network errors → Retry with backoff, fallback to manual
+- Permission errors → Skip operation, notify user via toast
+- Invalid paths → Sanitize and retry, or fail gracefully
+
+**Cache Invalidation:**
+- Automatic cache bust on file changes
+- File tree refresh after batch operations
+- Editor reloads affected files
+- Preview iframe auto-refreshes
 
 ### Publishing from Workspace
 
@@ -444,6 +576,212 @@ The Library page's forced theme ensures visual consistency regardless of system 
 4. **Toggle** - Switch component controls `respectSystemTheme` state
 5. **Fallback** - Glass materials work without `backdrop-filter` support
 
+## 🎨 Theme Scoping Architecture
+
+YBUILT implements **complete theme isolation** between project previews and the main workspace UI.
+
+### Project Themes vs App Themes
+
+**Two Independent Theme Systems:**
+1. **Project Themes (ThemeModal)** - Apply to iframe preview only
+2. **App Themes (Settings → Appearance)** - Apply to workspace UI only
+
+### 🖼️ Project Themes (Preview Only)
+
+Accessible via the "Theme for project" button in workspace header.
+
+**Features:**
+- **Iframe-Scoped** - Changes apply to preview content only
+- **Per-Workspace Persistence** - Saved to `data/workspaces/{jobId}/theme.json`
+- **Live Preview** - See changes in real-time via CSS variables
+- **Color Customization:**
+  - Background, foreground, primary, accent
+  - Card, popover, border colors
+  - Destructive (error) states
+  - Chart color palette (5 colors)
+- **Typography:**
+  - Font families: Sans, Serif, Mono
+  - Font size control
+- **Border Radius** - Global radius control
+- **Preset Themes:**
+  - Light (default)
+  - Dark
+  - High Contrast
+- **Reset to Defaults** - One-click restore
+
+**API Endpoints:**
+```typescript
+// Get project theme
+GET /api/workspace/:jobId/theme
+→ Returns { meta: {...}, colors: {...}, fonts: {...} }
+
+// Save project theme
+POST /api/workspace/:jobId/theme
+{
+  "colors": { "background": "#ffffff", ... },
+  "fonts": { "sans": "Inter", ... },
+  "borderRadius": "0.5rem"
+}
+→ Returns updated theme
+```
+
+**Data Structure:**
+```typescript
+interface ProjectTheme {
+  meta: {
+    name: string;
+    createdAt: string;
+    author: string;
+  };
+  colors: {
+    background: string;
+    text: string;
+    primaryBackground: string;
+    primaryText: string;
+    // ... 20+ color tokens
+  };
+  fonts: {
+    sans: string;
+    serif: string;
+    mono: string;
+  };
+  borderRadius: string;
+  customColors?: Array<{ name: string; value: string }>;
+}
+```
+
+**File Storage:**
+```
+data/workspaces/{jobId}/theme.json
+```
+
+### 🎛️ App Themes (Workspace UI Only)
+
+Accessible via Settings → Appearance.
+
+**Features:**
+- **Global Scope** - Apply to main workspace, not previews
+- **User Persistence** - Saved to `data/settings/{userId}.json`
+- **Appearance Controls:**
+  - Theme: System / Light / Dark
+  - Glass intensity (0-100%)
+  - Gloss finish toggle
+  - Parallax intensity (0-100%)
+  - Motion: Full / Reduced / None
+  - Low bandwidth mode
+  - Font family
+  - Font size (12-20px)
+
+**Settings API:**
+```typescript
+// Get user settings
+GET /api/settings
+→ Returns { appearance: {...}, workspace: {...}, ... }
+
+// Update appearance
+PATCH /api/settings/appearance
+{
+  "theme": "dark",
+  "glassIntensity": 75,
+  "fontSize": 14
+}
+→ Returns updated settings
+```
+
+**Applied via CSS Variables:**
+```css
+/* App-level only (not iframe) */
+document.documentElement.style.setProperty("--glass-alpha", "0.75");
+document.documentElement.style.setProperty("--base-font-size", "14px");
+```
+
+### 🔒 Isolation Architecture
+
+**How Themes Stay Separate:**
+
+1. **iframe Boundary** - Natural DOM isolation
+   ```typescript
+   // Project theme targets iframe document
+   const iframeDoc = iframe.contentWindow.document.documentElement;
+   iframeDoc.style.setProperty("--background", projectColor);
+   
+   // App theme targets root document
+   document.documentElement.style.setProperty("--glass-alpha", appSetting);
+   ```
+
+2. **No Cross-Contamination** - Different CSS variable scopes
+   - Project: `--background`, `--foreground`, `--primary`, etc.
+   - App: `--glass-alpha`, `--parallax-intensity`, `--base-font-size`
+
+3. **No postMessage Required** - Direct DOM access via `contentWindow`
+   ```typescript
+   // Safe because same-origin
+   iframe.contentWindow.document.documentElement.style.setProperty(...)
+   ```
+
+4. **HSL Color Conversion** - Project themes convert HEX → HSL
+   ```typescript
+   // Project theme uses HSL for Tailwind compatibility
+   const hsl = hexToHSL("#ffffff"); // "0 0% 100%"
+   iframeDoc.style.setProperty("--background", hsl);
+   ```
+
+5. **Settings Context** - App themes managed globally
+   ```typescript
+   // SettingsContext applies to workspace UI
+   useEffect(() => {
+     document.documentElement.style.setProperty("--glass-alpha", glassIntensity);
+   }, [settings.appearance]);
+   ```
+
+### 📝 Theme Persistence
+
+**Project Theme:**
+```json
+// data/workspaces/{jobId}/theme.json
+{
+  "meta": {
+    "name": "Custom Dark",
+    "createdAt": "2024-10-13T10:30:00Z",
+    "author": "demo"
+  },
+  "colors": {
+    "background": "#000000",
+    "text": "#ffffff",
+    ...
+  }
+}
+```
+
+**App Theme:**
+```json
+// data/settings/{userId}.json
+{
+  "appearance": {
+    "theme": "dark",
+    "glassIntensity": 75,
+    "glossFinish": true,
+    "fontSize": 14
+  }
+}
+```
+
+### 🔄 Theme Application Flow
+
+**Project Theme (Preview):**
+1. User opens ThemeModal
+2. Adjusts colors/fonts
+3. Clicks "Apply Preview" → Updates iframe immediately
+4. Clicks "Save" → Persists to `theme.json`
+5. Iframe reloads with saved theme
+
+**App Theme (Workspace):**
+1. User goes to Settings → Appearance
+2. Adjusts glass intensity / font size
+3. Changes apply immediately to workspace UI
+4. Auto-saved to `{userId}.json`
+5. Persists across sessions
+
 ## 🧪 Testing
 
 ### Manual Testing
@@ -484,10 +822,97 @@ The Library page's forced theme ensures visual consistency regardless of system 
    - Test screen reader (NVDA/JAWS)
    - Verify keyboard shortcuts
 
-### Automated Testing
+### E2E Test Scripts
+
+YBUILT includes comprehensive end-to-end tests in the `test/` directory.
+
+**Test Suites:**
+1. **test/generate.test.js** - Generation flow tests
+   - Homepage rendering
+   - Prompt submission
+   - Job polling
+   - Preview modal
+   - Error handling
+
+2. **test/workflow.test.js** - Workspace workflow tests
+   - Workspace initialization
+   - File tree operations
+   - Monaco editor interactions
+   - Console streaming
+   - Build trace viewer
+   - Publishing flow
+
+**Running Tests:**
 ```bash
-npm run test  # Unit tests (future)
-npm run e2e   # Playwright tests (future)
+# Run generation tests
+node test/generate.test.js
+
+# Run workspace tests
+node test/workflow.test.js
+
+# Run all tests
+npm run test:e2e
+
+# With custom URL
+BASE_URL=http://localhost:3000 node test/generate.test.js
+```
+
+**Configuration:**
+```javascript
+// test/config.js
+export const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
+export const TIMEOUT = 30000;  // 30s per test
+export const HEADLESS = process.env.HEADLESS !== 'false';
+```
+
+**Test Coverage (16 tests):**
+- ✅ Homepage loads with hero section
+- ✅ Prompt input accepts text
+- ✅ Generation creates job ID
+- ✅ Job status polling works
+- ✅ Preview modal displays iframe
+- ✅ Workspace loads file tree
+- ✅ Editor highlights syntax
+- ✅ Console streams logs
+- ✅ Build trace shows pipeline
+- ✅ File upload works (25MB limit)
+- ✅ Theme modal persists changes
+- ✅ Publishing deducts credits
+- ✅ Error states show retry UI
+- ✅ Auth flow works (mock mode)
+- ✅ Payment modal opens
+- ✅ Webhook verification passes
+
+**CI/CD Integration:**
+```yaml
+# .github/workflows/test.yml
+name: E2E Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npm install
+      - run: npm run dev &
+      - run: npm run test:e2e
+```
+
+**Test Utilities:**
+```javascript
+// test/utils.js
+export async function waitForElement(selector, timeout = 5000);
+export async function fillForm(data);
+export async function assertText(selector, expected);
+export async function screenshot(name);
+```
+
+### Automated Testing (Future)
+```bash
+npm run test      # Jest unit tests (planned)
+npm run test:int  # Integration tests (planned)
+npm run coverage  # Coverage report (planned)
 ```
 
 ## 🔧 Configuration
