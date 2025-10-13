@@ -1,0 +1,203 @@
+GOAL
+Make this repository 10× better: secure, reproducible, production-ready, and reliably deployable. Implement the supply-chain, provenance, canary automation, E2E, SLOs & alerting, CI vulnerability gates, flaky/chaos automation, runbooks, and detailed verification. Work on a new branch, commit as you go, produce unified diffs for every changed file, and produce verification logs and artifacts. If any step cannot run, report exactly why and provide one-line remediation.
+
+BRANCH
+- Create and work on branch: fix/ci-advanced-supplychain
+  git checkout -b fix/ci-advanced-supplychain
+
+QUICK OFFER (insert these two options at top of your run UI so the human can request immediate file outputs):
+"If you want, tell me which files from the short list (SBOM script, sign script, Playwright config, canary workflow, PR body, final report) you want me to produce in this chat right now and I’ll paste the exact file contents and unified diff snippets instantly."
+
+"If you want, I’ll also (optionally) produce any of these files immediately (pick from a short list). Otherwise, start implementing and return the final response per the output format."
+
+HIGH-LEVEL OBJECTIVES (in priority order)
+1. Supply-chain hardening: reproducible builds, SBOM generation, artifact signing, pinned deps.
+2. Release provenance: create and attach provenance/attestation to releases and GHCR images.
+3. Canary automation + E2E: Playwright E2E tests in Docker Compose and CI; automated canary promote/rollback based on metric checks.
+4. SLOs & alerting: convert metrics to SLOs, add Prometheus Alertmanager rules, Grafana alerts, synthetic checks.
+5. Security policy enforcement: image vulnerability scanning (Trivy/Grype/Clair), npm audit, Snyk optional; block publish on critical/high.
+6. Flaky tests + chaos: flaky test reporter, small chaos harness running only under manual CI gate.
+7. Runbooks & operationalization: rollback runbook, supply-chain verification doc, link runbooks in PR body.
+8. Documentation & acceptance: produce Implementation report with diffs, logs, remediation, and PR body ready to paste.
+
+FILES TO CREATE / MODIFY (explicit)
+- .github/workflows/ci.yml (augment; ensure no `|| true` bypasses)
+- .github/workflows/release.yml (semantic-release dry-run + optional publish)
+- .github/workflows/supplychain.yml (SBOM + attestation + signing + artifact upload)
+- .github/workflows/canary-promote.yml (conditional manual or automated promote/rollback)
+- package.json (ensure scripts) OR PACKAGE_JSON_CHANGES.md if editing blocked
+- ci/check-coverage.js (ensure used)
+- ci/generate-sbom.sh
+- ci/sign-artifact.sh
+- scripts/provenance/attest.js
+- docs/runbooks/rollback.md
+- docs/supply-chain.md
+- prometheus/alerts.yaml
+- .monitoring/alerting/alertmanager.yml
+- k8s/helm/templates/canary-config.yaml
+- test/e2e/playwright.config.ts + test/e2e/specs/**
+- docker-compose.e2e.yml
+- tools/flaky-detector.js
+- tools/chaos/simple-kill.js
+- .github/dependabot.yml
+- IMPLEMENTATION_SUPPLYCHAIN.md (final report with diffs, logs, remediation)
+
+PRE-FLIGHT / IMMEDIATE PRINTS
+- Print Node / npm / git versions:
+  node -v && npm -v && git --version || true
+- Print current git branch or say "git unavailable":
+  git branch --show-current || echo "git unavailable"
+- Print project root quick listing:
+  ls -la | sed -n '1,120p'
+
+STEP-BY-STEP TASKS (agent MUST follow; if blocked, record error + remediation)
+
+STEP A — package.json scripts (BLOCKING)
+1. Attempt to edit package.json. Ensure these scripts exist exactly as below. If you cannot programmatically edit package.json, create PACKAGE_JSON_CHANGES.md containing a unified git patch and exact git commands to apply it.
+
+Required scripts block (exact):
+{
+  "scripts": {
+    "start":"node dist/index.js",
+    "dev":"NODE_ENV=development tsx server/index.ts",
+    "build":"vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "lint":"eslint . --ext .ts,.js,.tsx",
+    "typecheck":"tsc -p tsconfig.json --noEmit",
+    "test:unit":"node test/run-unit-tests.cjs",
+    "test:integration":"TEST_PORT=5001 node test/run-all-tests.cjs",
+    "test:e2e":"playwright test",
+    "coverage":"nyc --reporter=lcov --reporter=text npm run test:unit",
+    "sbom":"sh ci/generate-sbom.sh",
+    "sign":"sh ci/sign-artifact.sh dist.tar.gz artifact.sig",
+    "provenance":"node scripts/provenance/attest.js --artifact dist/ --out artifacts/provenance.json",
+    "release":"semantic-release"
+  }
+}
+
+2. Commit (if git available) with message:
+   git add package.json && git commit -m "feat(ci): add scripts for sbom/sign/provenance" || echo "git unavailable"
+
+STEP B — SBOM + artifact signing + attestation
+1. Create ci/generate-sbom.sh:
+   - Behavior: `npm ci && npm run build` then generate SBOM to artifacts/sbom.json using a tool available in the environment (prefer `npx @cyclonedx/builder` or `syft`), and exit non-zero with clear message if SBOM tool not found.
+2. Create ci/sign-artifact.sh:
+   - Behavior: Accept artifact path args; if GPG env not present, print exact message and exit non-zero with remediation; if present, create tarball dist.tar.gz then gpg --armor --output dist.tar.gz.sig --detach-sign dist.tar.gz and save artifacts.
+3. Create scripts/provenance/attest.js:
+   - Behavior: compute git sha, build timestamp, sbom sha256 hash, artifact name, and produce artifacts/provenance.json. If GPG available and GPG_SIGN env truthy, sign the provenance output.
+4. Create .github/workflows/supplychain.yml:
+   - On push to branches: run build, run sbom script, run sign script (conditional), upload artifacts: sbom.json, provenance.json, dist.tar.gz and dist.tar.gz.sig (if present).
+   - If GPG credentials not present, mark sign step as skipped and include clear log.
+
+STEP C — reproducible builds
+1. Pin base image in Dockerfile (use explicit image digest if available) and add build-arg for lockfile usage; ensure build sequence follows deterministic flags: npm ci --prefer-offline --no-audit.
+2. In CI job: store and use npm cache, run npm ci --prefer-offline --no-audit and build. Upload build tarball as artifact: artifacts/dist.tar.gz.
+
+STEP D — release provenance & conditional publish
+1. .github/workflows/release.yml: run on push to main and on manual dispatch. First do semantic-release --dry-run; collect sbom and provenance as assets. Only perform actual publish (semantic-release + GHCR push) if secrets GHCR_PAT and SEMANTIC_RELEASE_TOKEN present OR manual approval set to publish=true.
+2. When publishing images, tag with git sha, add provenance.json + sbom.json to release assets.
+
+STEP E — E2E + Canary automation
+1. Add Playwright tests:
+   - Minimal smoke tests: /health, basic upload flow, and modal layering UI check.
+   - Tests live in test/e2e/specs/*.ts and configured with playwright.config.ts to point to TEST_BASE_URL via env.
+2. Create docker-compose.e2e.yml:
+   - Services: app (builds image), db (if used in repo), playwright (runner) that depends_on app and runs `npx playwright test`.
+   - App exposes port 5001 and has a healthcheck on /health or /api/metrics.
+3. Add integration-tests job in .github/workflows/ci.yml:
+   - Start docker compose, wait for health with retry logic, run `npm run test:e2e`, collect artifacts.
+4. Add .github/workflows/canary-promote.yml:
+   - Trigger: manual_dispatch or after release dry-run success.
+   - Steps: deploy helm with canary.enabled=true canary.weight=10 (helm upgrade --install), run a metric check/synthetic for configurable window (default 15m; make short in CI e.g., 60s), if pass -> promote (helm set weight 100), if fail -> run scripts/rollback.sh.
+   - All actions are idempotent.
+
+STEP F — SLOs & alerting
+1. Add docs/slos.md with SLOs (example: p95 latency < 300ms, error-rate < 0.5% over 5m).
+2. Add prometheus/alerts.yaml with rules for those SLOs and for canary failure.
+3. Add .monitoring/alerting/alertmanager.yml and one sample Grafana alert (store in .monitoring/grafana/dashboard.json).
+4. Add ci/synthetic-check.sh (curl health and basic endpoint; exit non-zero if failure) and a scheduled GitHub Action example for synthetic run.
+
+STEP G — Security gates in CI
+1. Add a CI step to run Trivy (or Grype) over the built image; if not available, run `npm audit --audit-level=high` and fail on >= high vulnerabilities.
+2. Optional: run `snyk test` if SNYK_TOKEN set; record output as artifacts/vuln-report.json but do not fail the pipeline if SNYK not configured.
+3. Upload vuln-report.json artifact.
+
+STEP H — flaky tests & chaos (safe, gated)
+1. Add tools/flaky-detector.js:
+   - Wrap test runner, re-run failing tests up to N=2, produce artifacts/flaky-report.json with counts and test names.
+   - Add a CI job `flaky-detect` that runs on-demand, publishes report as artifact.
+2. Add tools/chaos/simple-kill.js:
+   - A tiny harness that spawns a child process (a local test server or command), waits a short interval, kills the child, logs result. Only run in a dedicated "chaos" CI job with manual approval.
+3. Ensure Playwright E2E uses `--workers=1` in canary checks for determinism.
+
+STEP I — docs and runbooks
+1. docs/runbooks/rollback.md — step-by-step: how to revert a release, kubectl rollout undo, helm rollback, disable canary, redeploy previous image, and verify.
+2. docs/supply-chain.md — how to verify sbom (sha256), verify gpg signature, and validate provenance.json locally.
+3. Update PR_BODY_ADVANCED.md with acceptance checklist and links to runbooks.
+
+STEP J — FINAL verification & output collection
+Run the verification checklist below. For each command, capture:
+- exact command executed
+- full stdout/stderr (or tail of 500 lines)
+- exit code
+If the command cannot be executed due to environment restrictions (docker missing, gpg missing, secrets missing), record exact error text and one-line remediation.
+
+VERIFICATION CHECKLIST (run in order)
+1. node -v && npm -v && git --version || true
+2. npm ci (exit code)
+3. npm run lint (exit code + first 200 lines)
+4. npm run typecheck (exit code + first 200 lines)
+5. npm run build (exit code + last 200 lines)
+6. npm run sbom (exit code + artifacts/sbom.json presence)
+7. sh ci/sign-artifact.sh artifacts/dist.tar.gz (exit code or explicit GPG error)
+8. npx semantic-release --dry-run (capture output)
+9. docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit (if docker available; capture last 500 lines and exit)
+10. npm run test:e2e (Playwright) — exit code + first failing trace
+11. helm template --set canary.enabled=true --set canary.weight=10 ./helm (or a kind deployment simulation) to validate canary parameters
+12. Run vulnerability scan: trivy image ./app:local || run `npm audit --json` (capture output)
+13. node tools/flaky-detector.js (artifact: artifacts/flaky-report.json)
+
+ARTIFACTS TO PRODUCE
+- artifacts/sbom.json
+- artifacts/provenance.json
+- artifacts/dist.tar.gz (+ artifacts/dist.tar.gz.sig if signed)
+- artifacts/vuln-report.json
+- artifacts/flaky-report.json
+- IMPLEMENTATION_SUPPLYCHAIN.md (final report containing diffs, logs, remediation)
+- PR_BODY_ADVANCED.md (ready to paste into PR)
+
+SECRETS REQUIRED (exact names)
+- GHCR_PAT
+- SEMANTIC_RELEASE_TOKEN
+- SNYK_TOKEN
+- GPG_PRIVATE_KEY (or GitHub Actions signing mechanism)
+- SENTRY_DSN
+- KUBE_CONFIG or KUBE_TOKEN
+- RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET (if you run live flows)
+
+ACCEPTANCE CRITERIA
+- package.json contains required scripts OR PACKAGE_JSON_CHANGES.md contains exact patch + git commands
+- artifacts/sbom.json exists
+- artifacts/provenance.json exists and references git sha + sbom hash
+- CI workflow updated with supplychain job and canary workflow (no `|| true` bypasses)
+- Playwright E2E runnable in docker-compose.e2e.yml or report includes clear reason why not
+- Vulnerability scan executed and results produced or clear error + remediation provided
+- IMPLEMENTATION_SUPPLYCHAIN.md produced with full diffs + verification logs
+
+OUTPUT FORMAT (single final response required)
+1. Branch name used (or “git unavailable”)
+2. Files created / modified list (paths)
+3. For each file changed: a unified diff block (git-style)
+4. Verification checklist results: for each command, include command run, stdout tail, and exit code
+5. Artifacts produced and paths
+6. If any step skipped: exact error message and one-line remediation
+7. PR_BODY_ADVANCED.md content (ready to paste)
+8. Next recommended follow-ups (3 bullets) with a short risk/benefit note each
+
+BEHAVIOR RULES
+- Commit as you go. If git is disabled: create files and print exact git commands to add/commit/push locally.
+- Do NOT publish secrets; use placeholders in all files and workflows (e.g., ${{ secrets.GHCR_PAT }}).
+- If a step requires secrets or Docker and the environment lacks them, perform a dry-run where possible; otherwise record exact error and remediation.
+- If a step is compute-heavy (full mutation testing), run a short smoke mode and document how to run full job with example commands and estimated runtime.
+- On fatal blocker, stop gracefully and report why.
+
+END — Start implementing now.
