@@ -1,0 +1,4 @@
+{"timestamp":"2025-10-13T04:53:29.532Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"Create a portfolio website with project showcase"},"metadata":{"autonomy":"medium","autoApply":false}}
+{"timestamp":"2025-10-13T04:53:31.305Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-13T04:53:31.310Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-13T04:53:32.031Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/3d37efcd-1c20-4aa6-87df-8d02b8b79e58/index.html"}}

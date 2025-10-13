@@ -79,6 +79,71 @@ export const builds = pgTable("builds", {
 
 export type Build = typeof builds.$inferSelect;
 
+// Build Trace Types for BuildTraceViewer
+export enum BuildStage {
+  GENERATION = "GENERATION",
+  ASSEMBLY = "ASSEMBLY",
+  LINT = "LINT",
+  TEST = "TEST",
+  BUNDLE = "BUNDLE"
+}
+
+export interface BuildLogEntry {
+  timestamp: string;
+  level: "info" | "warn" | "error";
+  message: string;
+  details?: string;
+}
+
+export interface BuildStageTrace {
+  stage: BuildStage;
+  status: "pending" | "running" | "success" | "failed";
+  startedAt?: string;
+  completedAt?: string;
+  logs: BuildLogEntry[];
+  artifacts?: Array<{ label: string; url: string }>;
+}
+
+export interface BuildTrace {
+  jobId: string;
+  currentStage: BuildStage;
+  stages: Record<BuildStage, BuildStageTrace>;
+  summaryLog: string;
+}
+
+// Autonomy System for Auto-Apply
+export enum AutonomyLevel {
+  NONE = 0,
+  LOW = 1,
+  MEDIUM = 2,
+  HIGH = 3,
+  MAXIMUM = 4
+}
+
+export function hasHighAutonomy(level: string): boolean {
+  const levelMap: Record<string, number> = {
+    none: AutonomyLevel.NONE,
+    low: AutonomyLevel.LOW,
+    medium: AutonomyLevel.MEDIUM,
+    high: AutonomyLevel.HIGH,
+    max: AutonomyLevel.MAXIMUM,
+    maximum: AutonomyLevel.MAXIMUM
+  };
+  return (levelMap[level?.toLowerCase()] || 0) >= AutonomyLevel.HIGH;
+}
+
+// File Operations for AI-generated edits
+export interface FileOperation {
+  path: string;
+  kind: "replace" | "create" | "update";
+  content: string;
+}
+
+export interface AIResponse {
+  html: string;
+  operations?: FileOperation[];
+}
+
 // Version schema for snapshots and rollback
 export const versions = pgTable("versions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

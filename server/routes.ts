@@ -424,6 +424,167 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get build trace snapshot
+  app.get("/api/jobs/:jobId/build-trace", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const tracePath = path.join(process.cwd(), "data", "jobs", jobId, "build-trace.json");
+      
+      try {
+        const data = await fs.readFile(tracePath, "utf-8");
+        const trace = JSON.parse(data);
+        res.json(trace);
+      } catch (error) {
+        // No trace file yet, return initial state
+        const { BuildStage } = await import("@shared/schema");
+        res.json({
+          jobId,
+          currentStage: BuildStage.GENERATION,
+          stages: {
+            [BuildStage.GENERATION]: { 
+              stage: BuildStage.GENERATION, 
+              status: "pending", 
+              logs: [] 
+            },
+            [BuildStage.ASSEMBLY]: { 
+              stage: BuildStage.ASSEMBLY, 
+              status: "pending", 
+              logs: [] 
+            },
+            [BuildStage.LINT]: { 
+              stage: BuildStage.LINT, 
+              status: "pending", 
+              logs: [] 
+            },
+            [BuildStage.TEST]: { 
+              stage: BuildStage.TEST, 
+              status: "pending", 
+              logs: [] 
+            },
+            [BuildStage.BUNDLE]: { 
+              stage: BuildStage.BUNDLE, 
+              status: "pending", 
+              logs: [] 
+            },
+          },
+          summaryLog: ""
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching build trace:", error);
+      res.status(500).json({ error: "Failed to fetch build trace" });
+    }
+  });
+
+  // SSE stream for build trace updates
+  app.get("/api/jobs/:jobId/build-trace/stream", async (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    const { BuildStage } = await import("@shared/schema");
+
+    // Send sample events every 2 seconds
+    let eventCount = 0;
+    const interval = setInterval(() => {
+      eventCount++;
+
+      if (eventCount === 1) {
+        // Stage status update
+        res.write(`data: ${JSON.stringify({
+          type: "stage-status",
+          stage: BuildStage.LINT,
+          status: "running",
+        })}\n\n`);
+      } else if (eventCount === 2) {
+        // Log entry
+        res.write(`data: ${JSON.stringify({
+          type: "log",
+          stage: BuildStage.LINT,
+          log: {
+            timestamp: new Date().toISOString(),
+            level: "info",
+            message: "Running ESLint checks...",
+          },
+        })}\n\n`);
+      } else if (eventCount === 3) {
+        // Another log entry
+        res.write(`data: ${JSON.stringify({
+          type: "log",
+          stage: BuildStage.LINT,
+          log: {
+            timestamp: new Date().toISOString(),
+            level: "info",
+            message: "No linting errors found",
+          },
+        })}\n\n`);
+      } else if (eventCount === 4) {
+        // Complete stage
+        res.write(`data: ${JSON.stringify({
+          type: "stage-status",
+          stage: BuildStage.LINT,
+          status: "success",
+        })}\n\n`);
+      } else if (eventCount >= 5) {
+        // Complete event
+        res.write(`data: ${JSON.stringify({
+          type: "complete",
+        })}\n\n`);
+        clearInterval(interval);
+        res.end();
+      }
+    }, 2000);
+
+    req.on("close", () => {
+      clearInterval(interval);
+    });
+  });
+
+  // Download build trace transcript
+  app.get("/api/jobs/:jobId/build-trace/download", async (req, res) => {
+    try {
+      const { BuildStage } = await import("@shared/schema");
+      
+      // Generate transcript from all logs
+      const transcript = [
+        "Build Trace Transcript",
+        `Job ID: ${req.params.jobId}`,
+        `Generated: ${new Date().toISOString()}`,
+        "",
+        "=".repeat(80),
+        "",
+      ];
+
+      // Mock data - in real implementation, fetch from storage
+      const stages = [
+        BuildStage.GENERATION,
+        BuildStage.ASSEMBLY,
+        BuildStage.LINT,
+        BuildStage.TEST,
+        BuildStage.BUNDLE,
+      ];
+
+      for (const stage of stages) {
+        transcript.push(`Stage: ${stage}`);
+        transcript.push("-".repeat(40));
+        transcript.push("[2024-01-01 10:00:00] INFO: Sample log entry for " + stage);
+        transcript.push("");
+      }
+
+      transcript.push("=".repeat(80));
+      transcript.push("End of transcript");
+
+      const content = transcript.join("\n");
+      
+      res.setHeader("Content-Type", "text/plain");
+      res.setHeader("Content-Disposition", `attachment; filename="build-trace-${req.params.jobId}.txt"`);
+      res.send(content);
+    } catch (error) {
+      console.error("Error generating transcript:", error);
+      res.status(500).json({ error: "Failed to generate transcript" });
+    }
+  });
+
   // Get drafts for user
   app.get("/api/drafts/:userId", async (req, res) => {
     try {

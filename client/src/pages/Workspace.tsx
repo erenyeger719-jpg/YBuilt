@@ -47,6 +47,7 @@ import PromptFileModal from "@/components/PromptFileModal";
 import ResizableSplitter from "@/components/ResizableSplitter";
 import PageToolSheet from "@/components/PageToolSheet";
 import ThemeModal from "@/components/ThemeModal";
+import BuildTraceViewer from "@/components/BuildTraceViewer";
 
 interface WorkspaceFile {
   path: string;
@@ -71,7 +72,7 @@ export default function Workspace() {
   const { toast } = useToast();
   const workspace$ = useWorkspace(jobId || "");
 
-  const [rightTab, setRightTab] = useState<"preview" | "console">("preview");
+  const [rightTab, setRightTab] = useState<"preview" | "console" | "build">("preview");
   const [deviceMode, setDeviceMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
@@ -573,7 +574,7 @@ export default function Workspace() {
   // Right Pane Content
   const rightPane = (
     <div className="h-full flex flex-col">
-      <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "preview" | "console")} className="flex-1 flex flex-col overflow-hidden">
+      <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "preview" | "console" | "build")} className="flex-1 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-border pl-4 pr-3 flex-shrink-0 h-14 bg-background sticky top-0 z-[60] overflow-visible">
           <div className="flex items-center gap-0 overflow-visible">
             <TabsList className="h-12 bg-transparent">
@@ -581,8 +582,11 @@ export default function Workspace() {
                 <Monitor className="h-4 w-4" />
                 PREVIEW
               </TabsTrigger>
-              <TabsTrigger value="console" className="gap-2 mr-0 console-button" data-testid="tab-console">
+              <TabsTrigger value="console" className="gap-2 console-button" data-testid="tab-console">
                 CONSOLE
+              </TabsTrigger>
+              <TabsTrigger value="build" className="gap-2 mr-0" data-testid="tab-build">
+                BUILD
               </TabsTrigger>
             </TabsList>
           </div>
@@ -707,6 +711,10 @@ export default function Workspace() {
 
         <TabsContent value="console" className="flex-1 m-0 overflow-hidden">
           <ConsolePanel jobId={jobId || ""} />
+        </TabsContent>
+
+        <TabsContent value="build" className="flex-1 m-0 overflow-hidden">
+          <BuildTraceViewer jobId={jobId || ""} enabled={rightTab === "build"} />
         </TabsContent>
       </Tabs>
     </div>

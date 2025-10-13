@@ -619,5 +619,35 @@
     "error": null,
     "createdAt": "2025-10-13T04:31:45.603Z",
     "updatedAt": "2025-10-13T04:32:09.905Z"
+  },
+  "504a6f17-3a62-4529-86f9-f04e7c7ee857": {
+    "id": "504a6f17-3a62-4529-86f9-f04e7c7ee857",
+    "userId": "demo",
+    "prompt": "Create a modern landing page for a tech startup",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/504a6f17-3a62-4529-86f9-f04e7c7ee857/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T04:52:11.694Z",
+    "updatedAt": "2025-10-13T04:52:14.153Z"
+  },
+  "3d37efcd-1c20-4aa6-87df-8d02b8b79e58": {
+    "id": "3d37efcd-1c20-4aa6-87df-8d02b8b79e58",
+    "userId": "demo",
+    "prompt": "Create a portfolio website with project showcase",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/3d37efcd-1c20-4aa6-87df-8d02b8b79e58/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T04:53:29.474Z",
+    "updatedAt": "2025-10-13T04:53:32.350Z"
   }
 }

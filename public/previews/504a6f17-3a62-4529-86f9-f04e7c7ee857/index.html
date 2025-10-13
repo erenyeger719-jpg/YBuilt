@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Landing Page</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+      background: #ffffff; 
+      color: #000000; 
+    }
+    header { 
+      padding: 2rem; 
+      border-bottom: 1px solid #ddd; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+    }
+    .hero { 
+      padding: 6rem 2rem; 
+      text-align: center; 
+      min-height: 60vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    h1 { 
+      font-size: clamp(2rem, 5vw, 4rem); 
+      margin-bottom: 1rem; 
+      background: linear-gradient(to right, #000000, #666); 
+      -webkit-background-clip: text; 
+      background-clip: text; 
+      -webkit-text-fill-color: transparent; 
+    }
+    p { opacity: 0.8; font-size: 1.2rem; line-height: 1.6; }
+    .cta { 
+      background: #000; 
+      color: #fff; 
+      padding: 1rem 2rem; 
+      border-radius: 8px; 
+      text-decoration: none; 
+      display: inline-block; 
+      margin-top: 2rem;
+      font-weight: 600;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(0,0,0,0.1);
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="font-weight: bold; font-size: 1.25rem;">Landing Page</div>
+    <nav>Menu</nav>
+  </header>
+  <div class="hero">
+    <div class="badge">✨ AI Generated with ybuilt</div>
+    <h1>Transform Your Business</h1>
+    <p>Join thousands of satisfied customers today</p>
+    <a href="#" class="cta">Get Started</a>
+  </div>
+</body>
+</html>

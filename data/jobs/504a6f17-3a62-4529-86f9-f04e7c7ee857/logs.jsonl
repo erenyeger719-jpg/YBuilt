@@ -1,0 +1,5 @@
+{"timestamp":"2025-10-13T04:52:11.709Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"Create a modern landing page for a tech startup"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-13T04:52:11.710Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-13T04:52:14.149Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-13T04:52:14.150Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-13T04:52:14.152Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/504a6f17-3a62-4529-86f9-f04e7c7ee857/index.html"}}
