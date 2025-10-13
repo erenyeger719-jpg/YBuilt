@@ -1,0 +1,214 @@
+Mega Prompt ————————
+
+
+FINAL SHORT OPTIONS (present to the user first)
+I can generate the most important file contents now so you can paste them into Replit immediately. Pick one or multiple from this list and I’ll produce them in full:
+  • package.json diff snippet / PACKAGE_JSON_CHANGES.md (blocking)
+  • .github/workflows/ci.yml
+  • Dockerfile
+  • docker-compose.ci.yml
+  • server/tracing.ts and server/error-reporter.ts
+  • release.config.js and .github/workflows/release.yml
+  • k8s/deployment.yaml + Helm skeleton
+  • PR_BODY_ADVANCED.md and IMPLEMENTATION_ADVANCED_REPORT.md (boilerplate + checklist)
+
+Ask the user which of the above to produce, or proceed with “all” to create everything now. If the user chooses, produce each file instantly.
+
+---
+
+IMPLEMENTATION TASK: make this repo 10x better (do all work now)
+
+Branch:
+- Create and work on branch: fix/ci-advance-next
+  git checkout -b fix/ci-advance-next
+
+High-level goals:
+A. Fix blocking CI issues (package.json scripts + gate enforcement)
+B. Make CI deterministic and publish-safe (Docker-based integration, coverage gate)
+C. Add release automation (semantic-release dry-run, GHCR push when secrets present)
+D. Add tracing (OpenTelemetry), error capture (Sentry), and Prometheus/Grafana examples
+E. Harden tests (multipart upload helper, fuzzing, mutation testing, flaky detection)
+F. Add deployment artifacts (K8s/Helm canary + rollback scripts)
+G. Security: Snyk/Dependabot/pre-commit secret scanning
+
+Deliverables:
+- Files created/modified (explicit list below)
+- Each changed file must be shown as a unified diff in the final output
+- Run verification checklist and capture full outputs and exit codes
+- Produce `PR_BODY_ADVANCED.md` and `IMPLEMENTATION_ADVANCED_REPORT.md`
+- If any step cannot run (permissions/secrets/dockerd missing), report exactly why and give one-line remediation
+
+=== Step 0: Pre-flight checks ===
+- Print: `node -v && npm -v && git --version || true`
+- Print current branch or say “git unavailable”.
+
+=== Step 1: package.json scripts (blocking) ===
+If you can edit package.json, inject the following scripts into "scripts". If you cannot edit programmatically, create `PACKAGE_JSON_CHANGES.md` containing the exact patch (diff and `git` commands).
+
+Add/ensure these scripts exactly:
+{
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "NODE_ENV=development tsx server/index.ts",
+    "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "lint": "eslint . --ext .ts,.js,.tsx",
+    "lint:fix": "eslint . --ext .ts,.js,.tsx --fix",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "node test/run-unit-tests.cjs",
+    "test:integration": "TEST_PORT=5001 node test/run-all-tests.cjs",
+    "test:e2e": "playwright test",
+    "test": "npm run test:unit && npm run test:integration",
+    "coverage": "nyc --reporter=lcov --reporter=text npm run test:unit",
+    "mutation": "npx @stryker-mutator/core run",
+    "fuzz": "node test/fuzz-paths.cjs",
+    "docker:build": "docker build -t $npm_package_name:local .",
+    "docker:push": "docker build -t ghcr.io/${{github.repository}}:${GIT_SHA:-local} . && docker push ghcr.io/${{github.repository}}:${GIT_SHA:-local}",
+    "release": "semantic-release"
+  }
+}
+
+Task: ensure scripts exist (or write PACKAGE_JSON_CHANGES.md). Commit.
+
+=== Step 2: CI workflow (overwrite .github/workflows/ci.yml) ===
+Replace with hardened workflow:
+- matrix: node-version: [18,20]
+- jobs:
+  lint-and-typecheck:
+    - npm ci
+    - npm run lint (must fail the job)
+    - npm run typecheck (must fail the job)
+  build:
+    - npm ci
+    - npm run build
+  unit-tests:
+    - npm ci
+    - npm run test:unit
+    - run `npm run coverage` and generate coverage report
+    - Upload coverage as artifact
+  integration-tests:
+    - set up docker service; run `docker-compose -f docker-compose.ci.yml up --build --abort-on-container-exit`
+    - run `npm run test:integration` against composed app
+  publish (conditional):
+    - only on push to main and if previous jobs passed
+    - perform semantic-release dry-run by default, actual publish only if GH secrets (GHCR_PAT / SEMANTIC_RELEASE_TOKEN) are present OR after manual approval
+- Coverage gate: add step `node ci/check-coverage.js` to enforce >= 80% or fail
+
+Implementation details:
+- Remove all `|| true` occurrences
+- Upload artifacts on failure: test logs, coverage, build output
+- Add `continue-on-error: false` except for security audit (see note)
+Commit this file and show diff.
+
+=== Step 3: Docker Compose + deterministic integration ===
+Create/overwrite `docker-compose.ci.yml`:
+- service `app` builds Dockerfile and exposes 5001
+- healthcheck that polls /health or /api/metrics
+- `tests` service depends_on `app` and runs `node test/run-all-tests.cjs` with TEST_PORT pointing at `app:5001`
+- Use an explicit network, volumes if necessary
+
+Task: run locally (if docker available)
+- `docker compose -f docker-compose.ci.yml up --build --abort-on-container-exit`
+Capture exit code and last 500 lines of logs. If Docker unavailable, record exact error and provide manual steps for CI to run in GH Actions runner (already configured).
+
+=== Step 4: Release automation ===
+- Add `release.config.js` and `.github/workflows/release.yml`
+- Workflow: run after CI success; first do semantic-release dry-run; require manual approval to publish OR require `GHCR_PAT` + `SEMANTIC_RELEASE_TOKEN`
+- Add step to build and push GHCR images only if `GHCR_PAT` secret exists.
+
+=== Step 5: Observability & tracing ===
+Files to add:
+- `server/tracing.ts` — initialize OpenTelemetry NodeSDK, instrument http/express, use `resourceFromAttributes({ 'service.name': options.serviceName })`, export `initTracing({serviceName, otelCollectorUrl})`.
+- `server/error-reporter.ts` — Sentry init code; guard initialization behind `SENTRY_DSN` env; include redaction function.
+- Hook both into `server/index.ts` near top (call initTracing and initSentry only in non-dev).
+
+Verification:
+- Start dev server `PORT=5001 NODE_ENV=test LOG_LEVEL=INFO node dist/index.js` and call `/api/metrics` and a couple of endpoints; ensure traces/traces logs are produced (or show that OTEL exporter attempted to connect).
+
+=== Step 6: Prometheus/Grafana examples ===
+- Add `.monitoring/prometheus.yml` (scrape app /api/metrics on port 5000/5001)
+- Add `.monitoring/grafana/dashboard.json` (basic panels: http_requests_total, job_queue_depth, avg_job_duration, atomic_write_failures)
+
+=== Step 7: Fix upload multipart flakiness and test improvements ===
+- Ensure `test/upload-helper.cjs` is used in upload tests. Edit tests that used fetch/multipart ad-hoc to call `upload-helper.cjs`, passing `form.getHeaders()` to axios and `fs.createReadStream()` for file content and `maxBodyLength: Infinity`.
+- Add test `test/run-all-tests.cjs` improvement: set explicit TEST_PORT, wait for health with retries, stream logs on failure.
+
+=== Step 8: Mutation + Fuzz + Flaky detection ===
+- Add `stryker.config.mjs` tuned to the server utils and the path validation code. Add `npm run mutation` script.
+- Add `test/fuzz-paths.cjs` using `fast-check` to run 1000 trials that call the validate function via HTTP or direct require (if possible) and log counterexamples.
+- Add `test/flaky-report.js` that wraps the test runner, retries failing tests up to N=2, and records flakiness score into artifact `test/artifacts/flaky-report.json`. CI stores the artifact.
+
+=== Step 9: K8s/Helm + canary + rollback ===
+- Add `k8s/deployment.yaml`, `k8s/service.yaml` with readiness/liveness probes to /health and /api/metrics, resource requests/limits, and a `strategy: RollingUpdate` with `maxUnavailable: 0` and `maxSurge: 1`.
+- Add simple `helm/` chart with canary values (e.g., `canary.enabled`, `canary.weight`).
+- Add `scripts/rollback.sh` that can be run manually: either revert GH release or `kubectl rollout undo deployment/<app>`.
+- Add `emergency-rollback.yml` workflow for manual-run that uses `KUBECONFIG` or `KUBE_TOKEN` (do NOT store secrets in repository).
+
+=== Step 10: Security (Snyk, Dependabot, pre-commit) ===
+- Add `.github/workflows/security.yml` to run `snyk test` (only if `SNYK_TOKEN` present) and `npm audit`.
+- Add `.github/dependabot.yml` configured weekly for npm and GitHub Actions updates.
+- Add `husky` + `lint-staged` + `pre-commit` hook:
+  - Run `npm run lint` (fail) and a simple `node scripts/secret-scan.js` that uses regex to detect tokens; fail commit if matches. Provide instructions to bypass locally if truly needed.
+
+=== Step 11: Verification checklist (agent must run these and capture output) ===
+Run each and capture output + exit code. If something cannot run, explain why.
+1. `npm ci` (exit code)
+2. `npm run lint` (exit code + first 200 lines)
+3. `npm run typecheck` (exit code + first 200 lines)
+4. `npm run build` (exit code + last 200 lines)
+5. `npm run test:unit` (exit code + tail)
+6. `npm run coverage` and run `node ci/check-coverage.js` (exit code + coverage percent)
+7. `docker compose -f docker-compose.ci.yml up --build --abort-on-container-exit` (exit code + last 500 lines) — or report docker unavailability
+8. `npx semantic-release --dry-run` (capture output)
+9. `node test/fuzz-paths.cjs` (exit code + any failing counterexample)
+10. `npx @stryker-mutator/core run --reporters clear` (or explain if heavy; at minimum run quick mutation with timeout 5m)
+
+=== Step 12: Artifacts & PR output ===
+Create:
+- `IMPLEMENTATION_ADVANCED_REPORT.md` with:
+  - Branch
+  - Files created/modified list and unified diffs
+  - All command outputs (as above)
+  - Any failures and exact remediation steps
+  - Secrets required (list)
+  - Final acceptance checklist and how to run locally
+- `PR_BODY_ADVANCED.md` — PR description including summary, acceptance checklist, files changed, how to run local verification, and rollback instructions.
+
+=== Step 13: Secrets required (exact names) ===
+List these exact secret keys that must be set in repo settings:
+- `GHCR_PAT` (publish docker)
+- `SEMANTIC_RELEASE_TOKEN` (publish)
+- `SNYK_TOKEN` (snyk scan)
+- `SENTRY_DSN` (Sentry)
+- `KUBE_CONFIG` or `KUBE_TOKEN` (for rollback workflow)
+- `RAZORPAY_KEY_ID` & `RAZORPAY_KEY_SECRET` (already noted)
+- `GH_TOKEN` / `GITHUB_TOKEN` (CI)
+
+=== Acceptance criteria ===
+- package.json contains the scripts above OR `PACKAGE_JSON_CHANGES.md` contains exact patch and commit steps
+- `.github/workflows/ci.yml` updated and contains no `|| true` bypasses (explicit confirmation)
+- Build succeeds locally with `npm run build`
+- Unit tests pass (exit code 0)
+- Coverage >= 80% OR a justification appended to the report if not achievable now
+- Docker compose integration run succeeds OR the agent documents exact reason why it couldn't and how CI will run it
+- Semantic-release dry-run completes (no publish)
+- `IMPLEMENTATION_ADVANCED_REPORT.md` and `PR_BODY_ADVANCED.md` present and include diffs and full logs
+
+=== Output format expected from the agent ===
+Return a single response that includes:
+1. Branch name used or “git unavailable”
+2. Files created / modified list (paths)
+3. For each file changed, a unified diff block
+4. Verification checklist results (command run, stdout tail, exit code)
+5. Artifacts produced (paths to report files)
+6. If any step skipped, an exact failure reason and remediation (one-liner)
+7. `PR_BODY_ADVANCED.md` content (ready to paste)
+8. Next recommended follow-ups (3 bullets) with estimated risk/benefit
+
+=== Behavior rules for the agent ===
+- Work in branch `fix/ci-advance-next`
+- Commit as you go. If git not permitted, create files and show exact `git` commands to commit manually.
+- Do not publish secrets; use env placeholders.
+- If a step needs user secrets (GHCR, SNYK, etc.), do a dry-run and make publishing conditional.
+- Return everything in the single final reply.
+
+End of prompt.
