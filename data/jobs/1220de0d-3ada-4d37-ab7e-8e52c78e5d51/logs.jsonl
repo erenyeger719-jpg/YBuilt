@@ -1,0 +1,4 @@
+{"timestamp":"2025-10-13T05:51:12.338Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"security test"},"metadata":{"autonomy":"medium","autoApply":false}}
+{"timestamp":"2025-10-13T05:51:14.057Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-13T05:51:14.060Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-13T05:51:14.774Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/1220de0d-3ada-4d37-ab7e-8e52c78e5d51/index.html"}}

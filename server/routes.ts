@@ -67,6 +67,72 @@ const supportUpload = multer({
   }
 });
 
+// Security validation helpers
+function validateJobId(jobId: string): { valid: boolean; error?: string } {
+  // Must match UUID format: alphanumeric and hyphens only
+  if (!/^[a-z0-9-]+$/i.test(jobId)) {
+    return { valid: false, error: "Invalid job ID format" };
+  }
+  
+  // Must be exactly 36 characters (UUID length)
+  if (jobId.length !== 36) {
+    return { valid: false, error: "Invalid job ID length" };
+  }
+  
+  return { valid: true };
+}
+
+function validateAndResolvePath(
+  jobId: string,
+  requestedPath: string,
+  workspaceDir: string
+): { valid: boolean; resolvedPath?: string; error?: string } {
+  // URL decode to handle encoded traversal attempts
+  let decodedPath = requestedPath;
+  try {
+    // Decode multiple times to handle double/triple encoding
+    for (let i = 0; i < 3; i++) {
+      const decoded = decodeURIComponent(decodedPath);
+      if (decoded === decodedPath) break; // No more decoding needed
+      decodedPath = decoded;
+    }
+  } catch (e) {
+    // Invalid URL encoding
+  }
+  
+  // Reject paths with backslashes (Windows-style path traversal attempts)
+  if (decodedPath.includes('\\')) {
+    return { valid: false, error: "Path traversal attempt detected" };
+  }
+  
+  // Reject paths with .. (directory traversal)
+  if (decodedPath.includes('..')) {
+    return { valid: false, error: "Path traversal attempt detected" };
+  }
+  
+  // Reject paths with multiple consecutive dots (obfuscated traversal attempts)
+  if (/\.{2,}/.test(decodedPath)) {
+    return { valid: false, error: "Path traversal attempt detected" };
+  }
+  
+  // Normalize and resolve the path using decoded path
+  const normalized = path.normalize(decodedPath);
+  const resolved = path.resolve(workspaceDir, normalized);
+  
+  // Check containment: resolved path must be inside workspace
+  if (!resolved.startsWith(workspaceDir)) {
+    return { valid: false, error: "Path traversal attempt detected" };
+  }
+  
+  return { valid: true, resolvedPath: resolved };
+}
+
+function isProtectedFile(resolvedPath: string, workspaceDir: string): boolean {
+  // Protect index.html from deletion
+  const indexHtmlPath = path.resolve(workspaceDir, 'index.html');
+  return resolvedPath === indexHtmlPath;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Job generation endpoint
   app.post("/api/generate", async (req, res) => {
@@ -1370,14 +1436,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { jobId } = req.params;
       const { path: filePath } = req.query;
 
+      // Security: Validate jobId
+      const jobIdValidation = validateJobId(jobId);
+      if (!jobIdValidation.valid) {
+        return res.status(400).json({ error: jobIdValidation.error });
+      }
+
       if (!filePath || typeof filePath !== "string") {
         return res.status(400).json({ error: "Missing file path" });
       }
 
-      const fullPath = path.join(process.cwd(), "public", "previews", jobId, filePath);
+      const workspaceDir = path.join(process.cwd(), "public", "previews", jobId);
+      
+      // Security: Validate and resolve path
+      const pathValidation = validateAndResolvePath(jobId, filePath, workspaceDir);
+      if (!pathValidation.valid || !pathValidation.resolvedPath) {
+        return res.status(403).json({ error: pathValidation.error });
+      }
 
       try {
-        const content = await fs.readFile(fullPath, "utf-8");
+        const content = await fs.readFile(pathValidation.resolvedPath, "utf-8");
         res.json({ path: filePath, content });
       } catch (error) {
         res.status(404).json({ error: "File not found" });
@@ -1394,18 +1472,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { jobId } = req.params;
       const { path: filePath, content } = req.body;
 
+      // Security: Validate jobId
+      const jobIdValidation = validateJobId(jobId);
+      if (!jobIdValidation.valid) {
+        return res.status(400).json({ error: jobIdValidation.error });
+      }
+
       if (!filePath || typeof content !== "string") {
         return res.status(400).json({ error: "Missing file path or content" });
       }
 
-      const fullPath = path.join(process.cwd(), "public", "previews", jobId, filePath);
-      const dirPath = path.dirname(fullPath);
+      const workspaceDir = path.join(process.cwd(), "public", "previews", jobId);
+      
+      // Security: Validate and resolve path
+      const pathValidation = validateAndResolvePath(jobId, filePath, workspaceDir);
+      if (!pathValidation.valid || !pathValidation.resolvedPath) {
+        return res.status(403).json({ error: pathValidation.error });
+      }
+
+      const dirPath = path.dirname(pathValidation.resolvedPath);
 
       // Ensure directory exists
       await fs.mkdir(dirPath, { recursive: true });
 
       // Write file
-      await fs.writeFile(fullPath, content, "utf-8");
+      await fs.writeFile(pathValidation.resolvedPath, content, "utf-8");
 
       res.json({ success: true, path: filePath });
     } catch (error) {
@@ -1420,35 +1511,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { jobId, filePath } = req.params;
       const { content } = req.body;
 
-      // Security: Validate jobId - must be UUID-like, no path traversal
-      if (!jobId || !/^[a-zA-Z0-9-]+$/.test(jobId)) {
-        return res.status(400).json({ error: "Invalid job ID" });
+      // Security: Validate jobId
+      const jobIdValidation = validateJobId(jobId);
+      if (!jobIdValidation.valid) {
+        return res.status(400).json({ error: jobIdValidation.error });
       }
 
       if (!filePath || typeof content !== "string") {
         return res.status(400).json({ error: "Missing file path or content" });
       }
 
-      // Security: Validate path doesn't contain traversal sequences
-      if (filePath.includes("..") || filePath.includes("\\") || path.isAbsolute(filePath)) {
-        return res.status(400).json({ error: "Invalid file path" });
+      const workspaceDir = path.join(process.cwd(), "public", "previews", jobId);
+      
+      // Security: Validate and resolve path
+      const pathValidation = validateAndResolvePath(jobId, filePath, workspaceDir);
+      if (!pathValidation.valid || !pathValidation.resolvedPath) {
+        return res.status(403).json({ error: pathValidation.error });
       }
 
-      const basePath = path.join(process.cwd(), "public", "previews", jobId);
-      const fullPath = path.resolve(basePath, filePath);
-
-      // Security: Verify resolved path is within allowed directory
-      if (!fullPath.startsWith(basePath)) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-
-      const dirPath = path.dirname(fullPath);
+      const dirPath = path.dirname(pathValidation.resolvedPath);
 
       // Ensure directory exists
       await fs.mkdir(dirPath, { recursive: true });
 
       // Write file
-      await fs.writeFile(fullPath, content, "utf-8");
+      await fs.writeFile(pathValidation.resolvedPath, content, "utf-8");
 
       // Log for debugging
       const auditLog = `${new Date().toISOString()} - Updated file: ${filePath}, Job: ${jobId}\n`;
@@ -1547,42 +1634,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { jobId } = req.params;
       const { path: filePath } = req.query;
 
-      // Security: Validate jobId - must be UUID-like, no path traversal
-      if (!jobId || !/^[a-zA-Z0-9-]+$/.test(jobId)) {
-        return res.status(400).json({ error: "Invalid job ID" });
+      // Security: Validate jobId
+      const jobIdValidation = validateJobId(jobId);
+      if (!jobIdValidation.valid) {
+        return res.status(400).json({ error: jobIdValidation.error });
       }
 
       if (!filePath || typeof filePath !== "string") {
         return res.status(400).json({ error: "Missing file path" });
       }
 
-      // Security: Validate path doesn't contain traversal sequences
-      if (filePath.includes("..") || filePath.includes("\\") || path.isAbsolute(filePath)) {
-        return res.status(400).json({ error: "Invalid file path" });
-      }
-
       // Determine if it's a prompt file or regular file
       const isPromptFile = filePath.startsWith("prompts/");
-      const basePath = isPromptFile
+      const workspaceDir = isPromptFile
         ? path.join(process.cwd(), "data", "workspaces", jobId)
         : path.join(process.cwd(), "public", "previews", jobId);
 
-      const sanitizedPath = filePath.replace(/^prompts\//, '');
-      const fullPath = path.resolve(basePath, sanitizedPath);
-
-      // Security: Verify resolved path is within allowed directory
-      if (!fullPath.startsWith(basePath)) {
-        return res.status(403).json({ error: "Access denied" });
+      // For prompt files, remove the prompts/ prefix before validation
+      const pathToValidate = isPromptFile ? filePath.replace(/^prompts\//, '') : filePath;
+      
+      // Security: Validate and resolve path
+      const pathValidation = validateAndResolvePath(jobId, pathToValidate, workspaceDir);
+      if (!pathValidation.valid || !pathValidation.resolvedPath) {
+        return res.status(403).json({ error: pathValidation.error });
       }
 
-      // Security: Prevent deletion of critical files (check AFTER path resolution)
-      const indexHtmlPath = path.resolve(basePath, "index.html");
-      if (fullPath === indexHtmlPath) {
-        return res.status(403).json({ error: "Cannot delete index.html" });
+      // Security: Prevent deletion of protected files using resolved paths
+      if (isProtectedFile(pathValidation.resolvedPath, workspaceDir)) {
+        return res.status(403).json({ error: "Cannot delete protected file" });
       }
 
       try {
-        await fs.unlink(fullPath);
+        await fs.unlink(pathValidation.resolvedPath);
         
         // Log deletion
         const auditLog = `${new Date().toISOString()} - Deleted file: ${filePath}, Job: ${jobId}\n`;
@@ -1606,9 +1689,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { jobId } = req.params;
 
-      // Security: Validate jobId - must be UUID-like, no path traversal
-      if (!jobId || !/^[a-zA-Z0-9-]+$/.test(jobId)) {
-        return res.status(400).json({ error: "Invalid job ID" });
+      // Security: Validate jobId
+      const jobIdValidation = validateJobId(jobId);
+      if (!jobIdValidation.valid) {
+        return res.status(400).json({ error: jobIdValidation.error });
       }
 
       const uploadedFile = req.file;
@@ -1622,6 +1706,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .replace(/\.\./g, '')
         .replace(/[/\\]/g, '')
         .replace(/^\.+/, '')
+        .replace(/[<>:"|?*]/g, '') // Remove special characters
         .slice(0, 255); // Limit length
 
       if (!sanitizedFilename) {
@@ -1633,15 +1718,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const uploadsDir = path.join(process.cwd(), "public", "uploads", userId, jobId);
       await fs.mkdir(uploadsDir, { recursive: true });
 
-      // Move file from temp to permanent location with sanitized name
-      const finalPath = path.resolve(uploadsDir, sanitizedFilename);
-
-      // Security: Verify resolved path is within uploads directory
-      if (!finalPath.startsWith(uploadsDir)) {
-        return res.status(403).json({ error: "Access denied" });
+      // Security: Validate and resolve path (using normalized sanitized filename)
+      const pathValidation = validateAndResolvePath(jobId, sanitizedFilename, uploadsDir);
+      if (!pathValidation.valid || !pathValidation.resolvedPath) {
+        return res.status(403).json({ error: pathValidation.error });
       }
 
-      await fs.rename(uploadedFile.path, finalPath);
+      await fs.rename(uploadedFile.path, pathValidation.resolvedPath);
 
       const publicUrl = `/uploads/${userId}/${jobId}/${sanitizedFilename}`;
 
