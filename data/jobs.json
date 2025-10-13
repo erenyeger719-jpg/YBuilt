@@ -574,5 +574,50 @@
     "error": null,
     "createdAt": "2025-10-12T15:02:53.985Z",
     "updatedAt": "2025-10-12T15:02:56.030Z"
+  },
+  "0a89d4b2-a530-4c84-bc11-3bfb7e5cd362": {
+    "id": "0a89d4b2-a530-4c84-bc11-3bfb7e5cd362",
+    "userId": "demo",
+    "prompt": "rjrtjet",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/0a89d4b2-a530-4c84-bc11-3bfb7e5cd362/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T04:24:01.736Z",
+    "updatedAt": "2025-10-13T04:24:05.424Z"
+  },
+  "c387d0e3-375a-4ebb-b9d0-8c508bf7b43a": {
+    "id": "c387d0e3-375a-4ebb-b9d0-8c508bf7b43a",
+    "userId": "demo",
+    "prompt": "Create a simple landing page for a coffee shop",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/c387d0e3-375a-4ebb-b9d0-8c508bf7b43a/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T04:24:27.040Z",
+    "updatedAt": "2025-10-13T04:24:30.963Z"
+  },
+  "d7bac1a6-de1d-4423-abc8-03fab85a0c4f": {
+    "id": "d7bac1a6-de1d-4423-abc8-03fab85a0c4f",
+    "userId": "demo",
+    "prompt": "Create a portfolio website",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/d7bac1a6-de1d-4423-abc8-03fab85a0c4f/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"\",\"description\":\"\",\"theme\":\"monochrome\",\"heroText\":\"Create a portfolio website\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T04:31:45.603Z",
+    "updatedAt": "2025-10-13T04:32:09.905Z"
   }
 }

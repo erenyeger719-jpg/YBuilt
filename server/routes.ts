@@ -1162,7 +1162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Save workspace file
+  // Save workspace file (POST - for backward compatibility)
   app.post("/api/workspace/:jobId/file", async (req, res) => {
     try {
       const { jobId } = req.params;
@@ -1185,6 +1185,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error writing file:", error);
       res.status(500).json({ error: "Failed to write file" });
+    }
+  });
+
+  // Update workspace file (PUT - used by Page Tool)
+  app.put("/api/workspace/:jobId/files/:filePath(*)", async (req, res) => {
+    try {
+      const { jobId, filePath } = req.params;
+      const { content } = req.body;
+
+      // Security: Validate jobId - must be UUID-like, no path traversal
+      if (!jobId || !/^[a-zA-Z0-9-]+$/.test(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+
+      if (!filePath || typeof content !== "string") {
+        return res.status(400).json({ error: "Missing file path or content" });
+      }
+
+      // Security: Validate path doesn't contain traversal sequences
+      if (filePath.includes("..") || filePath.includes("\\") || path.isAbsolute(filePath)) {
+        return res.status(400).json({ error: "Invalid file path" });
+      }
+
+      const basePath = path.join(process.cwd(), "public", "previews", jobId);
+      const fullPath = path.resolve(basePath, filePath);
+
+      // Security: Verify resolved path is within allowed directory
+      if (!fullPath.startsWith(basePath)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const dirPath = path.dirname(fullPath);
+
+      // Ensure directory exists
+      await fs.mkdir(dirPath, { recursive: true });
+
+      // Write file
+      await fs.writeFile(fullPath, content, "utf-8");
+
+      // Log for debugging
+      const auditLog = `${new Date().toISOString()} - Updated file: ${filePath}, Job: ${jobId}\n`;
+      await fs.appendFile(
+        path.join(process.cwd(), "data", "audit.log"),
+        auditLog
+      ).catch(() => {});
+
+      res.json({ success: true, path: filePath });
+    } catch (error) {
+      console.error("Error updating file:", error);
+      res.status(500).json({ error: "Failed to update file" });
     }
   });
 

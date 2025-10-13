@@ -1,0 +1,5 @@
+{"timestamp":"2025-10-13T04:24:27.053Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"Create a simple landing page for a coffee shop"},"metadata":{"autonomy":"medium"}}
+{"timestamp":"2025-10-13T04:24:27.057Z","level":"info","stage":"AGENT","source":"agent","message":"Agent running with medium autonomy","metadata":{"autonomy":"medium","mode":"assisted"}}
+{"timestamp":"2025-10-13T04:24:30.954Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-13T04:24:30.956Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-13T04:24:30.963Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/c387d0e3-375a-4ebb-b9d0-8c508bf7b43a/index.html"}}
