@@ -2,6 +2,27 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+// LOG_LEVEL support
+const LOG_LEVEL = process.env.LOG_LEVEL || 'INFO';
+const levels: Record<string, number> = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+const currentLevel = levels[LOG_LEVEL] || levels.INFO;
+
+export const logger = {
+  debug: (...args: any[]) => currentLevel <= 0 && console.log('[DEBUG]', ...args),
+  info: (...args: any[]) => currentLevel <= 1 && console.log('[INFO]', ...args),
+  warn: (...args: any[]) => currentLevel <= 2 && console.warn('[WARN]', ...args),
+  error: (...args: any[]) => currentLevel <= 3 && console.error('[ERROR]', ...args)
+};
+
+// Razorpay mode validation
+const RAZORPAY_MODE = process.env.RAZORPAY_MODE || 'mock';
+if (RAZORPAY_MODE === 'live') {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    throw new Error('RAZORPAY_KEY_ID/SECRET required in live mode');
+  }
+}
+logger.info(`[RAZORPAY] Mode: ${RAZORPAY_MODE}`);
+
 const app = express();
 
 // Capture raw body for webhook signature verification

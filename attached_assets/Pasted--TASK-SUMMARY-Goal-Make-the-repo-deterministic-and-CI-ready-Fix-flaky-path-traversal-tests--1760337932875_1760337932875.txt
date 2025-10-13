@@ -1,0 +1,289 @@
+--- TASK SUMMARY --- Goal: Make the repo deterministic and CI-ready. Fix flaky path-traversal tests, multipart upload test failures, atomic writes, start/stop server harness for tests, Razorpay readiness guards, logging polish, and cleanup z-index values.
+Work should be committed to a single PR. Include test failures/fix notes in the PR description.
+--- CHANGES TO IMPLEMENT (apply these files/edits) ---
+1. New/edited utility: safe path validation File: server/utils/paths.ts (create) Drop in:
+
+// server/utils/paths.ts
+import path from 'path';
+
+export function safeDecodeOnce(raw) {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Validate and resolve a requestedPath (query or form input) into an absolute path
+ * inside workspaceDir. Throws Error with .code = 400 or 403.
+ */
+export function validateAndResolvePath(workspaceDir, requestedPath) {
+  if (typeof requestedPath !== 'string' || requestedPath.length === 0) {
+    const e = new Error('Invalid path');
+    e.code = 400;
+    throw e;
+  }
+
+  // Reject backslashes (windows-style traversal) and leftover percent signs
+  if (requestedPath.includes('\\') || requestedPath.includes('%')) {
+    const e = new Error('Forbidden path');
+    e.code = 403;
+    throw e;
+  }
+
+  const decoded = safeDecodeOnce(requestedPath);
+
+  // normalize to posix separators
+  const normalized = path.posix.normalize(decoded.replace(/\\/g, '/'));
+  // split segments and detect traversal markers
+  const segments = normalized.split('/').filter(Boolean);
+  if (segments.some(seg => seg === '..' || seg === '.')) {
+    const e = new Error('Forbidden path');
+    e.code = 403;
+    throw e;
+  }
+
+  // Ensure resolved path remains inside workspaceDir
+  const resolved = path.resolve(workspaceDir, '.' + path.posix.sep + normalized);
+  const workspaceAbs = path.resolve(workspaceDir) + path.sep;
+  if (!resolved.startsWith(workspaceAbs)) {
+    const e = new Error('Forbidden path');
+    e.code = 403;
+    throw e;
+  }
+
+  return resolved;
+}
+Use this helper in all workspace file endpoints in server/routes.ts:
+* GET /api/workspace/:jobId/file
+* POST /api/workspace/:jobId/file
+* PUT /api/workspace/:jobId/files/:filePath
+* DELETE /api/workspace/:jobId/file
+* POST /api/workspace/:jobId/upload
+Behavior: decode once, reject \ or % input, reject any segment equal to .. or ., throw 403 for forbidden attempts, 400for malformed paths.
+
+1. Atomic write helper File: server/utils/atomicWrite.js (create)
+
+// server/utils/atomicWrite.js
+import fs from 'fs/promises';
+import { open } from 'fs';
+import { randomUUID } from 'crypto';
+import path from 'path';
+
+export async function atomicWriteFile(finalPath, data, options = {}) {
+  const dir = path.dirname(finalPath);
+  const tmpPath = path.join(dir, `.tmp-${randomUUID()}`);
+  // open the tmp file descriptor directly so we can fsync
+  const fd = await fs.open(tmpPath, 'w');
+  try {
+    if (typeof data === 'string' || Buffer.isBuffer(data)) {
+      await fd.writeFile(data, options);
+    } else {
+      // if stream-like or object, stringify
+      await fd.writeFile(JSON.stringify(data), options);
+    }
+    await fd.sync();
+    await fd.close();
+    // rename is atomic on same fs
+    await fs.rename(tmpPath, finalPath);
+  } catch (err) {
+    try { await fs.unlink(tmpPath); } catch (_) {}
+    throw err;
+  }
+}
+Important: ensure tmpPath is on same filesystem as finalPath (we used same dir). Add unit tests to simulate partial failures.
+
+1. Fix upload tests & add helper File: test/upload-helper.cjs (create)
+
+// test/upload-helper.cjs
+const fs = require('fs');
+const FormData = require('form-data');
+const axios = require('axios');
+
+async function uploadFile(url, filepath, fieldName = 'file') {
+  const form = new FormData();
+  form.append(fieldName, fs.createReadStream(filepath));
+  const headers = form.getHeaders();
+  const resp = await axios.post(url, form, { headers, maxBodyLength: Infinity });
+  return resp.data;
+}
+
+module.exports = { uploadFile };
+Update existing upload tests to import and use this helper instead of direct fetch + form-data mismatches.
+
+1. Test harness: start/stop server programmatically File: test/harness.cjs (create)
+
+// test/harness.cjs
+const { spawn } = require('child_process');
+const fetch = require('node-fetch');
+
+function startServer(env = {}) {
+  const child = spawn('node', ['server/index.js'], {
+    env: { ...process.env, ...env },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  child.stdout.on('data', d => process.stdout.write(`[server] ${d}`));
+  child.stderr.on('data', d => process.stderr.write(`[server-err] ${d}`));
+  return child;
+}
+
+async function waitForServer(url, timeout = 10000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const res = await fetch(url);
+      if (res && (res.status === 200 || res.status === 204 || res.ok)) return;
+    } catch (e) {}
+    await new Promise(r => setTimeout(r, 200));
+  }
+  throw new Error('Server did not start in time at ' + url);
+}
+
+function stopServer(child) {
+  return new Promise((resolve) => {
+    if (!child || child.killed) return resolve();
+    child.on('exit', () => resolve());
+    child.kill('SIGINT');
+    setTimeout(() => { try { child.kill('SIGKILL'); } catch(e){}; resolve(); }, 3000);
+  });
+}
+
+module.exports = { startServer, waitForServer, stopServer };
+File: test/run-all-tests.cjs (create) — orchestrator
+
+// test/run-all-tests.cjs
+const { startServer, waitForServer, stopServer } = require('./harness.cjs');
+const { execSync } = require('child_process');
+const PORT = process.env.TEST_PORT || 5001;
+const base = `http://localhost:${PORT}`;
+
+(async () => {
+  const server = startServer({ NODE_ENV: 'test', PORT: PORT });
+  try {
+    await waitForServer(`${base}/health`, 15000).catch(() => waitForServer(`${base}/api/metrics`, 15000));
+    console.log('Server started; running tests...');
+    // run tests in sequence; fail fast and stop server on failure
+    const testList = [
+      'node test/jobid-roundtrip.test.cjs',
+      'node test/library-to-workspace.test.cjs',
+      'node test/security-path-traversal.test.cjs',
+      'node test/upload-sanitization.test.cjs',
+      'node test/e2e-publish.test.cjs'
+    ];
+    for (const t of testList) {
+      console.log('Running', t);
+      execSync(t, { stdio: 'inherit', env: { ...process.env, TEST_PORT: PORT } });
+    }
+    console.log('ALL TESTS PASSED');
+    process.exitCode = 0;
+  } catch (err) {
+    console.error('TESTS FAILED', err && err.message);
+    process.exitCode = 2;
+  } finally {
+    await stopServer(server);
+  }
+})();
+Note: Convert your tests to .cjs if node uses CJS for test runner. Ensure tests accept process.env.TEST_PORT.
+
+1. Update server endpoints to use validateAndResolvePath Edit server/routes.ts to import:
+
+import { validateAndResolvePath } from './utils/paths.js'; // adjust extension/module semantics
+Replace old naive checks like if (filePath.includes('..')) with:
+
+try {
+  const resolvedPath = validateAndResolvePath(workspaceDir, filePath);
+  // operate on resolvedPath
+} catch (err) {
+  if (err.code === 400) return res.status(400).json({error: err.message});
+  return res.status(403).json({error: err.message});
+}
+
+1. Razorpay / Payment readiness
+* Add env checks in server/index.ts or payment service:
+
+const RAZORPAY_MODE = process.env.RAZORPAY_MODE || 'mock'; // mock | test | live
+if (RAZORPAY_MODE === 'live') {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    throw new Error('RAZORPAY_KEY_ID/SECRET required in live mode');
+  }
+}
+* Ensure webhook signature verification is implemented for live.
+* In tests, mock Razorpay SDK calls. Add file test/mocks/razorpay-mock.cjs and use dependency injection or proxyquire / mock-require to swap real SDK.
+
+1. Logging & obs polish
+* Add LOG_LEVEL env parsing: support DEBUG|INFO|WARN|ERROR. Replace console.log with a simple logger that respects levels.
+* Ensure PII not printed.
+* Ensure metrics endpoint /api/metrics returns JSON (job times, queue depth).
+
+1. CSS z-index cleanup
+* Grep repo for 2147483600 and other huge z-index values. Normalize modal z-indexes to a single documented value: 99999.
+* Optional: add css variable in client/src/index.css:
+
+:root { --modal-z: 99999; }
+.dialog, .modal { z-index: var(--modal-z) !important; }
+
+--- ACCEPTANCE CRITERIA (must be true for PR to be approved) ---
+1. npm run qa (see package.json scripts below) reliably:
+    * starts server on TEST_PORT (or default 5001),
+    * waits for /health or /api/metrics,
+    * runs the test list and returns 0 only when all tests pass,
+    * cleans up and stops server on success or failure.
+2. Tests pass on a fresh checkout (no manual server start):
+    * node test/jobid-roundtrip.test.cjs PASS
+    * node test/library-to-workspace.test.cjs PASS
+    * node test/security-path-traversal.test.cjs PASS
+    * node test/upload-sanitization.test.cjs PASS
+    * node test/e2e-publish.test.cjs PASS
+3. Upload tests use axios + form-data helper and do not throw “Unexpected end of form.”
+4. Path validation rejects:
+    * backslash or leftover % characters,
+    * any segment equal to .. or .,
+    * requests that resolve outside workspace (403),
+    * malformed inputs return 400.
+5. Atomic writes use atomicWriteFile helper with fsync and rename in same dir and have unit tests that simulate failures.
+6. Razorpay: RAZORPAY_MODE works; live mode must require keys; tests mock SDK.
+7. Logging: logs respect LOG_LEVEL; no PII or secret values are logged.
+8. CSS: modal z-index normalized to var(--modal-z) and no leftover 2147483600 or other super-high z-index values remain.
+
+--- PACKAGE & SCRIPTS to add (edit package.json) ---
+
+"scripts": {
+  "start": "node server/index.js",
+  "test": "node test/run-all-tests.cjs",
+  "qa": "node test/run-all-tests.cjs"
+}
+
+--- TEST COMMANDS (for local run while developing) ---
+* TEST_PORT=5001 node test/run-all-tests.cjs
+* node test/jobid-roundtrip.test.cjs
+* node test/security-path-traversal.test.cjs
+* node test/upload-sanitization.test.cjs
+
+--- PR DELIVERABLES (what to include in PR) ---
+1. All new files: server/utils/paths.ts, server/utils/atomicWrite.js, test/harness.cjs, test/run-all-tests.cjs, test/upload-helper.cjs.
+2. Modified files: server/routes.ts (use validateAndResolvePath), server/storage.ts (use atomicWriteFile or imported helper), package.json scripts, client/src/index.css z-index var changes, any test files updated to .cjs and to use helper functions.
+3. Unit tests added for validateAndResolvePath and atomicWriteFile (simulate partial writes).
+4. test/README.md explaining npm run qa, server lifecycle, environment variables used.
+5. PR description summarizing what changed and why, including any tests modified (and rationale, e.g., changed double-encoded path tests to single-decode expectation).
+
+--- NOTES / TRADEOFFS / IMPORTANT ---
+* We deliberately decode only once (safeDecodeOnce). Do not iterative-decode; it can open decoding-based bypasses.
+* Blocking any segment equal to .. is secure and avoids false positives for filenames like config..bak (those aren’t equal to ..). If you want to reject segments containing consecutive dots (.. inside), note that will be more aggressive (possible false positives).
+* fs.rename atomicity only applies on same filesystem; confirm same FS in deployments (tmp path created in same parent dir).
+* Keep Razorpay live keys out of repo. Use environment secret manager in CI.
+* If tests still flaky, ensure CI uses a clean workspace and npm ci before npm run qa.
+--- EXTRA: small checklist to run locally before PR ---
+1. git checkout -b fix/ci-test-harness
+2. Implement changes
+3. npm ci
+4. TEST_PORT=5001 npm run qa
+5. If failing, capture logs and include them in PR
+
+Do the above, open the PR, and include in the PR description a short table:
+* file changed
+* change summary
+* tests added/modified
+* any non-obvious behavior (e.g., changed path-decode semantics)
+End of prompt

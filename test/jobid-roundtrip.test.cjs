@@ -1,8 +1,9 @@
-import assert from 'assert';
-import fs from 'fs/promises';
-import path from 'path';
+const assert = require('assert');
+const fs = require('fs/promises');
+const path = require('path');
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
+const PORT = process.env.TEST_PORT || 5000;
+const BASE_URL = `http://localhost:${PORT}`;
 const JOBS_FILE = path.join(process.cwd(), 'data', 'jobs.json');
 
 // Helper function to make API requests

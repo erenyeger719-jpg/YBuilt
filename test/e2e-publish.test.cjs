@@ -1,7 +1,8 @@
 const assert = require('assert');
 
 async function testE2EPublish() {
-  const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
+  const PORT = process.env.TEST_PORT || 5000;
+  const BASE_URL = `http://localhost:${PORT}`;
   
   console.log('=== E2E Publish Flow Test ===\n');
   

@@ -119,6 +119,9 @@
   --file-chips-height: 32px;
   --prompt-actions-height: 48px;
 
+  /* Modal z-index for consistent layering */
+  --modal-z: 99999;
+
   /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
 
   /* Fallback for older browsers */
@@ -705,6 +708,6 @@ body[data-force-theme="settings"] .settings-text-dark {
 /* Help submenu high z-index to prevent cropping */
 .help-side-popup {
   position: fixed !important;
-  z-index: 2147483601 !important;
+  z-index: var(--modal-z) !important;
 }
 }

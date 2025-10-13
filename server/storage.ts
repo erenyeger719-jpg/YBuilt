@@ -2,6 +2,9 @@ import { type User, type InsertUser, type Job, type InsertJob, type Build, type 
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
+// @ts-ignore - atomicWrite.js is a JavaScript module with .d.ts type definitions
+import { atomicWriteFile } from "./utils/atomicWrite.js";
+import { logger } from './index.js';
 
 const JOBS_FILE = path.join(process.cwd(), "data", "jobs.json");
 const USERS_FILE = path.join(process.cwd(), "data", "users.json");
@@ -174,7 +177,7 @@ export class MemStorage implements IStorage {
 
   private async saveJobs() {
     const jobsObj = Object.fromEntries(this.jobs);
-    await fs.writeFile(JOBS_FILE, JSON.stringify(jobsObj, null, 2));
+    await atomicWriteFile(JOBS_FILE, jobsObj);
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -251,9 +254,9 @@ export class MemStorage implements IStorage {
           credits: this.userCredits.get(id) || 0
         };
       });
-      await fs.writeFile(USERS_FILE, JSON.stringify(usersData, null, 2));
+      await atomicWriteFile(USERS_FILE, usersData);
     } catch (error) {
-      console.error("Error saving users:", error);
+      logger.error("Error saving users:", error);
     }
   }
 
@@ -261,12 +264,12 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     
     // [JOB_CREATE] Debug logging and validation
-    console.log('[JOB_CREATE] Generated UUID:', id, 'Length:', id.length);
+    logger.info('[JOB_CREATE] Generated UUID:', id, 'Length:', id.length);
     
     // Validate UUID format and length
     if (id.length !== 36) {
       const error = `[JOB_CREATE] ERROR: UUID length is ${id.length}, expected 36. UUID: ${id}`;
-      console.error(error);
+      logger.error(error);
       throw new Error(error);
     }
     
@@ -274,7 +277,7 @@ export class MemStorage implements IStorage {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       const error = `[JOB_CREATE] ERROR: UUID format invalid. UUID: ${id}`;
-      console.error(error);
+      logger.error(error);
       throw new Error(error);
     }
     
@@ -294,7 +297,7 @@ export class MemStorage implements IStorage {
       updatedAt: new Date(),
     };
     
-    console.log('[JOB_CREATE] Created job object with id:', job.id, 'Length:', job.id.length);
+    logger.info('[JOB_CREATE] Created job object with id:', job.id, 'Length:', job.id.length);
     
     this.jobs.set(id, job);
     await this.saveJobs();
@@ -305,7 +308,7 @@ export class MemStorage implements IStorage {
       throw new Error(`[JOB_CREATE] ERROR: Failed to save job with id: ${id}`);
     }
     
-    console.log('[JOB_CREATE] Job saved successfully. ID:', savedJob.id, 'Length:', savedJob.id.length);
+    logger.info('[JOB_CREATE] Job saved successfully. ID:', savedJob.id, 'Length:', savedJob.id.length);
     
     return job;
   }
@@ -352,7 +355,7 @@ export class MemStorage implements IStorage {
       const defaults = { ...defaultSettings, userId };
       // Ensure settings directory exists
       await fs.mkdir(SETTINGS_DIR, { recursive: true });
-      await fs.writeFile(settingsFile, JSON.stringify(defaults, null, 2));
+      await atomicWriteFile(settingsFile, defaults);
       return defaults;
     }
   }
@@ -371,7 +374,7 @@ export class MemStorage implements IStorage {
     
     const settingsFile = path.join(SETTINGS_DIR, `${userId}.json`);
     await fs.mkdir(SETTINGS_DIR, { recursive: true });
-    await fs.writeFile(settingsFile, JSON.stringify(validated, null, 2));
+    await atomicWriteFile(settingsFile, validated);
     
     return validated;
   }
@@ -403,12 +406,12 @@ export class MemStorage implements IStorage {
 
   private async saveBuilds() {
     const buildsObj = Object.fromEntries(this.builds);
-    await fs.writeFile(BUILDS_FILE, JSON.stringify(buildsObj, null, 2));
+    await atomicWriteFile(BUILDS_FILE, buildsObj);
   }
 
   private async saveVersions() {
     const versionsObj = Object.fromEntries(this.versions);
-    await fs.writeFile(VERSIONS_FILE, JSON.stringify(versionsObj, null, 2));
+    await atomicWriteFile(VERSIONS_FILE, versionsObj);
   }
 
   // Extended job methods
@@ -558,7 +561,7 @@ export class MemStorage implements IStorage {
     const draftFile = path.join(userDraftsDir, `${draftId}.json`);
     await this.atomicWriteFile(draftFile, JSON.stringify(newDraft, null, 2));
     
-    console.log(`[DRAFT] Created draft ${draftId} atomically for user ${draft.userId}`);
+    logger.info(`[DRAFT] Created draft ${draftId} atomically for user ${draft.userId}`);
     
     return newDraft;
   }
@@ -585,7 +588,7 @@ export class MemStorage implements IStorage {
       const draftFile = path.join(LIBRARY_DIR, draft.userId, "drafts", `${draftId}.json`);
       await this.atomicWriteFile(draftFile, JSON.stringify(updated, null, 2));
       
-      console.log(`[DRAFT] Updated draft ${draftId} atomically`);
+      logger.info(`[DRAFT] Updated draft ${draftId} atomically`);
     }
   }
 
@@ -619,12 +622,9 @@ export class MemStorage implements IStorage {
     try {
       const billingFile = path.join(process.cwd(), "data", "billing.json");
       const invoicesArray = Array.from(this.invoices.values());
-      await fs.writeFile(
-        billingFile,
-        JSON.stringify({ invoices: invoicesArray }, null, 2)
-      );
+      await atomicWriteFile(billingFile, { invoices: invoicesArray });
     } catch (error) {
-      console.error("Error saving invoices:", error);
+      logger.error("Error saving invoices:", error);
     }
   }
 
@@ -713,7 +713,7 @@ export class MemStorage implements IStorage {
     await fs.mkdir(workspaceDir, { recursive: true });
     
     const themeFile = path.join(workspaceDir, "theme.json");
-    await fs.writeFile(themeFile, JSON.stringify(theme, null, 2));
+    await atomicWriteFile(themeFile, theme);
   }
 
   // Project Settings methods
@@ -751,7 +751,7 @@ export class MemStorage implements IStorage {
     await fs.mkdir(projectDir, { recursive: true });
     
     const settingsFile = path.join(projectDir, "settings.json");
-    await fs.writeFile(settingsFile, JSON.stringify(settings, null, 2));
+    await atomicWriteFile(settingsFile, settings);
   }
 
   // Support ticket methods
@@ -771,9 +771,9 @@ export class MemStorage implements IStorage {
     try {
       await fs.mkdir(SUPPORT_DIR, { recursive: true });
       const ticketsObj = Object.fromEntries(this.supportTickets);
-      await fs.writeFile(SUPPORT_TICKETS_FILE, JSON.stringify(ticketsObj, null, 2));
+      await atomicWriteFile(SUPPORT_TICKETS_FILE, ticketsObj);
     } catch (error) {
-      console.error("Error saving support tickets:", error);
+      logger.error("Error saving support tickets:", error);
     }
   }
 
@@ -872,7 +872,7 @@ export class MemStorage implements IStorage {
     const keysDir = path.join(process.cwd(), "data", "users", userId);
     await fs.mkdir(keysDir, { recursive: true });
     const keysFile = path.join(keysDir, "ssh_keys.json");
-    await fs.writeFile(keysFile, JSON.stringify(keys, null, 2));
+    await atomicWriteFile(keysFile, keys);
     
     return newKey;
   }
@@ -882,7 +882,7 @@ export class MemStorage implements IStorage {
     const filtered = keys.filter(k => k.id !== keyId);
     
     const keysFile = path.join(process.cwd(), "data", "users", userId, "ssh_keys.json");
-    await fs.writeFile(keysFile, JSON.stringify(filtered, null, 2));
+    await atomicWriteFile(keysFile, filtered);
   }
 
   private generateSSHFingerprint(publicKey: string): string {
@@ -920,7 +920,7 @@ export class MemStorage implements IStorage {
     const secretsDir = path.join(process.cwd(), "data", "users", userId);
     await fs.mkdir(secretsDir, { recursive: true });
     const secretsFile = path.join(secretsDir, "secrets.json");
-    await fs.writeFile(secretsFile, JSON.stringify(secrets, null, 2));
+    await atomicWriteFile(secretsFile, secrets);
     
     return newSecret;
   }
@@ -930,7 +930,7 @@ export class MemStorage implements IStorage {
     const filtered = secrets.filter(s => s.name !== name);
     
     const secretsFile = path.join(process.cwd(), "data", "users", userId, "secrets.json");
-    await fs.writeFile(secretsFile, JSON.stringify(filtered, null, 2));
+    await atomicWriteFile(secretsFile, filtered);
   }
 
   // Integration methods
@@ -970,7 +970,7 @@ export class MemStorage implements IStorage {
     const integrationsDir = path.join(process.cwd(), "data", "users", userId);
     await fs.mkdir(integrationsDir, { recursive: true });
     const integrationsFile = path.join(integrationsDir, "integrations.json");
-    await fs.writeFile(integrationsFile, JSON.stringify(integrations, null, 2));
+    await atomicWriteFile(integrationsFile, integrations);
   }
 
   async disconnectIntegration(userId: string, provider: string): Promise<void> {
@@ -984,7 +984,7 @@ export class MemStorage implements IStorage {
     }
     
     const integrationsFile = path.join(process.cwd(), "data", "users", userId, "integrations.json");
-    await fs.writeFile(integrationsFile, JSON.stringify(integrations, null, 2));
+    await atomicWriteFile(integrationsFile, integrations);
   }
 
   // Domain methods
@@ -1013,7 +1013,7 @@ export class MemStorage implements IStorage {
     const domainsDir = path.join(process.cwd(), "data", "users", userId);
     await fs.mkdir(domainsDir, { recursive: true });
     const domainsFile = path.join(domainsDir, "domains.json");
-    await fs.writeFile(domainsFile, JSON.stringify(domains, null, 2));
+    await atomicWriteFile(domainsFile, domains);
     
     return newDomain;
   }
@@ -1023,7 +1023,7 @@ export class MemStorage implements IStorage {
     const filtered = domains.filter(d => d.id !== domainId);
     
     const domainsFile = path.join(process.cwd(), "data", "users", userId, "domains.json");
-    await fs.writeFile(domainsFile, JSON.stringify(filtered, null, 2));
+    await atomicWriteFile(domainsFile, filtered);
   }
 }
 

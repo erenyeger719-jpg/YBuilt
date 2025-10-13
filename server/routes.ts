@@ -9,6 +9,8 @@ import path from "path";
 import { z } from "zod";
 import multer from "multer";
 import archiver from "archiver";
+import { validateAndResolvePath } from "./utils/paths.js";
+import { logger } from "./index";
 
 // Workspace readiness check helper
 async function checkWorkspaceReady(jobId: string): Promise<{ ready: boolean; retryAfter?: number }> {
@@ -19,14 +21,14 @@ async function checkWorkspaceReady(jobId: string): Promise<{ ready: boolean; ret
     const stats = await fs.stat(indexPath);
     
     if (stats.size === 0) {
-      console.log(`[WORKSPACE] Preview file exists but is empty for job ${jobId}`);
+      logger.info(`[WORKSPACE] Preview file exists but is empty for job ${jobId}`);
       return { ready: false, retryAfter: 1000 };
     }
     
-    console.log(`[WORKSPACE] Workspace ready for job ${jobId}`);
+    logger.info(`[WORKSPACE] Workspace ready for job ${jobId}`);
     return { ready: true };
   } catch (error) {
-    console.log(`[WORKSPACE] Preview file not accessible for job ${jobId}:`, error);
+    logger.info(`[WORKSPACE] Preview file not accessible for job ${jobId}:`, error);
     return { ready: false, retryAfter: 1000 };
   }
 }
@@ -82,50 +84,6 @@ function validateJobId(jobId: string): { valid: boolean; error?: string } {
   return { valid: true };
 }
 
-function validateAndResolvePath(
-  jobId: string,
-  requestedPath: string,
-  workspaceDir: string
-): { valid: boolean; resolvedPath?: string; error?: string } {
-  // URL decode to handle encoded traversal attempts
-  let decodedPath = requestedPath;
-  try {
-    // Decode multiple times to handle double/triple encoding
-    for (let i = 0; i < 3; i++) {
-      const decoded = decodeURIComponent(decodedPath);
-      if (decoded === decodedPath) break; // No more decoding needed
-      decodedPath = decoded;
-    }
-  } catch (e) {
-    // Invalid URL encoding
-  }
-  
-  // Reject paths with backslashes (Windows-style path traversal attempts)
-  if (decodedPath.includes('\\')) {
-    return { valid: false, error: "Path traversal attempt detected" };
-  }
-  
-  // Reject paths with .. (directory traversal)
-  if (decodedPath.includes('..')) {
-    return { valid: false, error: "Path traversal attempt detected" };
-  }
-  
-  // Reject paths with multiple consecutive dots (obfuscated traversal attempts)
-  if (/\.{2,}/.test(decodedPath)) {
-    return { valid: false, error: "Path traversal attempt detected" };
-  }
-  
-  // Normalize and resolve the path using decoded path
-  const normalized = path.normalize(decodedPath);
-  const resolved = path.resolve(workspaceDir, normalized);
-  
-  // Check containment: resolved path must be inside workspace
-  if (!resolved.startsWith(workspaceDir)) {
-    return { valid: false, error: "Path traversal attempt detected" };
-  }
-  
-  return { valid: true, resolvedPath: resolved };
-}
 
 function isProtectedFile(resolvedPath: string, workspaceDir: string): boolean {
   // Protect index.html from deletion
@@ -145,15 +103,15 @@ if (RAZORPAY_MODE !== 'mock') {
       key_id: process.env.RAZORPAY_KEY_ID,
       key_secret: process.env.RAZORPAY_KEY_SECRET,
     });
-    console.log(`[RAZORPAY] Initialized with ${RAZORPAY_MODE} mode`);
+    logger.info(`[RAZORPAY] Initialized with ${RAZORPAY_MODE} mode`);
   } catch (error) {
-    console.error(`[RAZORPAY] Failed to initialize Razorpay in ${RAZORPAY_MODE} mode:`, error);
+    logger.error(`[RAZORPAY] Failed to initialize Razorpay in ${RAZORPAY_MODE} mode:`, error);
   }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Log Razorpay mode on server startup
-  console.log(`[RAZORPAY] Running in ${RAZORPAY_MODE} mode`);
+  logger.info(`[RAZORPAY] Running in ${RAZORPAY_MODE} mode`);
   
   // Job generation endpoint
   app.post("/api/generate", async (req, res) => {
@@ -173,12 +131,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const job = await storage.createJob(validation.data);
       
       // [JOB_RESPONSE] Debug logging before response
-      console.log('[JOB_RESPONSE] Job created with ID:', job.id, 'Length:', job.id.length);
+      logger.info('[JOB_RESPONSE] Job created with ID:', job.id, 'Length:', job.id.length);
       
       // Validate jobId before sending response
       if (job.id.length !== 36) {
         const error = `[JOB_RESPONSE] ERROR: Job ID length is ${job.id.length}, expected 36. ID: ${job.id}`;
-        console.error(error);
+        logger.error(error);
         return res.status(500).json({ error: "Invalid job ID generated" });
       }
       
@@ -186,11 +144,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await jobQueue.addJob(job.id, job.prompt);
       
       const responseData = { jobId: job.id, status: job.status };
-      console.log('[JOB_RESPONSE] Sending response:', JSON.stringify(responseData), 'jobId length:', responseData.jobId.length);
+      logger.info('[JOB_RESPONSE] Sending response:', JSON.stringify(responseData), 'jobId length:', responseData.jobId.length);
       
       res.json(responseData);
     } catch (error) {
-      console.error("Error creating job:", error);
+      logger.error("Error creating job:", error);
       res.status(500).json({ error: "Failed to create job" });
     }
   });
@@ -214,7 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: job.createdAt,
       });
     } catch (error) {
-      console.error("Error fetching job:", error);
+      logger.error("Error fetching job:", error);
       res.status(500).json({ error: "Failed to fetch job" });
     }
   });
@@ -250,7 +208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, status: "editing" });
     } catch (error) {
-      console.error("Error finalizing job:", error);
+      logger.error("Error finalizing job:", error);
       res.status(500).json({ error: "Failed to finalize job" });
     }
   });
@@ -281,7 +239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true });
     } catch (error) {
-      console.error("Error saving draft:", error);
+      logger.error("Error saving draft:", error);
       res.status(500).json({ error: "Failed to save draft" });
     }
   });
@@ -320,7 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(asset);
     } catch (error) {
-      console.error("Upload error:", error);
+      logger.error("Upload error:", error);
       res.status(500).json({ error: "Upload failed" });
     }
   });
@@ -348,7 +306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ ok: true, draftId: draft.draftId, libraryEntry: draft });
     } catch (error) {
-      console.error("Error creating draft:", error);
+      logger.error("Error creating draft:", error);
       res.status(500).json({ error: "Failed to create draft" });
     }
   });
@@ -359,7 +317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const drafts = await storage.getDrafts(req.params.userId);
       res.json(drafts);
     } catch (error) {
-      console.error("Error fetching drafts:", error);
+      logger.error("Error fetching drafts:", error);
       res.status(500).json({ error: "Failed to fetch drafts" });
     }
   });
@@ -389,7 +347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ jobId: req.params.jobId, queued: true });
     } catch (error) {
-      console.error("Error regenerating job:", error);
+      logger.error("Error regenerating job:", error);
       res.status(500).json({ error: "Failed to regenerate" });
     }
   });
@@ -426,7 +384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       // Check workspace readiness with timeout
-      console.log(`[WORKSPACE] Checking readiness for job ${req.params.jobId}`);
+      logger.info(`[WORKSPACE] Checking readiness for job ${req.params.jobId}`);
       const maxWaitTime = 10000; // 10 seconds max
       const startTime = Date.now();
       
@@ -434,7 +392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const readiness = await checkWorkspaceReady(req.params.jobId);
         
         if (readiness.ready) {
-          console.log(`[WORKSPACE] Workspace ready for job ${req.params.jobId}`);
+          logger.info(`[WORKSPACE] Workspace ready for job ${req.params.jobId}`);
           return res.json({ 
             status: 'success',
             ok: true, 
@@ -452,14 +410,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // If we get here, workspace is not ready after timeout
-      console.log(`[WORKSPACE] Workspace not ready after timeout for job ${req.params.jobId}`);
+      logger.info(`[WORKSPACE] Workspace not ready after timeout for job ${req.params.jobId}`);
       res.json({
         status: 'pending',
         retryAfter: 1000,
         message: 'Workspace is being prepared, please retry'
       });
     } catch (error) {
-      console.error("Error selecting job:", error);
+      logger.error("Error selecting job:", error);
       res.status(500).json({ error: "Failed to select" });
     }
   });
@@ -477,7 +435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const readiness = await checkWorkspaceReady(req.params.jobId);
       
       if (!readiness.ready) {
-        console.log(`[WORKSPACE] Files not ready for job ${req.params.jobId}`);
+        logger.info(`[WORKSPACE] Files not ready for job ${req.params.jobId}`);
         res.setHeader('Retry-After', (readiness.retryAfter || 1000) / 1000); // Convert to seconds
         return res.status(202).json({ 
           error: "Workspace not ready", 
@@ -553,7 +511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(404).json({ error: "Workspace files not found" });
       }
     } catch (error) {
-      console.error("Error fetching workspace files:", error);
+      logger.error("Error fetching workspace files:", error);
       res.status(500).json({ error: "Failed to fetch workspace files" });
     }
   });
@@ -571,7 +529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json([]);
       }
     } catch (error) {
-      console.error("Error fetching logs:", error);
+      logger.error("Error fetching logs:", error);
       res.status(500).json({ error: "Failed to fetch logs" });
     }
   });
@@ -623,7 +581,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     } catch (error) {
-      console.error("Error fetching build trace:", error);
+      logger.error("Error fetching build trace:", error);
       res.status(500).json({ error: "Failed to fetch build trace" });
     }
   });
@@ -732,7 +690,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader("Content-Disposition", `attachment; filename="build-trace-${req.params.jobId}.txt"`);
       res.send(content);
     } catch (error) {
-      console.error("Error generating transcript:", error);
+      logger.error("Error generating transcript:", error);
       res.status(500).json({ error: "Failed to generate transcript" });
     }
   });
@@ -743,7 +701,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const drafts = await storage.getDrafts(req.params.userId);
       res.json(drafts);
     } catch (error) {
-      console.error("Error fetching drafts:", error);
+      logger.error("Error fetching drafts:", error);
       res.status(500).json({ error: "Failed to fetch drafts" });
     }
   });
@@ -773,7 +731,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .digest("hex");
 
       if (signature !== expectedSignature) {
-        console.error("Invalid webhook signature");
+        logger.error("Invalid webhook signature");
         return res.status(400).json({ error: "Invalid signature" });
       }
 
@@ -799,12 +757,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           logEntry
         );
 
-        console.log(`Payment processed: ${paymentId} for user ${userId}`);
+        logger.info(`Payment processed: ${paymentId} for user ${userId}`);
       }
 
       res.json({ status: "ok" });
     } catch (error) {
-      console.error("Webhook error:", error);
+      logger.error("Webhook error:", error);
       res.status(500).json({ error: "Webhook processing failed" });
     }
   });
@@ -859,7 +817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         JSON.stringify(logEntry) + '\n'
       );
       
-      console.log('[PAYMENT_SIMULATE]', logEntry);
+      logger.info('[PAYMENT_SIMULATE]', logEntry);
       
       res.json({
         success: true,
@@ -869,7 +827,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
     } catch (error) {
-      console.error('Error simulating payment:', error);
+      logger.error('Error simulating payment:', error);
       res.status(500).json({ error: 'Failed to simulate payment' });
     }
   });
@@ -880,7 +838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const credits = await storage.getUserCredits(req.params.userId);
       res.json({ userId: req.params.userId, credits });
     } catch (error) {
-      console.error("Error fetching credits:", error);
+      logger.error("Error fetching credits:", error);
       res.status(500).json({ error: "Failed to fetch credits" });
     }
   });
@@ -905,7 +863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           username,
           password // In production, hash this password
         });
-        console.log(`Mock auth: Auto-created user ${email}`);
+        logger.info(`Mock auth: Auto-created user ${email}`);
       }
 
       // In mock mode, we don't actually verify password
@@ -922,7 +880,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error("Sign in error:", error);
+      logger.error("Sign in error:", error);
       res.status(500).json({ error: "Sign in failed" });
     }
   });
@@ -964,7 +922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error("Sign up error:", error);
+      logger.error("Sign up error:", error);
       res.status(500).json({ error: "Sign up failed" });
     }
   });
@@ -1015,7 +973,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid token" });
       }
     } catch (error) {
-      console.error("Get current user error:", error);
+      logger.error("Get current user error:", error);
       res.status(500).json({ error: "Failed to get user" });
     }
   });
@@ -1027,7 +985,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // In a real implementation, this would fetch from storage
       res.json([]);
     } catch (error) {
-      console.error("Error fetching projects:", error);
+      logger.error("Error fetching projects:", error);
       res.status(500).json({ error: "Failed to fetch projects" });
     }
   });
@@ -1079,7 +1037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error("Error fetching user profile:", error);
+      logger.error("Error fetching user profile:", error);
       res.status(500).json({ error: "Failed to fetch user profile" });
     }
   });
@@ -1133,7 +1091,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error("Avatar upload error:", error);
+      logger.error("Avatar upload error:", error);
       res.status(500).json({ error: "Avatar upload failed" });
     }
   });
@@ -1153,7 +1111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true });
     } catch (error) {
-      console.error("Error deleting project:", error);
+      logger.error("Error deleting project:", error);
       res.status(500).json({ error: "Failed to delete project" });
     }
   });
@@ -1172,7 +1130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Theme is always returned (default theme if no custom theme exists)
       res.json(theme);
     } catch (error) {
-      console.error("Error fetching workspace theme:", error);
+      logger.error("Error fetching workspace theme:", error);
       res.status(500).json({ error: "Failed to fetch workspace theme" });
     }
   });
@@ -1194,7 +1152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, theme });
     } catch (error: any) {
-      console.error("Error saving workspace theme:", error);
+      logger.error("Error saving workspace theme:", error);
       if (error.name === "ZodError") {
         return res.status(400).json({ error: "Invalid theme data", details: error.errors });
       }
@@ -1208,7 +1166,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const status = await storage.getSystemStatus();
       res.json(status);
     } catch (error) {
-      console.error("Error fetching system status:", error);
+      logger.error("Error fetching system status:", error);
       res.status(500).json({ error: "Failed to fetch system status" });
     }
   });
@@ -1234,7 +1192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       res.json(metrics);
     } catch (error) {
-      console.error("Error fetching metrics:", error);
+      logger.error("Error fetching metrics:", error);
       res.status(500).json({ error: "Failed to fetch metrics" });
     }
   });
@@ -1292,7 +1250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Support ticket created successfully",
       });
     } catch (error) {
-      console.error("Error creating support ticket:", error);
+      logger.error("Error creating support ticket:", error);
       res.status(500).json({ error: "Failed to create support ticket" });
     }
   });
@@ -1308,7 +1266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tickets = await storage.getSupportTickets(userId);
       res.json(tickets);
     } catch (error) {
-      console.error("Error fetching support tickets:", error);
+      logger.error("Error fetching support tickets:", error);
       res.status(500).json({ error: "Failed to fetch support tickets" });
     }
   });
@@ -1348,14 +1306,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           username: `${provider}User`,
           password: "oauth-mock-password"
         });
-        console.log(`Mock OAuth: Auto-created ${provider} user`);
+        logger.info(`Mock OAuth: Auto-created ${provider} user`);
       }
 
       // In a real app, you'd set a secure session cookie here
       // For now, just redirect to homepage with success param
       res.redirect(`/?oauth=success&provider=${provider}&email=${encodeURIComponent(mockEmail)}`);
     } catch (error) {
-      console.error("OAuth mock error:", error);
+      logger.error("OAuth mock error:", error);
       res.redirect(`/?oauth=error`);
     }
   });
@@ -1368,7 +1326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.getSettings(userId);
       res.json(settings);
     } catch (error) {
-      console.error("Error fetching settings:", error);
+      logger.error("Error fetching settings:", error);
       res.status(500).json({ error: "Failed to fetch settings" });
     }
   });
@@ -1400,7 +1358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(updatedSettings);
     } catch (error) {
-      console.error("Error updating settings:", error);
+      logger.error("Error updating settings:", error);
       if (error instanceof Error && error.name === "ZodError") {
         return res.status(400).json({ error: "Invalid settings data", details: error });
       }
@@ -1423,7 +1381,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         credits
       });
     } catch (error) {
-      console.error("Error fetching plan:", error);
+      logger.error("Error fetching plan:", error);
       res.status(500).json({ error: "Failed to fetch plan" });
     }
   });
@@ -1448,7 +1406,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "created"
       });
     } catch (error) {
-      console.error("Error creating order:", error);
+      logger.error("Error creating order:", error);
       res.status(500).json({ error: "Failed to create order" });
     }
   });
@@ -1482,7 +1440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         credits: await storage.getUserCredits(userId)
       });
     } catch (error) {
-      console.error("Error verifying payment:", error);
+      logger.error("Error verifying payment:", error);
       res.status(500).json({ error: "Failed to verify payment" });
     }
   });
@@ -1537,7 +1495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoice
       });
     } catch (error) {
-      console.error("Error publishing job:", error);
+      logger.error("Error publishing job:", error);
       res.status(500).json({ error: "Failed to publish" });
     }
   });
@@ -1561,19 +1519,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const workspaceDir = path.join(process.cwd(), "public", "previews", jobId);
       
       // Security: Validate and resolve path
-      const pathValidation = validateAndResolvePath(jobId, filePath, workspaceDir);
-      if (!pathValidation.valid || !pathValidation.resolvedPath) {
-        return res.status(403).json({ error: pathValidation.error });
-      }
-
       try {
-        const content = await fs.readFile(pathValidation.resolvedPath, "utf-8");
+        const resolvedPath = validateAndResolvePath(workspaceDir, filePath);
+        const content = await fs.readFile(resolvedPath, "utf-8");
         res.json({ path: filePath, content });
-      } catch (error) {
-        res.status(404).json({ error: "File not found" });
+      } catch (err: any) {
+        if (err.code === 400) {
+          return res.status(400).json({ error: err.message });
+        }
+        if (err.code === 403) {
+          return res.status(403).json({ error: err.message });
+        }
+        if (err.code === 'ENOENT') {
+          return res.status(404).json({ error: "File not found" });
+        }
+        // Unexpected error
+        logger.error('Unexpected path validation error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
       }
     } catch (error) {
-      console.error("Error reading file:", error);
+      logger.error("Error reading file:", error);
       res.status(500).json({ error: "Failed to read file" });
     }
   });
@@ -1597,22 +1562,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const workspaceDir = path.join(process.cwd(), "public", "previews", jobId);
       
       // Security: Validate and resolve path
-      const pathValidation = validateAndResolvePath(jobId, filePath, workspaceDir);
-      if (!pathValidation.valid || !pathValidation.resolvedPath) {
-        return res.status(403).json({ error: pathValidation.error });
+      try {
+        const resolvedPath = validateAndResolvePath(workspaceDir, filePath);
+        const dirPath = path.dirname(resolvedPath);
+        
+        // Ensure directory exists
+        await fs.mkdir(dirPath, { recursive: true });
+
+        // Write file
+        await fs.writeFile(resolvedPath, content, "utf-8");
+
+        res.json({ success: true, path: filePath });
+      } catch (err: any) {
+        if (err.code === 400) {
+          return res.status(400).json({ error: err.message });
+        }
+        if (err.code === 403) {
+          return res.status(403).json({ error: err.message });
+        }
+        // Unexpected error
+        logger.error('Unexpected path validation error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
       }
-
-      const dirPath = path.dirname(pathValidation.resolvedPath);
-
-      // Ensure directory exists
-      await fs.mkdir(dirPath, { recursive: true });
-
-      // Write file
-      await fs.writeFile(pathValidation.resolvedPath, content, "utf-8");
-
-      res.json({ success: true, path: filePath });
     } catch (error) {
-      console.error("Error writing file:", error);
+      logger.error("Error writing file:", error);
       res.status(500).json({ error: "Failed to write file" });
     }
   });
@@ -1636,29 +1609,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const workspaceDir = path.join(process.cwd(), "public", "previews", jobId);
       
       // Security: Validate and resolve path
-      const pathValidation = validateAndResolvePath(jobId, filePath, workspaceDir);
-      if (!pathValidation.valid || !pathValidation.resolvedPath) {
-        return res.status(403).json({ error: pathValidation.error });
+      try {
+        const resolvedPath = validateAndResolvePath(workspaceDir, filePath);
+        const dirPath = path.dirname(resolvedPath);
+
+        // Ensure directory exists
+        await fs.mkdir(dirPath, { recursive: true });
+
+        // Write file
+        await fs.writeFile(resolvedPath, content, "utf-8");
+
+        // Log for debugging
+        const auditLog = `${new Date().toISOString()} - Updated file: ${filePath}, Job: ${jobId}\n`;
+        await fs.appendFile(
+          path.join(process.cwd(), "data", "audit.log"),
+          auditLog
+        ).catch(() => {});
+
+        res.json({ success: true, path: filePath });
+      } catch (err: any) {
+        if (err.code === 400) {
+          return res.status(400).json({ error: err.message });
+        }
+        if (err.code === 403) {
+          return res.status(403).json({ error: err.message });
+        }
+        // Unexpected error
+        logger.error('Unexpected path validation error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
       }
-
-      const dirPath = path.dirname(pathValidation.resolvedPath);
-
-      // Ensure directory exists
-      await fs.mkdir(dirPath, { recursive: true });
-
-      // Write file
-      await fs.writeFile(pathValidation.resolvedPath, content, "utf-8");
-
-      // Log for debugging
-      const auditLog = `${new Date().toISOString()} - Updated file: ${filePath}, Job: ${jobId}\n`;
-      await fs.appendFile(
-        path.join(process.cwd(), "data", "audit.log"),
-        auditLog
-      ).catch(() => {});
-
-      res.json({ success: true, path: filePath });
     } catch (error) {
-      console.error("Error updating file:", error);
+      logger.error("Error updating file:", error);
       res.status(500).json({ error: "Failed to update file" });
     }
   });
@@ -1704,7 +1685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ file, fileCreated: true });
     } catch (error) {
-      console.error("Error creating prompt file:", error);
+      logger.error("Error creating prompt file:", error);
       res.status(500).json({ error: "Failed to create prompt file" });
     }
   });
@@ -1735,7 +1716,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ ok: true, path: safePath });
     } catch (error) {
-      console.error("Error creating folder:", error);
+      logger.error("Error creating folder:", error);
       res.status(500).json({ error: "Failed to create folder" });
     }
   });
@@ -1766,18 +1747,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pathToValidate = isPromptFile ? filePath.replace(/^prompts\//, '') : filePath;
       
       // Security: Validate and resolve path
-      const pathValidation = validateAndResolvePath(jobId, pathToValidate, workspaceDir);
-      if (!pathValidation.valid || !pathValidation.resolvedPath) {
-        return res.status(403).json({ error: pathValidation.error });
-      }
-
-      // Security: Prevent deletion of protected files using resolved paths
-      if (isProtectedFile(pathValidation.resolvedPath, workspaceDir)) {
-        return res.status(403).json({ error: "Cannot delete protected file" });
-      }
-
       try {
-        await fs.unlink(pathValidation.resolvedPath);
+        const resolvedPath = validateAndResolvePath(workspaceDir, pathToValidate);
+        
+        // Security: Prevent deletion of protected files using resolved paths
+        if (isProtectedFile(resolvedPath, workspaceDir)) {
+          return res.status(403).json({ error: "Cannot delete protected file" });
+        }
+
+        await fs.unlink(resolvedPath);
         
         // Log deletion
         const auditLog = `${new Date().toISOString()} - Deleted file: ${filePath}, Job: ${jobId}\n`;
@@ -1787,11 +1765,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ).catch(() => {});
 
         res.json({ success: true, path: filePath });
-      } catch (error) {
-        res.status(404).json({ error: "File not found" });
+      } catch (err: any) {
+        if (err.code === 400) {
+          return res.status(400).json({ error: err.message });
+        }
+        if (err.code === 403) {
+          return res.status(403).json({ error: err.message });
+        }
+        if (err.code === 'ENOENT') {
+          return res.status(404).json({ error: "File not found" });
+        }
+        // Unexpected error
+        logger.error('Unexpected path validation error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
       }
     } catch (error) {
-      console.error("Error deleting file:", error);
+      logger.error("Error deleting file:", error);
       res.status(500).json({ error: "Failed to delete file" });
     }
   });
@@ -1831,42 +1820,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await fs.mkdir(uploadsDir, { recursive: true });
 
       // Security: Validate and resolve path (using normalized sanitized filename)
-      const pathValidation = validateAndResolvePath(jobId, sanitizedFilename, uploadsDir);
-      if (!pathValidation.valid || !pathValidation.resolvedPath) {
-        return res.status(403).json({ error: pathValidation.error });
-      }
+      try {
+        const resolvedPath = validateAndResolvePath(uploadsDir, sanitizedFilename);
 
-      await fs.rename(uploadedFile.path, pathValidation.resolvedPath);
+        await fs.rename(uploadedFile.path, resolvedPath);
 
-      const publicUrl = `/uploads/${userId}/${jobId}/${sanitizedFilename}`;
+        const publicUrl = `/uploads/${userId}/${jobId}/${sanitizedFilename}`;
 
-      // Add to storage for tracking
-      await storage.addUploadedAsset(jobId, {
-        url: publicUrl,
-        name: sanitizedFilename,
-        mime: uploadedFile.mimetype,
-        size: uploadedFile.size
-      });
-
-      // Log upload
-      const auditLog = `${new Date().toISOString()} - Uploaded: ${sanitizedFilename} (original: ${uploadedFile.originalname}), Job: ${jobId}, Size: ${uploadedFile.size}\n`;
-      await fs.appendFile(
-        path.join(process.cwd(), "data", "audit.log"),
-        auditLog
-      ).catch(() => {});
-
-      res.json({
-        success: true,
-        file: {
-          id: crypto.randomUUID(),
-          filename: sanitizedFilename,
+        // Add to storage for tracking
+        await storage.addUploadedAsset(jobId, {
           url: publicUrl,
-          size: uploadedFile.size,
-          type: uploadedFile.mimetype
+          name: sanitizedFilename,
+          mime: uploadedFile.mimetype,
+          size: uploadedFile.size
+        });
+
+        // Log upload
+        const auditLog = `${new Date().toISOString()} - Uploaded: ${sanitizedFilename} (original: ${uploadedFile.originalname}), Job: ${jobId}, Size: ${uploadedFile.size}\n`;
+        await fs.appendFile(
+          path.join(process.cwd(), "data", "audit.log"),
+          auditLog
+        ).catch(() => {});
+
+        res.json({
+          success: true,
+          file: {
+            id: crypto.randomUUID(),
+            filename: sanitizedFilename,
+            url: publicUrl,
+            size: uploadedFile.size,
+            type: uploadedFile.mimetype
+          }
+        });
+      } catch (err: any) {
+        if (err.code === 400) {
+          return res.status(400).json({ error: err.message });
         }
-      });
+        if (err.code === 403) {
+          return res.status(403).json({ error: err.message });
+        }
+        // Unexpected error
+        logger.error('Unexpected path validation error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
     } catch (error) {
-      console.error("Error uploading file:", error);
+      logger.error("Error uploading file:", error);
       res.status(500).json({ error: "Failed to upload file" });
     }
   });
@@ -1942,7 +1940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           await fs.appendFile(logFile, JSON.stringify(log) + "\n");
         } catch (error) {
-          console.error("Error writing process log:", error);
+          logger.error("Error writing process log:", error);
         }
       }, 3000 + Math.random() * 2000); // Random interval 3-5 seconds
 
@@ -1961,7 +1959,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ processId, port, status: "started" });
     } catch (error) {
-      console.error("Error starting process:", error);
+      logger.error("Error starting process:", error);
       res.status(500).json({ error: "Failed to start process" });
     }
   });
@@ -1996,7 +1994,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, processId: process.processId });
     } catch (error) {
-      console.error("Error stopping process:", error);
+      logger.error("Error stopping process:", error);
       res.status(500).json({ error: "Failed to stop process" });
     }
   });
@@ -2020,7 +2018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }]
       });
     } catch (error) {
-      console.error("Error listing processes:", error);
+      logger.error("Error listing processes:", error);
       res.status(500).json({ error: "Failed to list processes" });
     }
   });
@@ -2056,12 +2054,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
           res.write(`data: ${JSON.stringify(transformedLog)}\n\n`);
         } catch (parseError) {
-          console.error("Failed to parse log line:", parseError);
+          logger.error("Failed to parse log line:", parseError);
         }
       }
     } catch (error) {
       // No logs yet or file doesn't exist
-      console.log(`No logs found for job ${jobId}`);
+      logger.info(`No logs found for job ${jobId}`);
     }
 
     // Poll for new logs every 500ms
@@ -2098,7 +2096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               };
               res.write(`data: ${JSON.stringify(transformedLog)}\n\n`);
             } catch (parseError) {
-              console.error("Failed to parse log line:", parseError);
+              logger.error("Failed to parse log line:", parseError);
             }
           }
           
@@ -2151,7 +2149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         agentSettings
       });
     } catch (error) {
-      console.error("Error starting build:", error);
+      logger.error("Error starting build:", error);
       res.status(500).json({ error: "Failed to start build" });
     }
   });
@@ -2166,7 +2164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { id: "tailwind", name: "Tailwind IntelliSense", icon: "🎨", installed: true },
       ]);
     } catch (error) {
-      console.error("Error fetching extensions:", error);
+      logger.error("Error fetching extensions:", error);
       res.status(500).json({ error: "Failed to fetch extensions" });
     }
   });
@@ -2193,7 +2191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(filtered);
     } catch (error) {
-      console.error("Error searching commands:", error);
+      logger.error("Error searching commands:", error);
       res.status(500).json({ error: "Failed to search commands" });
     }
   });
@@ -2207,7 +2205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profileData = await storage.getUserProfile(userId);
       res.json(profileData);
     } catch (error: any) {
-      console.error("Error fetching profile:", error);
+      logger.error("Error fetching profile:", error);
       if (error.message === "User not found") {
         return res.status(404).json({ error: "User not found" });
       }
@@ -2230,7 +2228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(updatedUser);
     } catch (error: any) {
-      console.error("Error updating profile:", error);
+      logger.error("Error updating profile:", error);
       if (error.message === "User not found") {
         return res.status(404).json({ error: "User not found" });
       }
@@ -2281,7 +2279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const downloadUrl = `/exports/${userId}/${projectId}.zip`;
       res.json({ downloadUrl });
     } catch (error) {
-      console.error("Error exporting project:", error);
+      logger.error("Error exporting project:", error);
       res.status(500).json({ error: "Failed to export project" });
     }
   });
@@ -2304,7 +2302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Verification email sent to " + newEmail 
       });
     } catch (error) {
-      console.error("Error changing email:", error);
+      logger.error("Error changing email:", error);
       res.status(500).json({ error: "Failed to change email" });
     }
   });
@@ -2334,7 +2332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, message: "Password updated successfully" });
     } catch (error) {
-      console.error("Error changing password:", error);
+      logger.error("Error changing password:", error);
       res.status(500).json({ error: "Failed to change password" });
     }
   });
@@ -2352,7 +2350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedUser = await storage.updateUser(userId, { region });
       res.json(updatedUser);
     } catch (error) {
-      console.error("Error updating region:", error);
+      logger.error("Error updating region:", error);
       res.status(500).json({ error: "Failed to update region" });
     }
   });
@@ -2370,7 +2368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedUser = await storage.updateUser(userId, { notificationSettings });
       res.json(updatedUser);
     } catch (error) {
-      console.error("Error updating notifications:", error);
+      logger.error("Error updating notifications:", error);
       res.status(500).json({ error: "Failed to update notifications" });
     }
   });
@@ -2392,7 +2390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      console.error("Error sending test notification:", error);
+      logger.error("Error sending test notification:", error);
       res.status(500).json({ error: "Failed to send test notification" });
     }
   });
@@ -2429,7 +2427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const downloadUrl = `/exports/${userId}/all-projects.zip`;
       res.json({ downloadUrl, status: "ready" });
     } catch (error) {
-      console.error("Error exporting all apps:", error);
+      logger.error("Error exporting all apps:", error);
       res.status(500).json({ error: "Failed to export apps" });
     }
   });
@@ -2463,7 +2461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(billingData);
     } catch (error) {
-      console.error("Error fetching billing:", error);
+      logger.error("Error fetching billing:", error);
       res.status(500).json({ error: "Failed to fetch billing info" });
     }
   });
@@ -2481,7 +2479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Mock storage - in production would save to user settings
       res.json({ success: true, threshold });
     } catch (error) {
-      console.error("Error setting usage alert:", error);
+      logger.error("Error setting usage alert:", error);
       res.status(500).json({ error: "Failed to set usage alert" });
     }
   });
@@ -2499,7 +2497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedUser = await storage.updateUser(userId, { roles });
       res.json(updatedUser);
     } catch (error) {
-      console.error("Error updating roles:", error);
+      logger.error("Error updating roles:", error);
       res.status(500).json({ error: "Failed to update roles" });
     }
   });
@@ -2513,7 +2511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const keys = await storage.getUserSSHKeys(userId);
       res.json(keys);
     } catch (error) {
-      console.error("Error fetching SSH keys:", error);
+      logger.error("Error fetching SSH keys:", error);
       res.status(500).json({ error: "Failed to fetch SSH keys" });
     }
   });
@@ -2536,7 +2534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newKey = await storage.addSSHKey(userId, { name, publicKey });
       res.json(newKey);
     } catch (error) {
-      console.error("Error adding SSH key:", error);
+      logger.error("Error adding SSH key:", error);
       res.status(500).json({ error: "Failed to add SSH key" });
     }
   });
@@ -2548,7 +2546,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteSSHKey(userId, keyId);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error deleting SSH key:", error);
+      logger.error("Error deleting SSH key:", error);
       res.status(500).json({ error: "Failed to delete SSH key" });
     }
   });
@@ -2562,7 +2560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const secrets = await storage.getUserSecrets(userId);
       res.json(secrets);
     } catch (error) {
-      console.error("Error fetching secrets:", error);
+      logger.error("Error fetching secrets:", error);
       res.status(500).json({ error: "Failed to fetch secrets" });
     }
   });
@@ -2580,7 +2578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newSecret = await storage.addSecret(userId, { name, value });
       res.json(newSecret);
     } catch (error) {
-      console.error("Error adding secret:", error);
+      logger.error("Error adding secret:", error);
       res.status(500).json({ error: "Failed to add secret" });
     }
   });
@@ -2592,7 +2590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteSecret(userId, name);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error deleting secret:", error);
+      logger.error("Error deleting secret:", error);
       res.status(500).json({ error: "Failed to delete secret" });
     }
   });
@@ -2606,7 +2604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integrations = await storage.getUserIntegrations(userId);
       res.json(integrations);
     } catch (error) {
-      console.error("Error fetching integrations:", error);
+      logger.error("Error fetching integrations:", error);
       res.status(500).json({ error: "Failed to fetch integrations" });
     }
   });
@@ -2618,7 +2616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.connectIntegration(userId, provider);
       res.json({ success: true, message: `Connected to ${provider}` });
     } catch (error) {
-      console.error("Error connecting integration:", error);
+      logger.error("Error connecting integration:", error);
       res.status(500).json({ error: "Failed to connect integration" });
     }
   });
@@ -2630,7 +2628,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.disconnectIntegration(userId, provider);
       res.json({ success: true, message: `Disconnected from ${provider}` });
     } catch (error) {
-      console.error("Error disconnecting integration:", error);
+      logger.error("Error disconnecting integration:", error);
       res.status(500).json({ error: "Failed to disconnect integration" });
     }
   });
@@ -2644,7 +2642,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const domains = await storage.getUserDomains(userId);
       res.json(domains);
     } catch (error) {
-      console.error("Error fetching domains:", error);
+      logger.error("Error fetching domains:", error);
       res.status(500).json({ error: "Failed to fetch domains" });
     }
   });
@@ -2668,7 +2666,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newDomain = await storage.addDomain(userId, { domain });
       res.json(newDomain);
     } catch (error) {
-      console.error("Error adding domain:", error);
+      logger.error("Error adding domain:", error);
       res.status(500).json({ error: "Failed to add domain" });
     }
   });
@@ -2680,7 +2678,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteDomain(userId, domainId);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error deleting domain:", error);
+      logger.error("Error deleting domain:", error);
       res.status(500).json({ error: "Failed to delete domain" });
     }
   });
@@ -2706,7 +2704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json(defaultProjectSettings);
       }
     } catch (error) {
-      console.error("Error fetching project settings:", error);
+      logger.error("Error fetching project settings:", error);
       res.status(500).json({ error: "Failed to fetch project settings" });
     }
   });
@@ -2752,7 +2750,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         settings 
       });
     } catch (error) {
-      console.error("Error updating project settings:", error);
+      logger.error("Error updating project settings:", error);
       res.status(500).json({ error: "Failed to update project settings" });
     }
   });

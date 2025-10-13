@@ -1,7 +1,8 @@
-import assert from 'assert';
+const assert = require('assert');
 
 async function testLibraryToWorkspace() {
-  const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
+  const PORT = process.env.TEST_PORT || 5000;
+  const BASE_URL = `http://localhost:${PORT}`;
   
   // Test 1: Create job and save as draft
   console.log('Test 1: Creating job and saving draft...');
