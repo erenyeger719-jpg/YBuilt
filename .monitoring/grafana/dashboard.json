@@ -1,0 +1,31 @@
+{
+  "dashboard": {
+    "title": "YBUILT Metrics",
+    "panels": [
+      {
+        "title": "HTTP Request Rate",
+        "targets": [{
+          "expr": "rate(http_requests_total[5m])"
+        }]
+      },
+      {
+        "title": "Job Queue Depth",
+        "targets": [{
+          "expr": "job_queue_depth"
+        }]
+      },
+      {
+        "title": "Atomic Write Failures",
+        "targets": [{
+          "expr": "rate(atomic_write_failures_total[5m])"
+        }]
+      },
+      {
+        "title": "Job Duration",
+        "targets": [{
+          "expr": "histogram_quantile(0.95, rate(job_duration_seconds_bucket[5m]))"
+        }]
+      }
+    ]
+  }
+}

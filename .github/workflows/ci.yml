@@ -1,6 +1,10 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main, develop, 'fix/**']
+  pull_request:
+    branches: [main]
 
 jobs:
   lint-and-typecheck:
@@ -45,7 +49,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-${{ github.sha }}
           path: dist/
           retention-days: 7
           
@@ -63,9 +67,19 @@ jobs:
           
       - run: npm ci
       
-      - name: Run unit tests
-        run: npm run test:unit
+      - name: Run unit tests with coverage
+        run: npm run coverage
         
+      - name: Check coverage threshold
+        run: node ci/check-coverage.js
+        
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.sha }}
+          path: coverage/
+          retention-days: 30
+          
   integration-tests:
     runs-on: ubuntu-latest
     needs: build
@@ -80,40 +94,39 @@ jobs:
           
       - run: npm ci
       
-      - run: npm run build
+      - name: Build for tests
+        run: npm run build
       
-      - name: Run integration tests
-        env:
-          TEST_PORT: 5001
-          NODE_ENV: test
-          LOG_LEVEL: INFO
-          RAZORPAY_MODE: mock
-        run: node test/run-all-tests.cjs
+      - name: Run integration tests with Docker
+        run: docker-compose -f docker-compose.ci.yml up --build --abort-on-container-exit --exit-code-from tests
         
-      - name: Upload logs on failure
+      - name: Upload test logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs
+          name: test-logs-${{ github.sha }}
           path: |
             test/**/*.log
             data/**/*.log
-            *.log
           retention-days: 7
           
-  security-audit:
+  publish-image:
     runs-on: ubuntu-latest
+    needs: [build, unit-tests, integration-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
       
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         with:
-          node-version: 20
-          cache: 'npm'
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
           
-      - run: npm ci
-      
-      - name: Run npm audit
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
+      - name: Build and push
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
+          docker build -t ghcr.io/${{ github.repository }}:latest .
+          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}:latest

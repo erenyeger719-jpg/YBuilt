@@ -1,0 +1,178 @@
+Mega Implementation Prompt — Make the repo 10x better (do this now)
+
+Goal
+Implement next-level improvements so the repo is reproducible, releaseable, observable, secure, and safer to operate. Do the following tasks end-to-end. Work on a new branch `fix/ci-advance`. Commit each logical change. If git/push is blocked, still create files and show diffs and command outputs.
+
+IMPORTANT: Do not prompt me for clarifications. Implement best-effort. Where environment or permissions block a step, report precisely what failed and why. Use placeholders for secrets (do not commit secrets).
+
+High-level tasks (execute in order)
+A. Add package.json scripts (blocking)
+B. Harden CI workflow (lint/typecheck/build/test/coverage/publish)
+C. Docker & CI integration tests (deterministic)
+D. Release automation (semantic-release + publish image to GHCR)
+E. Observability: OpenTelemetry + Sentry + Prometheus/Grafana artifacts
+F. Security: Snyk/Dependabot/secret-scan
+G. Test quality: mutation testing + fuzzing + flaky detection
+H. Deployment artifacts: Helm/K8s skeleton + canary rollout job
+I. Documentation, runbook, verification checklist, PR body
+
+Detailed file actions & snippets (create or update)
+
+1) **package.json** — Add these scripts (create `PACKAGE_JSON_CHANGES.md` if you cannot edit)
+Place inside `"scripts"` (merge with existing):
+```json
+"scripts": {
+  "start": "node dist/index.js",
+  "dev": "NODE_ENV=development tsx server/index.ts",
+  "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+  "lint": "eslint . --ext .ts,.js,.tsx",
+  "lint:fix": "eslint . --ext .ts,.js,.tsx --fix",
+  "typecheck": "tsc -p tsconfig.json --noEmit",
+  "test:unit": "node test/run-unit-tests.cjs",
+  "test:integration": "TEST_PORT=5001 node test/run-all-tests.cjs",
+  "test:e2e": "playwright test",
+  "test": "npm run test:unit && npm run test:integration",
+  "coverage": "nyc --reporter=lcov --reporter=text npm run test:unit",
+  "docker:build": "docker build -t $npm_package_name:local .",
+  "docker:push": "docker build -t ghcr.io/${{github.repository}}:${GIT_SHA:-local} . && docker push ghcr.io/${{github.repository}}:${GIT_SHA:-local}",
+  "release": "semantic-release"
+}
+If the agent cannot edit package.json, create PACKAGE_JSON_CHANGES.md with the exact patch and the single git commands to apply it.
+.github/workflows/ci.yml — replace current workflow with this hardened pipeline (create/overwrite):
+Matrix: node-version: [18,20]
+Steps:
+checkout
+setup-node
+cache npm
+npm ci
+npm run lint (fail if errors)
+npm run typecheck (fail if errors)
+npm run build
+Run unit tests and fail on error
+Run integration tests via Docker Compose (see docker-compose.ci.yml)
+Upload artifacts on failure (test logs, coverage, dist)
+Publish Docker image to GHCR on push to main with GITHUB_TOKEN/GHCR_PAT (only on successful tests)
+Add coverage check step (fail if coverage < 80%). Provide a small Node script ci/check-coverage.js that reads coverage/coverage-summary.json or coverage/lcov.info.
+Provide full YAML content — include continue-on-error: false everywhere (no || true).
+.github/workflows/release.yml
+On push to main and release - run semantic-release to create changelog + GitHub release.
+After release, build + push Docker image to GHCR using GHCR_TOKEN as secret.
+Dockerfile — multi-stage (improve cache and reproducibility)
+Use explicit build cache keys and deterministic install:
+# builder
+FROM node:20-bullseye AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --no-audit --prefer-offline
+COPY . .
+RUN npm run build
+
+# runtime
+FROM node:20-bullseye-slim
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/dist ./dist
+COPY package*.json ./
+RUN npm ci --omit=dev --no-audit
+USER node
+EXPOSE 5000
+CMD ["node","dist/index.js"]
+docker-compose.ci.yml
+Provide app service built from Dockerfile with PORT=5001, then tests service that runs node test/run-all-tests.cjs after app is healthy. Use a simple wait-for loop that polls http://app:5001/health (or /api/metrics).
+Publishing to GHCR
+Add GH Action step that:
+logs into ghcr: docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GHCR_PAT }}
+tags image with ghcr.io/${{ github.repository }}:${{ github.sha }}
+pushes image.
+Semantic release
+Add release.config.js for semantic-release with plugins for commit-analyzer, release-notes-generator, changelog, github, npm.
+Add GitHub Action release.yml that runs on push to main (after CI success).
+OpenTelemetry & Sentry
+Add server/tracing.ts:
+Initialize OpenTelemetry Node SDK (basic instrumentation for http, express).
+Export a function initTracing({ serviceName }) and call it early in server/index.ts when not in development.
+Add Sentry wrapper in server/error-reporter.ts that initializes only if SENTRY_DSN present and attaches request context.
+Update server/index.ts to call initTracing() and initialize Sentry (guarded by env).
+Provide small snippet for server/index.ts to include trace context for critical endpoints (file upload/path validation/atomic write).
+Prometheus & Grafana
+Keep server/telemetry.ts but:
+Add buckets/histograms for job duration.
+Add example Grafana dashboard JSON (.monitoring/grafana/dashboard.json) highlighting HTTP request rate, job queue depth, atomic write failures.
+Add prometheus.yml example scrape config in .monitoring/prometheus.yml with job: metrics scraping the app /api/metrics on port 5000.
+Snyk & Dependabot
+Add .github/workflows/security.yml step to run snyk test if SNYK_TOKEN available (otherwise run npm audit).
+Add .github/dependabot.yml to auto-create PRs for dependencies (weekly).
+Pre-commit & secret scanning
+Add husky + lint-staged config:
+lint-staged runs eslint and prettier on staged files.
+Add a pre-commit step to run a secret scanner (e.g., git-secrets or a tiny regex check) and refuse commit if found (documented in docs).
+Add an optional pre-push hook to run unit tests.
+Test quality: mutation & fuzz
+Add Stryker config for JS/TS mutation testing; add script npm run mutation to run it.
+Add a small fuzz harness for validateAndResolvePath using fast-check with a script test/fuzz-paths.cjs and a CI job that runs it with a limited budget (e.g., 1000 runs).
+Add test/flaky-report.js which counts retries and failure rates and stores an artifact for the PR.
+Failure & rollback automation
+Add scripts/rollback.sh:
+For GH release: gh release delete <tag> or git revert <merge-commit>
+For K8s: kubectl rollout undo deployment/<app> --namespace=<ns>
+Add a GitHub Action emergency-rollback.yml which can be run manually from Actions UI and uses secrets KUBECONFIG or KUBE_CONTEXT to perform rollback.
+K8s / Helm skeleton
+Add k8s/deployment.yaml and k8s/service.yaml with placeholders and readiness/liveness probes pointing at /health and /api/metrics.
+Add helm/Chart.yaml and basic templates for deploy + service + canary values.
+Add a charts/README.md explaining how to deploy to staging with helm upgrade --install.
+Verification & runbook
+Update docs/ci-runbook.md:
+How to run CI locally (docker-compose.ci.yml)
+How to run full pipeline locally (scripts)
+Expected artifacts and where to find them
+Provide a lightweight verification checklist the agent must run:
+npm ci exit code and tail output
+npm run lint exit code and tail
+npm run typecheck exit code and tail
+npm run build exit code and tail
+docker-compose -f docker-compose.ci.yml up --build --abort-on-container-exit (capture exit code and last 500 lines)
+npm run coverage generate coverage and ensure >= 80% (or report exact coverage)
+node test/run-all-tests.cjs (tail 400 lines)
+semantic-release dry-run (do NOT actually publish) — capture output for checks
+Secrets to request (names)
+GHCR_PAT — to push images
+SNYK_TOKEN — to run Snyk
+SENTRY_DSN — for Sentry
+KUBE_CONFIG or KUBE_TOKEN — optional for rollback workflow
+RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET — already noted
+SEMANTIC_RELEASE_TOKEN — to allow releases (alternatively use GITHUB_TOKEN)
+Acceptance criteria (what I should see when you finish)
+package.json scripts are added or PACKAGE_JSON_CHANGES.md exists with exact patch.
+.github/workflows/ci.yml updated to new hardened version (no || true) and includes publish steps (disabled until secrets present).
+Dockerfile and docker-compose.ci.yml present and docker-compose run either succeeded in environment or logged fail reason.
+server/tracing.ts and server/error-reporter.ts added and server/index.ts calls initTracing and Sentry conditionally.
+k8s/ or helm/ skeleton added.
+Mutation testing and fuzz harness added (can be run on CI).
+IMPLEMENTATION_ADVANCED_REPORT.md produced containing:
+Branch name used
+Files created/modified with diffs
+All command outputs requested above (logs, exit codes, tails)
+Any steps that could not run with reasons (permissions, docker unavailable, missing secrets)
+Exact commands to finalize (manually add scripts or secrets) with copy-paste commands.
+Execution rules for the agent
+Work on branch fix/ci-advance. Commit as you go. If git is blocked, still create files and show diffs and the git commands needed to commit locally.
+Do not publish any secret values or write actual secrets into files.
+If you run CI steps that would publish (semantic-release or docker push), do a dry run unless GHCR_PAT and SEMANTIC_RELEASE_TOKEN secrets are available.
+If an operation requires privileges not available, report and continue with the rest.
+When done, return a single final JSON-ish summary (human readable) containing:
+branch (or “git unavailable”)
+files created/modified list
+logs & exit codes for the verification checklist (or failure reasons)
+PR body text ready to paste (summary, checklist, files, risks, how to run locally)
+list of secrets required (exact names)
+next recommended follow-ups (3 bullets with priority)
+Make the agent verbose: show diffs for each file change and EXACT commands you ran and their outputs. If anything fails due to environment (e.g., Docker unavailable), explain step-by-step remediation and provide manual commands to finish.
+Finish by creating a PR body text in PR_BODY_ADVANCED.md that includes:
+
+Summary of changes
+Acceptance checklist (the acceptance criteria above)
+How to run locally
+Files changed (list)
+Risks/tradeoffs
+Rollback instructions (commands)
+End of mega instruction.

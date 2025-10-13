@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ybuilt
+  labels:
+    app: ybuilt
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ybuilt
+  template:
+    metadata:
+      labels:
+        app: ybuilt
+    spec:
+      containers:
+      - name: ybuilt
+        image: ghcr.io/OWNER/REPO:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "5000"
+        livenessProbe:
+          httpGet:
+            path: /api/metrics
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/metrics
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

@@ -1,0 +1,42 @@
+name: Emergency Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Rollback target'
+        required: true
+        type: choice
+        options:
+          - kubernetes
+          - release
+      namespace:
+        description: 'K8s namespace (for kubernetes target)'
+        required: false
+        default: 'default'
+      tag:
+        description: 'Release tag (for release target)'
+        required: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Rollback Kubernetes
+        if: inputs.target == 'kubernetes'
+        run: |
+          echo "${{ secrets.KUBECONFIG }}" > kubeconfig.yaml
+          export KUBECONFIG=kubeconfig.yaml
+          kubectl rollout undo deployment/ybuilt --namespace=${{ inputs.namespace }}
+          kubectl rollout status deployment/ybuilt --namespace=${{ inputs.namespace }}
+          
+      - name: Rollback Release
+        if: inputs.target == 'release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete ${{ inputs.tag }} --yes
+          git tag -d ${{ inputs.tag }}
+          git push origin :refs/tags/${{ inputs.tag }}

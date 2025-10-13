@@ -1,21 +1,40 @@
 version: '3.8'
+
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       - NODE_ENV=test
       - PORT=5001
       - LOG_LEVEL=INFO
       - RAZORPAY_MODE=mock
+      - USE_ATOMIC_FSYNC=true
     ports:
       - "5001:5001"
-    volumes:
-      - ./:/app:cached
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5001/api/metrics', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+      
   tests:
     image: node:20-bullseye
     working_dir: /app
     volumes:
       - ./:/app:cached
     depends_on:
-      - app
-    command: bash -lc "npm ci && sleep 3 && TEST_PORT=5001 node test/run-all-tests.cjs"
+      app:
+        condition: service_healthy
+    environment:
+      - TEST_PORT=5001
+      - BASE_URL=http://app:5001
+    command: |
+      bash -c "
+        npm ci &&
+        echo 'Waiting for app to be ready...' &&
+        sleep 2 &&
+        node test/run-all-tests.cjs
+      "

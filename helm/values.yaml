@@ -1,0 +1,15 @@
+replicaCount: 3
+
+image:
+  repository: ghcr.io/OWNER/REPO
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 5000
+
+canary:
+  enabled: false
+  weight: 10
