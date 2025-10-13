@@ -1,0 +1,103 @@
+{{- if .Values.canary.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ybuilt.fullname" . }}-canary
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+    deployment: canary
+spec:
+  replicas: {{ .Values.canary.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "ybuilt.selectorLabels" . | nindent 6 }}
+      deployment: canary
+  template:
+    metadata:
+      labels:
+        {{- include "ybuilt.selectorLabels" . | nindent 8 }}
+        deployment: canary
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.port }}
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /api/status
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/status
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DEPLOYMENT_TYPE
+          value: "canary"
+        {{- if .Values.canary.env }}
+        {{- toYaml .Values.canary.env | nindent 8 }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ybuilt.fullname" . }}-canary
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+    deployment: canary
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "ybuilt.selectorLabels" . | nindent 4 }}
+    deployment: canary
+
+---
+{{- if .Values.canary.weight }}
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: {{ include "ybuilt.fullname" . }}
+spec:
+  hosts:
+  - {{ include "ybuilt.fullname" . }}
+  http:
+  - match:
+    - headers:
+        canary:
+          exact: "true"
+    route:
+    - destination:
+        host: {{ include "ybuilt.fullname" . }}-canary
+        port:
+          number: {{ .Values.service.port }}
+  - route:
+    - destination:
+        host: {{ include "ybuilt.fullname" . }}-stable
+        port:
+          number: {{ .Values.service.port }}
+      weight: {{ sub 100 .Values.canary.weight }}
+    - destination:
+        host: {{ include "ybuilt.fullname" . }}-canary
+        port:
+          number: {{ .Values.service.port }}
+      weight: {{ .Values.canary.weight }}
+{{- end }}
+{{- end }}

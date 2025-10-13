@@ -11,6 +11,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@cyclonedx/cyclonedx-npm": "^4.0.3",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@monaco-editor/react": "^4.7.0",
@@ -19,6 +20,7 @@
     "@opentelemetry/resources": "^2.1.0",
     "@opentelemetry/sdk-node": "^0.206.0",
     "@opentelemetry/semantic-conventions": "^1.37.0",
+    "@playwright/test": "^1.56.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
     "@radix-ui/react-aspect-ratio": "^1.1.3",

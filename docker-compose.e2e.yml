@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5000"
+    environment:
+      - NODE_ENV=test
+      - PORT=5000
+      - LOG_LEVEL=INFO
+      - RAZORPAY_MODE=mock
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/api/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    networks:
+      - e2e-network
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.40.0-focal
+    working_dir: /app
+    volumes:
+      - ./test/e2e:/app/test/e2e
+      - ./artifacts:/app/artifacts
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+      - ./playwright.config.ts:/app/playwright.config.ts
+    environment:
+      - TEST_BASE_URL=http://app:5000
+      - CI=true
+    command: >
+      sh -c "
+        npm install --save-dev @playwright/test &&
+        npx playwright test --config test/e2e/playwright.config.ts
+      "
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - e2e-network
+
+networks:
+  e2e-network:
+    driver: bridge

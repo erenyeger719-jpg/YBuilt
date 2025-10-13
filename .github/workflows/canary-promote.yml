@@ -1,0 +1,178 @@
+name: Canary Deployment & Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - deploy-canary
+          - promote
+          - rollback
+      canary_weight:
+        description: 'Canary traffic percentage (10-100)'
+        required: false
+        default: '10'
+      metric_check_duration:
+        description: 'Metric check duration in seconds'
+        required: false
+        default: '60'
+
+env:
+  HELM_RELEASE: ybuilt
+  NAMESPACE: production
+  CANARY_WEIGHT: ${{ github.event.inputs.canary_weight || '10' }}
+  METRIC_CHECK_DURATION: ${{ github.event.inputs.metric_check_duration || '60' }}
+
+jobs:
+  canary-deploy:
+    name: Deploy Canary
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'deploy-canary'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+      
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.12.0'
+      
+      - name: Configure Kubernetes
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+      
+      - name: Deploy canary
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ./helm \
+            --namespace ${{ env.NAMESPACE }} \
+            --set canary.enabled=true \
+            --set canary.weight=${{ env.CANARY_WEIGHT }} \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 5m
+      
+      - name: Verify canary deployment
+        run: |
+          kubectl rollout status deployment/${{ env.HELM_RELEASE }}-canary \
+            -n ${{ env.NAMESPACE }} --timeout=5m
+
+  metric-check:
+    name: Check Canary Metrics
+    runs-on: ubuntu-latest
+    needs: canary-deploy
+    if: github.event.inputs.action == 'deploy-canary'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run synthetic checks
+        run: |
+          chmod +x ci/synthetic-check.sh
+          
+          echo "🔍 Running synthetic checks for ${{ env.METRIC_CHECK_DURATION }}s..."
+          
+          END_TIME=$((UNIX_TIMESTAMP + ${{ env.METRIC_CHECK_DURATION }}))
+          SUCCESS_COUNT=0
+          TOTAL_COUNT=0
+          
+          while [ $(date +%s) -lt $END_TIME ]; do
+            if bash ci/synthetic-check.sh; then
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            fi
+            TOTAL_COUNT=$((TOTAL_COUNT + 1))
+            sleep 5
+          done
+          
+          SUCCESS_RATE=$(echo "scale=2; $SUCCESS_COUNT / $TOTAL_COUNT * 100" | bc)
+          echo "✅ Success rate: $SUCCESS_RATE%"
+          
+          if (( $(echo "$SUCCESS_RATE < 95" | bc -l) )); then
+            echo "❌ Canary failed: success rate below 95%"
+            exit 1
+          fi
+      
+      - name: Check error rates
+        run: |
+          # Query Prometheus for error rate (if available)
+          if [ -n "${{ secrets.PROMETHEUS_URL }}" ]; then
+            ERROR_RATE=$(curl -s "${{ secrets.PROMETHEUS_URL }}/api/v1/query?query=rate(http_requests_total{status=~\"5..\"}[5m])" | jq -r '.data.result[0].value[1] // "0"')
+            
+            if (( $(echo "$ERROR_RATE > 0.005" | bc -l) )); then
+              echo "❌ Error rate too high: $ERROR_RATE"
+              exit 1
+            fi
+          fi
+
+  promote-canary:
+    name: Promote Canary to Production
+    runs-on: ubuntu-latest
+    needs: metric-check
+    if: github.event.inputs.action == 'promote' || (github.event.inputs.action == 'deploy-canary' && needs.metric-check.result == 'success')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+      
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+      
+      - name: Configure Kubernetes
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+      
+      - name: Promote canary
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ./helm \
+            --namespace ${{ env.NAMESPACE }} \
+            --set canary.enabled=true \
+            --set canary.weight=100 \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 5m
+          
+          echo "✅ Canary promoted to 100% traffic"
+      
+      - name: Cleanup canary resources
+        run: |
+          # Wait for stable deployment
+          sleep 30
+          
+          # Disable canary mode
+          helm upgrade --install ${{ env.HELM_RELEASE }} ./helm \
+            --namespace ${{ env.NAMESPACE }} \
+            --set canary.enabled=false \
+            --set image.tag=${{ github.sha }} \
+            --wait
+
+  rollback-canary:
+    name: Rollback Canary
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'rollback' || needs.metric-check.result == 'failure'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+      
+      - name: Rollback deployment
+        run: |
+          chmod +x scripts/rollback.sh
+          bash scripts/rollback.sh kubernetes
+      
+      - name: Notify rollback
+        run: |
+          echo "🔄 Canary deployment rolled back due to metric failures"
+          echo "📊 Check logs and metrics before retrying"

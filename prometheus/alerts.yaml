@@ -1,0 +1,151 @@
+groups:
+  - name: ybuilt_slos
+    interval: 30s
+    rules:
+      # SLO: p95 latency < 300ms
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "High p95 latency detected"
+          description: "p95 latency is {{ $value }}s (threshold: 0.3s)"
+          runbook: "https://docs.ybuilt.dev/runbooks/high-latency"
+
+      # SLO: Error rate < 0.5% over 5m
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.005
+        for: 5m
+        labels:
+          severity: critical
+          slo: error_rate
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 0.5%)"
+          runbook: "https://docs.ybuilt.dev/runbooks/high-error-rate"
+
+      # Job processing failures
+      - alert: JobProcessingFailures
+        expr: job_failures_total > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Job processing failures detected"
+          description: "{{ $value }} jobs have failed in the last 10 minutes"
+
+      # Queue depth growing
+      - alert: QueueDepthGrowing
+        expr: job_queue_depth > 100
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Job queue depth is growing"
+          description: "Queue depth is {{ $value }} (sustained for 15m)"
+
+      # Atomic write failures
+      - alert: AtomicWriteFailures
+        expr: rate(atomic_write_failures_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Atomic write failures detected"
+          description: "{{ $value }} atomic write failures per second"
+          runbook: "https://docs.ybuilt.dev/runbooks/atomic-write-failures"
+
+  - name: ybuilt_canary
+    interval: 30s
+    rules:
+      # Canary error rate higher than stable
+      - alert: CanaryHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{deployment="canary",status=~"5.."}[2m]))
+            /
+            sum(rate(http_requests_total{deployment="canary"}[2m]))
+          )
+          >
+          (
+            sum(rate(http_requests_total{deployment="stable",status=~"5.."}[2m]))
+            /
+            sum(rate(http_requests_total{deployment="stable"}[2m]))
+          ) * 1.5
+        for: 2m
+        labels:
+          severity: critical
+          component: canary
+        annotations:
+          summary: "Canary error rate exceeds stable by 50%"
+          description: "Canary deployment should be rolled back"
+          runbook: "https://docs.ybuilt.dev/runbooks/canary-rollback"
+
+      # Canary latency higher than stable
+      - alert: CanaryHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{deployment="canary"}[2m])
+          )
+          >
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{deployment="stable"}[2m])
+          ) * 1.3
+        for: 3m
+        labels:
+          severity: warning
+          component: canary
+        annotations:
+          summary: "Canary latency 30% higher than stable"
+          description: "Consider rolling back canary deployment"
+
+  - name: ybuilt_infrastructure
+    interval: 1m
+    rules:
+      # Service down
+      - alert: ServiceDown
+        expr: up{job="ybuilt"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "YBUILT service is down"
+          description: "Service {{ $labels.instance }} is unreachable"
+          runbook: "https://docs.ybuilt.dev/runbooks/service-down"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+          ) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/"}
+            / node_filesystem_size_bytes{mountpoint="/"}
+          ) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space running low"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining"

@@ -1,0 +1,154 @@
+name: Supply Chain Security
+
+on:
+  push:
+    branches: ['main', 'develop', 'fix/**', 'feat/**']
+  pull_request:
+    branches: ['main']
+  workflow_dispatch:
+
+jobs:
+  sbom-generation:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Generate SBOM
+        run: |
+          chmod +x ci/generate-sbom.sh
+          bash ci/generate-sbom.sh
+      
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: artifacts/sbom.json
+          retention-days: 90
+
+  sign-artifacts:
+    name: Sign Build Artifacts
+    runs-on: ubuntu-latest
+    needs: sbom-generation
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Create build tarball
+        run: tar -czf artifacts/dist.tar.gz dist/
+      
+      - name: Import GPG key
+        if: ${{ secrets.GPG_PRIVATE_KEY != '' }}
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      
+      - name: Sign artifacts
+        if: ${{ secrets.GPG_PRIVATE_KEY != '' }}
+        run: |
+          chmod +x ci/sign-artifact.sh
+          bash ci/sign-artifact.sh artifacts/dist.tar.gz artifacts/dist.tar.gz.sig
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      
+      - name: Skip signing (no GPG key)
+        if: ${{ secrets.GPG_PRIVATE_KEY == '' }}
+        run: |
+          echo "⚠️  GPG_PRIVATE_KEY secret not configured"
+          echo "📝 Signing skipped - configure GPG_PRIVATE_KEY secret to enable signing"
+          echo "📝 Generate key: gpg --full-generate-key"
+          echo "📝 Export key: gpg --armor --export-secret-keys YOUR_KEY_ID"
+      
+      - name: Upload signed artifacts
+        if: ${{ secrets.GPG_PRIVATE_KEY != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-artifacts
+          path: |
+            artifacts/dist.tar.gz
+            artifacts/dist.tar.gz.sig
+            artifacts/dist.tar.gz.sig.meta
+          retention-days: 90
+
+  provenance:
+    name: Generate Provenance
+    runs-on: ubuntu-latest
+    needs: sbom-generation
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for provenance
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
+          path: artifacts/
+      
+      - name: Generate provenance
+        run: |
+          chmod +x scripts/provenance/attest.js
+          node scripts/provenance/attest.js --artifact=dist/ --out=artifacts/provenance.json
+        env:
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_JOB: ${{ github.job }}
+          GPG_SIGN: ${{ secrets.GPG_PRIVATE_KEY != '' }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      
+      - name: Upload provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: provenance
+          path: |
+            artifacts/provenance.json
+            artifacts/provenance.json.sig
+          retention-days: 90
+      
+      - name: Display provenance summary
+        run: |
+          echo "📜 Provenance Summary:"
+          cat artifacts/provenance.json | jq -r '.ybuilt | "Git SHA: \(.git.sha)\nBranch: \(.git.branch)\nTimestamp: \(.build.timestamp)"'
