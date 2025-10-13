@@ -2,7 +2,11 @@ import { useState, useRef, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, X } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export interface UploadedFile {
   id: string;
@@ -17,6 +21,7 @@ interface PromptBarProps {
   onSubmit: (promptText: string) => void;
   onFileUpload: (file: File) => void;
   onRemoveFile?: (fileId: string) => void;
+  onFileClick?: (file: UploadedFile) => void;
   uploadedFiles?: UploadedFile[];
   isLoading?: boolean;
   agentButton?: React.ReactNode;
@@ -29,13 +34,13 @@ export default function PromptBar({
   onSubmit,
   onFileUpload,
   onRemoveFile,
+  onFileClick,
   uploadedFiles = [],
   isLoading = false,
   agentButton,
 }: PromptBarProps) {
   const { toast } = useToast();
   const [internalPromptText, setInternalPromptText] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Use controlled value if provided, otherwise use internal state
@@ -69,93 +74,83 @@ export default function PromptBar({
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Check file size (25MB limit)
-    if (file.size > 25 * 1024 * 1024) {
-      toast({
-        title: "File Too Large",
-        description: "File size must be less than 25MB",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    onFileUpload(file);
-    
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+  const handleFileClick = (file: UploadedFile) => {
+    if (onFileClick) {
+      onFileClick(file);
     }
   };
 
   return (
-    <div className="border-t border-border bg-background/50 flex-shrink-0">
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        onChange={handleFileSelect}
-        className="hidden"
-        data-testid="input-file-upload"
-      />
-
-      {/* Row A: Pills - Horizontal scroll, max-height 48px */}
+    <div 
+      className="border-t border-border bg-background/50 flex-shrink-0 flex flex-col"
+      style={{ height: 'var(--prompt-bar-height)' }}
+      data-testid="prompt-bar-container"
+    >
+      {/* Row A: File Chips - Fixed height with horizontal scroll */}
       {uploadedFiles.length > 0 && (
-        <div className="px-3 pt-2 pb-1 flex gap-1 overflow-x-auto max-h-[48px] items-center">
+        <div 
+          className="px-3 pt-2 pb-1 flex gap-1 overflow-x-auto items-center flex-shrink-0"
+          style={{ height: 'var(--file-chips-height)' }}
+          data-testid="prompt-file-chips"
+        >
           {uploadedFiles.map((file) => (
-            <Badge
-              key={file.id}
-              variant="secondary"
-              className="gap-1 pr-1 text-xs flex-shrink-0"
-              data-testid={`pill-file-${file.id}`}
-            >
-              <span className="max-w-[120px] truncate whitespace-nowrap">{file.name}</span>
-              {onRemoveFile && (
-                <button
-                  onClick={() => onRemoveFile(file.id)}
-                  className="ml-1 rounded-sm hover:bg-muted p-0.5"
-                  data-testid={`button-remove-file-${file.id}`}
+            <Tooltip key={file.id}>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="secondary"
+                  className="gap-1 pr-1 text-xs flex-shrink-0 cursor-pointer hover-elevate"
+                  data-testid={`pill-file-${file.id}`}
+                  onClick={() => handleFileClick(file)}
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </Badge>
+                  <span className="max-w-[120px] truncate whitespace-nowrap">{file.name}</span>
+                  {onRemoveFile && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveFile(file.id);
+                      }}
+                      className="ml-1 rounded-sm hover:bg-muted p-0.5"
+                      data-testid={`button-remove-file-${file.id}`}
+                    >
+                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">{file.name}</p>
+              </TooltipContent>
+            </Tooltip>
           ))}
         </div>
       )}
 
-      {/* Row B: Textarea - Prominent and roomy */}
-      <div className="px-3 py-2">
-        <textarea
-          ref={textareaRef}
-          value={promptText}
-          onChange={(e) => setPromptText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a command or paste a file. Press Enter to send, Shift+Enter for newline."
-          className="w-full min-h-[48px] max-h-[140px] resize-none bg-black/35 rounded-lg p-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-border disabled:opacity-50 disabled:cursor-not-allowed"
-          tabIndex={0}
-          aria-label="Build prompt"
-          disabled={isLoading}
-          data-testid="input-prompt-text"
-        />
+      {/* Row B: Textarea - Scrollable, takes remaining space */}
+      <div className="px-3 py-2 flex-1 overflow-hidden" data-testid="prompt-input-area">
+        <div className="h-full overflow-y-auto">
+          <textarea
+            ref={textareaRef}
+            value={promptText}
+            onChange={(e) => setPromptText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a command or paste a file. Press Enter to send, Shift+Enter for newline."
+            className="w-full min-h-[48px] resize-none bg-black/35 rounded-lg p-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-border disabled:opacity-50 disabled:cursor-not-allowed"
+            tabIndex={0}
+            aria-label="Build prompt"
+            disabled={isLoading}
+            data-testid="input-prompt-text"
+          />
+        </div>
       </div>
 
-      {/* Row C: Controls - Upload, Agent, Build buttons */}
-      <div className="px-3 pb-2 flex items-center gap-2 justify-end">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isLoading}
-          data-testid="button-upload-file-prompt"
-          title="Upload file"
-        >
-          <Upload className="h-4 w-4" />
-        </Button>
-
+      {/* Row C: Controls - Agent + Build buttons (NO upload button) */}
+      <div 
+        className="px-3 pb-2 flex items-center gap-2 justify-end flex-shrink-0"
+        style={{ height: 'var(--prompt-actions-height)' }}
+        data-testid="prompt-actions"
+      >
         {agentButton && <div className="flex-shrink-0">{agentButton}</div>}
 
         <Button

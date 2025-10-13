@@ -108,6 +108,17 @@
   --glass-reflection: rgba(255,255,255,0.08);
   --rim-strength: rgba(255,255,255,0.10);
 
+  /* Workspace Prompt Bar Layout Variables
+   * Fixed height structure for consistent vertical layout
+   * - prompt-bar-height: Total fixed height of prompt bar container
+   * - file-chips-height: Height of file chips row at top
+   * - prompt-actions-height: Height of action buttons row at bottom
+   * - Input area takes remaining space (flex: 1) between chips and actions
+   */
+  --prompt-bar-height: 180px;
+  --file-chips-height: 32px;
+  --prompt-actions-height: 48px;
+
   /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
 
   /* Fallback for older browsers */

@@ -323,6 +323,16 @@ export default function Workspace() {
     setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
+  // Handle file chip click to preview
+  const handleFileChipClick = (uploadedFile: UploadedFile) => {
+    // Find the file in workspace using the path
+    const file = workspace?.files.find(f => f.path === uploadedFile.path);
+    if (file) {
+      setSelectedPromptFile(file);
+      setShowPromptFileModal(true);
+    }
+  };
+
   const handleSaveFile = () => {
     if (!selectedFile || !workspace?.files) {
       toast({
@@ -545,6 +555,7 @@ export default function Workspace() {
         onSubmit={handlePromptSubmit}
         onFileUpload={handleFileUpload}
         onRemoveFile={handleRemoveFile}
+        onFileClick={handleFileChipClick}
         uploadedFiles={uploadedFiles}
         isLoading={buildMutation.isPending || workspace$.isPromptToFileLoading}
         agentButton={
@@ -578,7 +589,7 @@ export default function Workspace() {
           </div>
 
           {rightTab === "preview" && (
-            <div className="flex items-center gap-2 flex-shrink-0 overflow-visible preview-toolbar pr-1">
+            <div className="flex items-center gap-2 flex-shrink-0 overflow-visible preview-toolbar pr-1 ml-8">
               <div className="flex items-center gap-1">
                 <Button
                   variant={deviceMode === "desktop" ? "secondary" : "ghost"}
