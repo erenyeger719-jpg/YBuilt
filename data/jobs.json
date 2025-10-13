@@ -1069,5 +1069,50 @@
     "error": null,
     "createdAt": "2025-10-13T06:18:04.464Z",
     "updatedAt": "2025-10-13T06:18:07.224Z"
+  },
+  "e59e3459-da9e-4db0-8f70-17a5c0a03edf": {
+    "id": "e59e3459-da9e-4db0-8f70-17a5c0a03edf",
+    "userId": "test-user",
+    "prompt": "security test",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/e59e3459-da9e-4db0-8f70-17a5c0a03edf/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T14:41:29.320Z",
+    "updatedAt": "2025-10-13T14:41:31.611Z"
+  },
+  "d4d30c85-b44b-469b-948a-a10b258c3ef9": {
+    "id": "d4d30c85-b44b-469b-948a-a10b258c3ef9",
+    "userId": "test-user",
+    "prompt": "security test",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/d4d30c85-b44b-469b-948a-a10b258c3ef9/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T14:45:44.645Z",
+    "updatedAt": "2025-10-13T14:45:47.717Z"
+  },
+  "ff3583cf-754c-461a-a02d-12b0f0d4291c": {
+    "id": "ff3583cf-754c-461a-a02d-12b0f0d4291c",
+    "userId": "test-user",
+    "prompt": "security test",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/ff3583cf-754c-461a-a02d-12b0f0d4291c/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T14:47:10.312Z",
+    "updatedAt": "2025-10-13T14:47:13.167Z"
   }
 }

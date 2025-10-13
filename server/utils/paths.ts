@@ -32,7 +32,13 @@ export function validateAndResolvePath(workspaceDir: string, requestedPath: stri
   const normalized = path.posix.normalize(decoded.replace(/\\/g, '/'));
   // split segments and detect traversal markers
   const segments = normalized.split('/').filter(Boolean);
-  if (segments.some(seg => seg === '..' || seg === '.')) {
+  if (segments.some(seg => {
+    // Exact match for . or ..
+    if (seg === '..' || seg === '.') return true;
+    // Reject segments with 3+ consecutive dots (suspicious patterns like ....)
+    if (/^\.{3,}$/.test(seg)) return true;
+    return false;
+  })) {
     const e: any = new Error('Forbidden path');
     e.code = 403;
     throw e;

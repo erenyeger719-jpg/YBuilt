@@ -1,5 +1,5 @@
 const { spawn } = require('child_process');
-const fetch = require('node-fetch');
+// Use Node.js 18+ native fetch (global)
 
 function startServer(env = {}) {
   const child = spawn('npx', ['tsx', 'server/index.ts'], {

@@ -1,0 +1,457 @@
+Mega implementation prompt — do these steps and create these files
+Goal: finish and harden the CI/test/ops work already scaffolded: commit & stabilize changes, wire CI, verify test suite, update package.json, and prepare a clean PR with docs and rollback instructions. Implement everything below exactly; create files with the specified content, edit referenced files, run the verification commands, and report results and any failing tests (with logs).
+
+0) Global instructions for the agent
+* Work on a new branch: fix/ci-test-harness.
+* Stage and commit each logical change (utilities, tests, server changes, docs) with clear commit messages.
+* If any tests fail, include the failing test name and the last 200 lines of the test output in the final report.
+* If you cannot edit package.json due to permissions, create PACKAGE_JSON_CHANGES.md with an exact diff and note the step in the final report.
+* When a file uses TypeScript .ts and tests run under Node (CommonJS), also create a JS twin where safe (for tests) and ensure server keeps using the .ts import form.
+
+1) Immediate tasks (high priority — do these first)
+Run these commands in the project root (or perform the equivalent file/commit operations):
+1. Create a feature branch and commit current work:
+
+git checkout -b fix/ci-test-harness
+git add .
+git commit -m "feat(ci): add test harness, atomic write, path validation, logger, test helpers"
+1. Add/update package.json scripts (manual edit or automated):
+
+"scripts": {
+  "start": "node dist/index.js",
+  "dev": "NODE_ENV=development tsx server/index.ts",
+  "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+  "test": "node test/run-all-tests.cjs",
+  "qa": "node test/run-all-tests.cjs"
+}
+* If tests run with CJS, ensure tests are invoked with node test/... in the harness.
+1. Verify server runs and /health responds:
+
+# start dev server on ephemeral port
+PORT=5001 npm run dev
+# in another shell
+curl -sS http://localhost:5001/health || curl -sS http://localhost:5001/api/metrics
+* If port already in use, stop stray processes or run npx kill-port 5000.
+1. Run the test harness locally:
+
+TEST_PORT=5001 node test/run-all-tests.cjs
+* Capture any failing tests and include logs in the PR.
+
+2) Files to create / edit — create these exact files (copy/paste content)
+Implementation note: create the TypeScript utility server/utils/paths.ts and also a CommonJS-compatible server/utils/paths.js to let existing .cjs tests require it if necessary.
+2.1 server/utils/paths.ts
+
+// server/utils/paths.ts
+import path from 'path';
+
+export function safeDecodeOnce(raw: string) {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Validate and resolve a requestedPath into an absolute path inside workspaceDir.
+ * Throws Error with .code = 400 or 403.
+ */
+export function validateAndResolvePath(workspaceDir: string, requestedPath: string) {
+  if (typeof requestedPath !== 'string' || requestedPath.length === 0) {
+    const e: any = new Error('Invalid path');
+    e.code = 400;
+    throw e;
+  }
+
+  // Reject backslashes (windows-style traversal) and leftover percent signs
+  if (requestedPath.includes('\\') || requestedPath.includes('%')) {
+    const e: any = new Error('Forbidden path');
+    e.code = 403;
+    throw e;
+  }
+
+  const decoded = safeDecodeOnce(requestedPath);
+
+  // Normalize to posix separators
+  const normalized = path.posix.normalize(decoded.replace(/\\/g, '/'));
+  const segments = normalized.split('/').filter(Boolean);
+  if (segments.some(seg => seg === '..' || seg === '.')) {
+    const e: any = new Error('Forbidden path');
+    e.code = 403;
+    throw e;
+  }
+
+  // Resolve against workspace and ensure containment
+  const resolved = path.resolve(workspaceDir, '.' + path.posix.sep + normalized);
+  const workspaceAbs = path.resolve(workspaceDir) + path.sep;
+  if (!resolved.startsWith(workspaceAbs)) {
+    const e: any = new Error('Forbidden path');
+    e.code = 403;
+    throw e;
+  }
+
+  return resolved;
+}
+2.2 server/utils/paths.js (CommonJS for tests)
+
+// server/utils/paths.js
+const path = require('path');
+
+function safeDecodeOnce(raw) {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+function validateAndResolvePath(workspaceDir, requestedPath) {
+  if (typeof requestedPath !== 'string' || requestedPath.length === 0) {
+    const e = new Error('Invalid path');
+    e.code = 400;
+    throw e;
+  }
+
+  if (requestedPath.includes('\\') || requestedPath.includes('%')) {
+    const e = new Error('Forbidden path');
+    e.code = 403;
+    throw e;
+  }
+
+  const decoded = safeDecodeOnce(requestedPath);
+  const normalized = path.posix.normalize(decoded.replace(/\\/g, '/'));
+  const segments = normalized.split('/').filter(Boolean);
+  if (segments.some(seg => seg === '..' || seg === '.')) {
+    const e = new Error('Forbidden path');
+    e.code = 403;
+    throw e;
+  }
+
+  const resolved = path.resolve(workspaceDir, '.' + path.posix.sep + normalized);
+  const workspaceAbs = path.resolve(workspaceDir) + path.sep;
+  if (!resolved.startsWith(workspaceAbs)) {
+    const e = new Error('Forbidden path');
+    e.code = 403;
+    throw e;
+  }
+
+  return resolved;
+}
+
+module.exports = { validateAndResolvePath, safeDecodeOnce };
+
+2.3 server/utils/atomicWrite.js
+
+// server/utils/atomicWrite.js
+import fs from 'fs/promises';
+import { open } from 'fs';
+import { randomUUID } from 'crypto';
+import path from 'path';
+
+export async function atomicWriteFile(finalPath, data, options = {}) {
+  const dir = path.dirname(finalPath);
+  const tmpPath = path.join(dir, `.tmp-${randomUUID()}`);
+  // open the tmp file descriptor directly so we can fsync
+  let handle;
+  try {
+    handle = await open(tmpPath, 'w');
+    if (typeof data === 'string' || Buffer.isBuffer(data)) {
+      await handle.writeFile(data, options);
+    } else {
+      await handle.writeFile(JSON.stringify(data, null, 2), options);
+    }
+    await handle.sync();
+    await handle.close();
+    await fs.rename(tmpPath, finalPath);
+  } catch (err) {
+    try { if (handle) await handle.close(); } catch (_) {}
+    try { await fs.unlink(tmpPath); } catch (_) {}
+    throw err;
+  }
+}
+Important: the code closes handle in the catch, and removes tmp on error. This avoids FD leaks.
+
+2.4 test/upload-helper.cjs
+
+// test/upload-helper.cjs
+const fs = require('fs');
+const FormData = require('form-data');
+const axios = require('axios');
+
+async function uploadFile(url, filepath, fieldName = 'file') {
+  const form = new FormData();
+  form.append(fieldName, fs.createReadStream(filepath));
+  const headers = form.getHeaders();
+  const resp = await axios.post(url, form, { headers, maxBodyLength: Infinity });
+  return resp.data;
+}
+
+module.exports = { uploadFile };
+
+2.5 test/harness.cjs
+
+// test/harness.cjs
+const { spawn } = require('child_process');
+const fetch = require('node-fetch');
+
+function startServer(env = {}) {
+  // prefer tsx to run TS entry in dev/test: use npx tsx server/index.ts
+  const child = spawn('npx', ['tsx', 'server/index.ts'], {
+    env: { ...process.env, ...env },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  child.stdout.on('data', d => process.stdout.write(`[server] ${d}`));
+  child.stderr.on('data', d => process.stderr.write(`[server-err] ${d}`));
+  return child;
+}
+
+async function waitForServer(url, timeout = 10000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const res = await fetch(url);
+      if (res && (res.status === 200 || res.status === 204 || res.ok)) return;
+    } catch (e) {}
+    await new Promise(r => setTimeout(r, 200));
+  }
+  throw new Error('Server did not start in time at ' + url);
+}
+
+function stopServer(child) {
+  return new Promise((resolve) => {
+    if (!child || child.killed) return resolve();
+    child.on('exit', () => resolve());
+    child.kill('SIGINT');
+    setTimeout(() => { try { child.kill('SIGKILL'); } catch(e){}; resolve(); }, 3000);
+  });
+}
+
+module.exports = { startServer, waitForServer, stopServer };
+
+2.6 test/run-all-tests.cjs (test orchestrator)
+
+// test/run-all-tests.cjs
+const { startServer, waitForServer, stopServer } = require('./harness.cjs');
+const { execSync } = require('child_process');
+const PORT = process.env.TEST_PORT || 5001;
+const base = `http://localhost:${PORT}`;
+
+(async () => {
+  const server = startServer({ NODE_ENV: 'test', PORT: PORT });
+  try {
+    await waitForServer(`${base}/health`, 15000).catch(() => waitForServer(`${base}/api/metrics`, 15000));
+    console.log('Server started; running tests...');
+    const testList = [
+      'node test/jobid-roundtrip.test.cjs',
+      'node test/library-to-workspace.test.cjs',
+      'node test/security-path-traversal.test.cjs',
+      'node test/upload-sanitization.test.cjs',
+      'node test/e2e-publish.test.cjs'
+    ];
+    for (const t of testList) {
+      console.log('Running', t);
+      execSync(t, { stdio: 'inherit', env: { ...process.env, TEST_PORT: PORT } });
+    }
+    console.log('ALL TESTS PASSED');
+    process.exitCode = 0;
+  } catch (err) {
+    console.error('TESTS FAILED', err && (err.message || err));
+    process.exitCode = 2;
+  } finally {
+    await stopServer(server);
+  }
+})();
+
+2.7 Update server endpoints to use path validation
+Edit server/routes.ts — replace naive includes('..') or string checks and any backslash/percent heuristics with this pattern:
+At top:
+
+import { validateAndResolvePath } from './utils/paths.js'; // or './utils/paths' depending on TS config
+import { logger } from './index.js'; // ensure logger export in server/index.ts
+Example endpoint pattern:
+
+try {
+  const resolved = validateAndResolvePath(workspaceDir, filePath);
+  // use resolved
+} catch (err: any) {
+  if (err.code === 400) return res.status(400).json({ error: err.message });
+  if (err.code === 403) return res.status(403).json({ error: err.message });
+  logger.error('Unexpected path validation error', err);
+  return res.status(500).json({ error: 'Internal server error' });
+}
+Update these endpoints:
+* GET /api/workspace/:jobId/file
+* POST /api/workspace/:jobId/file
+* PUT /api/workspace/:jobId/files/:filePath
+* DELETE /api/workspace/:jobId/file
+* POST /api/workspace/:jobId/upload
+Ensure you do not iterate percent-decode — decode once via safeDecodeOnce().
+
+2.8 Logging: ensure server/index.ts exports logger
+If not present, add at top of server/index.ts:
+
+const LEVELS = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+const currentLevel = (process.env.LOG_LEVEL || 'INFO').toUpperCase();
+const threshold = LEVELS[currentLevel] ?? 1;
+
+export const logger = {
+  debug: (...args: any[]) => { if (threshold <= 0) console.log('[DEBUG]', ...args); },
+  info:  (...args: any[]) => { if (threshold <= 1) console.log('[INFO]', ...args); },
+  warn:  (...args: any[]) => { if (threshold <= 2) console.warn('[WARN]', ...args); },
+  error: (...args: any[]) => { if (threshold <= 3) console.error('[ERROR]', ...args); },
+};
+Replace console.* uses across server/* with logger.*. Do not log PII or secrets.
+
+2.9 Razorpay readiness checks in server/index.ts
+Add:
+
+const RAZORPAY_MODE = (process.env.RAZORPAY_MODE || 'mock').toLowerCase();
+if (RAZORPAY_MODE === 'live') {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    throw new Error('RAZORPAY_KEY_ID/SECRET required in live mode');
+  }
+}
+logger.info('[RAZORPAY] Mode:', RAZORPAY_MODE);
+In tests, ensure Razorpay SDK is mocked (create test/mocks/razorpay-mock.cjs and use dependency injection in modules that import it).
+
+2.10 CSS z-index normalization
+Edit client/src/index.css:
+* Add to :root:
+
+:root {
+  --modal-z: 99999;
+}
+* Replace super-high z-index: 2147483601 or similar with:
+
+.help-side-popup { z-index: var(--modal-z) !important; }
+Search repo for 2147483600 and similar and replace them with var(--modal-z) where appropriate.
+
+2.11 Unit tests to add
+Add unit tests:
+* test/unit-path-validation.test.cjs — assert reject of backslash, percent sign, .. segment, accept valid path.
+* test/unit-atomic-write.test.cjs — simulate atomic write success and simulate a failure mid-write (mock fs behaviors) and assert tmp cleanup/no partial final.
+(If unit tests are already provided by previous work, ensure they run and adapt imports if necessary.)
+
+3) GitHub Actions CI file — create .github/workflows/ci.yml
+
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+      - name: Run QA tests
+        env:
+          TEST_PORT: 5001
+          NODE_ENV: test
+        run: |
+          node test/run-all-tests.cjs
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: ./test/logs/**/*.log
+Notes:
+* If your repo uses Replit CI, adapt to its runner, but same port/wait-for-health pattern applies.
+* Add RAZORPAY_KEY_ID/SECRET as secrets if you ever enable live mode.
+
+4) How to run & verify locally (commands)
+1. Install dependencies:
+
+npm ci
+1. Build:
+
+npm run build
+1. Start dev server:
+
+PORT=5001 npm run dev
+1. Health check:
+
+curl -sS http://localhost:5001/health || curl -sS http://localhost:5001/api/metrics
+1. Run test harness:
+
+TEST_PORT=5001 node test/run-all-tests.cjs
+1. Run unit tests individually:
+
+node test/unit-path-validation.test.cjs
+node test/unit-atomic-write.test.cjs
+If a test fails, attach the last 200 lines of its output to the PR and include the failing test filename.
+
+5) PR: what to include & PR body template (paste into PR)
+
+## Summary
+Implemented CI-ready test harness, robust path validation, atomic writes, upload test fixes, logging centralization, z-index normalization.
+
+## Files changed
+- Created: server/utils/paths.ts, server/utils/paths.js, server/utils/atomicWrite.js, test/harness.cjs, test/run-all-tests.cjs, test/upload-helper.cjs, test/unit-*.cjs
+- Modified: server/routes.ts, server/storage.ts, server/index.ts, client/src/index.css, replit.md
+
+## Acceptance checklist
+- [ ] `npm run qa` completes (start->health->tests->stop)
+- [ ] Path traversal tests behave: 400 for malformed, 403 for forbidden
+- [ ] Upload tests pass with axios/form-data
+- [ ] Atomic write unit tests simulate failure and pass
+- [ ] `LOG_LEVEL` is honored; no PII in logs
+- [ ] Rebuild frontend and confirm UI
+
+## Tests changed/why
+- security-path-traversal.test: changed from double-encode expectation to decode-once + reject `%` leftover; this is deliberate to prevent double-decode bypasses.
+
+## How to run locally
+1. `npm ci`
+2. `npm run build`
+3. `PORT=5001 npm run dev` (or `npm start` after build)
+4. `TEST_PORT=5001 node test/run-all-tests.cjs`
+
+## Risks / tradeoffs
+- We decode percent-encodings once and reject leftover `%` — conservative, may reject certain encoded edge cases if they must be allowed.
+- Atomic rename is only atomic on same filesystem — make sure workspace directory is on the same mount in CI/prod.
+
+## Notes
+- If package.json could not be updated automatically, see `PACKAGE_JSON_CHANGES.md` for exact snippet to add.
+
+
+6) Rollback / emergency steps
+* Revert PR merge: git revert <merge-commit> or reset to the previous tag.
+* Kill runaway server: npx kill-port 5000 or kill <pid>.
+* If atomic write causes production data issues: set USE_ATOMIC_WRITE=false feature flag (if added), or revert the commit and redeploy old build.
+
+7) Longer-term suggestions (post-PR)
+* Add Docker-based integration tests to validate rename atomicity under real FS mounts.
+* Add Canary environment and include live-mode Razorpay integration guarded by env secrets.
+* Add centralized logs (Loki/Datadog) and structured tracing.
+* Add rate limiting for /api/metrics in prod.
+
+8) Tradeoffs / important reminders
+* Single decode + reject leftover % is strongest safety; if you must allow encoded safe characters, build an allowlist and decode those explicitly.
+* Ensure temporary files for atomic writes are created in the same parent directory (same FS).
+* Converting tests to .cjs simplifies CI with Node CJS runner; if ESM is required, convert harness/tests to ESM and use node --experimental-modules / tsx.
+
+9) Verification checklist (run before merging)
+1. npm ci
+2. npm run build
+3. PORT=5001 npm run dev — confirm /health returns OK
+4. TEST_PORT=5001 node test/run-all-tests.cjs — all tests green locally
+5. Open PR with full body (use template above)
+6. Ensure CI workflow run passes and artifacts/logs are good
+
+10) Final deliverable from the agent
+When finished, return a single message with:
+* branch name and commits created
+* list of files added/modified
+* results of npm run build and TEST_PORT=5001 node test/run-all-tests.cjs (full exit code and last 300 lines of stdout/stderr)
+* any failing tests and their logs (200 lines of output)
+* a copy of the PR body you opened (or will open) and the exact package.json snippet if you could not edit package.json
+* final checklist status (all acceptance criteria true/false)
+
+"Implement everything above exactly — create files, edit server/routes.ts, server/storage.ts, add CI workflow, run build and tests, commit to fix/ci-test-harness, and then report results and failing test logs (if any)."  END OF PROMPT
