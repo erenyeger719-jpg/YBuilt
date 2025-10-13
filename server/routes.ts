@@ -133,7 +133,28 @@ function isProtectedFile(resolvedPath: string, workspaceDir: string): boolean {
   return resolvedPath === indexHtmlPath;
 }
 
+// Razorpay configuration
+const RAZORPAY_MODE = process.env.RAZORPAY_MODE || 'mock';
+
+// Razorpay initialization
+let razorpay: any = null;
+if (RAZORPAY_MODE !== 'mock') {
+  try {
+    const Razorpay = require('razorpay');
+    razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+    console.log(`[RAZORPAY] Initialized with ${RAZORPAY_MODE} mode`);
+  } catch (error) {
+    console.error(`[RAZORPAY] Failed to initialize Razorpay in ${RAZORPAY_MODE} mode:`, error);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Log Razorpay mode on server startup
+  console.log(`[RAZORPAY] Running in ${RAZORPAY_MODE} mode`);
+  
   // Job generation endpoint
   app.post("/api/generate", async (req, res) => {
     try {
@@ -785,6 +806,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Webhook error:", error);
       res.status(500).json({ error: "Webhook processing failed" });
+    }
+  });
+
+  // Simulate payment webhook (mock mode only)
+  app.post("/api/payments/simulate", async (req, res) => {
+    if (RAZORPAY_MODE !== 'mock') {
+      return res.status(403).json({ error: 'Simulate endpoint only available in mock mode' });
+    }
+    
+    try {
+      const { userId, amount, orderId } = req.body;
+      
+      if (!userId || !amount) {
+        return res.status(400).json({ error: 'userId and amount are required' });
+      }
+      
+      // Simulate webhook payload
+      const mockWebhookPayload = {
+        event: 'payment.captured',
+        payload: {
+          payment: {
+            entity: {
+              id: `pay_mock_${Date.now()}`,
+              order_id: orderId || `order_mock_${Date.now()}`,
+              amount: amount * 100, // paise
+              status: 'captured'
+            }
+          }
+        }
+      };
+      
+      // Calculate credits (1 credit per ₹799 or equivalent)
+      const credits = Math.floor(amount / 799);
+      
+      // Add credits to user
+      await storage.addCredits(userId, credits);
+      
+      // Log simulated payment
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        mode: 'simulated',
+        userId,
+        amount,
+        credits,
+        orderId,
+        paymentId: mockWebhookPayload.payload.payment.entity.id
+      };
+      
+      await fs.appendFile(
+        path.join(process.cwd(), 'data', 'payments.log'),
+        JSON.stringify(logEntry) + '\n'
+      );
+      
+      console.log('[PAYMENT_SIMULATE]', logEntry);
+      
+      res.json({
+        success: true,
+        credits,
+        paymentId: mockWebhookPayload.payload.payment.entity.id,
+        message: 'Payment simulated successfully'
+      });
+      
+    } catch (error) {
+      console.error('Error simulating payment:', error);
+      res.status(500).json({ error: 'Failed to simulate payment' });
     }
   });
 

@@ -171,6 +171,69 @@ GET /api/jobs/{jobId}
 ### 5. Preview Modal
 Generated website displays in full-screen iframe modal with glass aesthetics.
 
+## 💰 Payment Configuration
+
+### Razorpay Modes
+YBUILT supports three payment modes via the `RAZORPAY_MODE` environment variable:
+
+#### Mock Mode (Default)
+```bash
+# No environment variable needed - runs in mock mode by default
+npm run dev
+```
+- Simulated payments
+- No API keys required
+- Full UPI/payment UI without real charges
+- Credits added instantly
+
+#### Test Mode
+```bash
+# Create .env file
+RAZORPAY_MODE=test
+RAZORPAY_KEY_ID=rzp_test_your_key_here
+RAZORPAY_KEY_SECRET=your_test_secret_here
+RAZORPAY_WEBHOOK_SECRET=your_test_webhook_secret_here
+```
+- Uses Razorpay test environment
+- Real payment flow but no actual charges
+- Test cards: 4111 1111 1111 1111
+
+#### Live Mode (Production)
+```bash
+# Production .env file
+RAZORPAY_MODE=live
+RAZORPAY_KEY_ID=rzp_live_your_key_here
+RAZORPAY_KEY_SECRET=your_live_secret_here
+RAZORPAY_WEBHOOK_SECRET=your_live_webhook_secret_here
+```
+- Real payments and charges
+- Production Razorpay credentials required
+- Webhook signature verification enabled
+
+### QA Testing - Simulate Webhook
+
+In mock mode, use the simulate endpoint to test payment flows:
+
+```bash
+curl -X POST http://localhost:5000/api/payments/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "demo",
+    "amount": 799,
+    "orderId": "test_order_123"
+  }'
+```
+
+Response:
+```json
+{
+  "success": true,
+  "credits": 1,
+  "paymentId": "pay_mock_1234567890",
+  "message": "Payment simulated successfully"
+}
+```
+
 ## 💰 Payment Flow
 
 ### Mock Mode (Default)
