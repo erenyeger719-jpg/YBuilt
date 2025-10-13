@@ -1265,6 +1265,295 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete workspace file
+  app.delete("/api/workspace/:jobId/file", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { path: filePath } = req.query;
+
+      // Security: Validate jobId - must be UUID-like, no path traversal
+      if (!jobId || !/^[a-zA-Z0-9-]+$/.test(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+
+      if (!filePath || typeof filePath !== "string") {
+        return res.status(400).json({ error: "Missing file path" });
+      }
+
+      // Security: Validate path doesn't contain traversal sequences
+      if (filePath.includes("..") || filePath.includes("\\") || path.isAbsolute(filePath)) {
+        return res.status(400).json({ error: "Invalid file path" });
+      }
+
+      // Determine if it's a prompt file or regular file
+      const isPromptFile = filePath.startsWith("prompts/");
+      const basePath = isPromptFile
+        ? path.join(process.cwd(), "data", "workspaces", jobId)
+        : path.join(process.cwd(), "public", "previews", jobId);
+
+      const sanitizedPath = filePath.replace(/^prompts\//, '');
+      const fullPath = path.resolve(basePath, sanitizedPath);
+
+      // Security: Verify resolved path is within allowed directory
+      if (!fullPath.startsWith(basePath)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Security: Prevent deletion of critical files (check AFTER path resolution)
+      const indexHtmlPath = path.resolve(basePath, "index.html");
+      if (fullPath === indexHtmlPath) {
+        return res.status(403).json({ error: "Cannot delete index.html" });
+      }
+
+      try {
+        await fs.unlink(fullPath);
+        
+        // Log deletion
+        const auditLog = `${new Date().toISOString()} - Deleted file: ${filePath}, Job: ${jobId}\n`;
+        await fs.appendFile(
+          path.join(process.cwd(), "data", "audit.log"),
+          auditLog
+        ).catch(() => {});
+
+        res.json({ success: true, path: filePath });
+      } catch (error) {
+        res.status(404).json({ error: "File not found" });
+      }
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      res.status(500).json({ error: "Failed to delete file" });
+    }
+  });
+
+  // Upload asset files to workspace
+  app.post("/api/workspace/:jobId/upload", upload.single("file"), async (req, res) => {
+    try {
+      const { jobId } = req.params;
+
+      // Security: Validate jobId - must be UUID-like, no path traversal
+      if (!jobId || !/^[a-zA-Z0-9-]+$/.test(jobId)) {
+        return res.status(400).json({ error: "Invalid job ID" });
+      }
+
+      const uploadedFile = req.file;
+
+      if (!uploadedFile) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Security: Sanitize filename - remove path traversal and dangerous characters
+      const sanitizedFilename = uploadedFile.originalname
+        .replace(/\.\./g, '')
+        .replace(/[/\\]/g, '')
+        .replace(/^\.+/, '')
+        .slice(0, 255); // Limit length
+
+      if (!sanitizedFilename) {
+        return res.status(400).json({ error: "Invalid filename" });
+      }
+
+      // Create destination directory for user uploads
+      const userId = "demo"; // In production, extract from JWT
+      const uploadsDir = path.join(process.cwd(), "public", "uploads", userId, jobId);
+      await fs.mkdir(uploadsDir, { recursive: true });
+
+      // Move file from temp to permanent location with sanitized name
+      const finalPath = path.resolve(uploadsDir, sanitizedFilename);
+
+      // Security: Verify resolved path is within uploads directory
+      if (!finalPath.startsWith(uploadsDir)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      await fs.rename(uploadedFile.path, finalPath);
+
+      const publicUrl = `/uploads/${userId}/${jobId}/${sanitizedFilename}`;
+
+      // Add to storage for tracking
+      await storage.addUploadedAsset(jobId, {
+        url: publicUrl,
+        name: sanitizedFilename,
+        mime: uploadedFile.mimetype,
+        size: uploadedFile.size
+      });
+
+      // Log upload
+      const auditLog = `${new Date().toISOString()} - Uploaded: ${sanitizedFilename} (original: ${uploadedFile.originalname}), Job: ${jobId}, Size: ${uploadedFile.size}\n`;
+      await fs.appendFile(
+        path.join(process.cwd(), "data", "audit.log"),
+        auditLog
+      ).catch(() => {});
+
+      res.json({
+        success: true,
+        file: {
+          id: crypto.randomUUID(),
+          filename: sanitizedFilename,
+          url: publicUrl,
+          size: uploadedFile.size,
+          type: uploadedFile.mimetype
+        }
+      });
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      res.status(500).json({ error: "Failed to upload file" });
+    }
+  });
+
+  // Process manager - track running dev processes
+  const runningProcesses = new Map<string, {
+    processId: string;
+    jobId: string;
+    port: number;
+    startedAt: string;
+    logInterval?: NodeJS.Timeout;
+  }>();
+
+  // Start dev process
+  app.post("/api/workspace/:jobId/run", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+
+      // Check if process already running
+      if (runningProcesses.has(jobId)) {
+        const existing = runningProcesses.get(jobId)!;
+        return res.json({
+          processId: existing.processId,
+          port: existing.port,
+          status: "already_running"
+        });
+      }
+
+      const processId = `proc_${crypto.randomUUID().slice(0, 12)}`;
+      const port = 3000 + Math.floor(Math.random() * 1000); // Random port 3000-4000
+
+      // Create process entry
+      const process = {
+        processId,
+        jobId,
+        port,
+        startedAt: new Date().toISOString()
+      };
+
+      runningProcesses.set(jobId, process);
+
+      // Simulate dev server logs
+      const logFile = path.join(globalThis.process.cwd(), "data", "jobs", jobId, "logs.jsonl");
+      await fs.mkdir(path.dirname(logFile), { recursive: true });
+
+      // Write initial log
+      const initLog = {
+        timestamp: new Date().toISOString(),
+        level: "info",
+        source: "express",
+        message: `Dev server starting on port ${port}...`,
+        metadata: { processId, port }
+      };
+      await fs.appendFile(logFile, JSON.stringify(initLog) + "\n");
+
+      // Simulate periodic logs
+      const logInterval = setInterval(async () => {
+        const logs = [
+          { level: "info", message: `[express] GET / 200 in ${Math.floor(Math.random() * 50)}ms` },
+          { level: "info", message: `[vite] hmr update ${Date.now()}` },
+          { level: "info", message: `[express] GET /api/status 304 in ${Math.floor(Math.random() * 10)}ms` }
+        ];
+
+        const randomLog = logs[Math.floor(Math.random() * logs.length)];
+        const log = {
+          timestamp: new Date().toISOString(),
+          level: randomLog.level,
+          source: "express",
+          message: randomLog.message,
+          metadata: { processId }
+        };
+
+        try {
+          await fs.appendFile(logFile, JSON.stringify(log) + "\n");
+        } catch (error) {
+          console.error("Error writing process log:", error);
+        }
+      }, 3000 + Math.random() * 2000); // Random interval 3-5 seconds
+
+      // Update process with logInterval
+      runningProcesses.set(jobId, { ...process, logInterval });
+
+      // Write started log
+      const startedLog = {
+        timestamp: new Date().toISOString(),
+        level: "info",
+        source: "express",
+        message: `serving on port ${port}`,
+        metadata: { processId, port }
+      };
+      await fs.appendFile(logFile, JSON.stringify(startedLog) + "\n");
+
+      res.json({ processId, port, status: "started" });
+    } catch (error) {
+      console.error("Error starting process:", error);
+      res.status(500).json({ error: "Failed to start process" });
+    }
+  });
+
+  // Stop dev process
+  app.post("/api/workspace/:jobId/stop", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+
+      const process = runningProcesses.get(jobId);
+      if (!process) {
+        return res.status(404).json({ error: "Process not found" });
+      }
+
+      // Clear log interval
+      if (process.logInterval) {
+        clearInterval(process.logInterval);
+      }
+
+      // Write stopped log
+      const logFile = path.join(globalThis.process.cwd(), "data", "jobs", jobId, "logs.jsonl");
+      const stoppedLog = {
+        timestamp: new Date().toISOString(),
+        level: "info",
+        source: "express",
+        message: "Dev server stopped",
+        metadata: { processId: process.processId }
+      };
+      await fs.appendFile(logFile, JSON.stringify(stoppedLog) + "\n");
+
+      runningProcesses.delete(jobId);
+
+      res.json({ success: true, processId: process.processId });
+    } catch (error) {
+      console.error("Error stopping process:", error);
+      res.status(500).json({ error: "Failed to stop process" });
+    }
+  });
+
+  // List running processes
+  app.get("/api/workspace/:jobId/processes", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+
+      const process = runningProcesses.get(jobId);
+      if (!process) {
+        return res.json({ processes: [] });
+      }
+
+      res.json({
+        processes: [{
+          processId: process.processId,
+          port: process.port,
+          startedAt: process.startedAt,
+          status: "running"
+        }]
+      });
+    } catch (error) {
+      console.error("Error listing processes:", error);
+      res.status(500).json({ error: "Failed to list processes" });
+    }
+  });
+
   // Log streaming (SSE)
   app.get("/api/jobs/:jobId/logs/stream", async (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
