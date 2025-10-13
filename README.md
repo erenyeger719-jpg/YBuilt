@@ -978,6 +978,71 @@ npm run test:int  # Integration tests (planned)
 npm run coverage  # Coverage report (planned)
 ```
 
+## ✅ QA Checklist
+
+### Automated Tests
+
+Run all tests with:
+```bash
+node test/run-all-tests.js
+```
+
+Individual test suites:
+```bash
+node test/jobid-roundtrip.test.js      # JobId roundtrip validation
+node test/library-to-workspace.test.js # Library→Workspace flow
+node test/security-path-traversal.test.cjs  # Path traversal security
+node test/upload-sanitization.test.cjs # Upload sanitization
+node test/e2e-publish.test.js          # Full publish flow
+```
+
+**Note:** To add npm scripts for easier testing, manually add the following to `package.json`:
+```json
+{
+  "scripts": {
+    "qa": "node test/run-all-tests.js",
+    "test:jobid": "node test/jobid-roundtrip.test.js",
+    "test:workflow": "node test/library-to-workspace.test.js",
+    "test:security": "node test/security-path-traversal.test.cjs",
+    "test:upload": "node test/upload-sanitization.test.cjs",
+    "test:e2e": "node test/e2e-publish.test.js"
+  }
+}
+```
+
+### Manual QA Checklist
+
+**Core Workflows:**
+- [ ] Create → Generate → Save Draft (5 runs)
+- [ ] Select → Open Workspace (5 runs)
+- [ ] Generate → Publish → Verify URL (3 runs)
+
+**UI/UX Verification:**
+- [ ] Prompt bar: fixed height, scrollable, file chips visible
+- [ ] Drag resize: smooth, min/max limits work
+- [ ] Publish button: visible next to fullscreen button
+- [ ] Theme modal: fully visible, Esc closes
+- [ ] Sign-in modal: centered, OAuth buttons work
+
+**Payment & Credits:**
+- [ ] Payment flow: simulate webhook, credits added
+- [ ] Credit deduction on publish
+- [ ] Published URL: accessible and displays website
+
+**Observability:**
+- [ ] Check `/api/metrics` endpoint returns correct data
+- [ ] Verify console logs show `[METRICS]` summaries
+- [ ] Confirm job timing is tracked accurately
+
+### Expected Results
+
+✅ All automated tests pass
+✅ All manual checks complete successfully
+✅ No console errors in browser
+✅ No server errors in logs
+✅ Metrics endpoint returns valid data
+✅ Published sites are accessible
+
 ## 🔧 Configuration
 
 ### Design System

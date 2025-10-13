@@ -1213,6 +1213,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Metrics endpoint
+  app.get("/api/metrics", async (req, res) => {
+    try {
+      const metrics = {
+        queue: {
+          depth: jobQueue.getQueueDepth(),
+          processing: jobQueue.getProcessingCount()
+        },
+        jobs: {
+          total: jobQueue.getTotalJobs(),
+          successful: jobQueue.getSuccessfulJobs(),
+          failed: jobQueue.getFailedJobs(),
+          avgTime: Math.round(jobQueue.getAverageJobTime())
+        },
+        autoApply: {
+          successes: jobQueue.getAutoApplySuccesses(),
+          failures: jobQueue.getAutoApplyFailures()
+        }
+      };
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching metrics:", error);
+      res.status(500).json({ error: "Failed to fetch metrics" });
+    }
+  });
+
   // Support Tickets
   app.post("/api/support/tickets", supportUpload.array("attachments", 5), async (req, res) => {
     try {

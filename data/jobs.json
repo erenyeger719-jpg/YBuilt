@@ -1039,5 +1039,35 @@
     "error": null,
     "createdAt": "2025-10-13T05:55:07.340Z",
     "updatedAt": "2025-10-13T05:55:10.097Z"
+  },
+  "627c6669-8089-46e8-906b-7a5be1bdb423": {
+    "id": "627c6669-8089-46e8-906b-7a5be1bdb423",
+    "userId": "demo",
+    "prompt": "test metrics tracking",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/627c6669-8089-46e8-906b-7a5be1bdb423/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T06:17:21.531Z",
+    "updatedAt": "2025-10-13T06:17:23.762Z"
+  },
+  "0b52c717-fd47-44cb-8f35-0b23fa47b6ed": {
+    "id": "0b52c717-fd47-44cb-8f35-0b23fa47b6ed",
+    "userId": "demo",
+    "prompt": "final test",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/0b52c717-fd47-44cb-8f35-0b23fa47b6ed/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T06:18:04.464Z",
+    "updatedAt": "2025-10-13T06:18:07.224Z"
   }
 }

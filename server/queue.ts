@@ -18,11 +18,86 @@ interface LogEntry {
 // Simple in-memory job queue for mock mode
 class JobQueue {
   private processing: Set<string> = new Set();
+  private metrics = {
+    totalJobs: 0,
+    successfulJobs: 0,
+    failedJobs: 0,
+    totalProcessingTime: 0,
+    autoApplySuccess: 0,
+    autoApplyFailures: 0,
+  };
+  private metricsInterval: NodeJS.Timeout | null = null;
+
+  constructor() {
+    this.startMetricsLogging();
+  }
+
+  private startMetricsLogging() {
+    this.metricsInterval = setInterval(() => {
+      const avgTime = this.getAverageJobTime();
+      console.log('[METRICS] Summary:', {
+        queueDepth: this.getQueueDepth(),
+        processing: this.getProcessingCount(),
+        totalJobs: this.metrics.totalJobs,
+        successful: this.metrics.successfulJobs,
+        failed: this.metrics.failedJobs,
+        avgJobTime: Math.round(avgTime) + 'ms',
+        autoApplySuccess: this.metrics.autoApplySuccess,
+        autoApplyFailures: this.metrics.autoApplyFailures,
+      });
+    }, 60000);
+  }
+
+  getQueueDepth(): number {
+    return this.processing.size;
+  }
+
+  getProcessingCount(): number {
+    return this.processing.size;
+  }
+
+  getTotalJobs(): number {
+    return this.metrics.totalJobs;
+  }
+
+  getSuccessfulJobs(): number {
+    return this.metrics.successfulJobs;
+  }
+
+  getFailedJobs(): number {
+    return this.metrics.failedJobs;
+  }
+
+  getAverageJobTime(): number {
+    if (this.metrics.totalJobs === 0) return 0;
+    return this.metrics.totalProcessingTime / this.metrics.totalJobs;
+  }
+
+  getAutoApplySuccesses(): number {
+    return this.metrics.autoApplySuccess;
+  }
+
+  getAutoApplyFailures(): number {
+    return this.metrics.autoApplyFailures;
+  }
+
+  shutdown() {
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+    }
+    console.log('[METRICS] Final summary on shutdown:', {
+      totalJobs: this.metrics.totalJobs,
+      successful: this.metrics.successfulJobs,
+      failed: this.metrics.failedJobs,
+      avgJobTime: Math.round(this.getAverageJobTime()) + 'ms',
+    });
+  }
 
   async addJob(jobId: string, prompt: string, scope?: RegenerationScope, autonomy?: string) {
     // Add job to queue and start processing
     if (!this.processing.has(jobId)) {
       this.processing.add(jobId);
+      this.metrics.totalJobs++;
       // Update to queued state
       await storage.updateJobStatus(jobId, "queued");
       this.processJob(jobId, prompt, scope, autonomy).catch(console.error);
@@ -189,6 +264,8 @@ class JobQueue {
   }
 
   private async processJob(jobId: string, prompt: string, scope?: RegenerationScope, autonomy: string = "medium") {
+    const startTime = Date.now();
+    
     try {
       // Initialize build trace
       await this.initBuildTrace(jobId);
@@ -281,6 +358,10 @@ class JobQueue {
 
         const hasFailures = results.some(r => !r.success);
         const successCount = results.filter(r => r.success).length;
+        const failureCount = results.length - successCount;
+        
+        this.metrics.autoApplySuccess += successCount;
+        this.metrics.autoApplyFailures += failureCount;
         
         if (hasFailures) {
           await this.emitTraceLog(jobId, BuildStageEnum.ASSEMBLY, "warn", 
@@ -373,8 +454,18 @@ class JobQueue {
 
       // Update job status to ready_for_finalization
       await storage.updateJobStatus(jobId, "ready_for_finalization", `/previews/${jobId}/index.html`);
+      
+      const duration = Date.now() - startTime;
+      this.metrics.totalProcessingTime += duration;
+      this.metrics.successfulJobs++;
+      console.log(`[METRICS] Job ${jobId} completed in ${duration}ms`);
     } catch (error) {
       console.error(`Error processing job ${jobId}:`, error);
+      
+      const duration = Date.now() - startTime;
+      this.metrics.totalProcessingTime += duration;
+      this.metrics.failedJobs++;
+      console.log(`[METRICS] Job ${jobId} failed after ${duration}ms`);
       
       // Mark current stage as failed
       try {
