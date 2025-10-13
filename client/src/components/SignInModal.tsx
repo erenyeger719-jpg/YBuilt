@@ -88,7 +88,11 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[680px] max-h-[92vh] overflow-auto card-glass signin-modal">
+      <DialogContent 
+        className="sm:max-w-[680px] max-h-[92vh] overflow-auto card-glass signin-modal"
+        style={{ zIndex: 99999 }}
+        data-testid="modal-signin"
+      >
         <div className="gloss-sheen" />
         
         <DialogHeader>

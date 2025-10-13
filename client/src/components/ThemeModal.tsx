@@ -325,7 +325,7 @@ export default function ThemeModal({ open, onOpenChange, projectId }: ThemeModal
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
         className="max-w-3xl" 
-        style={{ zIndex: 2147483600 }}
+        style={{ zIndex: 99999 }}
         data-testid="modal-theme"
       >
         <div className="flex items-center justify-center p-8">
@@ -337,7 +337,7 @@ export default function ThemeModal({ open, onOpenChange, projectId }: ThemeModal
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
         className="max-w-3xl max-h-[80vh]" 
-        style={{ zIndex: 2147483600 }}
+        style={{ zIndex: 99999 }}
         data-testid="modal-theme"
       >
         <DialogHeader>
