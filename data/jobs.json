@@ -874,5 +874,20 @@
     "error": null,
     "createdAt": "2025-10-13T05:38:24.880Z",
     "updatedAt": "2025-10-13T05:38:27.016Z"
+  },
+  "af217267-c624-4586-abae-9ada149cb8b2": {
+    "id": "af217267-c624-4586-abae-9ada149cb8b2",
+    "userId": "test-user",
+    "prompt": "test portfolio website",
+    "templateId": null,
+    "status": "editing",
+    "result": "/previews/af217267-c624-4586-abae-9ada149cb8b2/index.html",
+    "artifacts": null,
+    "settings": "{\"title\":\"Test Draft\",\"description\":\"Test portfolio website\",\"theme\":\"monochrome\",\"heroText\":\"Welcome to my portfolio\"}",
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T05:43:47.776Z",
+    "updatedAt": "2025-10-13T05:43:50.813Z"
   }
 }

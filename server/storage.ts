@@ -511,6 +511,36 @@ export class MemStorage implements IStorage {
     }
   }
 
+  // Atomic file write helper: write to temp → rename to final
+  private async atomicWriteFile(finalPath: string, content: string): Promise<void> {
+    const dir = path.dirname(finalPath);
+    const tempPath = path.join(dir, `.tmp-${randomUUID()}`);
+    
+    try {
+      // Ensure directory exists
+      await fs.mkdir(dir, { recursive: true });
+      
+      // Write to temp file
+      await fs.writeFile(tempPath, content, 'utf-8');
+      
+      // Ensure data is written to disk
+      const fileHandle = await fs.open(tempPath, 'r+');
+      await fileHandle.sync();
+      await fileHandle.close();
+      
+      // Atomic rename to final location
+      await fs.rename(tempPath, finalPath);
+    } catch (error) {
+      // Cleanup temp file on failure
+      try {
+        await fs.unlink(tempPath);
+      } catch {
+        // Temp file might not exist, ignore
+      }
+      throw error;
+    }
+  }
+
   async createDraft(draft: Omit<Draft, 'draftId' | 'createdAt' | 'updatedAt'>): Promise<Draft> {
     const draftId = randomUUID();
     const now = new Date().toISOString();
@@ -523,11 +553,12 @@ export class MemStorage implements IStorage {
     
     this.drafts.set(draftId, newDraft);
     
-    // Save to file system
+    // Save to file system using atomic write
     const userDraftsDir = path.join(LIBRARY_DIR, draft.userId, "drafts");
-    await fs.mkdir(userDraftsDir, { recursive: true });
     const draftFile = path.join(userDraftsDir, `${draftId}.json`);
-    await fs.writeFile(draftFile, JSON.stringify(newDraft, null, 2));
+    await this.atomicWriteFile(draftFile, JSON.stringify(newDraft, null, 2));
+    
+    console.log(`[DRAFT] Created draft ${draftId} atomically for user ${draft.userId}`);
     
     return newDraft;
   }
@@ -550,9 +581,11 @@ export class MemStorage implements IStorage {
       };
       this.drafts.set(draftId, updated);
       
-      // Save to file
+      // Save to file using atomic write
       const draftFile = path.join(LIBRARY_DIR, draft.userId, "drafts", `${draftId}.json`);
-      await fs.writeFile(draftFile, JSON.stringify(updated, null, 2));
+      await this.atomicWriteFile(draftFile, JSON.stringify(updated, null, 2));
+      
+      console.log(`[DRAFT] Updated draft ${draftId} atomically`);
     }
   }
 

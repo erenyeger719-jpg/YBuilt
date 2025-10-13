@@ -10,6 +10,27 @@ import { z } from "zod";
 import multer from "multer";
 import archiver from "archiver";
 
+// Workspace readiness check helper
+async function checkWorkspaceReady(jobId: string): Promise<{ ready: boolean; retryAfter?: number }> {
+  const indexPath = path.join(process.cwd(), "public", "previews", jobId, "index.html");
+  
+  try {
+    await fs.access(indexPath, fs.constants.R_OK);
+    const stats = await fs.stat(indexPath);
+    
+    if (stats.size === 0) {
+      console.log(`[WORKSPACE] Preview file exists but is empty for job ${jobId}`);
+      return { ready: false, retryAfter: 1000 };
+    }
+    
+    console.log(`[WORKSPACE] Workspace ready for job ${jobId}`);
+    return { ready: true };
+  } catch (error) {
+    console.log(`[WORKSPACE] Preview file not accessible for job ${jobId}:`, error);
+    return { ready: false, retryAfter: 1000 };
+  }
+}
+
 const upload = multer({
   dest: "public/uploads/",
   limits: { fileSize: 25 * 1024 * 1024 },
@@ -317,20 +338,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         JSON.stringify(manifest, null, 2)
       );
 
-      // Verify preview files exist before returning
-      const previewDir = path.join(process.cwd(), "public", "previews", req.params.jobId);
-      const indexPath = path.join(previewDir, "index.html");
+      // Check workspace readiness with timeout
+      console.log(`[WORKSPACE] Checking readiness for job ${req.params.jobId}`);
+      const maxWaitTime = 10000; // 10 seconds max
+      const startTime = Date.now();
       
-      try {
-        await fs.access(indexPath);
-        res.json({ 
-          ok: true, 
-          workspaceUrl: `/workspace/${req.params.jobId}`,
-          workspaceReady: true 
-        });
-      } catch (error) {
-        res.status(404).json({ error: "Preview files not found" });
+      while (Date.now() - startTime < maxWaitTime) {
+        const readiness = await checkWorkspaceReady(req.params.jobId);
+        
+        if (readiness.ready) {
+          console.log(`[WORKSPACE] Workspace ready for job ${req.params.jobId}`);
+          return res.json({ 
+            status: 'success',
+            ok: true, 
+            workspaceUrl: `/workspace/${req.params.jobId}`,
+            workspaceReady: true 
+          });
+        }
+        
+        // If not ready yet and we haven't timed out, wait briefly
+        if (Date.now() - startTime + (readiness.retryAfter || 1000) < maxWaitTime) {
+          await new Promise(resolve => setTimeout(resolve, readiness.retryAfter || 1000));
+        } else {
+          break;
+        }
       }
+      
+      // If we get here, workspace is not ready after timeout
+      console.log(`[WORKSPACE] Workspace not ready after timeout for job ${req.params.jobId}`);
+      res.json({
+        status: 'pending',
+        retryAfter: 1000,
+        message: 'Workspace is being prepared, please retry'
+      });
     } catch (error) {
       console.error("Error selecting job:", error);
       res.status(500).json({ error: "Failed to select" });
@@ -344,6 +384,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
+      }
+
+      // Check workspace readiness first
+      const readiness = await checkWorkspaceReady(req.params.jobId);
+      
+      if (!readiness.ready) {
+        console.log(`[WORKSPACE] Files not ready for job ${req.params.jobId}`);
+        res.setHeader('Retry-After', (readiness.retryAfter || 1000) / 1000); // Convert to seconds
+        return res.status(202).json({ 
+          error: "Workspace not ready", 
+          retryAfter: readiness.retryAfter || 1000 
+        });
       }
 
       const previewPath = job.result?.replace("/previews/", "");
