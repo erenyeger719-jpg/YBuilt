@@ -11,6 +11,7 @@ import multer from "multer";
 import archiver from "archiver";
 import { validateAndResolvePath } from "./utils/paths.js";
 import { logger } from "./index";
+import { metricsHandler } from "./telemetry";
 
 // Workspace readiness check helper
 async function checkWorkspaceReady(jobId: string): Promise<{ ready: boolean; retryAfter?: number }> {
@@ -1171,31 +1172,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Metrics endpoint
-  app.get("/api/metrics", async (req, res) => {
-    try {
-      const metrics = {
-        queue: {
-          depth: jobQueue.getQueueDepth(),
-          processing: jobQueue.getProcessingCount()
-        },
-        jobs: {
-          total: jobQueue.getTotalJobs(),
-          successful: jobQueue.getSuccessfulJobs(),
-          failed: jobQueue.getFailedJobs(),
-          avgTime: Math.round(jobQueue.getAverageJobTime())
-        },
-        autoApply: {
-          successes: jobQueue.getAutoApplySuccesses(),
-          failures: jobQueue.getAutoApplyFailures()
-        }
-      };
-      res.json(metrics);
-    } catch (error) {
-      logger.error("Error fetching metrics:", error);
-      res.status(500).json({ error: "Failed to fetch metrics" });
-    }
-  });
+  // Prometheus metrics endpoint
+  app.get("/api/metrics", metricsHandler);
 
   // Support Tickets
   app.post("/api/support/tickets", supportUpload.array("attachments", 5), async (req, res) => {
@@ -1520,7 +1498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Security: Validate and resolve path
       try {
-        const resolvedPath = validateAndResolvePath(workspaceDir, filePath);
+        const resolvedPath = await validateAndResolvePath(workspaceDir, filePath);
         const content = await fs.readFile(resolvedPath, "utf-8");
         res.json({ path: filePath, content });
       } catch (err: any) {
@@ -1563,7 +1541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Security: Validate and resolve path
       try {
-        const resolvedPath = validateAndResolvePath(workspaceDir, filePath);
+        const resolvedPath = await validateAndResolvePath(workspaceDir, filePath);
         const dirPath = path.dirname(resolvedPath);
         
         // Ensure directory exists
@@ -1610,7 +1588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Security: Validate and resolve path
       try {
-        const resolvedPath = validateAndResolvePath(workspaceDir, filePath);
+        const resolvedPath = await validateAndResolvePath(workspaceDir, filePath);
         const dirPath = path.dirname(resolvedPath);
 
         // Ensure directory exists
@@ -1748,7 +1726,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Security: Validate and resolve path
       try {
-        const resolvedPath = validateAndResolvePath(workspaceDir, pathToValidate);
+        const resolvedPath = await validateAndResolvePath(workspaceDir, pathToValidate);
         
         // Security: Prevent deletion of protected files using resolved paths
         if (isProtectedFile(resolvedPath, workspaceDir)) {
@@ -1821,7 +1799,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Security: Validate and resolve path (using normalized sanitized filename)
       try {
-        const resolvedPath = validateAndResolvePath(uploadsDir, sanitizedFilename);
+        const resolvedPath = await validateAndResolvePath(uploadsDir, sanitizedFilename);
 
         await fs.rename(uploadedFile.path, resolvedPath);
 

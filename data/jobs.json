@@ -598,12 +598,12 @@
     "status": "ready_for_finalization",
     "result": "/previews/c387d0e3-375a-4ebb-b9d0-8c508bf7b43a/index.html",
     "artifacts": null,
-    "settings": null,
+    "settings": "{\"agentSettings\":{\"autonomy\":\"medium\",\"autoApply\":false,\"safetyFilter\":true,\"computeTier\":\"standard\"}}",
     "versionIds": null,
     "logsPath": null,
     "error": null,
     "createdAt": "2025-10-13T04:24:27.040Z",
-    "updatedAt": "2025-10-13T04:24:30.963Z"
+    "updatedAt": "2025-10-13T15:24:02.968Z"
   },
   "d7bac1a6-de1d-4423-abc8-03fab85a0c4f": {
     "id": "d7bac1a6-de1d-4423-abc8-03fab85a0c4f",
@@ -1234,5 +1234,35 @@
     "error": null,
     "createdAt": "2025-10-13T14:58:04.153Z",
     "updatedAt": "2025-10-13T14:58:06.319Z"
+  },
+  "58b4d0ed-fd5e-47b1-86fc-64cd697b3497": {
+    "id": "58b4d0ed-fd5e-47b1-86fc-64cd697b3497",
+    "userId": "test-user",
+    "prompt": "security test",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/58b4d0ed-fd5e-47b1-86fc-64cd697b3497/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T15:33:20.322Z",
+    "updatedAt": "2025-10-13T15:33:23.114Z"
+  },
+  "a7cca683-8f65-4046-a6e2-73a0e5de2a61": {
+    "id": "a7cca683-8f65-4046-a6e2-73a0e5de2a61",
+    "userId": "test-user",
+    "prompt": "upload test",
+    "templateId": null,
+    "status": "ready_for_finalization",
+    "result": "/previews/a7cca683-8f65-4046-a6e2-73a0e5de2a61/index.html",
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-13T15:33:23.674Z",
+    "updatedAt": "2025-10-13T15:33:26.307Z"
   }
 }

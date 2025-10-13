@@ -1,0 +1,337 @@
+Mega Task: Harden CI, tests, observability, security, and deploy readiness so the repo becomes reproducible, safe, and production-grade.
+
+Goal: implement the immediate + short-term improvements below. Create files, make edits, run local verification (build + tests + containerized tests), and produce a final report with artifacts, test logs, CI changes, and next recommended steps.
+
+Work rules:
+- Work on a new branch: fix/ci-harden (if git operations are allowed) — if not, create changes and list exact files modified.
+- Commit per logical change with clear commit messages.
+- If you cannot run git, still create files and run the commands; record outputs.
+- Where secrets are needed (Snyk, SENTRY_DSN, registry creds) just set placeholders and document required repo secrets.
+- If you cannot push or create remote resources, produce exact commands/PR body to run manually.
+
+Deliverables (must include)
+1. List of files added/modified.
+2. Results for: `npm ci`, `npm run build`, `TEST_PORT=5001 node test/run-all-tests.cjs`. Include exit codes and last 300 lines of output (or failing test logs).
+3. Created GitHub Actions files and explanation.
+4. Dockerfile + docker-compose and instructions to run integration tests locally along with logs.
+5. PR body content to open (summary, checklist, files, how to run).
+6. Any failing tests, with logs, and remediation steps taken.
+
+Immediate implementation tasks to perform now (in this order):
+
+A. CI: Replace simple workflow with hardened pipeline `.github/workflows/ci.yml`
+- Create `.github/workflows/ci.yml` with:
+  - Name: CI
+  - Trigger: push, pull_request
+  - Matrix job: node-version: [20] (optionally include 18 for compatibility)
+  - Steps:
+    - checkout@v4
+    - actions/setup-node@v4 with node-version
+    - cache node modules using actions/cache keyed on package-lock.json
+    - run `npm ci`
+    - run `npm run lint` (add lint job; see section D)
+    - run `npm run typecheck` (tsc --noEmit) — add if TypeScript present
+    - run `npm run build`
+    - run `npm run test:unit` and `npm run test:integration` as separate steps
+    - upload artifacts for failures:
+      - test logs: `test/logs/**/*.log`
+      - coverage report: `coverage/**`
+      - build output: `dist/**`
+    - Add a separate job `security`:
+      - run `npm audit --audit-level=moderate` and save output
+      - If SNYK_TOKEN present, run `snyk test` (optional)
+  - Enforce failure if coverage < configured threshold (generate coverage JSON and check using a node script).
+- Provide exact YAML content to create.
+
+B. Containerize for deterministic integration tests
+1. Create `Dockerfile` (server) at repo root:
+   - Use node:20-alpine
+   - Install build deps
+   - Run `npm ci --production` separated from dev dependencies for build job; also add dev build stage
+   - Build to `/app/dist`
+   - Expose port 5000
+   - Default cmd `node dist/index.js`
+2. Create `docker-compose.yml` for test harness:
+   - service `app` built from local Dockerfile, environment `NODE_ENV=test`, `PORT=5001`
+   - optional `redis`/`postgres` if used (if not, include a comment)
+   - service `tests` that depends_on app and runs `node test/run-all-tests.cjs` inside the composed container
+3. Add `scripts` to package.json:
+   - `"docker:build": "docker build -t $npm_package_name:local ."`
+   - `"docker:up": "docker-compose up --build --abort-on-container-exit"`
+   - `"ci:docker-test": "docker-compose -f docker-compose.ci.yml up --build --abort-on-container-exit"`
+
+C. Strengthen path/FS validation and atomics
+1. Update `server/utils/paths.ts` and `server/utils/paths.js`:
+   - After normalization, use `fs.realpathSync` (or async) on resolved path and the workspaceDir to get canonical paths and compare so symlink escapes are prevented.
+   - Reject if resolved path is not within workspace: `!realResolved.startsWith(realWorkspace + path.sep)`.
+   - Keep the rejection rules for backslash, % leftover, segments `.` and `..`, and segments with >=3 dots.
+   - Add unit tests covering symlink attacks:
+     - Create a symlink inside a workspace pointing outside and assert validateAndResolvePath throws 403.
+2. Update `server/utils/atomicWrite.js`:
+   - Ensure tmp file is created on same FS; if given path is on NFS, freeze fallback: attempt to write to `path.join(path.dirname(finalPath), '.tmp-uuid')`.
+   - After rename, call `fsync` on parent dir (open dir and fsync) to ensure directory entry durability.
+   - Add unit tests simulating partial write (use mocking with sinon or real temporary file + injecting error).
+3. Add a feature flag via `process.env.USE_ATOMIC_WRITE` default true; if false, fallback to normal write (tests should verify both modes).
+
+D. Developer ergonomics: linters, hooks, typecheck
+1. Add `eslint` config (extend recommended + TypeScript if present) and `prettier` config.
+2. Add `husky` + `lint-staged` pre-commit:
+   - `lint-staged` runs `eslint --fix` and `prettier --write` on staged files.
+3. Add `package.json` scripts:
+   - `"lint": "eslint . --ext .ts,.js --fix"`
+   - `"typecheck": "tsc -p tsconfig.json --noEmit"`
+   - `"test:unit": "node test/run-unit-tests.cjs"` (create small runner if needed)
+   - `"test:integration": "TEST_PORT=5001 node test/run-all-tests.cjs"`
+   - `"coverage": "nyc --reporter=text --reporter=html npm run test:unit"`
+4. Add `.github/workflows/lint.yml` optional for fast lint/format checks.
+
+E. Observability & Error Reporting
+1. Replace simple logger with `server/logger.ts`:
+   - Use a tiny wrapper that outputs compact JSON lines, respects LOG_LEVEL, and supports `redact(keys:[ 'razorpay_key', 'authorization', 'password', 'ssn' ])`.
+   - Provide code snippet for `server/logger.ts` with `redact` helper and use `process.env.LOG_FORMAT=json|text` to toggle.
+2. Add Prometheus metrics:
+   - Add `server/telemetry.ts` that exposes `/api/metrics` using `prom-client`.
+   - Track counters: `http_requests_total` (labels method,path,status), `job_duration_seconds`, `job_queue_depth`, `atomic_write_failures_total`.
+   - Ensure metrics respect `METRICS_ALLOWLIST` env variable in prod (guard by IP or secret header).
+3. Add Sentry integration (optional):
+   - Create `server/error-reporter.ts` that reads `SENTRY_DSN` env var and initializes Sentry (capture exceptions). Document required secret.
+
+F. Tests: robustness and CI gating
+1. Ensure tests run deterministically in Docker in CI (use docker-compose.ci.yml).
+2. Test coverage:
+   - Add nyc/c8 to collect coverage and fail CI if coverage < 80% (configurable).
+3. Add tests for:
+   - Symlink escape
+   - Atomic write durability (fsync parent dir)
+   - Upload streaming resilience (large file streaming)
+   - Logging redaction (unit test that logger redacts secrets)
+4. Fix upload tests to use `test/upload-helper.cjs` (axios + form-data). Update tests to assert 200|400|403 or error codes accordingly.
+
+G. Security: scanning & secrets
+1. Add `.github/workflows/security.yml` or a step in CI:
+   - run `npm audit --json` and fail or warn on critical vulnerabilities.
+   - if `SNYK_TOKEN` available, run `snyk test --severity-threshold=high`
+2. Add `dependabot.yml` to auto-open PRs for dependency updates.
+3. Add `secret-scan` pre-commit hook (eg. git-secrets) and a CI step that scans for private keys using trufflehog-lite or a regex check.
+
+H. Packaging, caching, and fast CI
+1. cache node_modules and esbuild cache in GH Actions.
+2. Use layered Docker build to speed CI (`npm ci` separate).
+3. Add build artifacts caching for `dist/` only for ephemeral CI cache (but ensure reproducible build).
+
+I. Deploy & rollback
+1. Add `./deploy/docker-push.yml` workflow (optional):
+   - Build image, tag `ghcr.io/${{ github.repository }}:${{ github.sha }}`, push to GHCR (requires GHCR_TOKEN)
+   - Deploy to staging target using provided script or `kubectl apply` if K8s manifests present.
+2. Add `rollback.sh` script document with exact commands:
+   - `git revert <merge-commit>` or `kubectl rollout undo deployment/<app> --to-revision=<N>`
+   - `npx kill-port 5000` for local kill.
+
+J. Documentation & PR template
+1. Create `docs/CI-Runbook.md` (commands to run locally, how to interpret artifacts).
+2. Create `docs/observability.md` (how to read metrics and configure Sentry).
+3. Provide a PR template and release checklist.
+
+Exact files to create/edit (include content or clear templates)
+- `.github/workflows/ci.yml` (full content below)
+- `Dockerfile` (multi-stage, content below)
+- `docker-compose.ci.yml` (for CI integration tests)
+- `server/logger.ts` (JSON logger with redaction snippet below)
+- `server/telemetry.ts` (prom-client setup)
+- `server/utils/paths.ts` (upgrade: use fs.realpath)
+- `server/utils/atomicWrite.js` (upgrade: fsync parent dir)
+- `package.json` scripts (explicit snippet below) or `PACKAGE_JSON_CHANGES.md`
+- `test/run-all-tests.cjs` (ensure it can run inside Docker and collects logs to `test/logs/`)
+- `test/upload-helper.cjs` (verify axios usage)
+- `docs/CI-Runbook.md`, `docs/observability.md`
+- `dependabot.yml`
+- `.github/dependabot.yml` (or dependabot config)
+- `.github/workflows/security.yml` (optional)
+
+Important code snippets (copy/paste into files):
+
+1) `server/logger.ts` (Typescript)
+```ts
+import util from 'util';
+
+const LEVELS: Record<string, number> = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+const LEVEL = process.env.LOG_LEVEL?.toUpperCase() ?? 'INFO';
+const threshold = LEVELS[LEVEL] ?? 1;
+const FORMAT = process.env.LOG_FORMAT === 'json' ? 'json' : 'text';
+const REDACT_KEYS = (process.env.LOG_REDACT_KEYS || 'authorization,razorpay_key,razorpay_secret,password,ssn').split(',');
+
+function redact(obj: any) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const copy: any = Array.isArray(obj) ? [...obj] : { ...obj };
+  for (const k of Object.keys(copy)) {
+    if (REDACT_KEYS.includes(k)) copy[k] = '<<REDACTED>>';
+    else if (typeof copy[k] === 'object') copy[k] = redact(copy[k]);
+  }
+  return copy;
+}
+
+function format(level: string, args: any[]) {
+  const message = args.map(a => (typeof a === 'object' ? util.inspect(redact(a), { depth: 5 }) : String(a))).join(' ');
+  if (FORMAT === 'json') {
+    return JSON.stringify({ ts: new Date().toISOString(), level, msg: message });
+  }
+  return `[${level}] ${new Date().toISOString()} ${message}`;
+}
+
+export const logger = {
+  debug: (...args: any[]) => { if (threshold <= 0) console.log(format('DEBUG', args)); },
+  info:  (...args: any[]) => { if (threshold <= 1) console.log(format('INFO', args)); },
+  warn:  (...args: any[]) => { if (threshold <= 2) console.warn(format('WARN', args)); },
+  error: (...args: any[]) => { if (threshold <= 3) console.error(format('ERROR', args)); },
+};
+server/telemetry.ts
+import client from 'prom-client';
+
+const register = new client.Registry();
+client.collectDefaultMetrics({ register });
+
+export const httpRequestCounter = new client.Counter({
+  name: 'http_requests_total',
+  help: 'Total HTTP requests',
+  labelNames: ['method','route','status'],
+});
+register.registerMetric(httpRequestCounter);
+
+export function metricsHandler(req, res) {
+  res.set('Content-Type', register.contentType);
+  register.metrics().then(metrics => res.send(metrics)).catch(err => {
+    res.status(500).send('# metrics error');
+  });
+}
+Hook the metricsHandler to GET /api/metrics.
+Dockerfile (multi-stage)
+# Stage: build
+FROM node:20-bullseye AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage: runtime
+FROM node:20-bullseye-slim
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/dist ./dist
+COPY package*.json ./
+RUN npm ci --omit=dev
+EXPOSE 5000
+CMD ["node", "dist/index.js"]
+docker-compose.ci.yml
+version: '3.8'
+services:
+  app:
+    build: .
+    environment:
+      - NODE_ENV=test
+      - PORT=5001
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./:/app:cached
+  tests:
+    image: node:20-bullseye
+    working_dir: /app
+    volumes:
+      - ./:/app:cached
+    depends_on:
+      - app
+    command: bash -lc "npm ci && sleep 3 && TEST_PORT=5001 node test/run-all-tests.cjs"
+package.json scripts snippet (add/merge)
+"scripts": {
+  "start": "node dist/index.js",
+  "dev": "NODE_ENV=development tsx server/index.ts",
+  "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+  "lint": "eslint . --ext .ts,.js",
+  "typecheck": "tsc -p tsconfig.json --noEmit",
+  "test:unit": "node test/run-unit-tests.cjs",
+  "test:integration": "TEST_PORT=5001 node test/run-all-tests.cjs",
+  "test": "npm run test:unit && npm run test:integration",
+  "coverage": "nyc --reporter=lcov npm run test:unit",
+  "docker:build": "docker build -t $npm_package_name:local .",
+  "docker:up": "docker-compose -f docker-compose.ci.yml up --build --abort-on-container-exit"
+}
+Example .github/workflows/ci.yml (full)
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  lint-build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.node-version }}-
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Run integration tests (docker)
+        env:
+          TEST_PORT: 5001
+        run: |
+          docker-compose -f docker-compose.ci.yml up --build --abort-on-container-exit
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: ./test/logs/**/*
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - name: npm audit
+        run: npm audit --audit-level=moderate || true
+      - name: Snyk test (optional)
+        if: ${{ secrets.SNYK_TOKEN != '' }}
+        run: |
+          npm i -g snyk
+          snyk test --severity-threshold=high
+Execution checklist for the agent
+Add or update files above.
+Run npm ci and report exit code/output.
+Run npm run build and report exit code/output.
+Run npm run lint and npm run typecheck, fix issues or report.
+Create docker-compose.ci.yml and run docker-compose -f docker-compose.ci.yml up --build --abort-on-container-exit. Capture logs.
+Run TEST_PORT=5001 node test/run-all-tests.cjs. Capture exit code and last 300 lines.
+Open PR body text (provide contents) — or provide exact git commands to create branch and push.
+Final report expected from you (exact):
+Branch name (or “git unavailable”)
+Files added/modified (list)
+npm ci exit code + last 50 lines
+npm run build exit code + last 200 lines
+npm run lint & npm run typecheck outputs
+docker-compose run results and test logs (full or tail 500 lines)
+TEST_PORT=5001 node test/run-all-tests.cjs exit code and last 300 lines
+Any failing tests (file name) and failing log excerpt (200 lines)
+PR body text ready to paste
+Explicit list of secrets you added as placeholders and exact names to set in repo (SNYK_TOKEN, SENTRY_DSN, GHCR_TOKEN)
+Next recommended follow-ups (short prioritized list)
+Notes / caveats
+If you cannot run Docker in this environment, still create Dockerfile + docker-compose and run local tests as far as possible; indicate which steps failed due to environment.
+Do not commit real secrets anywhere — use placeholders.
+Keep redaction rules strict; do not log secrets, PII. Ensure tests do not print secrets.
+When finished: return a single message with the final report described above.
+End of prompt.

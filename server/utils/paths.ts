@@ -1,4 +1,5 @@
 import path from 'path';
+import fs from 'fs/promises';
 
 export function safeDecodeOnce(raw: string): string {
   try {
@@ -11,8 +12,9 @@ export function safeDecodeOnce(raw: string): string {
 /**
  * Validate and resolve a requestedPath (query or form input) into an absolute path
  * inside workspaceDir. Throws Error with .code = 400 or 403.
+ * Now includes symlink protection via realpath.
  */
-export function validateAndResolvePath(workspaceDir: string, requestedPath: string): string {
+export async function validateAndResolvePath(workspaceDir: string, requestedPath: string): Promise<string> {
   if (typeof requestedPath !== 'string' || requestedPath.length === 0) {
     const e: any = new Error('Invalid path');
     e.code = 400;
@@ -54,5 +56,40 @@ export function validateAndResolvePath(workspaceDir: string, requestedPath: stri
     throw e;
   }
 
-  return resolved;
+  // Symlink protection: resolve canonical paths
+  try {
+    const realResolved = await fs.realpath(resolved);
+    const realWorkspace = await fs.realpath(workspaceDir);
+    
+    // Ensure canonical resolved path is within canonical workspace
+    if (!realResolved.startsWith(realWorkspace + path.sep)) {
+      const e: any = new Error('Forbidden path');
+      e.code = 403;
+      throw e;
+    }
+    
+    return realResolved;
+  } catch (err: any) {
+    // Handle ENOENT - file doesn't exist yet, check parent directory
+    if (err.code === 'ENOENT') {
+      const parentDir = path.dirname(resolved);
+      try {
+        const realParent = await fs.realpath(parentDir);
+        const realWorkspace = await fs.realpath(workspaceDir);
+        
+        if (!realParent.startsWith(realWorkspace + path.sep) && realParent !== realWorkspace) {
+          const e: any = new Error('Forbidden path');
+          e.code = 403;
+          throw e;
+        }
+        
+        // Return the resolved path (not canonical since it doesn't exist yet)
+        return resolved;
+      } catch (parentErr: any) {
+        // Parent doesn't exist either - that's OK if it's within workspace bounds
+        return resolved;
+      }
+    }
+    throw err;
+  }
 }

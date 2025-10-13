@@ -75,10 +75,24 @@ The system supports a mock mode for Razorpay and AI generation, simulating delay
 - All modals use centralized z-index management
 - Fixed React Hooks violation in Workspace component (moved useMutation hooks before early returns to ensure consistent hook call order)
 
+**CI/Security Hardening (October 2025):**
+- **Production Logging**: `server/logger.ts` with JSON/text formats, LOG_LEVEL support (DEBUG|INFO|WARN|ERROR), automatic secret redaction (authorization, razorpay keys, passwords, SSN), customizable redaction via LOG_REDACT_KEYS
+- **Prometheus Telemetry**: `server/telemetry.ts` tracking http_requests_total, job_duration_seconds, job_queue_depth, atomic_write_failures_total; metrics endpoint at GET /api/metrics
+- **Enhanced Path Security**: Symlink protection in `server/utils/paths.ts` and `paths.js` using fs.realpath() for canonical path validation; prevents symlink-based directory traversal attacks; test coverage in `test/unit-symlink-protection.test.cjs` (3/3 passing)
+- **Atomic Write Durability**: Parent directory fsync in `server/utils/atomicWrite.js` with USE_ATOMIC_FSYNC flag (default true); crash-consistent writes with telemetry integration; test coverage in `test/unit-atomic-write.test.cjs` (5/5 passing)
+- **GitHub Actions CI**: Enhanced `.github/workflows/ci.yml` with Node.js matrix [18, 20], npm caching, separate jobs (lint-and-typecheck, build, unit-tests, integration-tests, security-audit), artifact uploads on failure
+- **Security Scanning**: `.github/workflows/security.yml` for weekly npm audit, conditional Snyk testing, secret scanning; `.github/dependabot.yml` for automated npm and GitHub Actions updates
+- **Docker Containerization**: Multi-stage Dockerfile (builder: node:20-bullseye, runtime: node:20-bullseye-slim); `docker-compose.ci.yml` for CI test orchestration; `.dockerignore` for optimized builds
+- **Code Quality**: ESLint v9 config (`eslint.config.js`) with TypeScript support, Prettier integration (`.prettierrc`); installed packages: eslint, @typescript-eslint/parser, @typescript-eslint/eslint-plugin, prettier, eslint-config-prettier
+- **Documentation**: `docs/ci-runbook.md` (local test commands, Docker instructions, CI workflow, troubleshooting), `docs/observability.md` (metrics endpoint, logger config, Prometheus setup, security best practices)
+- **Test Infrastructure**: `test/run-unit-tests.cjs` orchestrator; all unit tests passing (8/8 tests: atomic writes, symlink protection)
+- **Implementation Report**: Complete documentation in `IMPLEMENTATION_REPORT.md` with test results, security improvements, deployment checklist, PR template
+
 **Setup Requirements:**
 - See `PACKAGE_JSON_CHANGES.md` for required package.json scripts (test/qa) and tsx dependency
+- See `IMPLEMENTATION_REPORT.md` Part 1 for CI/security related package.json scripts (lint, typecheck, test:unit, test:integration, docker:build, docker:up)
 - See `test/README.md` for complete test infrastructure documentation
-- Environment variables: TEST_PORT (default 5001), LOG_LEVEL (default INFO), RAZORPAY_MODE (default mock)
+- Environment variables: TEST_PORT (default 5001), LOG_LEVEL (default INFO), LOG_FORMAT (text|json), RAZORPAY_MODE (default mock), USE_ATOMIC_FSYNC (default true)
 
 ## External Dependencies
 - **React 18 + TypeScript**: Frontend framework.

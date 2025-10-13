@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    environment:
+      - NODE_ENV=test
+      - PORT=5001
+      - LOG_LEVEL=INFO
+      - RAZORPAY_MODE=mock
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./:/app:cached
+  tests:
+    image: node:20-bullseye
+    working_dir: /app
+    volumes:
+      - ./:/app:cached
+    depends_on:
+      - app
+    command: bash -lc "npm ci && sleep 3 && TEST_PORT=5001 node test/run-all-tests.cjs"

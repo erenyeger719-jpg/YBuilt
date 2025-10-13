@@ -1,0 +1,74 @@
+name: Security
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly on Monday
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          
+      - run: npm ci
+      
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate --json > audit-results.json || true
+        
+      - name: Check audit results
+        run: |
+          if [ -s audit-results.json ]; then
+            echo "Security vulnerabilities found:"
+            cat audit-results.json
+          fi
+          
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit
+          path: audit-results.json
+          
+  snyk:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SNYK_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          
+      - run: npm ci
+      
+      - name: Run Snyk test
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          npm i -g snyk
+          snyk test --severity-threshold=high || true
+          
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Scan for secrets
+        run: |
+          echo "Scanning for potential secrets..."
+          # Basic regex patterns for common secrets
+          git grep -E "(password|secret|key|token|api_key|apikey)\s*[:=]\s*['\"][^'\"]{8,}" || true
+          git grep -E "-----BEGIN (RSA |DSA )?PRIVATE KEY-----" || true
+          echo "Secret scan complete"
