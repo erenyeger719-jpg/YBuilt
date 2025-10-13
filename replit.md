@@ -42,6 +42,42 @@ The frontend is built with React, TypeScript, and Vite, utilizing `shadcn/ui` fo
 ### System Design Choices
 The system supports a mock mode for Razorpay and AI generation, simulating delays and outcomes without requiring external API keys. It includes an in-memory job queue with a mock worker for AI generation requests. User persistence is ensured across server restarts, and immediate visual feedback is provided for appearance setting changes through CSS variable updates.
 
+### CI-Ready Infrastructure (Production)
+**Security Layer:**
+- Multi-layer path validation in `server/utils/paths.ts` (single-decode, backslash/percent rejection, segment validation, containment checks)
+- All 5 workspace file endpoints protected with `validateAndResolvePath()` returning proper 400/403 status codes
+- Protection against path traversal, Windows-style attacks, and URL encoding bypasses
+
+**Atomic Operations:**
+- `server/utils/atomicWrite.js` provides fsync + atomic rename pattern for zero partial writes
+- All 18 file persistence operations use atomic writes (jobs, drafts, profiles, settings, workspace files)
+- File descriptor cleanup in finally block prevents resource leaks
+
+**Test Infrastructure:**
+- `test/harness.cjs` - Server lifecycle management (start/wait/stop with npx tsx)
+- `test/run-all-tests.cjs` - Orchestrator that manages server and runs test suite sequentially
+- `test/upload-helper.cjs` - Multipart upload helper using axios + form-data (fixes "Unexpected end of form" errors)
+- All tests converted to .cjs with TEST_PORT environment variable support
+- Unit tests: `test/unit-path-validation.test.cjs` (4/4 passing), `test/unit-atomic-write.test.cjs` (3/3 passing)
+- Comprehensive test documentation in `test/README.md`
+
+**Observability & Configuration:**
+- LOG_LEVEL environment variable (DEBUG|INFO|WARN|ERROR) with level-aware logger
+- All console.* calls replaced with centralized logger (server/routes.ts, server/storage.ts)
+- Razorpay mode validation: RAZORPAY_MODE (mock|test|live) with required key checks in live mode
+- Metrics endpoint: GET /api/metrics (job stats, queue depth, auto-apply tracking)
+- Periodic metrics logging every 60 seconds
+
+**UI Polish:**
+- CSS variable `--modal-z: 99999` for normalized z-index across all modals
+- Removed legacy z-index values (2147483601) for consistent layering
+- All modals use centralized z-index management
+
+**Setup Requirements:**
+- See `PACKAGE_JSON_CHANGES.md` for required package.json scripts (test/qa) and tsx dependency
+- See `test/README.md` for complete test infrastructure documentation
+- Environment variables: TEST_PORT (default 5001), LOG_LEVEL (default INFO), RAZORPAY_MODE (default mock)
+
 ## External Dependencies
 - **React 18 + TypeScript**: Frontend framework.
 - **Express.js + TypeScript**: Backend framework.
