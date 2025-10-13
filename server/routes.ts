@@ -64,10 +64,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const job = await storage.createJob(validation.data);
       
+      // [JOB_RESPONSE] Debug logging before response
+      console.log('[JOB_RESPONSE] Job created with ID:', job.id, 'Length:', job.id.length);
+      
+      // Validate jobId before sending response
+      if (job.id.length !== 36) {
+        const error = `[JOB_RESPONSE] ERROR: Job ID length is ${job.id.length}, expected 36. ID: ${job.id}`;
+        console.error(error);
+        return res.status(500).json({ error: "Invalid job ID generated" });
+      }
+      
       // Add to job queue for processing
       await jobQueue.addJob(job.id, job.prompt);
       
-      res.json({ jobId: job.id, status: job.status });
+      const responseData = { jobId: job.id, status: job.status };
+      console.log('[JOB_RESPONSE] Sending response:', JSON.stringify(responseData), 'jobId length:', responseData.jobId.length);
+      
+      res.json(responseData);
     } catch (error) {
       console.error("Error creating job:", error);
       res.status(500).json({ error: "Failed to create job" });

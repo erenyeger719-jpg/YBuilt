@@ -259,6 +259,25 @@ export class MemStorage implements IStorage {
 
   async createJob(insertJob: InsertJob): Promise<Job> {
     const id = randomUUID();
+    
+    // [JOB_CREATE] Debug logging and validation
+    console.log('[JOB_CREATE] Generated UUID:', id, 'Length:', id.length);
+    
+    // Validate UUID format and length
+    if (id.length !== 36) {
+      const error = `[JOB_CREATE] ERROR: UUID length is ${id.length}, expected 36. UUID: ${id}`;
+      console.error(error);
+      throw new Error(error);
+    }
+    
+    // Validate UUID format (8-4-4-4-12 pattern)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      const error = `[JOB_CREATE] ERROR: UUID format invalid. UUID: ${id}`;
+      console.error(error);
+      throw new Error(error);
+    }
+    
     const job: Job = {
       id,
       userId: insertJob.userId,
@@ -274,8 +293,20 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
+    
+    console.log('[JOB_CREATE] Created job object with id:', job.id, 'Length:', job.id.length);
+    
     this.jobs.set(id, job);
     await this.saveJobs();
+    
+    // Verify job was saved correctly
+    const savedJob = this.jobs.get(id);
+    if (!savedJob) {
+      throw new Error(`[JOB_CREATE] ERROR: Failed to save job with id: ${id}`);
+    }
+    
+    console.log('[JOB_CREATE] Job saved successfully. ID:', savedJob.id, 'Length:', savedJob.id.length);
+    
     return job;
   }
 

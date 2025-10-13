@@ -1,0 +1,168 @@
+{
+  "userId": "test-user-uuid",
+  "appearance": {
+    "theme": "system",
+    "glassIntensity": 80,
+    "glossFinish": true,
+    "parallaxIntensity": 20,
+    "motion": "full",
+    "lowPower": false,
+    "lowBandwidth": false,
+    "fontFamily": "inter",
+    "fontSize": 16
+  },
+  "account": {
+    "displayName": "",
+    "handle": "",
+    "email": "user@example.com",
+    "language": "en",
+    "locale": "en-US",
+    "timezone": "UTC",
+    "emailVerified": false
+  },
+  "workspace": {
+    "projectVisibility": "private",
+    "defaultBranch": "main",
+    "projectRegion": "auto",
+    "defaultTemplate": "landing",
+    "computeTier": "balanced",
+    "memoryLimit": 512,
+    "concurrencySlots": 2,
+    "autoScaling": false,
+    "agentAutonomyDefault": "medium",
+    "autoApplyEdits": "review",
+    "buildTraceVerbosity": "normal",
+    "safetyScan": true,
+    "autoSaveDrafts": true,
+    "previewSandboxMode": "lenient",
+    "devicePreset": "desktop",
+    "snapshotThumbnails": true,
+    "allowProjectWebhooks": true,
+    "envVariables": [],
+    "paidIntegrations": false,
+    "autoCreatePreview": true,
+    "storageRegion": "india"
+  },
+  "editor": {
+    "theme": "dark",
+    "fontFamily": "Inter",
+    "fontSize": 14,
+    "lineHeight": 1.5,
+    "tabSize": 2,
+    "indentWithTabs": false,
+    "cursorStyle": "line",
+    "wordWrap": true,
+    "autoComplete": true,
+    "inlineAiSuggestions": "suggest",
+    "formatOnSave": true,
+    "defaultFormatter": "prettier",
+    "linterEnabled": true,
+    "linterRuleset": "recommended",
+    "codeLens": true,
+    "minimap": true,
+    "keymap": "default",
+    "autosaveInterval": "15s",
+    "aiModel": "claude-sonnet",
+    "aiComputeTier": "balanced",
+    "maxTokens": 2000,
+    "autoRunTests": false,
+    "suggestionTrigger": "tab",
+    "codePrivacy": "hosted-llm",
+    "telemetryOptOut": false,
+    "template": "starter",
+    "language": "js",
+    "autosave": 15,
+    "previewResolution": "auto",
+    "lintOnSave": true
+  },
+  "ai": {
+    "model": "gpt-5-x",
+    "temperature": 0.2,
+    "autoRefine": true,
+    "maxTokens": 4000,
+    "maxRuntime": 30,
+    "computeTier": "balanced",
+    "previewWatermark": true,
+    "defaultStyle": "monochrome",
+    "safetyFilter": true,
+    "safetyLevel": "medium",
+    "promptTemplates": []
+  },
+  "security": {
+    "twoFactor": false,
+    "twoFactorMethod": "authenticator",
+    "passwordlessLogin": false,
+    "sessions": [],
+    "apiKeys": [],
+    "sshKeys": []
+  },
+  "integrations": {
+    "github": {
+      "connected": false
+    },
+    "gitlab": {
+      "connected": false
+    },
+    "bitbucket": {
+      "connected": false
+    },
+    "webhooks": [],
+    "analytics": true,
+    "paymentGateway": "razorpay"
+  },
+  "organization": {
+    "name": "",
+    "domain": "",
+    "admins": [],
+    "projectQuota": 10,
+    "storageLimit": 5000,
+    "teamInvitePolicy": "admin-only"
+  },
+  "billing": {
+    "plan": "free",
+    "paymentMethods": []
+  },
+  "team": {
+    "invites": [],
+    "projectSharingDefault": "private"
+  },
+  "notifications": {
+    "channels": {
+      "emailTransactional": true,
+      "emailMarketing": false,
+      "inApp": true,
+      "push": false,
+      "sms": false
+    },
+    "events": {
+      "buildComplete": true,
+      "buildFail": true,
+      "publishComplete": true,
+      "publishFail": true,
+      "creditAlert": true,
+      "billingAlert": true,
+      "agentConfirmation": true,
+      "securityAlert": true,
+      "systemStatus": true,
+      "teamInvite": true
+    },
+    "digest": {
+      "enabled": false,
+      "dailyTime": "08:00",
+      "weeklyDay": "monday",
+      "timezone": "UTC"
+    },
+    "quietHours": {
+      "enabled": false,
+      "start": "22:00",
+      "end": "08:00",
+      "timezone": "UTC"
+    },
+    "delivery": "immediate",
+    "webhooks": []
+  },
+  "export": {
+    "retentionDays": 30,
+    "autoExport": false
+  }
+}

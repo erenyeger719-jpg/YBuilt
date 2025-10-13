@@ -1,0 +1,108 @@
+TASK: Stabilize & finish YBUILT workspace flows — fix jobId bug, make Select→Open reliable, harden endpoints, and complete critical UX fixes.
+
+CONTEXT
+- Current repo: ybuilt (client/server/worker) running in MOCK_MODE. Worker emits build traces, auto-apply exists, uploads & publish mock exist.
+- Recent known issue: POST /api/generate may return a truncated jobId (display/serialization bug). This causes workspace load failures ("Job not found").
+- Other UX issues remain: prompt bar spacing and file-chip visibility, prompt bar scroll behaviour, window resize smoothing, preview/console header cropped & publish button layering, theme modal layering, CLUI hover popover removal, help popover clipping, signin modal placement and OAuth stubs.
+
+GOAL (single sprint)
+Fix the jobId truncation and workspace open reliability, harden file endpoints, and address the highest impact UX bugs so the Create → Save Draft → Select → Open Workspace → Edit → Save → Publish flow is robust and demonstrably stable.
+
+WHAT TO IMPLEMENT (code + tests + docs)
+
+A) **Fix jobId truncation & serialization**
+1. Trace full path of jobId generation and return:
+   - Ensure job UUID generation uses a standard library (uuid v4). Wherever job.id is created, persist the full string.
+   - Ensure every API response returns the same exact string as stored in data/jobs.json (no .slice, substring, or trim anywhere).
+2. Add server tests:
+   - `test/jobid-roundtrip.test.js`: POST /api/generate -> assert returned jobId === entry in data/jobs.json -> GET /api/jobs/:jobId returns correct record (200).
+3. Add logging around job creation/response to help diagnose issues in future.
+
+B) **Make Select → Open Workspace atomic & reliable**
+1. When saving drafts or finalizing a job, write files atomically:
+   - Implement a temp directory write → fs.rename to final location.
+   - Ensure `POST /api/drafts` waits for disk writes to finish (fsync or equivalent) before returning success.
+2. If `Select` leads to opening a workspace:
+   - The server should check that `public/previews/{jobId}/index.html` exists and is readable before returning success.
+   - If files are not ready, return `{ status: 'pending', retryAfter: 1000 }` and client should poll.
+3. Add tests:
+   - `test/library-to-workspace.test.js`: save draft -> call select -> assert /workspace/:jobId/files returns file list and that editor loads file contents.
+
+C) **Harden file endpoints**
+1. Re-verify and harden:
+   - jobId validation (regex /^[a-z0-9-]+$/i).
+   - Path normalization: always `const resolved = path.resolve(workspaceDir, path.normalize(requestedPath))` and assert `resolved.startsWith(workspaceDir)`.
+   - index.html protection using resolved path (cannot be deleted).
+2. Add tests:
+   - `test/security-path-traversal.test.js`: try deletion of `../../etc/passwd` variants and assert 403.
+   - `test/upload-sanitization.test.js`: upload files with tricky filenames → assert sanitized and stored under allowed dir.
+
+D) **UX fixes (client) — exact items**
+1. Prompt bar:
+   - Ensure the text input area is vertically centered between upload/file chips above and action buttons (agent/build) below. The input area must have its own fixed vertical height and internal scroll for messages—no vertical growth of the whole prompt area.
+   - Remove duplicate + buttons. Only one upload control in the file toolbar.
+   - File chips visible inline (show truncated filename with tooltip). Clicking a chip opens a small modal preview (image/text).
+   - Acceptance: user can add multiple files and they appear as chips; the prompt bar height never changes; message pane scrolls when long.
+2. Window resizing & split panes:
+   - Implement smooth drag resizing with min/max limits. Max horizontal split should be 50/50. Use requestAnimationFrame for smoothness.
+   - When left panel is shrunk, don't crop top toolbar buttons (agent/build/save). Instead shrink icons or collapse into overflow menu.
+   - Acceptance: Drag left/right smoothly; top toolbar buttons remain visible or accessible via overflow.
+3. Preview/Console header & Publish button:
+   - Ensure the preview/console tab header is fully visible (not cropped). Move the Publish button into the preview header top layer (same z-index as header controls), positioned just left of the preview fullscreen button.
+   - Add a visual spacer of ~30px between Console tab option and Publish button.
+   - Acceptance: Publish button visible at all sizes and clickable; `Build: success • Last: 2m ago` pill positioned 35 spaces left from original location (visually distinct).
+4. Theme modal layering:
+   - Render Theme modal via React portal to document.body with z-index: 99999, and ensure it never clips. Do not change modal content or controls—only layer.
+   - Acceptance: Opening Theme modal always appears fully on top; it's keyboard accessible and closeable with Esc.
+5. CLUI & Help popovers:
+   - Remove CLUI hover-trigger popover; convert to click-open submenu only.
+   - Ensure Help popover is rendered in a portal and not clipped; include system status at top and “Get Help” button that opens a centered help modal with Billing / Account / Technical choices and the small buttons: Report abuse, Read the docs, Check the community (each linking to /help endpoints).
+   - Acceptance: Hovering CLUI no longer shows popover. Help popover visible and functional.
+6. Sign-in modal:
+   - Center app-wide sign-in modal in viewport with proper stacking (top layer). Add OAuth buttons for Google, Apple, Facebook, Twitter (MOCK_MODE: these return demo login).
+   - Acceptance: Signing in via any method returns demo token and loads /me.
+
+E) **Finish Publish/Payments readiness**
+1. Add a `RAZORPAY_MODE` env flag: `mock | test | live`. Keep default `mock`.
+2. Add environment checks in README and `deploy.md` showing the exact steps to switch to `test` and `live` keys.
+3. Add an endpoint `POST /api/payments/simulate` in MOCK_MODE to trigger webhook flow (useful for QA).
+4. Acceptance: demo purchase flow increases credits and publishes returns public URL; simulating webhook behaves identically.
+
+F) **Observability & Tests**
+1. Add metrics endpoints or logs for:
+   - avg job time, worker failures, queue depth, auto-apply failures.
+2. Expand tests:
+   - Add `test/e2e-publish.test.js` to cover login → generate → save draft → open workspace → run dev → publish (mock).
+3. Add one-line QA checklist in README and a command `npm run qa` to run all tests sequentially.
+
+DELIVERABLES (what to return)
+1. Code changes (client/server/worker) implementing A–E.
+2. New tests under `test/` as described.
+3. Updated README + deploy.md with env toggles and the steps to swap Razorpay keys.
+4. A short QA report (one paragraph) confirming tests passed locally.
+
+NON-FUNCTIONAL RULES
+- Do not change existing UI themes or the overall monochrome aesthetic.
+- Do not alter file locations: previews in `public/previews/{jobId}`, uploads in `public/uploads/{userId}/{projectId}`.
+- For any subtle UI movement (pixel spacing), use CSS variables and document the change in a single comment block.
+
+ACCEPTANCE CRITERIA (must pass)
+1. `node test/jobid-roundtrip.test.js` passes.
+2. `node test/library-to-workspace.test.js` passes.
+3. `node test/security-path-traversal.test.js` passes.
+4. Manual UI checks:
+   - Create → Generate → Save Draft → Select → Open Workspace works end-to-end 5 runs.
+   - Prompt bar behaves: fixed height, scrollable message pane, file chips visible.
+   - Drag resizing smooth, Publish button visible next to fullscreen, Theme modal fully on top.
+5. README updated with `RAZORPAY_MODE` instructions and `npm run qa` to execute all tests.
+
+TIMED PRIORITY
+- Fix jobId truncation & tests first (highest priority).
+- Then Library→Workspace atomic writes.
+- Then UX fixes (prompt bar, resizing, publish placement).
+- Then Payment readiness & docs.
+
+DELIVERABLE FORMAT
+- Reply with a short QA summary and the git diff or list of edited files (paths) and the exact test commands you ran and their pass/fail results.
+
+END TASK

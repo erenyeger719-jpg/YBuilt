@@ -1,0 +1,125 @@
+{
+  "jobId": "88e7db7b-dc3b-4b9a-be91-32028118c370",
+  "currentStage": "BUNDLE",
+  "stages": {
+    "GENERATION": {
+      "stage": "GENERATION",
+      "status": "success",
+      "logs": [
+        {
+          "timestamp": "2025-10-13T05:37:20.681Z",
+          "level": "info",
+          "message": "Starting AI generation...",
+          "details": "Prompt: \"Test prompt 2\""
+        },
+        {
+          "timestamp": "2025-10-13T05:37:22.634Z",
+          "level": "info",
+          "message": "AI generation complete"
+        }
+      ],
+      "startedAt": "2025-10-13T05:37:20.680Z",
+      "completedAt": "2025-10-13T05:37:22.635Z"
+    },
+    "ASSEMBLY": {
+      "stage": "ASSEMBLY",
+      "status": "success",
+      "logs": [
+        {
+          "timestamp": "2025-10-13T05:37:22.637Z",
+          "level": "info",
+          "message": "Assembling files and components..."
+        },
+        {
+          "timestamp": "2025-10-13T05:37:22.639Z",
+          "level": "info",
+          "message": "Preview HTML generated"
+        }
+      ],
+      "startedAt": "2025-10-13T05:37:22.636Z",
+      "completedAt": "2025-10-13T05:37:22.640Z",
+      "artifacts": [
+        {
+          "label": "Preview HTML",
+          "url": "/previews/88e7db7b-dc3b-4b9a-be91-32028118c370/index.html"
+        }
+      ]
+    },
+    "LINT": {
+      "stage": "LINT",
+      "status": "success",
+      "logs": [
+        {
+          "timestamp": "2025-10-13T05:37:22.642Z",
+          "level": "info",
+          "message": "Running code quality checks..."
+        },
+        {
+          "timestamp": "2025-10-13T05:37:22.945Z",
+          "level": "info",
+          "message": "HTML structure validated"
+        },
+        {
+          "timestamp": "2025-10-13T05:37:22.947Z",
+          "level": "info",
+          "message": "CSS syntax checked"
+        }
+      ],
+      "startedAt": "2025-10-13T05:37:22.642Z",
+      "completedAt": "2025-10-13T05:37:22.950Z"
+    },
+    "TEST": {
+      "stage": "TEST",
+      "status": "success",
+      "logs": [
+        {
+          "timestamp": "2025-10-13T05:37:22.954Z",
+          "level": "info",
+          "message": "Running basic tests..."
+        },
+        {
+          "timestamp": "2025-10-13T05:37:23.358Z",
+          "level": "info",
+          "message": "Responsive design check: passed"
+        },
+        {
+          "timestamp": "2025-10-13T05:37:23.359Z",
+          "level": "info",
+          "message": "Accessibility validation: passed"
+        }
+      ],
+      "startedAt": "2025-10-13T05:37:22.952Z",
+      "completedAt": "2025-10-13T05:37:23.360Z"
+    },
+    "BUNDLE": {
+      "stage": "BUNDLE",
+      "status": "success",
+      "logs": [
+        {
+          "timestamp": "2025-10-13T05:37:23.361Z",
+          "level": "info",
+          "message": "Finalizing bundle..."
+        },
+        {
+          "timestamp": "2025-10-13T05:37:23.663Z",
+          "level": "info",
+          "message": "Assets optimized"
+        },
+        {
+          "timestamp": "2025-10-13T05:37:23.664Z",
+          "level": "info",
+          "message": "Bundle complete"
+        }
+      ],
+      "startedAt": "2025-10-13T05:37:23.360Z",
+      "completedAt": "2025-10-13T05:37:23.665Z",
+      "artifacts": [
+        {
+          "label": "Final Build",
+          "url": "/previews/88e7db7b-dc3b-4b9a-be91-32028118c370/index.html"
+        }
+      ]
+    }
+  },
+  "summaryLog": "Build completed successfully for job 88e7db7b-dc3b-4b9a-be91-32028118c370\nGenerated from prompt: \"Test prompt 2\"\nAll 5 stages passed: GENERATION → ASSEMBLY → LINT → TEST → BUNDLE\nPreview available at: /previews/88e7db7b-dc3b-4b9a-be91-32028118c370/index.html"
+}

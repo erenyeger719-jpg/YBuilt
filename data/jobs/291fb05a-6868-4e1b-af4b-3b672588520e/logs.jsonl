@@ -1,0 +1,4 @@
+{"timestamp":"2025-10-13T05:37:20.521Z","level":"info","stage":"GENERATION","source":"worker","message":"Starting generation","details":{"prompt":"Test UUID roundtrip integrity"},"metadata":{"autonomy":"medium","autoApply":false}}
+{"timestamp":"2025-10-13T05:37:21.873Z","level":"info","stage":"ASSEMBLY","source":"worker","message":"Assembling components"}
+{"timestamp":"2025-10-13T05:37:21.880Z","level":"info","stage":"LINT","source":"worker","message":"Running linting checks"}
+{"timestamp":"2025-10-13T05:37:22.606Z","level":"info","stage":"STATIC-BUILD","source":"worker","message":"Build complete","details":{"outputPath":"/previews/291fb05a-6868-4e1b-af4b-3b672588520e/index.html"}}
