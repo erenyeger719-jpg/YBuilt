@@ -217,11 +217,6 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
               />
             </div>
 
-            {mode === "signup" && (
-              <p className="text-sm text-muted-foreground">
-                In mock mode, any email/password combination works
-              </p>
-            )}
 
             <div className="flex flex-col gap-2 pt-2">
               <Button

@@ -291,7 +291,7 @@ export default function Profile() {
                 <Avatar className="w-24 h-24">
                   <AvatarImage src={avatarPreview || user?.avatar || undefined} />
                   <AvatarFallback className="text-2xl">
-                    {user?.username?.[0]?.toUpperCase() || "U"}
+                    {user?.email?.[0]?.toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
 
@@ -346,10 +346,10 @@ export default function Profile() {
             </CardHeader>
             <CardContent className="p-6 pt-0 space-y-4">
               <div className="space-y-2">
-                <Label>Username</Label>
-                <Input value={user?.username || ""} disabled />
+                <Label>Email</Label>
+                <Input value={user?.email || ""} disabled />
                 <p className="text-xs text-muted-foreground">
-                  Username cannot be changed
+                  Email cannot be changed
                 </p>
               </div>
 

@@ -224,7 +224,7 @@ export default function GetHelpModal({ open, onOpenChange }: GetHelpModalProps) 
     actions[action as keyof typeof actions]?.();
   };
 
-  const userDisplayName = userData?.user?.username || "";
+  const userDisplayName = userData?.user?.email?.split('@')[0] || "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

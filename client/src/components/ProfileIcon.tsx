@@ -51,10 +51,12 @@ export default function ProfileIcon() {
     setCurrentUser(user);
   };
 
-  // Get user initials for avatar
+  // Get user initials for avatar from email
   const getUserInitials = () => {
     if (!currentUser) return "?";
-    return currentUser.username.substring(0, 2).toUpperCase();
+    // Get first 2 characters from email (before @)
+    const emailPart = currentUser.email.split('@')[0];
+    return emailPart.substring(0, 2).toUpperCase();
   };
 
   return (
@@ -86,8 +88,8 @@ export default function ProfileIcon() {
             <>
               <DropdownMenuLabel className="relative z-10">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{currentUser.username}</p>
-                  <p className="text-xs leading-none text-muted-foreground">{currentUser.email}</p>
+                  <p className="text-sm font-medium leading-none">{currentUser.email}</p>
+                  <p className="text-xs leading-none text-muted-foreground">ID: {currentUser.id}</p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
