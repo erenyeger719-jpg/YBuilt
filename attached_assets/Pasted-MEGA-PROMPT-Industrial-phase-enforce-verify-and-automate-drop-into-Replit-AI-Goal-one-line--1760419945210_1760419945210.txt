@@ -1,0 +1,213 @@
+MEGA PROMPT — Industrial phase: enforce, verify, and automate (drop into Replit AI)
+
+Goal (one line)
+Make the repository production-enforceable and supply-chain-proof: enforce cosign-based image signature verification end-to-end; ensure SBOM attestation verification at deploy/admission time; make builds reproducible; add progressive delivery with metric-based promotion; tighten policy-as-code so unsigned or vulnerable artifacts are rejected; and produce a full verification bundle and actionable remediation steps.
+
+Branch
+Create and work on:
+fix/industrial-enforce
+(If git operations are blocked in this environment: create files and print exact git commands the user can run locally; do not attempt to push secrets.)
+
+Quick user offer (must show at start)
+If you want, tell me which files you want printed now (I’ll paste contents + unified diffs instantly):
+- k8s/sigstore-policy-controller-install.sh
+- .github/workflows/publish.yml (fixed)
+- k8s/gatekeeper/constraint-verify-cosign.yaml (real verification)
+- scripts/cosign-sign-artifacts.sh (fixed)
+- ci/verify-publish-dryrun.sh (verification helper)
+Pick any or "all".
+
+Want me to immediately paste the corrected publish.yml, scripts/cosign-sign-artifacts.sh, and k8s/gatekeeper/constraint-verify-cosign.yaml here so you can copy/paste them into Replit right now? If so, say which three and I’ll dump the full contents + unified diffs.
+
+Scope and non-goals (be explicit)
+- In-scope: create/modify repo files (scripts, workflows, manifests, OPA rego), verify locally where possible, produce unified diffs, produce a final IMPLEMENTATION_ENFORCE.md and PR body.
+- Out-of-scope: cluster-level kubectl apply (unless agent has cluster credentials). If cluster ops are required, the agent must produce exact kubectl commands and a one-line remediation so humans can run them.
+- Never print secrets. Use ${{ secrets.NAME }} placeholders in workflows.
+
+Top-level checklist (agent must complete these)
+- Enforce cosign verification in CI and at admission (Gatekeeper/Sigstore policy controller or strong Gatekeeper callout with verification step).
+- Fix publish workflow so cosign is installed and used correctly (correct args, no silent || true).
+- Ensure cert-manager manifests are valid YAML and include ClusterIssuer (self-signed and CA-backed) examples.
+- Make builds reproducible (SOURCE_DATE_EPOCH, pinned base image digests, lockfile use) and produce artifacts/dist.tar.gz and artifacts/dist.tar.gz.sha256.
+- Generate SBOM (CycloneDX), create provenance JSON (git sha, build time, sbom sha256), and produce cosign attestations.
+- Add an admission-time verify example: either Gatekeeper + Sigstore Policy Controller or a documented alternative with exact kubectl steps.
+- Add progressive delivery workflow: canary promotion that requires image signature + SBOM before promote; autoset rollback on metric failure.
+- Add observability hardening: include log <-> trace correlation shim, Tempo+Loki guidance snippet, sampling guidance; add canary Prometheus alert rules.
+- Add developer ergonomics: devcontainer updated to include cosign, opa, trivy, reproducible-build helper.
+- Produce verification runbook + final report with diffs and exact remediation for failures.
+
+Files to create / modify (explicit; agent must show diffs for each changed file)
+- .github/workflows/publish.yml — fixed OIDC publish workflow (install cosign, reproducible build step, cosign signing, attach attestations). Must not call scripts with wrong args.
+- .github/workflows/canary-promote.yml — run after publish; deploy canary, run synthetic checks, require cosign verification and SBOM attestation to promote.
+- scripts/cosign-sign-artifacts.sh — robust signing helper (support keyless OIDC and --key env://COSIGN_KEY; fail loudly on missing inputs).
+- scripts/reproducible-build.sh — wrapper that produces deterministic dist and artifacts tarball with SOURCE_DATE_EPOCH, fixed TZ, and sha256.
+- scripts/generate-cyclonedx-sbom.sh — produce CycloneDX SBOM to artifacts/sbom.json.
+- scripts/provenance/attest-oci.js — produce artifacts/provenance.json with {git_sha, built_at, sbom_sha256, image_ref} and sign it (cosign attest or GPG if configured).
+- ci/verify-sbom-and-cosign.sh — verify cosign signature and attestations for an image and check sbom sha consistency.
+- k8s/cert-manager/clusterissuer-selfsigned.yaml and k8s/cert-manager/clusterissuer-ca.yaml — valid, pure YAML ClusterIssuer examples.
+- k8s/gatekeeper/constraint-verify-cosign.yaml & opa/policies/verify-cosign.rego — implement real verification (if Gatekeeper can't call cosign locally, create a CI policy-check that uses cosign verify; Gatekeeper example should instruct to deploy Sigstore Policy Controller).
+- k8s/admission/sbom-verify-admission.yaml — example admission webhook manifest (document cert-manager dependency and exact kubectl commands).
+- helm/values-canary.yaml and helm/templates/canary-config.yaml — ensure promotion requires SBOM & signature annotation before traffic increase.
+- monitoring/prometheus-canary-alerts.yaml — rule set for canary failure (error-rate, p95) and auto-rollback thresholds.
+- tools/log-trace-correlation.js — middleware to attach trace id to structured logs.
+- .devcontainer/devcontainer.json and .devcontainer/Dockerfile — include cosign, opa, trivy, and reproducible-build helper.
+- IMPLEMENTATION_ENFORCE.md — final report with diffs, verification outputs, list of required secrets, and one-line remediations for each blocked step.
+- PR_BODY_ENFORCE.md — ready-to-paste PR description and acceptance checklist.
+
+Step-by-step tasks the agent must perform
+(Commit as you go; if git disabled, create files and print exact git commands)
+1. Preflight  
+   Print:
+node -v && npm -v && git --version || true
+git branch --show-current || echo "git unavailable"
+uname -a
+ls -la | sed -n '1,120p'
+
+2. Create branch (or instruct user with exact git commands if not allowed). Example commands to print:
+git checkout -b fix/industrial-enforce
+git add <files>
+git commit -m "feat(enforce): cosign verification, reproducible builds, admission examples"
+git push origin fix/industrial-enforce
+
+3. Implement reproducible build script `scripts/reproducible-build.sh`  
+- Use pinned base image digest in Dockerfile snippet (example comment with pattern `node:20-bullseye@sha256:...` — agent must not invent digest; instead add value placeholder and explain how to lock).
+- Run `npm ci --prefer-offline --no-audit`, set `SOURCE_DATE_EPOCH`, `TZ=UTC`; produce `artifacts/dist.tar.gz` and `sha256sum` file.
+
+4. Generate SBOM and provenance  
+- Run (or provide dry-run) `scripts/generate-cyclonedx-sbom.sh` → `artifacts/sbom.json`  
+- Create `artifacts/provenance.json` with git sha and sbom sha256; sign it via cosign attest or document GPG fallback.
+
+5. Cosign signing script  
+- Implement `scripts/cosign-sign-artifacts.sh` supporting:
+  - `--image IMAGE_REF` or `--artifact artifacts/dist.tar.gz`
+  - Keyless (`cosign sign --yes IMAGE`) and key (`cosign sign --key env://COSIGN_KEY`) modes.
+  - Attach SBOM & provenance as predicates: `cosign attest --type cyclonedx --predicate artifacts/sbom.json IMAGE`
+- Fail loudly on missing SBOM/provenance.
+
+6. Fix publish workflow `.github/workflows/publish.yml`  
+- Ensure `sigstore/cosign-installer@v3` step runs before calling scripts; ensure `id-token: write` permission set.
+- Use `actions/checkout@v4` with `fetch-depth: 0`.
+- Build via `scripts/reproducible-build.sh`.
+- Generate SBOM and provenance.
+- Push image to GHCR (only if not dry-run) and sign using `scripts/cosign-sign-artifacts.sh` with correct args (image ref).
+- After sign, run `ci/verify-sbom-and-cosign.sh` to verify signature & sbom consistency; fail on any mismatch.
+- Upload artifacts to release (dry-run if secrets not present).
+
+7. Admission & Gatekeeper  
+- Create OPA rego policy `opa/policies/verify-cosign.rego` that references a verification method (document two options):
+  - A: **Sigstore Policy Controller** — recommended and show `kubectl` commands to install and policy config to require cosign signatures and SBOM.
+  - B: **CI-enforced pre-deploy check + Gatekeeper constraint** — Gatekeeper may not execute `cosign verify` directly; provide a robust CI policy-check job that rejects PRs unless `ci/verify-sbom-and-cosign.sh` passes. Add Gatekeeper constraint example that enforces presence of attestations/annotations but also requires CI check.
+- Provide exact `kubectl apply` commands and required CRs for cert-manager and Sigstore Policy Controller.
+
+8. Canary promote workflow `.github/workflows/canary-promote.yml`  
+- Trigger: `workflow_run` after publish success OR `workflow_dispatch`.  
+- Steps:
+  - Deploy canary via Helm with `canary.enabled=true`.
+  - Wait for `kubectl rollout status`.
+  - Run synthetic checks (`ci/synthetic-check.sh`) repeatedly for configured intervals.
+  - Require `ci/verify-sbom-and-cosign.sh` to pass for the image in `helm/values`.
+  - If metrics pass → promote; else → `scripts/rollback.sh`.
+
+9. Observability  
+- Add `tools/log-trace-correlation.js` and show 2-line example to add into `server/index.ts`.
+- Add `monitoring/prometheus-canary-alerts.yaml` with rules for p95 and error-rate and an alert to trigger rollback.
+- Add Tempo + Loki guidance and Grafana dashboards (document how to wire).
+
+10. Devcontainer & local dev  
+ - Update `.devcontainer` to include `cosign`, `opa`, `trivy`, and reproducible-build helper; ensure `postCreateCommand` runs `npm ci`.
+
+11. CI policy-check job `.github/workflows/policy-check.yml`  
+ - Run `ci/verify-sbom-and-cosign.sh` for the built image; run `trivy` and `npm audit`; produce artifacts `artifacts/vuln-report.json`. If high/critical found, create annotated comment and fail job.
+
+12. Documentation & deliverables  
+ - Produce `IMPLEMENTATION_ENFORCE.md` containing:
+   - Branch used
+   - Files changed (list + unified diff for each)
+   - Full verification outputs (commands, stdout tail, exit codes)
+   - Secrets required (exact names)
+   - Clear one-line remediation for each failing step
+ - Produce `PR_BODY_ENFORCE.md` ready to paste.
+ - Update `replit.md` to reflect enforcement/limitations.
+
+Verification checklist (agent must run, capture output; if blocked, show exact error and remediation)
+For each, record command, stdout/stderr (or last 200 lines), and exit code.
+
+A. Preflight (always run)
+node -v && npm -v && git --version || true
+git branch --show-current || echo "git unavailable"
+ls -la
+
+B. Local checks / dry-run
+bash scripts/reproducible-build.sh
+check artifacts/dist.tar.gz exists
+sha256sum artifacts/dist.tar.gz > artifacts/dist.tar.gz.sha256
+bash scripts/generate-cyclonedx-sbom.sh
+
+check artifacts/sbom.json
+node scripts/provenance/attest-oci.js --out artifacts/provenance.json
+check file exists
+bash scripts/cosign-sign-artifacts.sh --image ghcr.io/OWNER/REPO:DRYRUN --dry-run
+capture output (if cosign not available, show installer remediation)
+bash ci/verify-sbom-and-cosign.sh ghcr.io/OWNER/REPO:DRYRUN
+dry-run verify (should indicate OIDC missing or verify failure)
+npx trivy image --version
+npm audit --json > artifacts/npm-audit.json
+
+C. Workflow / CI dry-run
+- Run `act` or simulate workflow as available; otherwise run critical steps locally:
+  - `bash scripts/reproducible-build.sh`
+  - `bash scripts/generate-cyclonedx-sbom.sh`
+  - `node scripts/provenance/attest-oci.js`
+  - `bash scripts/cosign-sign-artifacts.sh --image local:test --dry-run`
+- Record outputs and exit codes. If `docker` or `cosign` not available, present exact remediation and a one-line command the user must run in GitHub Actions (enable `id-token` permissions and `sigstore/cosign-installer` action).
+
+D. Gatekeeper / admission simulation
+- Run policy-check locally:
+  - `opa eval --data opa/policies -i <example-deployment.json> 'data.ybuilt.security.deny'` (or `opa test`), capture output.
+- If Gatekeeper not available, provide `kubectl` commands needed to deploy Sigstore Policy Controller and Gatekeeper constraints and list exact CRs.
+
+Acceptance criteria (all must pass or be documented with remediation)
+- `scripts/reproducible-build.sh` produces `artifacts/dist.tar.gz` and sha256 file.
+- `artifacts/sbom.json` exists and is valid CycloneDX (basic JSON parse).
+- `artifacts/provenance.json` exists (contains git sha and sbom sha256).
+- `scripts/cosign-sign-artifacts.sh` runs in dry-run mode and shows expected sign commands; in real mode (CI) it signs and `ci/verify-sbom-and-cosign.sh` verifies signature.
+- `.github/workflows/publish.yml` includes cosign installer and verification step and does not use `|| true`.
+- `k8s/cert-manager/clusterissuer-*.yaml` are valid YAML (no Markdown).
+- `IMPLEMENTATION_ENFORCE.md` and `PR_BODY_ENFORCE.md` exist and include diffs and verification outputs.
+- All created scripts are executable (`chmod +x`) and located under `scripts/` or `ci/`.
+
+Secrets required (exact names to list in IMPLEMENTATION_ENFORCE.md)
+- `COSIGN_KEY` (if using key-based signing) — prefer keyless OIDC but include this fallback name
+- `GHCR_PAT` or configure OIDC — if OIDC used, ensure `id-token: write` permission in workflow
+- `SEMANTIC_RELEASE_TOKEN` (if releasing to npm)
+- `CERT_MANAGER_ISSUER_SECRET` (optional)
+- `SNYK_TOKEN` (optional)
+- `GPG_PRIVATE_KEY` (optional fallback)
+
+Behavior rules / constraints for agent
+- Do not print secrets.
+- Commit as you go. If git disabled: create files and print exact git commands to apply them locally.
+- If a step requires external resources (cluster, registry creds, GitHub id-token), do a dry-run and produce exact remediation steps (one-liners).
+- If heavy tasks (full Trivy DB pull, full mutation run) are requested, run a smoke-mode and print the exact commands + approximate runtime to run full checks locally or in CI.
+- When a failing verification occurs, copy/paste the failing command and the exact error and give one-line remediation.
+
+Final output format (single response)
+The agent must return a single response containing:
+1. Branch name used or “git unavailable”
+2. Files created / modified list (paths)
+3. For each changed file: a unified diff block
+4. Verification checklist results (command, stdout tail, exit code)
+5. Artifacts produced (paths)
+6. If any step skipped: exact error message and one-line remediation
+7. `IMPLEMENTATION_ENFORCE.md` content (summary + how to finalize manual steps)
+8. `PR_BODY_ENFORCE.md` content (ready to paste)
+9. Next recommended follow-ups (3 bullets) with short risk/benefit notes
+
+Finish
+Run the plan now. If any checks cannot be executed because of environment limits (no docker, no cosign, no cluster access, or git disabled), the agent must still:
+- create the files,
+- make them executable,
+- show unified diffs,
+- and produce clear, exact commands the human must run locally or in CI (copy/paste).
+
+That’s it — a single, explicit playbook.  END OF PROMPT
