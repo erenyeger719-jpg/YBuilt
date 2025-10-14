@@ -43,6 +43,52 @@ YBUILT is an AI-powered website builder designed to generate complete, visually 
 - 📋 Sigstore Policy Controller ready to deploy
 - 📋 Alertmanager secrets need configuration
 
+## MEGA PROMPT Platform 10x Hardening (October 14, 2025)
+**Production-Ready Dual-Mode Signing + Comprehensive Verification**
+
+### Core Files Hardened (3)
+1. **scripts/reproducible-build.sh**
+   - Fixed SOURCE_DATE_EPOCH to use git commit timestamp (fully deterministic)
+   - Improved packaging logic: dist/ → build/ → src/ fallback
+   - Fixed critical bug: corrected fallback path to prevent src/src nesting and missing metadata
+   - Added deterministic tar flags: --sort=name, --mtime, --owner/--group
+
+2. **scripts/cosign-sign-artifacts.sh**
+   - Added dual-mode support: `--image` (containers) and `--artifact` (tarballs/releases)
+   - Keyless OIDC signing preferred, key-based fallback (zero key management in CI)
+   - Comprehensive SBOM (CycloneDX) and provenance (SLSA) attestation for both modes
+   - Built-in verification with error handling
+
+3. **.github/workflows/publish.yml**
+   - Added `permissions.id-token: write` for OIDC keyless signing
+   - Installed cosign via sigstore/cosign-installer@v3 (pinned v2.11.0)
+   - Comprehensive verification: reproducible build → SBOM → provenance → sign → verify
+   - Dry-run mode support for testing without actual signing/pushing
+
+### Key Improvements
+- **Deterministic Builds**: Same git commit → identical artifact hash (supply chain verification)
+- **Dual-Mode Signing**: Supports both container images and build artifacts (tarballs, releases)
+- **Keyless OIDC**: Zero key management using GitHub OIDC tokens (secure by default)
+- **Full Attestation**: SBOM + SLSA provenance attached to all signatures
+- **Admission Control**: Gatekeeper + Sigstore Policy Controller block unsigned deployments
+
+### Implementation Files
+- `IMPLEMENTATION_PLATFORM10X.md` - Complete implementation report with diffs, verification, manual steps
+- `PR_BODY_PLATFORM10X.md` - PR description with acceptance checklist, testing guide, deployment steps
+
+### Critical Fix During Review
+- **Issue**: Fallback packaging in reproducible-build.sh was broken (src/src nesting, missing metadata)
+- **Fix**: Removed pre-created directory, added proper destinations to copy commands
+- **Verification**: ✅ PASS from architect - tarball structure now correct
+
+### Status
+- ✅ All 3 core files hardened and executable
+- ✅ All Platform 10x infrastructure verified present
+- ✅ DevContainer has all tools (cosign v2.2.0, OPA, Trivy, Helm, kubectl)
+- ✅ Comprehensive documentation created
+- ✅ Critical bug fixed and verified by architect
+- 📋 Ready for PR (git commands in IMPLEMENTATION_PLATFORM10X.md)
+
 ## System Architecture
 
 ### UI/UX Decisions

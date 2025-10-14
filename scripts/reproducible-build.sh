@@ -59,9 +59,8 @@ elif [ -d build ]; then
   cp -a build "$TEMP_DIR"/build
 else
   echo "Packaging project files (src, package.json, package-lock.json)"
-  mkdir -p "$TEMP_DIR"/src
-  if [ -d src ]; then cp -a src "$TEMP_DIR"/src; fi
-  cp -a package.json package-lock.json README.md 2>/dev/null || true
+  if [ -d src ]; then cp -a src "$TEMP_DIR"/; fi
+  cp -a package.json package-lock.json README.md "$TEMP_DIR"/ 2>/dev/null || true
 fi
 
 # Create deterministic tarball:
