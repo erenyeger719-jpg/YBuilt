@@ -2,7 +2,7 @@ import { Server as HTTPServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { verifyToken, type JWTPayload } from "./middleware/auth.js";
 import { storage } from "./storage.js";
-import { logger } from "./index.js";
+import { logger } from "./middleware/logging.js";
 
 interface AuthenticatedSocket extends Socket {
   user?: JWTPayload;
@@ -33,19 +33,19 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       logger.info(`[SOCKET] Authenticated user connected: ${decoded.email}`);
       next();
     } catch (error) {
-      logger.error("[SOCKET] Authentication failed:", error);
+      logger.error({ error }, "[SOCKET] Authentication failed");
       next(new Error("Authentication failed"));
     }
   });
 
   // Connection handler
   io.on("connection", (socket: AuthenticatedSocket) => {
-    const userId = socket.user?.id || "anonymous";
+    const userId = socket.user?.sub || "anonymous";
     logger.info(`[SOCKET] Client connected: ${socket.id} (User: ${userId})`);
 
     // Join user's personal room
     if (socket.user) {
-      socket.join(`user:${socket.user.id}`);
+      socket.join(`user:${socket.user.sub}`);
     }
 
     // Join project room
@@ -73,7 +73,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
 
         // Save user message
         const userMessage = await storage.createChatMessage({
-          userId: socket.user.id,
+          userId: socket.user.sub.toString(),
           projectId: data.projectId || null,
           role: "user",
           content: data.message,
@@ -91,7 +91,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
         // TODO: Integrate with OpenAI for AI response
         // For now, send a mock response
         const aiResponse = await storage.createChatMessage({
-          userId: socket.user.id,
+          userId: socket.user.sub.toString(),
           projectId: data.projectId || null,
           role: "assistant",
           content: `I understand you want to: "${data.message}". How can I help you build that?`,
@@ -105,9 +105,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           createdAt: aiResponse.createdAt,
         });
 
-        logger.info(`[CHAT:AI] User ${socket.user.id} sent message`);
+        logger.info(`[CHAT:AI] User ${socket.user.sub} sent message`);
       } catch (error) {
-        logger.error("[CHAT:AI] Error:", error);
+        logger.error({ error }, "[CHAT:AI] Error");
         socket.emit("error", { message: "Failed to process AI chat message" });
       }
     });
@@ -125,7 +125,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
 
         // Save message
         const chatMessage = await storage.createChatMessage({
-          userId: socket.user.id,
+          userId: socket.user.sub.toString(),
           projectId: data.projectId,
           role: "user",
           content: data.message,
@@ -135,16 +135,16 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
         // Broadcast to all users in the project room
         io.to(`project:${data.projectId}`).emit("chat:message", {
           id: chatMessage.id,
-          userId: socket.user.id,
-          username: socket.user.username,
+          userId: socket.user.sub,
+          username: socket.user.email,
           role: "user",
           content: chatMessage.content,
           createdAt: chatMessage.createdAt,
         });
 
-        logger.info(`[CHAT:COLLAB] User ${socket.user.id} sent message to project ${data.projectId}`);
+        logger.info(`[CHAT:COLLAB] User ${socket.user.sub} sent message to project ${data.projectId}`);
       } catch (error) {
-        logger.error("[CHAT:COLLAB] Error:", error);
+        logger.error({ error }, "[CHAT:COLLAB] Error");
         socket.emit("error", { message: "Failed to send collaboration message" });
       }
     });
@@ -162,7 +162,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
 
         // Save message
         const chatMessage = await storage.createChatMessage({
-          userId: socket.user.id,
+          userId: socket.user.sub.toString(),
           projectId: null,
           role: "user",
           content: data.message,
@@ -182,7 +182,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
 
         // Auto-response for support
         const supportResponse = await storage.createChatMessage({
-          userId: socket.user.id,
+          userId: socket.user.sub.toString(),
           projectId: null,
           role: "system",
           content: "Thank you for contacting support. A team member will respond shortly.",
@@ -199,9 +199,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           createdAt: supportResponse.createdAt,
         });
 
-        logger.info(`[CHAT:SUPPORT] User ${socket.user.id} sent support message`);
+        logger.info(`[CHAT:SUPPORT] User ${socket.user.sub} sent support message`);
       } catch (error) {
-        logger.error("[CHAT:SUPPORT] Error:", error);
+        logger.error({ error }, "[CHAT:SUPPORT] Error");
         socket.emit("error", { message: "Failed to send support message" });
       }
     });
@@ -210,10 +210,10 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     socket.on("typing:start", (data: { projectId?: string }) => {
       if (!socket.user) return;
       
-      const room = data.projectId ? `project:${data.projectId}` : `user:${socket.user.id}`;
+      const room = data.projectId ? `project:${data.projectId}` : `user:${socket.user.sub}`;
       socket.to(room).emit("typing:user", {
-        userId: socket.user.id,
-        username: socket.user.username,
+        userId: socket.user.sub,
+        username: socket.user.email,
         typing: true,
       });
     });
@@ -221,10 +221,10 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     socket.on("typing:stop", (data: { projectId?: string }) => {
       if (!socket.user) return;
       
-      const room = data.projectId ? `project:${data.projectId}` : `user:${socket.user.id}`;
+      const room = data.projectId ? `project:${data.projectId}` : `user:${socket.user.sub}`;
       socket.to(room).emit("typing:user", {
-        userId: socket.user.id,
-        username: socket.user.username,
+        userId: socket.user.sub,
+        username: socket.user.email,
         typing: false,
       });
     });

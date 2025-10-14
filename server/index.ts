@@ -12,6 +12,7 @@ import { setupVite, serveStatic, log } from "./vite.js";
 import { rateLimiter } from "./middleware/rateLimiter.js";
 import { requestIdMiddleware, logger } from './middleware/logging.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
+import { initializeSocket } from './socket.js';
 import authRoutes from './routes/auth.js';
 import projectsRoutes from './routes/projects.js';
 import chatRoutes from './routes/chat.js';
@@ -42,8 +43,10 @@ const app = express();
   const DATABASE_FILE = process.env.DATABASE_FILE || './data/app.db';
   logger.info(`[DB] Using SQLite database at ${DATABASE_FILE}`);
 
-  // Security headers
-  app.use(helmet());
+  // Security headers (disable CSP in development for Vite inline scripts)
+  app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+  }));
   
   // CORS support
   app.use(cors());
@@ -78,6 +81,10 @@ const app = express();
 
   // Create HTTP server
   const server = createServer(app);
+
+  // Initialize Socket.IO for real-time features
+  const io = initializeSocket(server);
+  logger.info('[SOCKET.IO] Real-time server initialized');
 
   // Setup Vite in development or serve static files in production
   const isDev = process.env.NODE_ENV === "development" || app.get("env") === "development";

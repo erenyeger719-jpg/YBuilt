@@ -4,7 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 // @ts-ignore - atomicWrite.js is a JavaScript module with .d.ts type definitions
 import { atomicWriteFile } from "./utils/atomicWrite.js";
-import { logger } from './index.js';
+import { logger } from './middleware/logging.js';
 
 const JOBS_FILE = path.join(process.cwd(), "data", "jobs.json");
 const USERS_FILE = path.join(process.cwd(), "data", "users.json");
