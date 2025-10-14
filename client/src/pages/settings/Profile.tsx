@@ -434,7 +434,7 @@ export default function Profile() {
                   )}
                 </div>
                 <Link href="/settings/account">
-                  <Button variant="link" className="h-auto p-0 text-xs">
+                  <Button variant="ghost" className="h-auto p-0 text-xs">
                     <LinkIcon className="w-3 h-3 mr-1" />
                     Change email in Account settings
                   </Button>

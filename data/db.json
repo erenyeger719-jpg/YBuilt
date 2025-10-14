@@ -71,6 +71,18 @@
       "email": "test-1760445573-31744@example.com",
       "password_hash": "$2b$10$BU4Uf70Za2muWN5GYpjLoeQCy25.4UI0NHlUpPh.aW3EJJwQW256u",
       "created_at": 1760445573670
+    },
+    {
+      "id": 13,
+      "email": "newtest1760446384@example.com",
+      "password_hash": "$2b$10$FGT5TBUchQaB9cJCQxSye.V/IIkd5CA66g9WJk11OJDViTKPta4gS",
+      "created_at": 1760446385019
+    },
+    {
+      "id": 14,
+      "email": "test-1760446490-2226@example.com",
+      "password_hash": "$2b$10$be3VyU5fo8xZRGBM0cY8fu.UwmEiQ18msGdeRqbTQahTeNR/4ZEl6",
+      "created_at": 1760446490246
     }
   ],
   "projects": [],
