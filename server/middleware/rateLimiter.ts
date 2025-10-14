@@ -9,7 +9,7 @@ interface RateLimitStore {
 
 const store: RateLimitStore = {};
 const WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 100; // 100 requests per minute
+const MAX_REQUESTS = 500; // 500 requests per minute (increased from 100)
 
 // Cleanup old entries every 5 minutes
 setInterval(() => {
@@ -22,8 +22,13 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 export function rateLimiter(req: Request, res: Response, next: NextFunction) {
-  // Skip rate limiting for assets
-  if (req.path.startsWith('/assets') || req.path.startsWith('/previews')) {
+  // Skip rate limiting for static assets and Vite HMR
+  if (req.path.startsWith('/assets') || 
+      req.path.startsWith('/previews') || 
+      req.path.startsWith('/@vite') || 
+      req.path.startsWith('/@react-refresh') ||
+      req.path.startsWith('/@fs') ||
+      req.path.startsWith('/@replit')) {
     return next();
   }
 
