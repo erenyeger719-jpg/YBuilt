@@ -7,7 +7,7 @@ import path from 'path';
 
 const TEST_DB_FILE = './data/test-auth-db.json';
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:5000';
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
 describe('Authentication Endpoints', () => {
   let db: Database;
@@ -17,6 +17,9 @@ describe('Authentication Endpoints', () => {
     db.data.users = [];
     await db.write();
   });
+
+  const generateUniqueEmail = () => 
+    `test-${Date.now()}-${Math.floor(Math.random() * 10000)}@example.com`;
 
   after(async () => {
     try {
@@ -30,11 +33,12 @@ describe('Authentication Endpoints', () => {
 
   describe('POST /api/auth/register', () => {
     test('Success: Valid email/password creates user and returns token', async () => {
+      const testEmail = generateUniqueEmail();
       const response = await fetch(`${BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'test@example.com',
+          email: testEmail,
           password: 'password123'
         })
       });
@@ -44,7 +48,7 @@ describe('Authentication Endpoints', () => {
       assert.strictEqual(response.status, 201, 'Should return 201 status');
       assert.ok(data.token, 'Should return a token');
       assert.ok(data.user, 'Should return user object');
-      assert.strictEqual(data.user.email, 'test@example.com', 'User email should match');
+      assert.strictEqual(data.user.email, testEmail, 'User email should match');
       assert.ok(data.user.id, 'User should have an id');
     });
 
@@ -66,11 +70,12 @@ describe('Authentication Endpoints', () => {
     });
 
     test('Error: Password too short (< 6 chars) returns 400', async () => {
+      const testEmail = generateUniqueEmail();
       const response = await fetch(`${BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'test2@example.com',
+          email: testEmail,
           password: '12345'
         })
       });
@@ -83,11 +88,12 @@ describe('Authentication Endpoints', () => {
     });
 
     test('Error: Duplicate email returns 409', async () => {
+      const testEmail = generateUniqueEmail();
       await fetch(`${BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'duplicate@example.com',
+          email: testEmail,
           password: 'password123'
         })
       });
@@ -96,7 +102,7 @@ describe('Authentication Endpoints', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'duplicate@example.com',
+          email: testEmail,
           password: 'password123'
         })
       });
@@ -109,11 +115,12 @@ describe('Authentication Endpoints', () => {
     });
 
     test('Verify JWT token payload contains sub (user id) and email', async () => {
+      const testEmail = generateUniqueEmail();
       const response = await fetch(`${BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'jwt-test@example.com',
+          email: testEmail,
           password: 'password123'
         })
       });
@@ -125,17 +132,20 @@ describe('Authentication Endpoints', () => {
       const decoded = jwt.verify(data.token, JWT_SECRET) as any;
       
       assert.ok(decoded.sub, 'Token should contain sub (user id)');
-      assert.strictEqual(decoded.email, 'jwt-test@example.com', 'Token should contain email');
+      assert.strictEqual(decoded.email, testEmail, 'Token should contain email');
     });
   });
 
   describe('POST /api/auth/login', () => {
+    let loginTestEmail: string;
+
     before(async () => {
+      loginTestEmail = generateUniqueEmail();
       await fetch(`${BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'login-test@example.com',
+          email: loginTestEmail,
           password: 'correct-password'
         })
       });
@@ -146,7 +156,7 @@ describe('Authentication Endpoints', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'login-test@example.com',
+          email: loginTestEmail,
           password: 'correct-password'
         })
       });
@@ -156,7 +166,7 @@ describe('Authentication Endpoints', () => {
       assert.strictEqual(response.status, 200, 'Should return 200 status');
       assert.ok(data.token, 'Should return a token');
       assert.ok(data.user, 'Should return user object');
-      assert.strictEqual(data.user.email, 'login-test@example.com', 'User email should match');
+      assert.strictEqual(data.user.email, loginTestEmail, 'User email should match');
     });
 
     test('Error: Wrong password returns 401', async () => {
@@ -164,7 +174,7 @@ describe('Authentication Endpoints', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'login-test@example.com',
+          email: loginTestEmail,
           password: 'wrong-password'
         })
       });
@@ -196,7 +206,7 @@ describe('Authentication Endpoints', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'login-test@example.com',
+          email: loginTestEmail,
           password: 'correct-password'
         })
       });
@@ -208,7 +218,7 @@ describe('Authentication Endpoints', () => {
       const decoded = jwt.verify(data.token, JWT_SECRET) as any;
       
       assert.ok(decoded.sub, 'Token should contain sub (user id)');
-      assert.strictEqual(decoded.email, 'login-test@example.com', 'Token should contain correct email');
+      assert.strictEqual(decoded.email, loginTestEmail, 'Token should contain correct email');
       assert.ok(decoded.exp, 'Token should have expiration');
     });
   });

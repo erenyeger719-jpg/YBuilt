@@ -13,6 +13,9 @@ describe('Code Execution Endpoints', () => {
   let authToken: string;
   let userId: number;
 
+  const generateUniqueEmail = () => 
+    `test-${Date.now()}-${Math.floor(Math.random() * 10000)}@example.com`;
+
   before(async () => {
     db = await initDb(TEST_DB_FILE);
     db.data.users = [];
@@ -22,7 +25,7 @@ describe('Code Execution Endpoints', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'execute-test@example.com',
+        email: generateUniqueEmail(),
         password: 'password123'
       })
     });

@@ -14,6 +14,9 @@ describe('Project CRUD Endpoints', () => {
   let otherUserId: number;
   let projectId: string;
 
+  const generateUniqueEmail = () => 
+    `test-${Date.now()}-${Math.floor(Math.random() * 10000)}@example.com`;
+
   before(async () => {
     db = await initDb(TEST_DB_FILE);
     db.data.users = [];
@@ -24,7 +27,7 @@ describe('Project CRUD Endpoints', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'project-owner@example.com',
+        email: generateUniqueEmail(),
         password: 'password123'
       })
     });
@@ -36,7 +39,7 @@ describe('Project CRUD Endpoints', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'other-user@example.com',
+        email: generateUniqueEmail(),
         password: 'password123'
       })
     });
@@ -55,9 +58,9 @@ describe('Project CRUD Endpoints', () => {
     }
   });
 
-  describe('POST /api/jobs (Create Project)', () => {
+  describe('POST /api/projects (Create Project)', () => {
     test('Success: Creates project with authenticated user', async () => {
-      const response = await fetch(`${BASE_URL}/api/jobs`, {
+      const response = await fetch(`${BASE_URL}/api/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,15 +74,15 @@ describe('Project CRUD Endpoints', () => {
 
       const data = await response.json();
       
-      assert.strictEqual(response.status, 200, 'Should return 200 status');
-      assert.ok(data.jobId, 'Should return jobId');
+      assert.strictEqual(response.status, 201, 'Should return 201 status');
+      assert.ok(data.id, 'Should return id');
       assert.ok(data.status, 'Should return status');
       
-      projectId = data.jobId;
+      projectId = data.id;
     });
 
     test('Error: Requires authentication (401 without token)', async () => {
-      const response = await fetch(`${BASE_URL}/api/jobs`, {
+      const response = await fetch(`${BASE_URL}/api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -117,9 +120,9 @@ describe('Project CRUD Endpoints', () => {
     });
   });
 
-  describe('GET /api/jobs/:id (Get Specific Project)', () => {
+  describe('GET /api/projects/:id (Get Specific Project)', () => {
     test('Returns specific project', async () => {
-      const createResponse = await fetch(`${BASE_URL}/api/jobs`, {
+      const createResponse = await fetch(`${BASE_URL}/api/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -131,9 +134,9 @@ describe('Project CRUD Endpoints', () => {
         })
       });
       const createData = await createResponse.json();
-      const newProjectId = createData.jobId;
+      const newProjectId = createData.id;
 
-      const response = await fetch(`${BASE_URL}/api/jobs/${newProjectId}`);
+      const response = await fetch(`${BASE_URL}/api/projects/${newProjectId}`);
       const data = await response.json();
       
       assert.strictEqual(response.status, 200, 'Should return 200 status');
@@ -143,7 +146,7 @@ describe('Project CRUD Endpoints', () => {
     });
 
     test('Error: Returns 404 for non-existent project', async () => {
-      const response = await fetch(`${BASE_URL}/api/jobs/non-existent-id`);
+      const response = await fetch(`${BASE_URL}/api/projects/non-existent-id`);
       
       assert.strictEqual(response.status, 404, 'Should return 404 for non-existent project');
     });
@@ -153,7 +156,7 @@ describe('Project CRUD Endpoints', () => {
     let collabProjectId: string;
 
     before(async () => {
-      const response = await fetch(`${BASE_URL}/api/jobs`, {
+      const response = await fetch(`${BASE_URL}/api/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -165,7 +168,7 @@ describe('Project CRUD Endpoints', () => {
         })
       });
       const data = await response.json();
-      collabProjectId = data.jobId;
+      collabProjectId = data.id;
     });
 
     test('POST /api/projects/:projectId/collaborators - Owner can add collaborator', async () => {
@@ -245,7 +248,7 @@ describe('Project CRUD Endpoints', () => {
     let commitProjectId: string;
 
     before(async () => {
-      const response = await fetch(`${BASE_URL}/api/jobs`, {
+      const response = await fetch(`${BASE_URL}/api/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -257,7 +260,7 @@ describe('Project CRUD Endpoints', () => {
         })
       });
       const data = await response.json();
-      commitProjectId = data.jobId;
+      commitProjectId = data.id;
     });
 
     test('POST /api/projects/:projectId/commits - Owner can create commit', async () => {

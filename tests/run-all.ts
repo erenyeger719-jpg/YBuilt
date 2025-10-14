@@ -21,6 +21,22 @@ async function runTests() {
   console.log('\n🧪 Running Backend Brain MVP Tests\n');
   console.log('=' .repeat(60));
   
+  // CLEANUP: Delete data/db.json before running tests to ensure clean state
+  const dbPath = join(__dirname, '..', 'data', 'db.json');
+  
+  try {
+    if (await fs.access(dbPath).then(() => true).catch(() => false)) {
+      await fs.unlink(dbPath);
+      console.log('✅ Deleted data/db.json');
+    }
+    
+    // Note: The server will auto-create an empty database on next request
+    // Wait for any pending operations to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  } catch (err) {
+    console.warn('⚠️  Warning: Could not delete data/db.json:', err);
+  }
+  
   const testFiles = [
     join(__dirname, 'auth.test.ts'),
     join(__dirname, 'projects.test.ts'),

@@ -300,5 +300,34 @@ router.get("/user/:userId", authMiddleware, async (req: Request, res: Response) 
   }
 });
 
+/**
+ * GET /api/projects/:id
+ * Get a specific project by ID
+ * IMPORTANT: This must be LAST to avoid matching more specific routes
+ */
+router.get("/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const project = await storage.getJob(id);
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    res.status(200).json({
+      id: project.id,
+      userId: project.userId,
+      prompt: project.prompt,
+      status: project.status,
+      templateId: project.templateId,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+    });
+  } catch (error) {
+    logger.error("Get project error:", error);
+    res.status(500).json({ error: "Failed to get project" });
+  }
+});
+
   return router;
 }
