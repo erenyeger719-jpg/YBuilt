@@ -35,7 +35,7 @@ async function checkWorkspaceReady(jobId: string): Promise<{ ready: boolean; ret
     logger.info(`[WORKSPACE] Workspace ready for job ${jobId}`);
     return { ready: true };
   } catch (error) {
-    logger.info(`[WORKSPACE] Preview file not accessible for job ${jobId}:`, error);
+    logger.info({ error, jobId }, `[WORKSPACE] Preview file not accessible for job ${jobId}`);
     return { ready: false, retryAfter: 1000 };
   }
 }
@@ -112,7 +112,7 @@ if (RAZORPAY_MODE !== 'mock') {
     });
     logger.info(`[RAZORPAY] Initialized with ${RAZORPAY_MODE} mode`);
   } catch (error) {
-    logger.error(`[RAZORPAY] Failed to initialize Razorpay in ${RAZORPAY_MODE} mode:`, error);
+    logger.error({ error, mode: RAZORPAY_MODE }, `[RAZORPAY] Failed to initialize Razorpay in ${RAZORPAY_MODE} mode`);
   }
 }
 
@@ -150,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const job = await storage.createJob(validation.data);
       
       // [JOB_RESPONSE] Debug logging before response
-      logger.info('[JOB_RESPONSE] Job created with ID:', job.id, 'Length:', job.id.length);
+      logger.info({ jobId: job.id, length: job.id.length }, '[JOB_RESPONSE] Job created with ID');
       
       // Validate jobId before sending response
       if (job.id.length !== 36) {
@@ -163,11 +163,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await jobQueue.addJob(job.id, job.prompt);
       
       const responseData = { jobId: job.id, status: job.status };
-      logger.info('[JOB_RESPONSE] Sending response:', JSON.stringify(responseData), 'jobId length:', responseData.jobId.length);
+      logger.info({ responseData, jobIdLength: responseData.jobId.length }, '[JOB_RESPONSE] Sending response');
       
       res.json(responseData);
     } catch (error) {
-      logger.error("Error creating job:", error);
+      logger.error({ error }, "Error creating job");
       res.status(500).json({ error: "Failed to create job" });
     }
   });
@@ -191,7 +191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: job.createdAt,
       });
     } catch (error) {
-      logger.error("Error fetching job:", error);
+      logger.error({ error }, "Error fetching job");
       res.status(500).json({ error: "Failed to fetch job" });
     }
   });
@@ -227,7 +227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, status: "editing" });
     } catch (error) {
-      logger.error("Error finalizing job:", error);
+      logger.error({ error }, "Error finalizing job");
       res.status(500).json({ error: "Failed to finalize job" });
     }
   });
@@ -258,7 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true });
     } catch (error) {
-      logger.error("Error saving draft:", error);
+      logger.error({ error }, "Error saving draft");
       res.status(500).json({ error: "Failed to save draft" });
     }
   });
@@ -297,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(asset);
     } catch (error) {
-      logger.error("Upload error:", error);
+      logger.error({ error }, "Upload error");
       res.status(500).json({ error: "Upload failed" });
     }
   });
@@ -325,7 +325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ ok: true, draftId: draft.draftId, libraryEntry: draft });
     } catch (error) {
-      logger.error("Error creating draft:", error);
+      logger.error({ error }, "Error creating draft");
       res.status(500).json({ error: "Failed to create draft" });
     }
   });
@@ -336,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const drafts = await storage.getDrafts(req.params.userId);
       res.json(drafts);
     } catch (error) {
-      logger.error("Error fetching drafts:", error);
+      logger.error({ error }, "Error fetching drafts");
       res.status(500).json({ error: "Failed to fetch drafts" });
     }
   });
@@ -366,7 +366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ jobId: req.params.jobId, queued: true });
     } catch (error) {
-      logger.error("Error regenerating job:", error);
+      logger.error({ error }, "Error regenerating job");
       res.status(500).json({ error: "Failed to regenerate" });
     }
   });
@@ -436,7 +436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: 'Workspace is being prepared, please retry'
       });
     } catch (error) {
-      logger.error("Error selecting job:", error);
+      logger.error({ error }, "Error selecting job");
       res.status(500).json({ error: "Failed to select" });
     }
   });
@@ -530,7 +530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(404).json({ error: "Workspace files not found" });
       }
     } catch (error) {
-      logger.error("Error fetching workspace files:", error);
+      logger.error({ error }, "Error fetching workspace files");
       res.status(500).json({ error: "Failed to fetch workspace files" });
     }
   });
@@ -548,7 +548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json([]);
       }
     } catch (error) {
-      logger.error("Error fetching logs:", error);
+      logger.error({ error }, "Error fetching logs");
       res.status(500).json({ error: "Failed to fetch logs" });
     }
   });
@@ -600,7 +600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     } catch (error) {
-      logger.error("Error fetching build trace:", error);
+      logger.error({ error }, "Error fetching build trace");
       res.status(500).json({ error: "Failed to fetch build trace" });
     }
   });
@@ -709,7 +709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader("Content-Disposition", `attachment; filename="build-trace-${req.params.jobId}.txt"`);
       res.send(content);
     } catch (error) {
-      logger.error("Error generating transcript:", error);
+      logger.error({ error }, "Error generating transcript");
       res.status(500).json({ error: "Failed to generate transcript" });
     }
   });
@@ -720,7 +720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const drafts = await storage.getDrafts(req.params.userId);
       res.json(drafts);
     } catch (error) {
-      logger.error("Error fetching drafts:", error);
+      logger.error({ error }, "Error fetching drafts");
       res.status(500).json({ error: "Failed to fetch drafts" });
     }
   });
@@ -781,7 +781,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ status: "ok" });
     } catch (error) {
-      logger.error("Webhook error:", error);
+      logger.error({ error }, "Webhook error");
       res.status(500).json({ error: "Webhook processing failed" });
     }
   });
@@ -836,7 +836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         JSON.stringify(logEntry) + '\n'
       );
       
-      logger.info('[PAYMENT_SIMULATE]', logEntry);
+      logger.info(logEntry, '[PAYMENT_SIMULATE]');
       
       res.json({
         success: true,
@@ -846,7 +846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
     } catch (error) {
-      logger.error('Error simulating payment:', error);
+      logger.error({ error }, 'Error simulating payment');
       res.status(500).json({ error: 'Failed to simulate payment' });
     }
   });
@@ -857,7 +857,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const credits = await storage.getUserCredits(req.params.userId);
       res.json({ userId: req.params.userId, credits });
     } catch (error) {
-      logger.error("Error fetching credits:", error);
+      logger.error({ error }, "Error fetching credits");
       res.status(500).json({ error: "Failed to fetch credits" });
     }
   });
@@ -899,7 +899,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      logger.error("Sign in error:", error);
+      logger.error({ error }, "Sign in error");
       res.status(500).json({ error: "Sign in failed" });
     }
   });
@@ -941,7 +941,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      logger.error("Sign up error:", error);
+      logger.error({ error }, "Sign up error");
       res.status(500).json({ error: "Sign up failed" });
     }
   });
@@ -992,7 +992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid token" });
       }
     } catch (error) {
-      logger.error("Get current user error:", error);
+      logger.error({ error }, "Get current user error");
       res.status(500).json({ error: "Failed to get user" });
     }
   });
@@ -1004,7 +1004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // In a real implementation, this would fetch from storage
       res.json([]);
     } catch (error) {
-      logger.error("Error fetching projects:", error);
+      logger.error({ error }, "Error fetching projects");
       res.status(500).json({ error: "Failed to fetch projects" });
     }
   });
@@ -1056,7 +1056,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      logger.error("Error fetching user profile:", error);
+      logger.error({ error }, "Error fetching user profile");
       res.status(500).json({ error: "Failed to fetch user profile" });
     }
   });
@@ -1110,7 +1110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      logger.error("Avatar upload error:", error);
+      logger.error({ error }, "Avatar upload error");
       res.status(500).json({ error: "Avatar upload failed" });
     }
   });
@@ -1130,7 +1130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true });
     } catch (error) {
-      logger.error("Error deleting project:", error);
+      logger.error({ error }, "Error deleting project");
       res.status(500).json({ error: "Failed to delete project" });
     }
   });
@@ -1149,7 +1149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Theme is always returned (default theme if no custom theme exists)
       res.json(theme);
     } catch (error) {
-      logger.error("Error fetching workspace theme:", error);
+      logger.error({ error }, "Error fetching workspace theme");
       res.status(500).json({ error: "Failed to fetch workspace theme" });
     }
   });
@@ -1171,7 +1171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, theme });
     } catch (error: any) {
-      logger.error("Error saving workspace theme:", error);
+      logger.error({ error }, "Error saving workspace theme");
       if (error.name === "ZodError") {
         return res.status(400).json({ error: "Invalid theme data", details: error.errors });
       }
@@ -1185,7 +1185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const status = await storage.getSystemStatus();
       res.json(status);
     } catch (error) {
-      logger.error("Error fetching system status:", error);
+      logger.error({ error }, "Error fetching system status");
       res.status(500).json({ error: "Failed to fetch system status" });
     }
   });
@@ -1246,7 +1246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Support ticket created successfully",
       });
     } catch (error) {
-      logger.error("Error creating support ticket:", error);
+      logger.error({ error }, "Error creating support ticket");
       res.status(500).json({ error: "Failed to create support ticket" });
     }
   });
@@ -1262,7 +1262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tickets = await storage.getSupportTickets(userId);
       res.json(tickets);
     } catch (error) {
-      logger.error("Error fetching support tickets:", error);
+      logger.error({ error }, "Error fetching support tickets");
       res.status(500).json({ error: "Failed to fetch support tickets" });
     }
   });
@@ -1309,7 +1309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For now, just redirect to homepage with success param
       res.redirect(`/?oauth=success&provider=${provider}&email=${encodeURIComponent(mockEmail)}`);
     } catch (error) {
-      logger.error("OAuth mock error:", error);
+      logger.error({ error }, "OAuth mock error");
       res.redirect(`/?oauth=error`);
     }
   });
@@ -1322,7 +1322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.getSettings(userId);
       res.json(settings);
     } catch (error) {
-      logger.error("Error fetching settings:", error);
+      logger.error({ error }, "Error fetching settings");
       res.status(500).json({ error: "Failed to fetch settings" });
     }
   });
@@ -1354,7 +1354,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(updatedSettings);
     } catch (error) {
-      logger.error("Error updating settings:", error);
+      logger.error({ error }, "Error updating settings");
       if (error instanceof Error && error.name === "ZodError") {
         return res.status(400).json({ error: "Invalid settings data", details: error });
       }
@@ -1377,7 +1377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         credits
       });
     } catch (error) {
-      logger.error("Error fetching plan:", error);
+      logger.error({ error }, "Error fetching plan");
       res.status(500).json({ error: "Failed to fetch plan" });
     }
   });
@@ -1402,7 +1402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "created"
       });
     } catch (error) {
-      logger.error("Error creating order:", error);
+      logger.error({ error }, "Error creating order");
       res.status(500).json({ error: "Failed to create order" });
     }
   });
@@ -1436,7 +1436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         credits: await storage.getUserCredits(userId)
       });
     } catch (error) {
-      logger.error("Error verifying payment:", error);
+      logger.error({ error }, "Error verifying payment");
       res.status(500).json({ error: "Failed to verify payment" });
     }
   });
@@ -1491,7 +1491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoice
       });
     } catch (error) {
-      logger.error("Error publishing job:", error);
+      logger.error({ error }, "Error publishing job");
       res.status(500).json({ error: "Failed to publish" });
     }
   });
@@ -1530,11 +1530,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ error: "File not found" });
         }
         // Unexpected error
-        logger.error('Unexpected path validation error:', err);
+        logger.error({ error: err }, 'Unexpected path validation error');
         return res.status(500).json({ error: 'Internal server error' });
       }
     } catch (error) {
-      logger.error("Error reading file:", error);
+      logger.error({ error }, "Error reading file");
       res.status(500).json({ error: "Failed to read file" });
     }
   });
@@ -1577,11 +1577,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: err.message });
         }
         // Unexpected error
-        logger.error('Unexpected path validation error:', err);
+        logger.error({ error: err }, 'Unexpected path validation error');
         return res.status(500).json({ error: 'Internal server error' });
       }
     } catch (error) {
-      logger.error("Error writing file:", error);
+      logger.error({ error }, "Error writing file");
       res.status(500).json({ error: "Failed to write file" });
     }
   });
@@ -1631,11 +1631,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: err.message });
         }
         // Unexpected error
-        logger.error('Unexpected path validation error:', err);
+        logger.error({ error: err }, 'Unexpected path validation error');
         return res.status(500).json({ error: 'Internal server error' });
       }
     } catch (error) {
-      logger.error("Error updating file:", error);
+      logger.error({ error }, "Error updating file");
       res.status(500).json({ error: "Failed to update file" });
     }
   });
@@ -1681,7 +1681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ file, fileCreated: true });
     } catch (error) {
-      logger.error("Error creating prompt file:", error);
+      logger.error({ error }, "Error creating prompt file");
       res.status(500).json({ error: "Failed to create prompt file" });
     }
   });
@@ -1712,7 +1712,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ ok: true, path: safePath });
     } catch (error) {
-      logger.error("Error creating folder:", error);
+      logger.error({ error }, "Error creating folder");
       res.status(500).json({ error: "Failed to create folder" });
     }
   });
@@ -1772,11 +1772,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ error: "File not found" });
         }
         // Unexpected error
-        logger.error('Unexpected path validation error:', err);
+        logger.error({ error: err }, 'Unexpected path validation error');
         return res.status(500).json({ error: 'Internal server error' });
       }
     } catch (error) {
-      logger.error("Error deleting file:", error);
+      logger.error({ error }, "Error deleting file");
       res.status(500).json({ error: "Failed to delete file" });
     }
   });
@@ -1856,11 +1856,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: err.message });
         }
         // Unexpected error
-        logger.error('Unexpected path validation error:', err);
+        logger.error({ error: err }, 'Unexpected path validation error');
         return res.status(500).json({ error: 'Internal server error' });
       }
     } catch (error) {
-      logger.error("Error uploading file:", error);
+      logger.error({ error }, "Error uploading file");
       res.status(500).json({ error: "Failed to upload file" });
     }
   });
@@ -1936,7 +1936,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           await fs.appendFile(logFile, JSON.stringify(log) + "\n");
         } catch (error) {
-          logger.error("Error writing process log:", error);
+          logger.error({ error }, "Error writing process log");
         }
       }, 3000 + Math.random() * 2000); // Random interval 3-5 seconds
 
@@ -1955,7 +1955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ processId, port, status: "started" });
     } catch (error) {
-      logger.error("Error starting process:", error);
+      logger.error({ error }, "Error starting process");
       res.status(500).json({ error: "Failed to start process" });
     }
   });
@@ -1990,7 +1990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, processId: process.processId });
     } catch (error) {
-      logger.error("Error stopping process:", error);
+      logger.error({ error }, "Error stopping process");
       res.status(500).json({ error: "Failed to stop process" });
     }
   });
@@ -2014,7 +2014,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }]
       });
     } catch (error) {
-      logger.error("Error listing processes:", error);
+      logger.error({ error }, "Error listing processes");
       res.status(500).json({ error: "Failed to list processes" });
     }
   });
@@ -2050,7 +2050,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
           res.write(`data: ${JSON.stringify(transformedLog)}\n\n`);
         } catch (parseError) {
-          logger.error("Failed to parse log line:", parseError);
+          logger.error({ error: parseError }, "Failed to parse log line");
         }
       }
     } catch (error) {
@@ -2092,7 +2092,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               };
               res.write(`data: ${JSON.stringify(transformedLog)}\n\n`);
             } catch (parseError) {
-              logger.error("Failed to parse log line:", parseError);
+              logger.error({ error: parseError }, "Failed to parse log line");
             }
           }
           
@@ -2145,7 +2145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         agentSettings
       });
     } catch (error) {
-      logger.error("Error starting build:", error);
+      logger.error({ error }, "Error starting build");
       res.status(500).json({ error: "Failed to start build" });
     }
   });
@@ -2160,7 +2160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { id: "tailwind", name: "Tailwind IntelliSense", icon: "🎨", installed: true },
       ]);
     } catch (error) {
-      logger.error("Error fetching extensions:", error);
+      logger.error({ error }, "Error fetching extensions");
       res.status(500).json({ error: "Failed to fetch extensions" });
     }
   });
@@ -2187,7 +2187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(filtered);
     } catch (error) {
-      logger.error("Error searching commands:", error);
+      logger.error({ error }, "Error searching commands");
       res.status(500).json({ error: "Failed to search commands" });
     }
   });
@@ -2201,7 +2201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profileData = await storage.getUserProfile(userId);
       res.json(profileData);
     } catch (error: any) {
-      logger.error("Error fetching profile:", error);
+      logger.error({ error }, "Error fetching profile");
       if (error.message === "User not found") {
         return res.status(404).json({ error: "User not found" });
       }
@@ -2224,7 +2224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(updatedUser);
     } catch (error: any) {
-      logger.error("Error updating profile:", error);
+      logger.error({ error }, "Error updating profile");
       if (error.message === "User not found") {
         return res.status(404).json({ error: "User not found" });
       }
@@ -2275,7 +2275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const downloadUrl = `/exports/${userId}/${projectId}.zip`;
       res.json({ downloadUrl });
     } catch (error) {
-      logger.error("Error exporting project:", error);
+      logger.error({ error }, "Error exporting project");
       res.status(500).json({ error: "Failed to export project" });
     }
   });
@@ -2298,7 +2298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Verification email sent to " + newEmail 
       });
     } catch (error) {
-      logger.error("Error changing email:", error);
+      logger.error({ error }, "Error changing email");
       res.status(500).json({ error: "Failed to change email" });
     }
   });
@@ -2328,7 +2328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, message: "Password updated successfully" });
     } catch (error) {
-      logger.error("Error changing password:", error);
+      logger.error({ error }, "Error changing password");
       res.status(500).json({ error: "Failed to change password" });
     }
   });
@@ -2346,7 +2346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedUser = await storage.updateUser(userId, { region });
       res.json(updatedUser);
     } catch (error) {
-      logger.error("Error updating region:", error);
+      logger.error({ error }, "Error updating region");
       res.status(500).json({ error: "Failed to update region" });
     }
   });
@@ -2364,7 +2364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedUser = await storage.updateUser(userId, { notificationSettings });
       res.json(updatedUser);
     } catch (error) {
-      logger.error("Error updating notifications:", error);
+      logger.error({ error }, "Error updating notifications");
       res.status(500).json({ error: "Failed to update notifications" });
     }
   });
@@ -2386,7 +2386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error("Error sending test notification:", error);
+      logger.error({ error }, "Error sending test notification");
       res.status(500).json({ error: "Failed to send test notification" });
     }
   });
@@ -2423,7 +2423,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const downloadUrl = `/exports/${userId}/all-projects.zip`;
       res.json({ downloadUrl, status: "ready" });
     } catch (error) {
-      logger.error("Error exporting all apps:", error);
+      logger.error({ error }, "Error exporting all apps");
       res.status(500).json({ error: "Failed to export apps" });
     }
   });
@@ -2457,7 +2457,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(billingData);
     } catch (error) {
-      logger.error("Error fetching billing:", error);
+      logger.error({ error }, "Error fetching billing");
       res.status(500).json({ error: "Failed to fetch billing info" });
     }
   });
@@ -2475,7 +2475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Mock storage - in production would save to user settings
       res.json({ success: true, threshold });
     } catch (error) {
-      logger.error("Error setting usage alert:", error);
+      logger.error({ error }, "Error setting usage alert");
       res.status(500).json({ error: "Failed to set usage alert" });
     }
   });
@@ -2493,7 +2493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedUser = await storage.updateUser(userId, { roles });
       res.json(updatedUser);
     } catch (error) {
-      logger.error("Error updating roles:", error);
+      logger.error({ error }, "Error updating roles");
       res.status(500).json({ error: "Failed to update roles" });
     }
   });
@@ -2507,7 +2507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const keys = await storage.getUserSSHKeys(userId);
       res.json(keys);
     } catch (error) {
-      logger.error("Error fetching SSH keys:", error);
+      logger.error({ error }, "Error fetching SSH keys");
       res.status(500).json({ error: "Failed to fetch SSH keys" });
     }
   });
@@ -2530,7 +2530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newKey = await storage.addSSHKey(userId, { name, publicKey });
       res.json(newKey);
     } catch (error) {
-      logger.error("Error adding SSH key:", error);
+      logger.error({ error }, "Error adding SSH key");
       res.status(500).json({ error: "Failed to add SSH key" });
     }
   });
@@ -2542,7 +2542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteSSHKey(userId, keyId);
       res.json({ success: true });
     } catch (error) {
-      logger.error("Error deleting SSH key:", error);
+      logger.error({ error }, "Error deleting SSH key");
       res.status(500).json({ error: "Failed to delete SSH key" });
     }
   });
@@ -2556,7 +2556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const secrets = await storage.getUserSecrets(userId);
       res.json(secrets);
     } catch (error) {
-      logger.error("Error fetching secrets:", error);
+      logger.error({ error }, "Error fetching secrets");
       res.status(500).json({ error: "Failed to fetch secrets" });
     }
   });
@@ -2574,7 +2574,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newSecret = await storage.addSecret(userId, { name, value });
       res.json(newSecret);
     } catch (error) {
-      logger.error("Error adding secret:", error);
+      logger.error({ error }, "Error adding secret");
       res.status(500).json({ error: "Failed to add secret" });
     }
   });
@@ -2586,7 +2586,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteSecret(userId, name);
       res.json({ success: true });
     } catch (error) {
-      logger.error("Error deleting secret:", error);
+      logger.error({ error }, "Error deleting secret");
       res.status(500).json({ error: "Failed to delete secret" });
     }
   });
@@ -2600,7 +2600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integrations = await storage.getUserIntegrations(userId);
       res.json(integrations);
     } catch (error) {
-      logger.error("Error fetching integrations:", error);
+      logger.error({ error }, "Error fetching integrations");
       res.status(500).json({ error: "Failed to fetch integrations" });
     }
   });
@@ -2612,7 +2612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.connectIntegration(userId, provider);
       res.json({ success: true, message: `Connected to ${provider}` });
     } catch (error) {
-      logger.error("Error connecting integration:", error);
+      logger.error({ error }, "Error connecting integration");
       res.status(500).json({ error: "Failed to connect integration" });
     }
   });
@@ -2624,7 +2624,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.disconnectIntegration(userId, provider);
       res.json({ success: true, message: `Disconnected from ${provider}` });
     } catch (error) {
-      logger.error("Error disconnecting integration:", error);
+      logger.error({ error }, "Error disconnecting integration");
       res.status(500).json({ error: "Failed to disconnect integration" });
     }
   });
@@ -2638,7 +2638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const domains = await storage.getUserDomains(userId);
       res.json(domains);
     } catch (error) {
-      logger.error("Error fetching domains:", error);
+      logger.error({ error }, "Error fetching domains");
       res.status(500).json({ error: "Failed to fetch domains" });
     }
   });
@@ -2662,7 +2662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newDomain = await storage.addDomain(userId, { domain });
       res.json(newDomain);
     } catch (error) {
-      logger.error("Error adding domain:", error);
+      logger.error({ error }, "Error adding domain");
       res.status(500).json({ error: "Failed to add domain" });
     }
   });
@@ -2674,7 +2674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteDomain(userId, domainId);
       res.json({ success: true });
     } catch (error) {
-      logger.error("Error deleting domain:", error);
+      logger.error({ error }, "Error deleting domain");
       res.status(500).json({ error: "Failed to delete domain" });
     }
   });
@@ -2700,7 +2700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json(defaultProjectSettings);
       }
     } catch (error) {
-      logger.error("Error fetching project settings:", error);
+      logger.error({ error }, "Error fetching project settings");
       res.status(500).json({ error: "Failed to fetch project settings" });
     }
   });
@@ -2746,7 +2746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         settings 
       });
     } catch (error) {
-      logger.error("Error updating project settings:", error);
+      logger.error({ error }, "Error updating project settings");
       res.status(500).json({ error: "Failed to update project settings" });
     }
   });
