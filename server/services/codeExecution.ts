@@ -32,10 +32,6 @@ const TEMP_DIR = path.join(process.cwd(), "tmp", "executions");
 // Strict execution mode - disable execution entirely if not explicitly enabled
 const EXECUTION_ENABLED = process.env.ENABLE_CODE_EXECUTION === "true";
 
-if (!EXECUTION_ENABLED) {
-  logger.warn("[CODE_EXEC] Code execution is DISABLED. Set ENABLE_CODE_EXECUTION=true to enable (NOT recommended for production without proper sandboxing)");
-}
-
 // Supported languages and their execution commands
 const LANGUAGE_CONFIG: Record<string, {
   extension: string;
@@ -125,6 +121,7 @@ export async function executeCode(
 
   // Check if execution is enabled
   if (!EXECUTION_ENABLED) {
+    logger.warn("[CODE_EXEC] Code execution is DISABLED. Set ENABLE_CODE_EXECUTION=true to enable (NOT recommended for production without proper sandboxing)");
     return {
       stdout: "",
       stderr: "Code execution is disabled for security reasons. Enable with ENABLE_CODE_EXECUTION=true (requires proper sandboxing in production)",

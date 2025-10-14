@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import morgan from "morgan";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { rateLimiter } from "./middleware/rateLimiter";
 
 // LOG_LEVEL support
 const LOG_LEVEL = process.env.LOG_LEVEL || 'INFO';
@@ -40,6 +41,9 @@ app.use(morgan(morganFormat, {
     write: (message) => logger.info(message.trim())
   }
 }));
+
+// Rate limiting (100 req/min per IP)
+app.use(rateLimiter);
 
 app.use((req, res, next) => {
   const start = Date.now();
