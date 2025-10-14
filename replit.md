@@ -29,8 +29,8 @@ The frontend uses React, TypeScript, and Vite, with `shadcn/ui` for components, 
 - **Job Lifecycle**: Defines states from `created` to `published` for website generation and deployment.
 - **Scoped Regeneration**: Allows regeneration of specific site components (e.g., full-site, hero-only).
 - **User Authentication**: JWT-based system with registration, login, and protected routes.
-- **Real-time Chat**: Socket.IO integration supporting AI assistant, collaboration, and support modes, with history.
-- **Code Execution Engine**: Multi-language support (JS, Python, TS, Bash) with timeout/output limits, disabled by default for security.
+- **Real-time Chat**: Socket.IO integration with JWT authentication supporting AI assistant, collaboration, and support modes. Features include typing indicators, message history, and 3 chat modes (AI Assistant for website building help, Collaboration for team chat, Support for help tickets). ChatPanel UI integrated as floating panel in Studio page (bottom-right).
+- **Code Execution Terminal**: Interactive JavaScript execution using isolated-vm sandbox. TerminalPanel features Monaco editor with syntax highlighting, real-time stdout/stderr output display, execution status indicators (Ready/Running/Success/Error/Timeout), keyboard shortcuts (Ctrl/Cmd+Enter), and example code snippets. Integrated as floating panel in Studio page (bottom-left). Production-safe with memory limits (64MB), timeout (3s), and output size limits (64KB).
 - **Project Management**: Role-based collaboration (owner/editor/viewer) with version control and commit history.
 - **Settings System**: Production-ready settings for Notifications, Workspace, and Editor with auto-save and Zod validation.
 - **Library**: Stores saved drafts with thumbnails.
