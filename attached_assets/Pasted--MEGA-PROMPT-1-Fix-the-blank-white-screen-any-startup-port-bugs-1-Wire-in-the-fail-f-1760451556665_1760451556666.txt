@@ -1,0 +1,146 @@
+ MEGA PROMPT —————————>  1. Fix the blank white screen + any startup/port bugs
+1. Wire in the fail-fast JWT config (config.ts + jwt.ts + imports + secrets)
+2. Run a full “bug hunt + harden + verify” pass on the new SQLite + isolated-vm backend
+
+⬇️ ⬇️
+You’re my implementation agent. Don’t ask follow-ups. Do the work now and return a single final response containing:
+* A short summary of what you diagnosed/fixed.
+* A bullet list of files changed/created.
+* For every file you changed/created: a unified diff block.
+* Every command you ran (exact command), with last 30 lines of stdout/stderr and exit code.
+* Any skipped step with the exact reason and a one-line remediation.
+* A quick “How to run” at the end.
+CONTEXT (do not re-debate)
+* This is YBUILT: Express + React/Vite.
+* Backend was recently migrated to SQLite (better-sqlite3) and isolated-vm.
+* I’m seeing a blank white preview on Replit. Sometimes the server also logs EADDRINUSE: 0.0.0.0:5000 when I manually run npm run dev.
+* Package edits to package.json may be blocked in this environment; if blocked, print the exact sed/json commands I should run, or perform the change via the allowed tool.
+
+GOALS
+A) Kill the blank white screen and make dev run cleanly
+1. Preflight (run & capture results):
+    * node -v && npm -v
+    * lsof -i :5000 || true (or OS-equivalent)
+    * grep -nE "PORT|listen" -n server/index.ts
+    * rg -n "createServer|app.listen|vite|HMR" -S
+    * Open browser console logs + network tab; collect first errors (module resolution, MIME, CORS, 404, React crash, Vite HMR).
+2. Port sanity: Ensure server binds process.env.PORT || 5000 and logs the chosen port. If port is busy, fail fast with a clear message (don’t crash opaque).
+    * Add a tiny guard that checks if EADDRINUSE happens, then suggests “Stop previous run or change port”.
+3. Vite/SPA routing:
+    * If we’re using SPA routing, make Express serve index.html as a catch-all: app.get('*', (_req,res)=>res.sendFile(path.join(__dirname,'../client/index.html'))) (adjust path if needed).
+    * In dev, ensure Vite HMR is reachable: vite.config.ts → server: { host: true }. If Replit needs explicit HMR clientPort, set it to Number(process.env.PORT) || 5173 with a sensible default.
+4. Static + proxies: Confirm that /assets/* etc. aren’t rate-limited and Vite HMR paths (/@vite, /@react-refresh, /@fs) are whitelisted in the rate limiter.
+5. Dependency flakiness: If the white screen ties to missing ESM entries (e.g., framer-motion), verify installed files exist (node_modules/framer-motion/dist/es/index.mjs). If corrupted, reinstall only the broken package(s).
+6. React crash: If the UI still renders blank, grab the first exception stack from the console, fix the source (common: ref forwarding, invalid hook call, import path). Don’t mask errors; fix root cause.
+B) Add the fail-fast JWT config and helpers (must-do)
+Create the files exactly as below and wire them in:
+1) server/config.ts
+
+// server/config.ts
+// Central place for required env vars. Crashes early if missing.
+
+export const JWT_SECRET =
+  process.env.JWT_SECRET ??
+  (() => {
+    throw new Error("JWT_SECRET is missing. Set it in Replit → Tools → Secrets.");
+  })();
+
+export const JWT_SECRET_PREVIOUS = process.env.JWT_SECRET_PREVIOUS || undefined;
+
+// Token lifetime; tweak if you want (e.g. "1h", "7d")
+export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? "7d";
+2) Top of server/index.ts
+
+// Ensure envs are loaded (optional if using dotenv)
+try { await import('dotenv/config'); } catch { /* ok if not present */ }
+
+// Fail fast if JWT_SECRET is missing
+import "./config";
+3) server/lib/jwt.ts
+
+// server/lib/jwt.ts
+import jwt, { JwtPayload } from "jsonwebtoken";
+import { JWT_SECRET, JWT_SECRET_PREVIOUS, JWT_EXPIRES_IN } from "../config";
+
+type Payload = Record<string, unknown>;
+
+export function signJwt(payload: Payload): string {
+  return jwt.sign(payload, JWT_SECRET, {
+    algorithm: "HS256",
+    expiresIn: JWT_EXPIRES_IN,
+  });
+}
+
+export function verifyJwt(token: string): JwtPayload | string {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    if (JWT_SECRET_PREVIOUS) return jwt.verify(token, JWT_SECRET_PREVIOUS);
+    throw err;
+  }
+}
+4) Ensure deps exist (install if missing and show logs):
+
+npm i jsonwebtoken
+npm i -D @types/jsonwebtoken
+5) Replit Secret (you set it, but confirm presence):
+* Key: JWT_SECRET
+* Value: long random hex (print a helper command in output to generate if missing)
+C) Harden dev ergonomics & avoid port collisions
+* Ensure server/index.ts uses:
+
+const PORT = Number(process.env.PORT) || 5000;
+app.listen(PORT, '0.0.0.0', () => logger.info({ port: PORT }, 'server up'));
+* If EADDRINUSE, print clear instructions to stop the previous process in Replit and/or retry.
+D) Verify the SQLite + isolated-vm path is intact
+Run & report:
+* npx tsx server/db/migrate.ts
+* npx tsx server/db/seed.ts
+* curl -s -X POST http://localhost:${PORT}/api/auth/login -H "content-type: application/json" -d '{"email":"demo@example.com","password":"demo1234"}'
+* Use the token to hit /api/projects and /api/execute (one normal script, one infinite loop to confirm timeout). Print the responses (truncated if long).
+E) Bug-hunt checklist (must check all)
+* Rate limiter excludes /assets, /previews, /@vite, /@react-refresh, /@fs, /@replit.
+* SSE build trace stream connects (no 429).
+* Badge ref still forwards via forwardRef (no “Function components cannot be given refs”).
+* Invalid hook call: none after fixes.
+* Vite: no “Failed to resolve entry” errors; if any, reinstall only the affected package; don’t nuke the lockfile.
+* SPA fallback: 200 for deep links (e.g., /workspace/abc returns index.html).
+* /api/health endpoint returns {ok:true} 200 (add it if missing).
+* CORS only if actually needed; otherwise, keep tight.
+
+REQUIRED CHANGES (apply as diffs)
+1. server/config.ts (new) → content as above.
+2. server/lib/jwt.ts (new) → content as above.
+3. server/index.ts
+    * Import "dotenv/config" (best-effort) before anything else that reads envs.
+    * Import "./config" at the very top.
+    * Ensure app.listen(PORT, '0.0.0.0', ...) and PORT = process.env.PORT || 5000.
+    * Add a simple /api/health route if missing:    app.get('/api/health', (_req,res)=>res.json({ok:true}));
+    *   
+    * If not present, add SPA fallback for frontend (only in prod if you already run Vite dev server separately).
+4. server/middleware/rateLimiter.ts
+    * Ensure whitelist includes: /assets, /previews, /@vite, /@react-refresh, /@fs, /@replit.
+5. vite.config.ts
+    * Ensure:    export default defineConfig({
+    *   server: { host: true },
+    * })
+    *   
+    * Only set hmr: { clientPort: Number(process.env.PORT) } if HMR fails to connect; otherwise leave default.
+If package.json script changes are needed but direct edit is blocked, output the exact jq or sed one-liner(s) I should run.
+
+ACCEPTANCE CRITERIA (don’t skip)
+* Visiting the Replit Preview shows the actual UI (no blank white page).
+* npm run dev (or the configured dev entry) starts cleanly; no EADDRINUSE if a single process is running.
+* /api/health returns { ok: true }.
+* Login works with the seeded user; projects list returns; execute returns captured logs & timeout behavior.
+* If JWT_SECRET is missing, server fails fast with the explicit error message from server/config.ts.
+* Return unified diffs for every file you touched/created.
+* Return the last 30 lines of each command’s output and the exit code.
+* Short “How to Run” section at the end.
+
+OPTIONAL POLISH (add only if time permits)
+* Add a tiny /api/version showing git SHA/date if available.
+* Strip any || true on critical steps in CI (if that file exists here).
+
+Execute now. Don’t ask questions. Return the final bundle with diffs + logs.
+⬆️ END OF PROMPT ⬆️
