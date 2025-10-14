@@ -12,6 +12,11 @@ import archiver from "archiver";
 import { validateAndResolvePath } from "./utils/paths.js";
 import { logger } from "./index";
 import { metricsHandler } from "./telemetry";
+import authRouter from "./routes/auth.js";
+import chatRouter from "./routes/chat.js";
+import executeRouter from "./routes/execute.js";
+import projectsRouter from "./routes/projects.js";
+import { initializeSocket } from "./socket.js";
 
 // Workspace readiness check helper
 async function checkWorkspaceReady(jobId: string): Promise<{ ready: boolean; retryAfter?: number }> {
@@ -113,6 +118,18 @@ if (RAZORPAY_MODE !== 'mock') {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Log Razorpay mode on server startup
   logger.info(`[RAZORPAY] Running in ${RAZORPAY_MODE} mode`);
+  
+  // Register authentication routes
+  app.use("/api/auth", authRouter);
+  
+  // Register chat routes
+  app.use("/api/chat", chatRouter);
+  
+  // Register code execution routes
+  app.use("/api/execute", executeRouter);
+  
+  // Register project collaboration routes
+  app.use("/api/projects", projectsRouter);
   
   // Job generation endpoint
   app.post("/api/generate", async (req, res) => {
@@ -2734,6 +2751,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Initialize Socket.IO
+  initializeSocket(httpServer);
 
   return httpServer;
 }

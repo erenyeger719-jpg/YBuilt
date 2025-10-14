@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset, type ProjectTheme, projectThemeSchema, themePresets, type ProjectSettings, type SupportTicket, type InsertSupportTicket, type SystemStatus, type SSHKey, type InsertSSHKey, type Secret, type InsertSecret, type Integration, type Domain, type InsertDomain } from "@shared/schema";
+import { type User, type InsertUser, type Job, type InsertJob, type Build, type Version, type Settings, settingsSchema, type Draft, type UploadedAsset, type ProjectTheme, projectThemeSchema, themePresets, type ProjectSettings, type SupportTicket, type InsertSupportTicket, type SystemStatus, type SSHKey, type InsertSSHKey, type Secret, type InsertSecret, type Integration, type Domain, type InsertDomain, type ChatMessage, type InsertChatMessage, type CodeExecution, type InsertCodeExecution, type ProjectCollaborator, type ProjectCommit } from "@shared/schema";
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
@@ -100,6 +100,25 @@ export interface IStorage {
   getUserDomains(userId: string): Promise<Domain[]>;
   addDomain(userId: string, domain: InsertDomain): Promise<Domain>;
   deleteDomain(userId: string, domainId: string): Promise<void>;
+  
+  // Chat methods
+  createChatMessage(message: import("@shared/schema").InsertChatMessage): Promise<import("@shared/schema").ChatMessage>;
+  getChatHistory(userId: string, projectId?: string, limit?: number): Promise<import("@shared/schema").ChatMessage[]>;
+  deleteChatMessage(messageId: string): Promise<void>;
+  
+  // Code Execution methods
+  createCodeExecution(execution: import("@shared/schema").InsertCodeExecution): Promise<import("@shared/schema").CodeExecution>;
+  getCodeExecutionHistory(userId: string, projectId?: string, limit?: number): Promise<import("@shared/schema").CodeExecution[]>;
+  updateCodeExecution(id: string, updates: Partial<import("@shared/schema").CodeExecution>): Promise<void>;
+  
+  // Project Collaboration methods
+  addCollaborator(projectId: string, userId: string, role: string): Promise<import("@shared/schema").ProjectCollaborator>;
+  getCollaborators(projectId: string): Promise<import("@shared/schema").ProjectCollaborator[]>;
+  removeCollaborator(projectId: string, userId: string): Promise<void>;
+  
+  // Project Version Control methods
+  createCommit(commit: Omit<import("@shared/schema").ProjectCommit, 'id' | 'createdAt'>): Promise<import("@shared/schema").ProjectCommit>;
+  getCommits(projectId: string, limit?: number): Promise<import("@shared/schema").ProjectCommit[]>;
 }
 
 export interface Invoice {
@@ -125,6 +144,10 @@ export class MemStorage implements IStorage {
   private invoices: Map<string, Invoice>;
   private supportTickets: Map<string, SupportTicket>;
   private projectSettings: Map<string, ProjectSettings>;
+  private chatMessages: Map<string, ChatMessage>;
+  private codeExecutions: Map<string, CodeExecution>;
+  private collaborators: Map<string, ProjectCollaborator[]>; // projectId -> collaborators[]
+  private commits: Map<string, ProjectCommit[]>; // projectId -> commits[]
 
   constructor() {
     this.users = new Map();
@@ -137,6 +160,10 @@ export class MemStorage implements IStorage {
     this.invoices = new Map();
     this.supportTickets = new Map();
     this.projectSettings = new Map();
+    this.chatMessages = new Map();
+    this.codeExecutions = new Map();
+    this.collaborators = new Map();
+    this.commits = new Map();
     this.loadJobs();
     this.loadUsers();
     this.loadBuilds();
@@ -1024,6 +1051,130 @@ export class MemStorage implements IStorage {
     
     const domainsFile = path.join(process.cwd(), "data", "users", userId, "domains.json");
     await atomicWriteFile(domainsFile, filtered);
+  }
+
+  // Chat methods
+  async createChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
+    const id = randomUUID();
+    const chatMessage: ChatMessage = {
+      id,
+      userId: message.userId,
+      projectId: message.projectId || null,
+      role: message.role,
+      content: message.content,
+      metadata: message.metadata || null,
+      createdAt: new Date(),
+    };
+    
+    this.chatMessages.set(id, chatMessage);
+    return chatMessage;
+  }
+
+  async getChatHistory(userId: string, projectId?: string, limit: number = 100): Promise<ChatMessage[]> {
+    const messages = Array.from(this.chatMessages.values())
+      .filter(m => m.userId === userId && (!projectId || m.projectId === projectId))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+    
+    return messages.reverse(); // Return in chronological order
+  }
+
+  async deleteChatMessage(messageId: string): Promise<void> {
+    this.chatMessages.delete(messageId);
+  }
+
+  // Code Execution methods
+  async createCodeExecution(execution: InsertCodeExecution): Promise<CodeExecution> {
+    const id = randomUUID();
+    const codeExecution: CodeExecution = {
+      id,
+      userId: execution.userId,
+      projectId: execution.projectId || null,
+      language: execution.language,
+      code: execution.code,
+      stdout: null,
+      stderr: null,
+      exitCode: null,
+      executionTimeMs: null,
+      status: "pending",
+      createdAt: new Date(),
+    };
+    
+    this.codeExecutions.set(id, codeExecution);
+    return codeExecution;
+  }
+
+  async getCodeExecutionHistory(userId: string, projectId?: string, limit: number = 50): Promise<CodeExecution[]> {
+    return Array.from(this.codeExecutions.values())
+      .filter(e => e.userId === userId && (!projectId || e.projectId === projectId))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  }
+
+  async updateCodeExecution(id: string, updates: Partial<CodeExecution>): Promise<void> {
+    const execution = this.codeExecutions.get(id);
+    if (!execution) {
+      throw new Error(`Code execution ${id} not found`);
+    }
+    
+    Object.assign(execution, updates);
+    this.codeExecutions.set(id, execution);
+  }
+
+  // Project Collaboration methods
+  async addCollaborator(projectId: string, userId: string, role: string): Promise<ProjectCollaborator> {
+    const id = randomUUID();
+    const collaborator: ProjectCollaborator = {
+      id,
+      projectId,
+      userId,
+      role,
+      invitedAt: new Date(),
+      acceptedAt: new Date(), // Auto-accept for now
+    };
+    
+    const existing = this.collaborators.get(projectId) || [];
+    existing.push(collaborator);
+    this.collaborators.set(projectId, existing);
+    
+    return collaborator;
+  }
+
+  async getCollaborators(projectId: string): Promise<ProjectCollaborator[]> {
+    return this.collaborators.get(projectId) || [];
+  }
+
+  async removeCollaborator(projectId: string, userId: string): Promise<void> {
+    const existing = this.collaborators.get(projectId) || [];
+    const filtered = existing.filter(c => c.userId !== userId);
+    this.collaborators.set(projectId, filtered);
+  }
+
+  // Project Version Control methods
+  async createCommit(commit: Omit<ProjectCommit, 'id' | 'createdAt'>): Promise<ProjectCommit> {
+    const id = randomUUID();
+    const projectCommit: ProjectCommit = {
+      id,
+      projectId: commit.projectId,
+      userId: commit.userId,
+      message: commit.message,
+      changes: commit.changes,
+      parentCommitId: commit.parentCommitId || null,
+      createdAt: new Date(),
+    };
+    
+    const existing = this.commits.get(commit.projectId) || [];
+    existing.push(projectCommit);
+    this.commits.set(commit.projectId, existing);
+    
+    return projectCommit;
+  }
+
+  async getCommits(projectId: string, limit: number = 50): Promise<ProjectCommit[]> {
+    const commits = this.commits.get(projectId) || [];
+    return commits
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
   }
 }
 

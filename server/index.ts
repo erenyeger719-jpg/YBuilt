@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import morgan from "morgan";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -30,6 +31,15 @@ app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Morgan HTTP request logging
+const morganFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
+app.use(morgan(morganFormat, {
+  skip: (req) => req.path.startsWith('/assets') || req.path.startsWith('/src'),
+  stream: {
+    write: (message) => logger.info(message.trim())
+  }
+}));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -64,12 +74,27 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  // Centralized error handling middleware
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    // Log error with context
+    logger.error(`[ERROR] ${req.method} ${req.path} - ${status}: ${message}`, {
+      error: err.stack,
+      userId: (req as any).user?.id,
+      body: req.body,
+    });
+
+    // Don't expose internal errors in production
+    const clientMessage = process.env.NODE_ENV === 'production' && status === 500
+      ? "Internal Server Error"
+      : message;
+
+    res.status(status).json({ 
+      error: clientMessage,
+      ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
+    });
   });
 
   // importantly only setup vite in development and after

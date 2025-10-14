@@ -883,3 +883,75 @@ export const themePresets = {
     customColors: [],
   },
 } as const;
+
+// Chat Messages Schema
+export const chatMessages = pgTable("chat_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  projectId: varchar("project_id"), // optional: scoped to a project
+  role: text("role").notNull(), // user|assistant|system
+  content: text("content").notNull(),
+  metadata: jsonb("metadata"), // { type: 'ai-assistant'|'collaboration'|'support', context: {...} }
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+
+// Code Execution History Schema
+export const codeExecutions = pgTable("code_executions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  projectId: varchar("project_id"), // optional: associated project
+  language: text("language").notNull(), // javascript|python|typescript|etc
+  code: text("code").notNull(),
+  stdout: text("stdout"),
+  stderr: text("stderr"),
+  exitCode: integer("exit_code"),
+  executionTimeMs: integer("execution_time_ms"),
+  status: text("status").notNull().default("pending"), // pending|running|completed|failed|timeout
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCodeExecutionSchema = createInsertSchema(codeExecutions).omit({
+  id: true,
+  createdAt: true,
+  stdout: true,
+  stderr: true,
+  exitCode: true,
+  executionTimeMs: true,
+  status: true,
+});
+
+export type CodeExecution = typeof codeExecutions.$inferSelect;
+export type InsertCodeExecution = z.infer<typeof insertCodeExecutionSchema>;
+
+// Project Collaborators Schema
+export const projectCollaborators = pgTable("project_collaborators", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  role: text("role").notNull().default("viewer"), // owner|editor|viewer
+  invitedAt: timestamp("invited_at").defaultNow().notNull(),
+  acceptedAt: timestamp("accepted_at"),
+});
+
+export type ProjectCollaborator = typeof projectCollaborators.$inferSelect;
+
+// Project Version Control Schema (extends existing versions)
+export const projectCommits = pgTable("project_commits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  message: text("message").notNull(),
+  changes: jsonb("changes").notNull(), // { files: [...], diff: {...} }
+  parentCommitId: varchar("parent_commit_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ProjectCommit = typeof projectCommits.$inferSelect;
