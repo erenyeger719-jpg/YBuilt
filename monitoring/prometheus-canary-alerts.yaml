@@ -1,0 +1,201 @@
+# Prometheus Alert Rules for Canary Deployments
+# These rules trigger automatic rollback when canary metrics exceed thresholds
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-canary-alerts
+  namespace: monitoring
+data:
+  canary-alerts.yaml: |
+    groups:
+      - name: canary_deployment_alerts
+        interval: 10s
+        rules:
+          # High error rate in canary
+          - alert: CanaryHighErrorRate
+            expr: |
+              (
+                sum(rate(http_requests_total{namespace="ybuilt-canary",status=~"5.."}[1m]))
+                /
+                sum(rate(http_requests_total{namespace="ybuilt-canary"}[1m]))
+              ) > 0.005
+            for: 2m
+            labels:
+              severity: critical
+              component: canary
+              action: rollback
+            annotations:
+              summary: "Canary deployment has high error rate"
+              description: "Error rate is {{ $value | humanizePercentage }} (threshold: 0.5%)"
+              runbook_url: "https://github.com/OWNER/ybuilt/blob/main/docs/runbooks/canary-rollback.md"
+              action: "Automatic rollback initiated"
+          
+          # High P95 latency in canary
+          - alert: CanaryHighLatency
+            expr: |
+              histogram_quantile(0.95, 
+                sum(rate(http_request_duration_seconds_bucket{namespace="ybuilt-canary"}[1m])) by (le)
+              ) > 0.3
+            for: 3m
+            labels:
+              severity: warning
+              component: canary
+              action: rollback
+            annotations:
+              summary: "Canary deployment has high P95 latency"
+              description: "P95 latency is {{ $value }}s (threshold: 300ms)"
+              runbook_url: "https://github.com/OWNER/ybuilt/blob/main/docs/runbooks/canary-rollback.md"
+              action: "Automatic rollback initiated"
+          
+          # Low success rate in canary
+          - alert: CanaryLowSuccessRate
+            expr: |
+              (
+                sum(rate(http_requests_total{namespace="ybuilt-canary",status=~"2.."}[1m]))
+                /
+                sum(rate(http_requests_total{namespace="ybuilt-canary"}[1m]))
+              ) < 0.99
+            for: 2m
+            labels:
+              severity: critical
+              component: canary
+              action: rollback
+            annotations:
+              summary: "Canary deployment has low success rate"
+              description: "Success rate is {{ $value | humanizePercentage }} (threshold: 99%)"
+              runbook_url: "https://github.com/OWNER/ybuilt/blob/main/docs/runbooks/canary-rollback.md"
+              action: "Automatic rollback initiated"
+          
+          # Canary pods not ready
+          - alert: CanaryPodsNotReady
+            expr: |
+              kube_deployment_status_replicas_available{namespace="ybuilt-canary"}
+              /
+              kube_deployment_spec_replicas{namespace="ybuilt-canary"}
+              < 0.8
+            for: 5m
+            labels:
+              severity: critical
+              component: canary
+              action: rollback
+            annotations:
+              summary: "Canary pods are not ready"
+              description: "Only {{ $value | humanizePercentage }} of canary pods are available (threshold: 80%)"
+              runbook_url: "https://github.com/OWNER/ybuilt/blob/main/docs/runbooks/canary-rollback.md"
+              action: "Automatic rollback initiated"
+          
+          # Memory usage spike in canary
+          - alert: CanaryHighMemoryUsage
+            expr: |
+              container_memory_usage_bytes{namespace="ybuilt-canary",container="ybuilt"}
+              /
+              container_spec_memory_limit_bytes{namespace="ybuilt-canary",container="ybuilt"}
+              > 0.9
+            for: 5m
+            labels:
+              severity: warning
+              component: canary
+            annotations:
+              summary: "Canary has high memory usage"
+              description: "Memory usage is {{ $value | humanizePercentage }} of limit"
+              runbook_url: "https://github.com/OWNER/ybuilt/blob/main/docs/runbooks/investigate-memory.md"
+          
+          # CPU throttling in canary
+          - alert: CanaryCPUThrottling
+            expr: |
+              rate(container_cpu_cfs_throttled_seconds_total{namespace="ybuilt-canary"}[5m])
+              > 0.1
+            for: 3m
+            labels:
+              severity: warning
+              component: canary
+            annotations:
+              summary: "Canary experiencing CPU throttling"
+              description: "CPU throttling rate is {{ $value }}s/s"
+              runbook_url: "https://github.com/OWNER/ybuilt/blob/main/docs/runbooks/investigate-cpu.md"
+          
+          # Canary promotion success
+          - alert: CanaryPromotionSuccess
+            expr: |
+              kube_deployment_labels{namespace="ybuilt-prod",label_promoted_from="canary"}
+              and
+              kube_deployment_status_replicas_available{namespace="ybuilt-prod"}
+              /
+              kube_deployment_spec_replicas{namespace="ybuilt-prod"}
+              >= 0.99
+            for: 1m
+            labels:
+              severity: info
+              component: canary
+              action: promote
+            annotations:
+              summary: "Canary successfully promoted to production"
+              description: "Production deployment is healthy after canary promotion"
+              runbook_url: "https://github.com/OWNER/ybuilt/blob/main/docs/runbooks/post-promotion.md"
+
+---
+# AlertManager configuration for canary rollback automation
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-canary-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    global:
+      resolve_timeout: 5m
+    
+    route:
+      group_by: ['alertname', 'namespace']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 12h
+      receiver: 'default'
+      
+      routes:
+        # Canary rollback alerts go to webhook
+        - match:
+            action: rollback
+          receiver: 'canary-rollback-webhook'
+          group_wait: 0s
+          group_interval: 0s
+          repeat_interval: 1h
+        
+        # Canary promotion alerts
+        - match:
+            action: promote
+          receiver: 'slack-success'
+          group_wait: 0s
+    
+    receivers:
+      - name: 'default'
+        slack_configs:
+          - api_url_file: '/etc/alertmanager/secrets/slack-webhook-url'
+            channel: '#deployments'
+            title: '{{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+      
+      - name: 'canary-rollback-webhook'
+        webhook_configs:
+          - url: 'http://canary-controller.ybuilt-system.svc.cluster.local:8080/rollback'
+            send_resolved: false
+        slack_configs:
+          - api_url_file: '/etc/alertmanager/secrets/slack-webhook-url'
+            channel: '#incidents'
+            title: '🚨 CANARY ROLLBACK TRIGGERED'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+            color: 'danger'
+      
+      - name: 'slack-success'
+        slack_configs:
+          - api_url_file: '/etc/alertmanager/secrets/slack-webhook-url'
+            channel: '#deployments'
+            title: '✅ {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+            color: 'good'
+      
+      - name: 'pagerduty'
+        pagerduty_configs:
+          - service_key_file: '/etc/alertmanager/secrets/pagerduty-service-key'
+            description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'

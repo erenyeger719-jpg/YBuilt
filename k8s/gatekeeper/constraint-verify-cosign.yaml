@@ -1,0 +1,77 @@
+# Gatekeeper Constraint: Require Cosign Attestation Annotation
+# NOTE:
+#  - This constraint enforces presence of a Cosign attestation annotation on Deployments/Pods.
+#  - **Important**: Gatekeeper alone cannot run `cosign verify` — to *enforce* real signature verification
+#    at admission-time install the Sigstore Policy Controller (recommended). See INSTALL section below.
+#  - If cluster owners cannot install Sigstore, use the CI-enforced pre-deploy policy-check workflow that
+#    verifies signatures/attestations and blocks merges. See docs/ for exact CI commands.
+
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredcosignannotation
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredCosignAnnotation
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredcosignannotation
+
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "Deployment"
+          not has_cosign_annotation(input.review.object)
+          msg := sprintf("Missing required cosign attestation annotation on Deployment %v", [input.review.object.metadata.name])
+        }
+
+        has_cosign_annotation(obj) {
+          ann := obj.metadata.annotations
+          ann["cosign.sigstore.dev/signature"]
+        }
+
+---
+# Constraint using the template: deny Deployments lacking cosign annotations
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredCosignAnnotation
+metadata:
+  name: require-cosign-attestation
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    namespaces: [""] # empty -> all namespaces; adjust as needed
+
+---
+# OPTIONAL: Sigstore Policy Controller (recommended) - installation instructions (not a manifest)
+# To enforce *real* cosign verification at admission time, install Sigstore Policy Controller:
+#   kubectl apply -f https://github.com/sigstore/policy-controller/releases/latest/download/policy-controller.yaml
+# Then create a ClusterImagePolicy (example) that requires cosign signatures and linked attestations.
+# See: https://sigstore.dev and https://github.com/sigstore/policy-controller for examples.
+
+---
+# Installation commands for Sigstore Policy Controller:
+# 
+# 1. Install Policy Controller:
+#    kubectl apply -f https://github.com/sigstore/policy-controller/releases/latest/download/policy-controller.yaml
+#
+# 2. Create ClusterImagePolicy:
+#    kubectl apply -f - <<EOF
+#    apiVersion: policy.sigstore.dev/v1beta1
+#    kind: ClusterImagePolicy
+#    metadata:
+#      name: ybuilt-image-policy
+#    spec:
+#      images:
+#        - glob: "ghcr.io/OWNER/ybuilt:**"
+#      authorities:
+#        - keyless:
+#            identities:
+#              - issuer: "https://token.actions.githubusercontent.com"
+#                subject: "https://github.com/OWNER/ybuilt/.github/workflows/publish.yml@refs/heads/main"
+#    EOF
+#
+# 3. Verify installation:
+#    kubectl get clusterimagepolicy

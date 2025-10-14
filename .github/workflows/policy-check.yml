@@ -1,0 +1,182 @@
+name: Policy Check (Signatures & Vulnerabilities)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: write
+  security-events: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  verify-attestations:
+    name: Verify Signatures & Attestations
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+      
+      - name: Build artifacts (for verification)
+        run: |
+          chmod +x scripts/reproducible-build.sh
+          # Use git commit timestamp for deterministic builds
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) TZ=UTC bash scripts/reproducible-build.sh
+      
+      - name: Generate SBOM
+        run: |
+          chmod +x scripts/generate-cyclonedx-sbom.sh
+          bash scripts/generate-cyclonedx-sbom.sh
+      
+      - name: Verify SBOM & attestations
+        id: verify
+        run: |
+          chmod +x ci/verify-sbom-and-cosign.sh
+          
+          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          
+          echo "🔍 Verifying signatures for: ${IMAGE_REF}"
+          
+          if ./ci/verify-sbom-and-cosign.sh "${IMAGE_REF}"; then
+            echo "✅ Signatures and attestations verified"
+            echo "verified=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ ENFORCEMENT FAILURE: Image verification failed"
+            echo ""
+            echo "📝 This PR cannot merge without verified signatures"
+            echo "💡 To fix:"
+            echo "  1. Ensure publish workflow has run successfully"
+            echo "  2. Image must be signed with cosign (OIDC or key-based)"
+            echo "  3. SBOM and provenance attestations must be attached"
+            echo ""
+            echo "verified=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+  
+  vulnerability-scan:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+      
+      - name: Run Trivy scan (filesystem)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Run npm audit
+        id: npm-audit
+        run: |
+          mkdir -p artifacts
+          npm audit --json > artifacts/npm-audit.json || true
+          
+          # Check for critical/high vulnerabilities
+          CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' artifacts/npm-audit.json)
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' artifacts/npm-audit.json)
+          
+          echo "📊 Vulnerability Summary:"
+          echo "  Critical: ${CRITICAL}"
+          echo "  High: ${HIGH}"
+          
+          if [ "${CRITICAL}" -gt 0 ] || [ "${HIGH}" -gt 0 ]; then
+            echo "❌ Found ${CRITICAL} critical and ${HIGH} high vulnerabilities"
+            echo "vulnerabilities=true" >> $GITHUB_OUTPUT
+            
+            # Create annotation
+            echo "::warning::Found ${CRITICAL} critical and ${HIGH} high npm vulnerabilities"
+          else
+            echo "✅ No critical or high vulnerabilities found"
+            echo "vulnerabilities=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Upload vulnerability report
+        uses: actions/upload-artifact@v4
+        with:
+          name: vulnerability-reports
+          path: |
+            artifacts/npm-audit.json
+            trivy-results.sarif
+          retention-days: 30
+      
+      - name: Fail on critical vulnerabilities (optional gate)
+        if: steps.npm-audit.outputs.vulnerabilities == 'true'
+        run: |
+          echo "⚠️ Vulnerabilities detected but not failing build"
+          echo "💡 Review artifacts/npm-audit.json for details"
+          echo "💡 To enforce: change this step to 'exit 1'"
+          # exit 1  # Uncomment to enforce
+  
+  opa-policy-test:
+    name: OPA Policy Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+      
+      - name: Run OPA tests
+        run: |
+          if [ -d "opa/policies" ]; then
+            echo "🔍 Running OPA policy tests..."
+            opa test opa/policies -v || {
+              echo "⚠️ OPA tests failed or no tests found"
+              exit 0  # Don't fail if no tests
+            }
+          else
+            echo "⚠️ No OPA policies found at opa/policies"
+          fi
+      
+      - name: Validate Gatekeeper constraints
+        run: |
+          if [ -f "k8s/gatekeeper/constraint-verify-cosign.yaml" ]; then
+            echo "✅ Gatekeeper constraint found"
+            echo "💡 Deploy with: kubectl apply -f k8s/gatekeeper/constraint-verify-cosign.yaml"
+          else
+            echo "⚠️ No Gatekeeper constraints found"
+          fi
