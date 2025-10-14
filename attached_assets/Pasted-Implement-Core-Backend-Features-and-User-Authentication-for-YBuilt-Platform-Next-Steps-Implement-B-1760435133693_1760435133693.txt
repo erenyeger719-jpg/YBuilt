@@ -1,0 +1,85 @@
+Implement Core Backend Features and User Authentication for YBuilt Platform
+
+Next Steps: Implement Backend Features & Authentication (Platform 10x)
+We’re now moving into building the actual backend logic for your workspace. The focus is on implementing core features (chat, code execution, project saving) and optionally adding user account support. The mega prompt below outlines all the tasks and considerations.
+Clarifying Questions (choose one path before proceeding):
+* Q1: Do you want the AI to implement the backend server logic for real features (a chat interface, code execution endpoint, project saving) now?
+* Q2: Do you want user account functionality (sign-up/login with persistent sessions) included now or should we finish the core backend features first?
+Based on your answers, follow the relevant tasks below (both paths can be implemented sequentially if desired).
+High-Level Task List
+1. Create a Feature Branch: Create or switch to a new git branch (e.g. feat/backend-features). If Git is unavailable, note this in documentation.
+2. Set Up Environment & Dependencies:
+    * Install and configure the necessary backend framework and libraries. For example, use Express.js(Node/TypeScript) for the server.
+    * Install key packages: express, cors, dotenv, plus any chosen database library (e.g. sqlite3 or better-sqlite3), and utility libraries such as bcrypt (for password hashing) and jsonwebtoken (for JWTs). Example command: npm install express cors dotenv sqlite3 bcrypt jsonwebtoken.
+    * Create a .env.example file listing required environment variables (e.g. PORT, DATABASE_URL, JWT_SECRET) with placeholder values.
+3. Initialize Backend Project Files:
+    * Create or update server/index.ts (or server/app.ts) as the entry point. Import dotenv at the top to load environment variables, then initialize the Express app.
+    * If not already present, create a tsconfig.json in the server/ directory with "module": "commonjs" or "esnext" (matching usage of import/require as needed).
+    * Ensure server/index.ts listens on process.env.PORT and logs a startup message. Handle the EADDRINUSE error gracefully if the port is occupied (for local testing, you can increment the port or kill any existing process).
+4. User Authentication (optional path): If you chose to include user accounts now:
+    * Database Setup: Create a users table in SQLite (or other DB) with fields id (PRIMARY KEY), email(unique), and password_hash.
+    * Register Endpoint: Create server/routes/auth.ts (or similar) with a POST /api/auth/registerendpoint. Validate input (email/password), hash the password with bcrypt, and store the new user in the database. Return a success message or error (e.g. duplicate email).
+    * Login Endpoint: Add POST /api/auth/login. Verify the user’s email and password. If valid, generate a JSON Web Token (JWT) signed with JWT_SECRET and return it to the client. The token will be used for authenticating future requests.
+    * Middleware: Implement an authentication middleware (e.g. authMiddleware.ts) that checks for a valid JWT in the Authorization header (Bearer <token>). Attach the decoded user info to req.user. Use this middleware to protect the feature endpoints below if accounts are required.
+    * Session Persistence: (Optional) If sessions are needed beyond JWT, set up secure, HTTP-only cookies or a session store. Otherwise, JWTs in headers are sufficient.
+    * Environment Note: Add JWT_SECRET to .env.example and require it at runtime.
+5. Chat Feature:
+    * Real-Time Option: If a real-time chat is desired, integrate a WebSocket library (e.g. Socket.IO or ws). For example, set up Socket.IO on the Express server, and on connection broadcast messages to all clients or rooms.
+    * REST Option: Alternatively, create a POST /api/chat endpoint that accepts a message object { userId, message } and broadcasts it by storing in-memory or pushing to connected clients.
+    * Storage (optional): For persistent chat history, create a chats table (id, user_id, message, timestamp) and save each chat message. Implement GET /api/chat/history to retrieve recent messages.
+    * Security: If accounts are used, require the user’s JWT for chat endpoints. Otherwise, you may allow anonymous messages.
+    * Logging: Log chat events on the server for monitoring (e.g. console.log or a logger).
+6. File/Code Execution:
+    * Create a POST /api/execute endpoint. The request body should include code to execute (e.g. { language: "javascript", code: "..." }).
+    * Sandboxing: Implement execution with caution. One approach is using Node’s child_process (spawn or exec) to run code in a separate process with a strict timeout (e.g. 5 seconds) and limited output size to prevent hangs or abuse. For JavaScript, you might use vm2 or a containerized service; for other languages, use appropriate runtime executables.
+    * Response: Capture stdout and stderr from the execution and return them in the response. For example: { stdout: "...", stderr: "..." }.
+    * Security: Validate or sanitize the input code if possible. Run child processes with restricted permissions.
+    * Rate Limiting: Consider (optional) adding rate limiting to prevent abuse of the execution endpoint.
+7. Project Saving:
+    * Database Setup: Create a projects table with fields like id, name, content, user_id (nullable), created_at, updated_at.
+    * Endpoints:
+        * POST /api/projects to create or update a project. Accept JSON data { name, content, (optional user_id) }. Save it in the DB (insert or update based on if id is provided).
+        * GET /api/projects to list all projects (optionally filter by user_id if accounts are used).
+        * GET /api/projects/:id to retrieve a single project.
+        * DELETE /api/projects/:id to delete a project.
+    * Authentication: If user accounts are enabled, only allow a user to access their own projects. In this case, use user_id from req.user (from JWT).
+    * Data Validation: Validate inputs (e.g. non-empty name, safe content length) before saving.
+    * Respond with IDs: Return the created project’s id and other metadata in the response so the client can navigate to it.
+8. Observability, Logging & Error Handling:
+    * Add a logging middleware (e.g. using morgan) to log all HTTP requests with status codes and response times.
+    * Implement centralized error handling middleware in Express to catch and format errors in JSON (with appropriate status codes).
+    * Ensure all async operations use try-catch or .catch() to avoid unhandled promise rejections.
+    * (Optional) Integrate a monitoring tool or write logs to a file for audit.
+9. Testing & CI Integration:
+    * Unit/Integration Tests: Write automated tests for the new backend endpoints. For example, use Jest or Mocha + Supertest to test each API route (auth, chat, execute, project).
+    * Smoke Tests: Update or create a smoke test script (e.g. scripts/smoke.sh) that makes sample requests to each endpoint and verifies a successful response (HTTP 200).
+    * CI Workflow: Update the GitHub Actions workflows to include running these tests on each pull request. For example, create or update .github/workflows/ci-tests.yml to run npm test or npm run smoke.
+    * Fail-Fast: Configure the tests so that failures (e.g. unhandled exceptions) cause the build to fail, ensuring code quality.
+10. Developer Experience & Documentation:
+    * Update package.json scripts for convenience (e.g. "dev": "nodemon server/index.ts", "build", "test").
+    * Ensure Makefile or README has commands for running the server locally, running tests, and setting environment variables.
+    * Update IMPLEMENTATION_PLATFORM10X_NEXT.md: Add summaries of the new features implemented, how to run them, and any manual steps (like creating an initial admin user or setting JWT_SECRET).
+    * Update PR_BODY_PLATFORM10X_NEXT.md: Describe the impact of these new features, list changed files, and any follow-up steps (like reviewing security or scalability).
+    * (Optional) Add inline code documentation (JSDoc comments) for complex logic (e.g. code execution flow).
+11. Production Hardening:
+    * Secrets: Ensure no secrets (like JWT_SECRET) are hard-coded. Use placeholder values in code or .env, with a note to set real secrets in production.
+    * Security: Double-check that all new inputs (auth, chat, code) are validated. Install npm audit fixes for known vulnerabilities.
+    * Performance: For heavy operations (code execution), ensure they're non-blocking (spawn child processes, do not block the main thread).
+    * Resource Limits: (Optional) Configure timeouts or memory limits on code execution to prevent abuse.
+    * Logging Level: Configure log levels via environment (e.g. DEBUG vs INFO) for production readiness.
+12. Final Verification:
+    * Run all new tests and smoke tests to ensure everything passes.
+    * Manually test each feature:
+        * Create a user (if accounts) and log in.
+        * Post a chat message or connect via WebSocket.
+        * Execute a code snippet and view output.
+        * Create/edit a project and retrieve it.
+    * Ensure no errors or security warnings appear.
+    * Build and start the server, verifying it starts on the correct port.
+Post-Implementation: MERGE and Review
+Once all the above is done and verified:
+* Merge Prep: Ensure all changes are committed with clear messages.
+* Pull Request: Use the content from PR_BODY_PLATFORM10X_NEXT.md as the PR description. Tag reviewers for final checks (security review, etc).
+* Follow-Up: Plan follow-up improvements such as adding chat rooms, audit logging, or advanced analytics in future iterations.
+This completes the mega prompt for implementing the backend features and (optionally) user authentication. Proceed systematically through each task, ensuring thoroughness and documentation for a production-ready upgrade.
+ END OF PROMPT
