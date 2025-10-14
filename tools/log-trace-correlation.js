@@ -5,7 +5,7 @@
  * Injects OpenTelemetry trace_id into logs for distributed tracing
  */
 
-const { context, trace } = require('@opentelemetry/api');
+import { context, trace } from '@opentelemetry/api';
 
 /**
  * Extract trace ID from current OpenTelemetry context
@@ -146,7 +146,7 @@ function getRetentionPolicy() {
 }
 
 // Export functions
-module.exports = {
+export {
   getTraceId,
   getSpanId,
   getCorrelationMetadata,
@@ -231,7 +231,7 @@ async function loadUserData(userId) {
 */
 
 // CLI usage
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const logger = createTraceAwareLogger('ybuilt-cli');
   
   logger.info('Log-trace correlation example', {

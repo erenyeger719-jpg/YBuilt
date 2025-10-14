@@ -5,10 +5,13 @@
  * Generates in-toto format provenance with SLSA v0.2 predicate
  */
 
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const { execSync } = require('child_process');
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Parse CLI arguments
 const args = process.argv.slice(2);
