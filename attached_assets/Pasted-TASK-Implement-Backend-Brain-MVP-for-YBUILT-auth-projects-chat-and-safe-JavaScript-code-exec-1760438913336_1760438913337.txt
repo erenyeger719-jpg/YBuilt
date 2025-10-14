@@ -1,0 +1,707 @@
+TASK: Implement "Backend Brain" MVP for YBUILT — auth, projects, chat, and safe JavaScript code execution (sandboxed). Make changes in a new branch and produce a PR-ready set of changes + verification.
+
+High-level goals:
+- Add secure user signup/login (JWT), project CRUD, chat (simple persistent messages), and an /api/execute endpoint for sandboxed JavaScript execution using vm2.
+- Use SQLite (file DB) to minimize hosting costs.
+- Add server-side logging, request ids, and robust error handling.
+- Add unit/smoke tests and a CI workflow that runs them.
+- Keep everything runnable locally in Replit: no Docker required.
+- If any step cannot be executed inside this environment (permissions, docker, global installs), create files, show diffs, and list exact git commands to run locally.
+
+BRANCH:
+- Create branch: feat/backend-brain (or print git commands if git unavailable).
+
+ENVIRONMENT (create .env.example):
+- PORT=5000
+- DATABASE_URL=./data/sqlite.db
+- JWT_SECRET=replace_this_secret
+- NODE_ENV=development
+- EXECUTION_TIMEOUT_MS=5000
+- MAX_CODE_OUTPUT=65536
+
+FILES TO CREATE / MODIFY
+(Include unified diffs for each file change in your response. If you can't run git, print exact files and diffs.)
+
+1) server/index.ts (or server/app.ts) — new/modify
+- Load .env
+- Create Express app with JSON parsing, morgan logging, request-id middleware
+- Connect to SQLite via better-sqlite3 or sqlite3
+- Mount routes at /api/auth, /api/projects, /api/chat, /api/execute
+- Global error handler and graceful shutdown
+- Example: listen on process.env.PORT with informative logs and handle EADDRINUSE by trying PORT+1 and logging what happened.
+
+2) server/db.ts — new
+- Single-file DB connector that ensures folder ./data exists, opens SQLite, and creates tables if not present:
+  - users(id INTEGER PRIMARY KEY, email TEXT UNIQUE, password_hash TEXT, created_at INTEGER)
+  - projects(id INTEGER PRIMARY KEY, name TEXT, content TEXT, user_id INTEGER NULL, created_at INTEGER, updated_at INTEGER)
+  - chats(id INTEGER PRIMARY KEY, user_id INTEGER NULL, message TEXT, created_at INTEGER)
+
+3) server/routes/auth.ts — new
+- POST /api/auth/register { email, password } -> validate, bcrypt.hash(password), insert, return { user: {id,email}, token }
+- POST /api/auth/login { email, password } -> verify, return JWT (expires optional)
+- Token payload: { sub: userId, email }, sign with JWT_SECRET
+- Do not store raw passwords. Return descriptive errors for duplicates.
+
+4) server/middleware/auth.ts — new
+- Middleware to verify Authorization: Bearer <token>
+- Attach req.user = { id, email } or 401
+
+5) server/routes/projects.ts — new
+- Protected endpoints:
+  - POST /api/projects -> create project; if token present use req.user.id as owner
+  - GET /api/projects -> list all projects (if user authenticated, return their projects; otherwise return public examples)
+  - GET /api/projects/:id -> fetch
+  - PUT /api/projects/:id -> update only if owner
+  - DELETE /api/projects/:id -> delete only if owner
+
+6) server/routes/chat.ts — new
+- POST /api/chat -> save message with optional user_id from token
+- GET /api/chat?limit=50 -> return last messages
+- Keep messages small (limit length). Rate limit these endpoints lightly.
+
+7) server/routes/execute.ts — new
+- POST /api/execute { language: "javascript", code: "..." }
+- For MVP support only "javascript" using vm2:
+  - Use vm2 VM with timeout = Number(process.env.EXECUTION_TIMEOUT_MS||5000)
+  - Capture console output and return stdout/stderr and execution time
+  - Enforce max output size and max runtime
+  - Sanitize response: do not leak process.env or filesystem; disable require.
+  - Keep strict resource control. If vm2 not available in environment, produce scripts and instructions to run locally, and a safe fallback that returns an error with remediation steps.
+
+8) server/middleware/rateLimiter.ts — modify/verify
+- Ensure rate limiter allows normal page loads. Keep existing code but ensure API endpoints /api/execute and /api/auth are rate-limited per-IP (e.g., 30 reqs/min per endpoint) and static assets and Vite HMR paths are excluded.
+
+9) server/middleware/logging.ts — new
+- Add request ID (UUID v4), include it in response headers and logs.
+- Use morgan + custom logger exposing reqId.
+
+10) tests/ (new)
+- tests/auth.test.js (or ts) - register + login (mock DB or in-memory sqlite)
+- tests/projects.test.js - CRUD flow
+- tests/execute.test.js - run simple JS snippet, ensure timeout works
+- scripts/smoke.sh — run server and run curl checks for /api/status, /api/auth (health), /api/projects
+
+11) package.json — modify
+- Add scripts:
+  - "server:dev": "NODE_ENV=development npx tsx server/index.ts"
+  - "start": "node build/index.js" (if compiled)
+  - "test": "jest --runInBand"
+  - "smoke": "bash ./scripts/smoke.sh"
+- Add dependencies: express, better-sqlite3 (or sqlite3), bcrypt, jsonwebtoken, vm2, morgan, uuid, dotenv, cors, supertest, jest, tsx (if TS). If TypeScript project, add types/dev dependencies.
+
+12) .github/workflows/ci-tests.yml — new
+- On pull_request and push to feat/backend-brain branch:
+  - npm ci
+  - npm run test
+  - npm run smoke (skip execute if vm2 not available; mark as-warning)
+- Use existing ci-cache workflow where appropriate.
+
+13) client changes — modify
+- Add JS client helpers to store JWT in localStorage/sessionStorage and attach Authorization header to API calls.
+- Update project save UI to call POST/PUT /api/projects.
+- Update login/register pages/components (simple forms).
+- Update code execution UI to call /api/execute and show output (limit displayed lines).
+- Ensure any new client code uses React hooks properly (no conditional hooks) and handle 401s by prompting login.
+
+14) docs/IMPLEMENTATION_BACKEND_BRAIN.md — new
+- Short README: list endpoints, env vars, how to run locally, tests to run, and what was intentionally limited (only JS exec via vm2).
+
+VERIFICATION CHECKLIST (agent must run and capture outputs)
+- [ ] Create branch feat/backend-brain or print exact git commands to create branch + add/commit.
+- [ ] npm ci completes with exit code 0 (or print remediation)
+- [ ] Unit tests: npm test -> all tests pass (show stdout tail and exit code)
+- [ ] Smoke: npm run smoke -> show curl outputs (200/expected bodies)
+- [ ] /api/auth/register + /api/auth/login -> returns token -> token validates
+- [ ] /api/projects CRUD flow using JWT auth -> show sample JSON responses
+- [ ] /api/execute simple JS returns expected output and enforces timeout -> show outputs
+- [ ] CI workflow file created and lists steps (don’t need to run GitHub Actions here; just ensure file exists)
+- [ ] All edited files: show unified diffs in the response.
+  Quick plan (one line)
+Paste files → npm ci → put secrets in Replit Secrets or .env → npm run server:dev → run bash scripts/smoke.shto verify.
+
+Files to paste (create these in your repo)
+Note: Project is ESM ("type":"module") so files are .js with import syntax.
+1) package.json
+Create or merge. If you already have one, paste the scripts and install the dependencies listed.
+
+{
+  "name": "ybuilt-backend-brain",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "server:dev": "NODE_ENV=development npx tsx server/index.js",
+    "start": "node server/index.js",
+    "smoke": "bash ./scripts/smoke.sh",
+    "test": "node --experimental-vm-modules tests/run-all.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.2",
+    "helmet": "^7.0.0",
+    "lowdb": "^6.0.1",
+    "morgan": "^1.10.0",
+    "uuid": "^9.0.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.0",
+    "vm2": "^3.9.17"
+  },
+  "devDependencies": {
+    "tsx": "^3.12.7"
+  }
+}
+
+2) .env.example
+Create this and then copy into Replit Secrets or a real .env (do not commit real secrets).
+
+PORT=5000
+DATABASE_FILE=./data/db.json
+JWT_SECRET=replace_this_with_a_long_random_string
+NODE_ENV=development
+EXECUTION_TIMEOUT_MS=3000
+MAX_CODE_OUTPUT=65536
+
+3) server/index.js
+Main server entry.
+
+import 'dotenv/config';
+import express from 'express';
+import helmet from 'helmet';
+import cors from 'cors';
+import morgan from 'morgan';
+import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
+
+import { initDb } from './server/db.js';
+import authRoutes from './server/routes/auth.js';
+import projectsRoutes from './server/routes/projects.js';
+import chatRoutes from './server/routes/chat.js';
+import executeRoutes from './server/routes/execute.js';
+import { rateLimiter } from './server/middleware/rateLimiter.js';
+import { requestIdMiddleware, requestLogger } from './server/middleware/logging.js';
+
+const PORT = Number(process.env.PORT || 5000);
+const app = express();
+
+// ensure data dir exists
+const dataDir = path.resolve('./data');
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+// init db
+const db = initDb(process.env.DATABASE_FILE || './data/db.json');
+
+// middlewares
+app.use(helmet());
+app.use(cors());
+app.use(express.json({ limit: '200kb' }));
+app.use(requestIdMiddleware);
+app.use(requestLogger);
+app.use(morgan('tiny', { skip: () => process.env.NODE_ENV === 'test' }));
+app.use(rateLimiter);
+
+// health
+app.get('/api/status', (req, res) => res.json({ status: 'ok' }));
+
+// mount routes and pass db instance
+app.use('/api/auth', authRoutes(db));
+app.use('/api/projects', projectsRoutes(db));
+app.use('/api/chat', chatRoutes(db));
+app.use('/api/execute', executeRoutes(db));
+
+// global error handler
+app.use((err, req, res, next) => {
+  console.error(`[${req.id || 'no-id'}] ERROR:`, err && err.stack ? err.stack : err);
+  res.status(err?.status || 500).json({ error: err?.message || 'internal_error' });
+});
+
+// start server; if port busy, try next
+function startup(port, attempts = 0) {
+  const server = app.listen(port, () => {
+    console.log(`✅ Server listening on http://0.0.0.0:${port} (pid ${process.pid})`);
+  });
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && attempts < 3) {
+      console.warn(`Port ${port} in use - trying ${port + 1}`);
+      startup(port + 1, attempts + 1);
+    } else {
+      console.error('Failed to start server:', err);
+      process.exit(1);
+    }
+  });
+}
+startup(PORT);
+
+4) server/db.js
+Simple file-backed DB using lowdb.
+
+import { Low, JSONFile } from 'lowdb';
+import fs from 'fs';
+import path from 'path';
+
+export function initDb(file = './data/db.json') {
+  const filePath = path.resolve(file);
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  const adapter = new JSONFile(filePath);
+  const db = new Low(adapter);
+  // initialize
+  (async () => {
+    await db.read();
+    db.data ||= { users: [], projects: [], chats: [] };
+    await db.write();
+  })().catch((e) => console.error('DB init error', e));
+  return db;
+}
+
+5) server/middleware/logging.js
+Request ID and simple logger.
+
+import { v4 as uuidv4 } from 'uuid';
+
+export function requestIdMiddleware(req, res, next) {
+  req.id = req.headers['x-request-id'] || uuidv4();
+  res.setHeader('X-Request-Id', req.id);
+  next();
+}
+
+export function requestLogger(req, res, next) {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    console.log(`[${req.id}] ${req.method} ${req.path} ${res.statusCode} - ${ms}ms`);
+  });
+  next();
+}
+
+6) server/middleware/rateLimiter.js
+Lightweight IP-based limiter with exclusions.
+
+const store = new Map();
+const WINDOW_MS = 60 * 1000;
+const MAX_REQUESTS = 500;
+
+const EXCLUDE_PREFIXES = ['/assets', '/previews', '/@vite', '/@react-refresh', '/@fs', '/favicon.ico', '/api/status'];
+
+export function rateLimiter(req, res, next) {
+  if (EXCLUDE_PREFIXES.some(p => req.path.startsWith(p))) return next();
+
+  const ip = req.get('x-forwarded-for') || req.ip || 'unknown';
+  const now = Date.now();
+  const entry = store.get(ip) || { count: 0, start: now };
+  if (now - entry.start > WINDOW_MS) {
+    entry.count = 1;
+    entry.start = now;
+  } else {
+    entry.count += 1;
+  }
+  store.set(ip, entry);
+
+  if (entry.count > MAX_REQUESTS) {
+    res.set('Retry-After', String(Math.ceil((WINDOW_MS - (now - entry.start)) / 1000)));
+    return res.status(429).json({ error: 'rate_limited' });
+  }
+  next();
+}
+
+// periodic cleanup
+setInterval(() => {
+  const cutoff = Date.now() - (WINDOW_MS * 2);
+  for (const [k, v] of store) {
+    if (v.start < cutoff) store.delete(k);
+  }
+}, 5 * 60 * 1000);
+
+7) server/middleware/auth.js
+JWT auth middleware.
+
+import jwt from 'jsonwebtoken';
+
+const SECRET = process.env.JWT_SECRET || 'replace_me';
+
+export function authMiddleware(req, res, next) {
+  const auth = req.get('authorization') || '';
+  const m = auth.match(/^Bearer (.+)$/);
+  if (!m) {
+    req.user = null;
+    return next();
+  }
+  try {
+    const payload = jwt.verify(m[1], SECRET);
+    req.user = { id: payload.sub, email: payload.email };
+    return next();
+  } catch (err) {
+    return res.status(401).json({ error: 'invalid_token' });
+  }
+}
+
+8) server/routes/auth.js
+Register and login.
+
+import express from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
+
+const SECRET = process.env.JWT_SECRET || 'replace_me';
+const TOKEN_EXP = '7d';
+
+export default function authRoutes(db) {
+  const router = express.Router();
+
+  router.post('/register', async (req, res) => {
+    const { email, password } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: 'email_and_password_required' });
+
+    await db.read();
+    const exists = db.data.users.find(u => u.email === email.toLowerCase());
+    if (exists) return res.status(409).json({ error: 'email_exists' });
+
+    const hash = await bcrypt.hash(password, 10);
+    const user = { id: uuidv4(), email: email.toLowerCase(), password_hash: hash, created_at: Date.now() };
+    db.data.users.push(user);
+    await db.write();
+
+    const token = jwt.sign({ sub: user.id, email: user.email }, SECRET, { expiresIn: TOKEN_EXP });
+    res.json({ user: { id: user.id, email: user.email }, token });
+  });
+
+  router.post('/login', async (req, res) => {
+    const { email, password } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: 'email_and_password_required' });
+
+    await db.read();
+    const user = db.data.users.find(u => u.email === email.toLowerCase());
+    if (!user) return res.status(401).json({ error: 'invalid_credentials' });
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'invalid_credentials' });
+
+    const token = jwt.sign({ sub: user.id, email: user.email }, SECRET, { expiresIn: TOKEN_EXP });
+    res.json({ user: { id: user.id, email: user.email }, token });
+  });
+
+  return router;
+}
+
+9) server/routes/projects.js
+Project CRUD (basic owner-only ops).
+
+import express from 'express';
+import { authMiddleware } from '../server/middleware/auth.js';
+
+export default function projectsRoutes(db) {
+  const router = express.Router();
+  router.use(authMiddleware);
+
+  router.post('/', async (req, res) => {
+    const { name = 'Untitled', content = '' } = req.body || {};
+    await db.read();
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+    const project = { id, user_id: req.user?.id || null, name, content, created_at: Date.now(), updated_at: Date.now() };
+    db.data.projects.push(project);
+    await db.write();
+    res.json({ project });
+  });
+
+  router.get('/', async (req, res) => {
+    await db.read();
+    const user = req.user;
+    const projects = user ? db.data.projects.filter(p => p.user_id === user.id) : db.data.projects.slice(0, 10);
+    res.json({ projects });
+  });
+
+  router.get('/:id', async (req, res) => {
+    await db.read();
+    const p = db.data.projects.find(x => x.id === req.params.id);
+    if (!p) return res.status(404).json({ error: 'not_found' });
+    if (p.user_id && req.user?.id !== p.user_id) return res.status(403).json({ error: 'forbidden' });
+    res.json({ project: p });
+  });
+
+  router.put('/:id', async (req, res) => {
+    await db.read();
+    const p = db.data.projects.find(x => x.id === req.params.id);
+    if (!p) return res.status(404).json({ error: 'not_found' });
+    if (p.user_id && req.user?.id !== p.user_id) return res.status(403).json({ error: 'forbidden' });
+    const { name, content } = req.body || {};
+    if (name !== undefined) p.name = name;
+    if (content !== undefined) p.content = content;
+    p.updated_at = Date.now();
+    await db.write();
+    res.json({ project: p });
+  });
+
+  router.delete('/:id', async (req, res) => {
+    await db.read();
+    const ix = db.data.projects.findIndex(x => x.id === req.params.id);
+    if (ix === -1) return res.status(404).json({ error: 'not_found' });
+    const p = db.data.projects[ix];
+    if (p.user_id && req.user?.id !== p.user_id) return res.status(403).json({ error: 'forbidden' });
+    db.data.projects.splice(ix, 1);
+    await db.write();
+    res.json({ ok: true });
+  });
+
+  return router;
+}
+
+10) server/routes/chat.js
+Simple persistent chat messages.
+
+import express from 'express';
+import { authMiddleware } from '../server/middleware/auth.js';
+
+export default function chatRoutes(db) {
+  const router = express.Router();
+  router.use(authMiddleware);
+
+  router.post('/', async (req, res) => {
+    const { message } = req.body || {};
+    if (!message || String(message).trim().length === 0) return res.status(400).json({ error: 'message_required' });
+    if (String(message).length > 2000) return res.status(400).json({ error: 'message_too_long' });
+
+    await db.read();
+    const chat = { id: Date.now().toString(36), user_id: req.user?.id || null, message: String(message).slice(0,2000), created_at: Date.now() };
+    db.data.chats.push(chat);
+    await db.write();
+    res.json({ chat });
+  });
+
+  router.get('/', async (req, res) => {
+    await db.read();
+    const limit = Math.min(100, Number(req.query.limit || 50));
+    const msgs = db.data.chats.slice(-limit);
+    res.json({ messages: msgs });
+  });
+
+  return router;
+}
+
+11) server/routes/execute.js
+Sandboxed JS execution using vm2. Very careful — no require, console captured, timeout enforced, output truncated.
+
+import express from 'express';
+import { VM } from 'vm2';
+import { authMiddleware } from '../server/middleware/auth.js';
+
+const DEFAULT_TIMEOUT = Number(process.env.EXECUTION_TIMEOUT_MS || 3000);
+const MAX_OUTPUT = Number(process.env.MAX_CODE_OUTPUT || 65536);
+
+export default function executeRoutes(db) {
+  const router = express.Router();
+  // allow optional auth; but enforce rate limiting earlier
+  router.use(authMiddleware);
+
+  router.post('/', async (req, res) => {
+    const { language = 'javascript', code = '' } = req.body || {};
+    if (language !== 'javascript') return res.status(400).json({ error: 'unsupported_language' });
+    if (!code || String(code).trim().length === 0) return res.status(400).json({ error: 'code_required' });
+
+    // capture console logs
+    const logs = [];
+    const consoleSandbox = {
+      log: (...args) => {
+        try {
+          logs.push({ type: 'log', text: args.map(String).join(' ') });
+          if (logs.join('').length > MAX_OUTPUT) throw new Error('output_truncated');
+        } catch (e) {
+          /* pass */
+        }
+      },
+      error: (...args) => logs.push({ type: 'error', text: args.map(String).join(' ') }),
+      warn: (...args) => logs.push({ type: 'warn', text: args.map(String).join(' ') })
+    };
+
+    let vm;
+    try {
+      vm = new VM({
+        timeout: DEFAULT_TIMEOUT,
+        sandbox: { console: consoleSandbox },
+        eval: false,
+        wasm: false
+      });
+
+      const start = Date.now();
+      const result = vm.run(`(async () => { ${code} })()`);
+      // allow returned promise to resolve (note: VM timeout also applies)
+      const value = await Promise.resolve(result);
+      const elapsed = Date.now() - start;
+      const output = String(value === undefined ? '' : JSON.stringify(value));
+      const truncatedOutput = output.length > MAX_OUTPUT ? output.slice(0, MAX_OUTPUT) + '...[truncated]' : output;
+
+      // truncate logs if needed
+      let combinedLogs = logs.map(l => `[${l.type}] ${l.text}`).join('\n');
+      if (combinedLogs.length > MAX_OUTPUT) combinedLogs = combinedLogs.slice(0, MAX_OUTPUT) + '\n...[truncated]';
+
+      res.json({ ok: true, result: truncatedOutput, logs: combinedLogs, time_ms: elapsed });
+    } catch (err) {
+      const message = err && err.message ? String(err.message) : 'execution_error';
+      const truncated = String(message).slice(0, 2000);
+      return res.status(400).json({ ok: false, error: truncated, logs: logs.map(l => l.text).slice(0, 50) });
+    }
+  });
+
+  return router;
+}
+
+12) scripts/smoke.sh
+Basic smoke tests you can run locally.
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOST=${HOST:-http://localhost:5000}
+
+echo "→ Checking /api/status"
+curl -sS "${HOST}/api/status" | jq || true
+
+echo "→ Register sample user"
+curl -sS -X POST "${HOST}/api/auth/register" -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' | jq || true
+
+echo "→ Login"
+TOK=$(curl -sS -X POST "${HOST}/api/auth/login" -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' | jq -r '.token')
+echo "token: ${TOK}"
+
+echo "→ Create project"
+curl -sS -X POST "${HOST}/api/projects" -H "Content-Type: application/json" -H "Authorization: Bearer ${TOK}" -d '{"name":"demo","content":"console.log(\"hello\")"}' | jq || true
+
+echo "→ Exec JS"
+curl -sS -X POST "${HOST}/api/execute" -H "Content-Type: application/json" -H "Authorization: Bearer ${TOK}" -d '{"language":"javascript","code":"console.log(\"hi\"); return {ok:42};"}' | jq || true
+
+echo "Smoke finished."
+Make it executable:
+
+chmod +x scripts/smoke.sh
+
+13) docs/IMPLEMENTATION_BACKEND_BRAIN.md
+Small README explaining endpoints and how to run.
+
+# Backend Brain — quick runbook
+
+ENV:
+- copy .env.example -> .env or set Replit secrets
+- JWT_SECRET must be set
+
+Install:
+npm ci
+
+Start (dev):
+npm run server:dev
+
+Smoke:
+npm run smoke
+
+Endpoints:
+- GET /api/status
+- POST /api/auth/register { email, password } -> { user, token }
+- POST /api/auth/login { email, password } -> { user, token }
+- POST /api/projects (auth) { name, content } -> project
+- GET /api/projects (auth) -> list
+- GET /api/projects/:id
+- PUT /api/projects/:id (auth)
+- DELETE /api/projects/:id (auth)
+- POST /api/chat { message } -> chat
+- GET /api/chat?limit=50 -> messages
+- POST /api/execute { language: 'javascript', code: '...' } -> { result, logs }
+
+Notes:
+- Execution uses vm2 with a timeout (EXECUTION_TIMEOUT_MS). Only JS allowed.
+- Database is a single JSON file at ./data/db.json (low-cost, suitable for MVP).
+
+14) PR_BODY_BACKEND_BRAIN.md
+Short PR text to paste into GitHub.
+
+feat: backend brain — auth, projects, chat, sandboxed JS execution
+
+What:
+- Added JWT-based authentication (register/login).
+- Added projects CRUD endpoints and simple persistent storage (file DB).
+- Added chat message persistence.
+- Added sandboxed JavaScript execution endpoint using vm2 (timeout & output truncation).
+- Added rate limiting, request-id logging, smoke script, and documentation.
+
+Why:
+- Small, low-cost backend to store projects, run small JS snippets safely, and enable user accounts for the YBUILT MVP.
+
+How to test:
+1. Set env vars from .env.example
+2. npm ci
+3. npm run server:dev
+4. npm run smoke
+
+Notes / follow-ups:
+- Consider migrating to SQLite or a real managed DB when user volume grows.
+- Add better exec isolation for multi-language later (containerized runners).
+
+Exact git commands (if git works in your environment)
+
+git checkout -b feat/backend-brain
+git add server package.json scripts docs .env.example
+git commit -m "feat: backend brain (auth, projects, chat, sandbox exec) - MVP"
+git push origin feat/backend-brain
+
+Commands to run in Replit (step-by-step)
+1. Paste the files above.
+2. In Replit shell:
+
+# install deps
+npm ci
+
+# set env (or use Replit Secrets)
+# export JWT_SECRET="a-very-long-secret"
+# export DATABASE_FILE=./data/db.json
+
+# start dev server
+npm run server:dev
+1. In another shell, run smoke:
+
+bash scripts/smoke.sh
+Expected smoke results: status ok, register + login return token, project created, execute returns logs/result.
+
+Safety & limits (read this)
+* Execution endpoint runs JS only and is intentionally limited. Do not accept user-submitted arbitrary modules or enable require. vm2 blocks require by default here.
+* This MVP uses a file DB — OK for single-node/testing. When you scale, move to an actual DB service.
+* Keep your JWT_SECRET secret. Use Replit secrets, not committing .env.
+
+Quick dev tips (so you don’t break things)
+* If you get EADDRINUSE, restart or change PORT (Replit sometimes has dev servers already).
+* If vm2 throws a weird error in Replit, consider increasing EXECUTION_TIMEOUT_MS slightly but keep small (3s).
+* If you want to let users save files, store them as project content in DB and render client-side.
+ 
+ACCEPTANCE CRITERIA (must be satisfied to call task complete)
+1. Branch created and committed changes exist (or prints git commands).
+2. Server runs locally with `npm run server:dev` and responds to /api/status with 200 and { status: 'ok' }.
+3. Register/login flow works and returns JWT.
+4. Project save & retrieve works for authenticated user.
+5. JS code execution endpoint runs sandboxed JS and enforces timeouts.
+6. Tests & smoke script run locally (or produce clear remediation if environment blocks something).
+7. Clear documentation in IMPLEMENTATION_BACKEND_BRAIN.md and PR body text describing changes and any manual steps.
+
+CONSTRAINTS / SAFETY RULES (strict)
+- Do not attempt to run Docker or create privileged processes. This must work in Replit environment without root. If any step requires external infra, produce scripts and instructions to run locally or in a cloud provider.
+- Execution endpoint supports ONLY JavaScript for now (vm2). Do not implement arbitrary native binary execution.
+- Don’t commit secrets. Use .env.example and require the reviewer to set real secrets in GitHub Secrets or Replit environment variables.
+- If any long-running or heavy CPU tasks are needed, return HTTP 202 and queue the job; do not block event loop.
+
+REPORTING FORMAT (how agent should reply back)
+- List files created/modified (paths) and attach unified diffs.
+- Show exact git commands to create branch, add files, commit, and push.
+- Show outputs of verification checklist commands: tail of stdout and exit codes.
+- If any tests or commands failed due to environment limits, show exact error and a one-line remediation.
+- Provide a suggested PR body (PR_BODY_BACKEND_BRAIN.md) and a short follow-up roadmap (3 items) with risk/benefit notes.
+
+FOLLOW-UP ROADMAP (recommendations after MVP)
+1. Multi-language execution via remote executor (containerized API). Risk: medium, cost: medium. Benefit: big.
+2. Add payment gating for heavy execs / paid compute. Risk: low, cost: recurring. Benefit: revenue.
+3. Add persistent websocket chat with rooms and presence (Socket.IO) and file attachments. Risk: low, cost: low.
+
+Extra notes for the agent:
+- Be explicit about anything that cannot be done automatically in Replit and provide exact manual steps.
+- Keep code minimal and readable; prefer sync DB calls for simplicity using better-sqlite3 (safe on single-node).
+- Keep security sane: JWT with reasonable expiry (e.g., 7d) and password hashing with bcrypt (salt rounds 10).
+- Provide small example curl command for each endpoint to verify manually.
+
+END TASK
