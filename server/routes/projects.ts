@@ -236,15 +236,19 @@ router.put('/:id', authRequired, async (req: Request, res: Response) => {
       [projectId]
     );
 
+    if (!updatedProject) {
+      return res.status(500).json({ error: 'Failed to retrieve updated project' });
+    }
+
     logger.info({ projectId, userId: req.user.id }, 'Project updated');
 
     res.status(200).json({
-      id: updatedProject!.id,
-      userId: updatedProject!.user_id,
-      name: updatedProject!.name,
-      content: updatedProject!.content,
-      createdAt: updatedProject!.created_at,
-      updatedAt: updatedProject!.updated_at,
+      id: updatedProject.id,
+      userId: updatedProject.user_id,
+      name: updatedProject.name,
+      content: updatedProject.content,
+      createdAt: updatedProject.created_at,
+      updatedAt: updatedProject.updated_at,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

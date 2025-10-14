@@ -17,4 +17,4 @@ export const JWT_SECRET =
 export const JWT_SECRET_PREVIOUS = process.env.JWT_SECRET_PREVIOUS || undefined;
 
 // Token lifetime; tweak if you want (e.g. "1h", "7d")
-export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? "7d";
+export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";

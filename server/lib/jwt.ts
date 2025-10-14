@@ -6,8 +6,7 @@ export type Payload = Record<string, unknown>;
 
 export function signJwt(payload: Payload): string {
   return jwt.sign(payload, JWT_SECRET, {
-    algorithm: "HS256",
-    expiresIn: JWT_EXPIRES_IN as string | number,
+    expiresIn: JWT_EXPIRES_IN as any,
   });
 }
 
