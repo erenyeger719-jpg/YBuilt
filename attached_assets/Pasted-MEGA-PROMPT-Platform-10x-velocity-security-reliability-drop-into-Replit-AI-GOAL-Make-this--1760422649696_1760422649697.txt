@@ -1,0 +1,115 @@
+MEGA PROMPT — Platform 10x: velocity + security + reliability (drop into Replit AI)
+
+GOAL
+Make this repository and the Replit platform integration measurably faster, safer, and more reliable for developers:
+- reduce local & CI build time via remote caching & reproducible builds,
+- enforce supply-chain security (cosign + SBOM + attestations) end-to-end,
+- add metric-based progressive delivery with automatic rollback,
+- ship observability and dev ergonomics improvements.
+
+BRANCH
+Work on branch: fix/platform-10x
+If git is blocked: create/modify files and at the end print exact git commands the human should run (no git operations attempted).
+
+QUICK OFFER (must show at the start of the agent response)
+If you want me to paste any specific file now, reply with which of these and I’ll dump full contents + unified diffs:
+- scripts/reproducible-build.sh
+- scripts/cosign-sign-artifacts.sh
+- .github/workflows/publish.yml (enforce)
+- .github/workflows/canary-promote.yml
+- .devcontainer/devcontainer.json
+
+IN-SCOPE / OUT-OF-SCOPE
+- In-scope: create/modify repo files, run local dry-runs, produce unified diffs, create implementation report and PR body.
+- Out-of-scope: real cluster `kubectl apply` or pushing images to protected registries unless credentials are present. If cluster ops required, produce exact `kubectl` commands and a one-line remediation for humans to run.
+
+SECRETS (placeholders only — don’t print values)
+Use `${{ secrets.COSIGN_KEY }}`, `${{ secrets.GITHUB_TOKEN }}`, `${{ secrets.SLACK_WEBHOOK_URL }}` etc. Document exact secret names required.
+
+TOP-LEVEL ACCEPTANCE CRITERIA
+1. `scripts/reproducible-build.sh` produces `artifacts/dist.tar.gz` and `artifacts/dist.tar.gz.sha256`.
+2. `scripts/generate-cyclonedx-sbom.sh` produces `artifacts/sbom.json`.
+3. `scripts/provenance/attest-oci.js` produces `artifacts/provenance.json` with {git_sha, built_at, sbom_sha256, image_ref}.
+4. `.github/workflows/publish.yml` enforces cosign signing + SBOM attestation and fails PRs on missing/invalid signatures.
+5. `.github/workflows/canary-promote.yml` deploys canary, requires signature+SBOM before traffic ramp, and auto-rolls back on configured Prometheus metrics.
+6. `tools/log-trace-correlation.js` attaches trace id to structured logs and examples exist in server entrypoint.
+7. `IMPLEMENTATION_PLATFORM10X.md` and `PR_BODY_PLATFORM10X.md` created with diffs and verification outputs.
+
+FILES TO CREATE / MODIFY (show unified diffs for each change)
+- scripts/reproducible-build.sh — wrapper for deterministic builds, sets `SOURCE_DATE_EPOCH` from git commit time, packages artifact tarball + sha256.
+- scripts/generate-cyclonedx-sbom.sh — produce CycloneDX SBOM to `artifacts/sbom.json` (or simulate in dry-run if tool missing).
+- scripts/provenance/attest-oci.js — write provenance JSON and print SHA256 of SBOM.
+- scripts/cosign-sign-artifacts.sh — robust signing helper: accepts `--image` or `--artifact`, keyless OIDC fallback and `--key env://COSIGN_KEY`, attaches SBOM & provenance via `cosign attest`, verifies with `cosign verify`.
+- ci/verify-sbom-and-cosign.sh — verify signature + attestations; return non-zero on failure and print actionable remediation.
+- .github/workflows/publish.yml — build, SBOM, provenance, sign/attest, verify. Must include `sigstore/cosign-installer@v*` before using cosign and `permissions: id-token: write`.
+- .github/workflows/canary-promote.yml — deploys canary (helm), verifies SBOM/signature, runs synthetic checks and Prometheus metrics checks; promotes or rollback.
+- .github/workflows/policy-check.yml — PR gating job that runs `ci/verify-sbom-and-cosign.sh`, trivy, npm audit, and OPA tests.
+- k8s/cert-manager/clusterissuer-selfsigned.yaml and clusterissuer-ca.yaml — valid YAML examples.
+- k8s/gatekeeper/constraint-verify-cosign.yaml & opa/policies/verify-cosign.rego — Gatekeeper template + constraint that enforces cosign attestation annotation and documents installing Sigstore Policy Controller for full enforcement.
+- helm/values-canary.yaml & helm/templates/canary-config.yaml — require SBOM & signature before increasing traffic.
+- monitoring/prometheus-canary-alerts.yaml — canary alerts and webhook for rollback.
+- tools/log-trace-correlation.js — middleware for trace→logs.
+- .devcontainer/devcontainer.json + .devcontainer/Dockerfile — include cosign, opa, trivy, reproducible build helper and build cache client.
+
+STEP-BY-STEP TASKS (commit as you go)
+Preflight
+- Print:
+node -v && npm -v && git --version || true
+git branch --show-current || echo "git unavailable"
+uname -a
+ls -la | sed -n '1,120p'
+- Attempt `git checkout -b fix/platform-10x`. If blocked: don’t error; instead record the commands in `GIT_COMMANDS_PLATFORM10X.md`.
+
+Implementation order (atomic commits)
+1. scripts/reproducible-build.sh — implement deterministic build; run locally.
+2. scripts/generate-cyclonedx-sbom.sh — produce SBOM; dry-run allowed.
+3. scripts/provenance/attest-oci.js — produce provenance JSON.
+4. scripts/cosign-sign-artifacts.sh — sign image or artifact; attach SBOM/provenance; verify.
+5. ci/verify-sbom-and-cosign.sh — verification tool used by policy-check and canary workflows.
+6. .github/workflows/publish.yml — replace/patch to enforce signing, attestations; include dry-run mode.
+7. .github/workflows/policy-check.yml — gate PRs with verification and vulnerability checks.
+8. .github/workflows/canary-promote.yml — canary deploy and automated promote/rollback.
+9. observability files, devcontainer updates, and monitoring rules.
+10. Create `IMPLEMENTATION_PLATFORM10X.md` and `PR_BODY_PLATFORM10X.md` — include diffs, verification outputs, required secrets list, and one-liner remediations.
+
+VERIFICATION CHECKLIST — run & record outputs (command, last ~200 lines of stdout/stderr, exit code)
+A. Preflight (see above)
+B. Local/Smoke
+- `bash scripts/reproducible-build.sh`
+- `bash scripts/generate-cyclonedx-sbom.sh`
+- `node scripts/provenance/attest-oci.js --out artifacts/provenance.json`
+- `bash scripts/cosign-sign-artifacts.sh --image ghcr.io/OWNER/REPO:DRYRUN --dry-run`
+- `bash ci/verify-sbom-and-cosign.sh ghcr.io/OWNER/REPO:DRYRUN` (dry-run)
+- `npx trivy --version` and `npm audit --json > artifacts/npm-audit.json`
+- `opa test opa/policies` or `opa eval` with example manifests
+C. Workflow dry-run: run the essential steps locally (without pushing) and report errors.
+D. Canary dry-run: run helm template + synthetic check script; do not apply to cluster unless creds present.
+
+IF ANY STEP IS BLOCKED
+- Print exact failing command, exact last error output (tail), and **one-line remediation** the human should run (copy/paste).
+- Example: “cosign not found — remediation: add `- uses: sigstore/cosign-installer@v3` before signing step and ensure `permissions: id-token: write`.”
+
+BEHAVIOR RULES
+- Never print secret values.
+- If cluster actions are required and credentials are missing: generate `kubectl apply` commands and a short checklist (Cluster role, cert-manager, sigstore policy controller).
+- Fail loud and provide actionable remediation lines.
+- Make scripts idempotent and fail on missing preconditions with clear errors.
+
+OUTPUT FORMAT (single response)
+Your final reply must include:
+1. Branch used or “git unavailable”
+2. List of files created/modified
+3. Unified diffs for each changed file
+4. Verification checklist results (commands executed, stdout tail, exit code)
+5. Artifacts produced (paths)
+6. If steps were skipped, exact error + one-line remediation
+7. Full `IMPLEMENTATION_PLATFORM10X.md` content (summary + manual finalize steps)
+8. Full `PR_BODY_PLATFORM10X.md` content (ready to paste)
+9. Three next recommended follow-ups (short risk/benefit)
+
+Start implementing now. If anything cannot be executed (no docker, no cosign, no cluster access), still:
+- create and chmod +x scripts,
+- show diffs,
+- produce exact remediation commands for a human-run deployment.
+
+END OF PROMPT
