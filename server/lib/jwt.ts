@@ -5,10 +5,11 @@ import { JWT_SECRET, JWT_SECRET_PREVIOUS, JWT_EXPIRES_IN } from "../config.js";
 export type Payload = Record<string, unknown>;
 
 export function signJwt(payload: Payload): string {
-  return jwt.sign(payload, JWT_SECRET, {
+  const options = {
     algorithm: "HS256" as const,
     expiresIn: JWT_EXPIRES_IN,
-  });
+  };
+  return jwt.sign(payload, JWT_SECRET, options);
 }
 
 export function verifyJwt(token: string): JwtPayload | string {

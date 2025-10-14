@@ -21,7 +21,7 @@ export interface JWTPayload {
  * Wraps the centralized signJwt from lib/jwt
  */
 export function signJwt(payload: JWTPayload): string {
-  return sign(payload as Record<string, unknown>);
+  return sign(payload as unknown as Record<string, unknown>);
 }
 
 /**
