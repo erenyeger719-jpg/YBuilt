@@ -1,0 +1,28 @@
+# CA-based ClusterIssuer for Production
+
+# Step 1: Create CA Certificate
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ybuilt-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: ybuilt-ca
+  secretName: ybuilt-ca-secret
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+
+---
+# Step 2: Create CA Issuer
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: ybuilt-ca-issuer
+spec:
+  ca:
+    secretName: ybuilt-ca-secret

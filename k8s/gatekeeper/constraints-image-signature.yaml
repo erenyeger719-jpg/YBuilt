@@ -65,8 +65,10 @@ apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sRequireCosignSignature
 metadata:
   name: require-cosign-signature
+  annotations:
+    description: "SECURITY WARNING: This constraint only checks annotation presence, not signature validity. Set to warn mode until proper verification is implemented via Sigstore Policy Controller."
 spec:
-  enforcementAction: deny
+  enforcementAction: warn  # CHANGED FROM deny - annotation-only check is not secure
   match:
     kinds:
       - apiGroups: [""]

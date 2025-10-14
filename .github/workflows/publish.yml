@@ -136,22 +136,23 @@ jobs:
             echo "⚠️ OIDC token not available"
           fi
       
-      - name: Sign with cosign (OIDC)
+      - name: Sign artifacts with cosign (OIDC)
         if: steps.oidc-check.outputs.oidc_available == 'true'
         run: |
-          chmod +x scripts/cosign-publish.sh
-          ./scripts/cosign-publish.sh \
+          chmod +x scripts/cosign-sign-artifacts.sh
+          ./scripts/cosign-sign-artifacts.sh \
             artifacts/dist.tar.gz \
             artifacts/sbom.json \
             artifacts/provenance.json
       
-      - name: Sign with cosign (Key fallback)
+      - name: Sign artifacts with cosign (Key fallback)
         if: steps.oidc-check.outputs.oidc_available == 'false' && secrets.COSIGN_KEY != ''
         env:
           COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
         run: |
-          chmod +x scripts/cosign-publish.sh
-          ./scripts/cosign-publish.sh \
+          chmod +x scripts/cosign-sign-artifacts.sh
+          COSIGN_KEY="${{ secrets.COSIGN_KEY }}" \
+            ./scripts/cosign-sign-artifacts.sh \
             artifacts/dist.tar.gz \
             artifacts/sbom.json \
             artifacts/provenance.json
