@@ -1,0 +1,158 @@
+MEGA PROMPT — Next-level: from 10x → industrial (supply-chain, signing, provenance, progressive delivery, ops)
+Goal — short Make the repository industrial-grade: reproducible deterministic builds, supply-chain provenance & attestations (Sigstore/cosign + in-toto-like artifacts), secretsless publish (OIDC), signed container images & SBOM verification, progressive delivery with canary/blue-green automation (Flagger/istio or native Helm + automated metric checks), stronger runtime security and observability (trace->log correlation, sampling, retention), stronger policy-as-code gates (OPA/Gatekeeper in CI), and developer ergonomics (devcontainer / reproducible dev workspace). Work on a new branch and produce diffs, artifacts, and a complete verification report.
+Branch
+
+git checkout -b fix/industrial-readiness
+Quick offer to human (agent must present this at start)
+
+If you want, tell me which of the quick files you want me to print now and I’ll paste exact contents + unified diffs instantly:
+- cosign-publish.sh (image signing/push helper)
+- .github/workflows/publish.yml (OIDC + cosign + GHCR)
+- devcontainer.json
+- opa/policies/deny-privileged.rego
+- helm/chart/values-canary.yaml (progressive delivery knobs)
+Pick any or “all”.
+High-level new objectives (ordered)
+1. Zero-Trust publishing: Use GitHub OIDC (no long-lived secrets) + cosign to sign images and produce OCI attestations (SLSA-friendly). Attach provenance to GH release.
+2. Signed image + SBOM verification on deploy: Use cosign + cosign verify + CycloneDX SBOM verification in pipeline and on cluster admission (via Gatekeeper).
+3. Reproducible deterministic builds: determinism in Docker (pinned base image digest, build-arg for lockfile hash), add reproducible-frontend build steps (fixed node/npm versions, deterministic asset hashing).
+4. Policy-as-code gating: Add OPA/Gatekeeper checks in CI for image signature presence, SBOM verification, dependency policy, and deny-of-privileged images.
+5. Progressive delivery, promotion automation: Improve canary to use Flagger (or a Helm-run metric check) to safely promote canary via metric-based checks and automatically rollback.
+6. Advanced provenance & attestation: Generate in-toto style attestations (or cosign attestations) for artifacts and images, store in release assets.
+7. Runtime security & k8s defense: recommend minimal-distroless images, add PodSecurityPolicy/PSA via Gatekeeper/OPA, explain eBPF/Cilium suggestions.
+8. Observability hardening: correlate traces and logs (trace IDs), add sampling rules and retention guidance, add Tempo/Loki pipeline example and Grafana alerts.
+9. Developer UX: devcontainer + VSCode Remote, reproducible local dev via docker-compose + cached builder, prebuilt dev images to speed onboarding.
+10. Automated audit & remediation: PR check that runs snyk, trivy, npm audit, and creates prioritized remediation issues.
+Files to create or modify (explicit list)
+* .github/workflows/publish.yml — OIDC build/publish with cosign, push to GHCR, create release with artifacts
+* scripts/cosign-publish.sh — helper to sign image, upload attestation and SBOM
+* ci/verify-sbom-and-cosign.sh — verify SBOM + cosign attestation
+* scripts/generate-cyclonedx-sbom.sh — reproducible SBOM creation
+* scripts/reproducible-build.sh — deterministic build wrapper (locks, environment)
+* helm/Chart.yaml + helm/values-canary.yaml + helm/templates/canary-config.yaml — canary config support
+* .github/workflows/canary-flagger.yml — job to run Flagger/helm promote flow with metric checks
+* k8s/gatekeeper/constraints-image-signature.yaml and opa/policies/deny-privileged.rego — policy-as-code
+* .devcontainer/devcontainer.json and .devcontainer/Dockerfile — reproducible dev environment
+* docs/industrial-readiness.md — step-by-step guide
+* IMPLEMENTATION_INDUSTRIAL.md — final report with diffs + verification
+* tools/log-trace-correlation.js — tiny library to ensure loggers include trace ids
+* monitoring/tempo-loki-stack.md — reference how to connect Tempo+Loki with Grafana dashboards
+* k8s/admission/sbom-verify-admission.yaml — an example admission webhook config that gates deployments on signed SBOM/attestations (or document it if cluster-level not possible)
+* scripts/verify-release-assets.sh — verify artifacts uploaded to GH release
+Detailed step-by-step tasks the agent must perform (do each, commit as you go; if blocked, record exact error + remediation)
+Step 0 — preflight prints (always)
+Print the environment and branch:
+
+node -v && npm -v && git --version || true
+git branch --show-current || echo "git unavailable"
+ls -la | sed -n '1,120p'
+Step 1 — branch + commit policy
+* Create branch fix/industrial-readiness. Commit each logical file change with clear messages (use meaningful atomic commits). If git disabled, create files and print exact git commands for local commit.
+Step 2 — reproducible deterministic build wrapper
+* Create scripts/reproducible-build.sh:
+    * Use pinned base image digests or --platform arguments in Docker build.
+    * Use npm ci --prefer-offline --no-audit and environment vars SOURCE_DATE_EPOCH and TZ=UTC to normalize timestamps.
+    * Produce artifacts/dist.tar.gz and compute sha256.
+* Add commit and show unified diff.
+Step 3 — SBOM generation & signing using Sigstore/Cosign
+* Create scripts/generate-cyclonedx-sbom.sh (use npx @cyclonedx/builder or syft fallback).
+* Create scripts/cosign-publish.sh:
+    * Build image (or use dist tarball), push to GHCR using OIDC (see publish.yml).
+    * Use cosign sign --key <KEY|KMS> or cosign sign-blob if using keyless (OIDC) flow.
+    * Use cosign attest --predicate provenance.json to produce attestations.
+    * Upload SBOM + provenance.json + signed attestation to GH release (dry-run if secrets missing).
+* Add ci/verify-sbom-and-cosign.sh that runs cosign verify and verifies SBOM sha matches artifact.
+Step 4 — GitHub workflow: publish.yml (OIDC + cosign)
+* Create .github/workflows/publish.yml:
+    * Trigger: push to main (but do dry-run) and manual dispatch for real publish.
+    * Use permissions: contents: write, packages: write, id-token: write to enable OIDC.
+    * Steps:
+        * checkout
+        * setup-node
+        * npm ci
+        * npm run build via scripts/reproducible-build.sh
+        * scripts/generate-cyclonedx-sbom.sh
+        * scripts/cosign-publish.sh — if secrets or OIDC not configured, do a dry-run and upload artifacts as workflow artifacts
+        * Create draft release and attach artifacts/provenance via release API (dry-run when secrets absent)
+* Remove any || true. Fail pipeline on missing critical checks.
+Step 5 — Policy-as-code & admission gating (CI-level)
+* Add opa/policies/deny-privileged.rego — deny containers running as root, deny images without cosign signature, deny if SBOM has banned package patterns.
+* Create k8s/gatekeeper/constraints-image-signature.yaml sample (how to enforce in cluster with Gatekeeper).
+* Add a CI job policy-check that runs opa eval against built manifests and cosign verify on built image; fail if policy denies.
+Step 6 — Progressive delivery: Flagger/Helm improvements
+* Add helm/values-canary.yaml with canary weight knobs, success/failure thresholds, intervals.
+* Add .github/workflows/canary-flagger.yml:
+    * Trigger: after a successful publish dry-run (or manual)
+    * Steps:
+        * Deploy canary via Helm with canary.enabled=true weight=10
+        * Run synthetic checks (ci/synthetic-check.sh) for X seconds (make short for CI by default)
+        * If metrics green → helm set weight 100 and finalize; else → run scripts/rollback.sh
+* Commit diffs.
+Step 7 — Advanced provenance: attestation format
+* Create scripts/provenance/attest-oci.js or use cosign attest; produce artifacts/provenance.jsoncontaining: git_sha, build_time, sbom_sha256, image_ref, cosign_attestation_ref. Sign provenance.json with cosign or GPG. Upload as release asset.
+Step 8 — Observability hardening (trace <-> logs)
+* Add tools/log-trace-correlation.js: middleware for request logger that injects trace_id from OpenTelemetry context into structured logs; update server logger to include trace_id if present.
+* Add monitoring/tempo-loki-stack.md: instructions for hooking Tempo+Loki and sample Grafana dashboards; include sampling guidance (e.g., sample 10% of traces, 100% for errors).
+* Add Grafana panel snippet for canary metrics and SLO dashboards.
+Step 9 — Runtime security & smallest images
+* Add docs recommending distroless or slim images and show a multi-stage Dockerfile change snippet that produces small runtime images and uses USER non-root.
+* Add k8s/admission/sbom-verify-admission.yaml as an example (document how to wire an admission webhook that rejects unsigned artifacts). If cluster not available, document manual remediation steps.
+Step 10 — Developer ergonomics
+* Add .devcontainer/devcontainer.json + .devcontainer/Dockerfile:
+    * Match Node and tool versions used in CI; preinstall build tools; mount local cache.
+    * Add a set of VSCode recommended extensions (playwright, eslint, typescript, remote containers).
+* Add README.local.md to explain fast local dev with docker-compose and devcontainer.
+Step 11 — Automated audit & remediation
+* Add a CI job vuln-scan that:
+    * Builds image and runs trivy image --format json -o artifacts/vuln-report.json
+    * Runs npm audit --json > artifacts/npm-audit.json
+    * If critical vulnerabilities found, fail and annotate PR with the top findings.
+* Optionally create issues automatically for high severity with a templated body (if GH token available).
+Step 12 — Verification checklist (agent must run / capture)
+For each command below, record the exact command, stdout/stderr (or tail), and exit code. If something cannot run due to environment/secrets, print exact error and one-line remediation.
+Run in order:
+1. node -v && npm -v && git --version
+2. git checkout -b fix/industrial-readiness (or show branch)
+3. npm ci (exit code)
+4. ./scripts/reproducible-build.sh → confirm artifacts/dist.tar.gz and its sha256sum
+5. ./scripts/generate-cyclonedx-sbom.sh → artifacts/sbom.json present
+6. ./scripts/cosign-publish.sh --dry-run (exit code + output). If OIDC not available, must show dry-run and remediation to enable OIDC.
+7. ./ci/verify-sbom-and-cosign.sh artifacts/dist.tar.gz (or explain missing cosign)
+8. npx trivy image local:tag --output artifacts/vuln-report.json || npm audit --json > artifacts/npm-audit.json (capture)
+9. git diff --staged --name-only and git show --name-only HEAD to show commits
+10. If Docker available: docker build -t local:test . then cosign verify (or capture why not)
+11. npx opa eval -i manifests/input.json --data opa/policies or run policy-check job
+12. Create a draft release with gh release create (dry-run) attaching artifacts (dry-run if no token)
+13. npm run test:e2e --reporter=list (Playwright smoke tests) — capture failure traces
+Step 13 — Acceptance criteria & outputs
+Agent must produce a single final response containing:
+1. Branch name used ("git unavailable" if not)
+2. Files created/modified list (paths)
+3. For each file changed: a unified diff block
+4. Verification checklist results: command, stdout tail, exit code
+5. Artifacts produced (paths): artifacts/dist.tar.gz, artifacts/sbom.json, artifacts/provenance.json, artifacts/vuln-report.json, cosign attestations (or note missing)
+6. If any step skipped/failed: the exact error message and one-line remediation
+7. IMPLEMENTATION_INDUSTRIAL.md content (final report summary + how to complete manual steps)
+8. PR_BODY_INDUSTRIAL.md — ready to paste PR description and acceptance checklist
+9. Next recommended follow-ups (3 bullets) with short risk/benefit notes
+Secrets & environment requirements (exact names)
+* GHCR_PAT (if not using OIDC)
+* SEMANTIC_RELEASE_TOKEN (for npm publishing)
+* SNYK_TOKEN (optional)
+* COSIGN_KEY or OIDC enabled in GH Actions (preferred)
+* GPG_PRIVATE_KEY (if using GPG fallback)
+* KUBE_CONFIG or KUBE_TOKEN (for promotion/rollback workflows) Agent should never print secrets; use placeholders in workflow files (${{ secrets.NAME }}).
+Behavioral rules for the agent (non-negotiable)
+* Commit as you go. If git disabled, create files and print exact git commands to run locally.
+* Do not publish secrets; always use placeholders in workflows.
+* If OIDC not available, do dry-run and show exact remediation steps and GitHub settings to flip.
+* If heavy operations are needed (full Trivy database pull, full mutation testing), run a short smoke mode and document commands to run the full job offline with estimated runtime.
+* When failing, be explicit: copy/paste the failing command + full error message and offer one-line remediation.
+Optional immediate files the agent should offer to paste now (human can ask for these)
+* scripts/cosign-publish.sh
+* .github/workflows/publish.yml
+* .devcontainer/devcontainer.json
+* opa/policies/deny-privileged.rego
+* helm/values-canary.yaml
+* scripts/reproducible-build.sh
+Finish Run the plan now and produce the full final reply matching the Acceptance criteria & outputs format above. If anything cannot be executed, stop that step cleanly, record the exact error, and continue with remaining steps.
