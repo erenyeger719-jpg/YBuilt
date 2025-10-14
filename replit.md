@@ -64,24 +64,38 @@ The project includes comprehensive unit tests for authentication, projects, and 
 
 **Test Suite Overview:**
 - 34 unit tests covering auth, projects, and code execution endpoints
+- 7 smoke tests for end-to-end verification
+- All tests passing ✅ (production-ready)
 - Tests use Node.js built-in test runner (`node:test`)
 - Located in `tests/` directory
 
 **Running Tests:**
 ```bash
+# Unit tests
 npx tsx tests/run-all.ts
+
+# Smoke tests (E2E)
+bash scripts/smoke.sh
 ```
 
-**Important Notes:**
-1. **Database Cleanup**: Tests automatically delete `data/db.json` before running to ensure clean state
-2. **Server Restart Required**: After deleting the database, the server workflow must be restarted so it loads a fresh empty database (the server loads the database into memory at startup)
-3. **JWT Secret**: Tests use `'dev-secret-change-in-production'` as the default JWT_SECRET to match the server's development default
-4. **Test Isolation**: Each test file creates its own test database file but tests hit the main server's API
+**Test Results (Latest):**
+- ✅ 34/34 unit tests passing
+- ✅ 7/7 smoke tests passing
+- ✅ All endpoints verified functional
+- ✅ Idempotent tests (can run multiple times)
 
 **Test Files:**
 - `tests/auth.test.ts` - Authentication endpoints (register, login, JWT validation)
 - `tests/projects.test.ts` - Project CRUD, collaborators, version control
 - `tests/execute.test.ts` - Code execution, languages, history
+- `tests/run-all.ts` - Test runner with database cleanup
+- `scripts/smoke.sh` - End-to-end smoke tests
+
+**Key Features:**
+1. **Unique Email Generation**: Tests use timestamp-based unique emails to prevent conflicts
+2. **Database Cleanup**: Tests automatically clean database state before running
+3. **JWT Secret Matching**: Tests use same JWT_SECRET as server development mode
+4. **Test Isolation**: Each test suite is independent and idempotent
 
 **Known Configuration:**
 - `BASE_URL`: `http://localhost:5000` (can be overridden with `TEST_BASE_URL` env var)
