@@ -1,160 +1,172 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { Database } from '../db.js';
-import { authRateLimiter } from '../middleware/rateLimiter.js';
+import { z } from 'zod';
+import { get, run } from '../db/sqlite.js';
+import { signJwt, authRequired } from '../middleware/auth.js';
+import { logger } from '../middleware/logging.js';
 
-// SECURITY: JWT_SECRET must be set - this should be caught at server startup
-// but we check again here as defense in depth
-const NODE_ENV = process.env.NODE_ENV || 'production';
-let JWT_SECRET: string;
+const router = Router();
 
-if (!process.env.JWT_SECRET) {
-  if (NODE_ENV === 'development') {
-    // Allow development fallback with clear warning
-    JWT_SECRET = 'dev-secret-change-in-production';
-    console.warn('⚠️  Using development JWT_SECRET. Set JWT_SECRET env var for production!');
-  } else {
-    // Production or any other environment: require JWT_SECRET
-    throw new Error(
-      'CRITICAL SECURITY ERROR: JWT_SECRET environment variable is required. ' +
-      'Generate a secure secret with: openssl rand -base64 32'
+// Validation schemas
+const registerSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
+const loginSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+/**
+ * POST /api/auth/register
+ * Register a new user
+ */
+router.post('/register', async (req: Request, res: Response) => {
+  try {
+    // Validate request body
+    const validatedData = registerSchema.parse(req.body);
+    const { email, password } = validatedData;
+
+    // Check if user already exists
+    const existingUser = get<{ id: number }>(
+      'SELECT id FROM users WHERE email = ?',
+      [email]
     );
+
+    if (existingUser) {
+      return res.status(409).json({
+        error: 'Email already exists',
+      });
+    }
+
+    // Hash password (bcrypt cost 10)
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Insert user
+    const result = run(
+      'INSERT INTO users (email, password_hash) VALUES (?, ?)',
+      [email, passwordHash]
+    );
+
+    const userId = Number(result.lastInsertRowid);
+
+    // Get created user
+    const user = get<{ id: number; email: string; created_at: string }>(
+      'SELECT id, email, created_at FROM users WHERE id = ?',
+      [userId]
+    );
+
+    if (!user) {
+      throw new Error('Failed to create user');
+    }
+
+    // Generate JWT
+    const token = signJwt({
+      sub: user.id,
+      email: user.email,
+    });
+
+    logger.info({ userId: user.id, email: user.email }, 'User registered');
+
+    res.status(201).json({
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      token,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: error.errors,
+      });
+    }
+
+    logger.error({ error }, 'Registration error');
+    res.status(500).json({
+      error: 'Internal server error',
+    });
   }
-} else {
-  JWT_SECRET = process.env.JWT_SECRET;
-}
+});
 
-export default function authRoutes(db: Database) {
-  const router = Router();
+/**
+ * POST /api/auth/login
+ * Login user
+ */
+router.post('/login', async (req: Request, res: Response) => {
+  try {
+    // Validate request body
+    const validatedData = loginSchema.parse(req.body);
+    const { email, password } = validatedData;
 
-  // Apply endpoint-specific rate limiter (30 req/min per IP)
-  router.use(authRateLimiter);
+    // Get user by email
+    const user = get<{ id: number; email: string; password_hash: string }>(
+      'SELECT id, email, password_hash FROM users WHERE email = ?',
+      [email]
+    );
 
-  router.post('/register', async (req: Request, res: Response) => {
-    try {
-      const { email, password } = req.body;
-
-      if (!email || typeof email !== 'string') {
-        return res.status(400).json({
-          error: 'Email is required',
-        });
-      }
-
-      if (!password || typeof password !== 'string') {
-        return res.status(400).json({
-          error: 'Password is required',
-        });
-      }
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({
-          error: 'Invalid email format',
-        });
-      }
-
-      if (password.length < 6) {
-        return res.status(400).json({
-          error: 'Password must be at least 6 characters long',
-        });
-      }
-
-      const existingUser = db.data.users.find(u => u.email === email);
-      if (existingUser) {
-        return res.status(409).json({
-          error: 'Email already exists',
-        });
-      }
-
-      const password_hash = await bcrypt.hash(password, 10);
-
-      const maxId = db.data.users.length > 0
-        ? Math.max(...db.data.users.map(u => u.id))
-        : 0;
-      const newUserId = maxId + 1;
-
-      const newUser = {
-        id: newUserId,
-        email,
-        password_hash,
-        created_at: Date.now(),
-      };
-
-      db.data.users.push(newUser);
-      await db.write();
-
-      const token = jwt.sign(
-        { sub: newUserId, email },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      return res.status(201).json({
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-        },
-        token,
-      });
-    } catch (error) {
-      console.error('Registration error:', error);
-      return res.status(500).json({
-        error: 'Internal server error',
+    if (!user) {
+      return res.status(401).json({
+        error: 'invalid_credentials',
       });
     }
-  });
 
-  router.post('/login', async (req: Request, res: Response) => {
-    try {
-      const { email, password } = req.body;
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
 
-      if (!email || typeof email !== 'string') {
-        return res.status(400).json({
-          error: 'Email is required',
-        });
-      }
-
-      if (!password || typeof password !== 'string') {
-        return res.status(400).json({
-          error: 'Password is required',
-        });
-      }
-
-      const user = db.data.users.find(u => u.email === email);
-      if (!user) {
-        return res.status(401).json({
-          error: 'invalid_credentials',
-        });
-      }
-
-      const isValidPassword = await bcrypt.compare(password, user.password_hash);
-      if (!isValidPassword) {
-        return res.status(401).json({
-          error: 'invalid_credentials',
-        });
-      }
-
-      const token = jwt.sign(
-        { sub: user.id, email: user.email },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      return res.status(200).json({
-        user: {
-          id: user.id,
-          email: user.email,
-        },
-        token,
-      });
-    } catch (error) {
-      console.error('Login error:', error);
-      return res.status(500).json({
-        error: 'Internal server error',
+    if (!isValidPassword) {
+      return res.status(401).json({
+        error: 'invalid_credentials',
       });
     }
-  });
 
-  return router;
-}
+    // Generate JWT
+    const token = signJwt({
+      sub: user.id,
+      email: user.email,
+    });
+
+    logger.info({ userId: user.id, email: user.email }, 'User logged in');
+
+    res.status(200).json({
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      token,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: error.errors,
+      });
+    }
+
+    logger.error({ error }, 'Login error');
+    res.status(500).json({
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * GET /api/auth/me
+ * Get current user info (requires auth)
+ */
+router.get('/me', authRequired, (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  res.status(200).json({
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+    },
+  });
+});
+
+export default router;

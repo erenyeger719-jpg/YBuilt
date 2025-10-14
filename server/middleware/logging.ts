@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import pino from 'pino';
+import { nanoid } from 'nanoid';
 
 // Extend Express Request type to include id
 declare global {
@@ -11,6 +12,22 @@ declare global {
 }
 
 /**
+ * Pino logger instance
+ * Pretty print in development, JSON in production
+ */
+export const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+  transport: process.env.NODE_ENV === 'development' ? {
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+      translateTime: 'HH:MM:ss',
+      ignore: 'pid,hostname',
+    },
+  } : undefined,
+});
+
+/**
  * Request ID middleware
  * Generates or uses existing request ID from 'x-request-id' header
  */
@@ -20,7 +37,7 @@ export function requestIdMiddleware(
   next: NextFunction
 ): void {
   // Use existing request ID or generate new one
-  req.id = (req.headers['x-request-id'] as string) || uuidv4();
+  req.id = (req.headers['x-request-id'] as string) || nanoid(12);
   
   // Set response header
   res.setHeader('X-Request-Id', req.id);
@@ -30,7 +47,7 @@ export function requestIdMiddleware(
 
 /**
  * Request logger middleware
- * Logs request method, path, status code, and response time
+ * Logs request method, path, status code, and response time with request ID
  */
 export function requestLogger(
   req: Request,
@@ -39,12 +56,34 @@ export function requestLogger(
 ): void {
   const start = Date.now();
   
+  // Log request start
+  logger.info({
+    reqId: req.id,
+    method: req.method,
+    path: req.path,
+    ip: req.ip,
+  }, 'Incoming request');
+  
   res.on('finish', () => {
     const duration = Date.now() - start;
     const { method, path } = req;
     const { statusCode } = res;
     
-    console.log(`[${req.id}] ${method} ${path} ${statusCode} - ${duration}ms`);
+    const logData = {
+      reqId: req.id,
+      method,
+      path,
+      statusCode,
+      duration,
+    };
+    
+    if (statusCode >= 500) {
+      logger.error(logData, 'Request error');
+    } else if (statusCode >= 400) {
+      logger.warn(logData, 'Request warning');
+    } else {
+      logger.info(logData, 'Request complete');
+    }
   });
   
   next();

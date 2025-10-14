@@ -1,158 +1,173 @@
-import { Router, Request, Response } from "express";
-import { z } from "zod";
-import { storage } from "../storage.js";
-import { authMiddleware } from "../middleware/auth.js";
-import { executeRateLimiter } from "../middleware/rateLimiter.js";
-import { executeCode, getSupportedLanguages, isLanguageSupported } from "../services/codeExecution.js";
-import { executeJavaScriptWithVM2 } from "../services/vm2Executor.js";
-import { logger } from "../index.js";
-import { Database } from "../db.js";
+import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import ivm from 'isolated-vm';
+import { authOptional } from '../middleware/auth.js';
+import { logger } from '../middleware/logging.js';
 
-export default function executeRoutes(db: Database) {
-  const router = Router();
+const router = Router();
 
-// Apply endpoint-specific rate limiter (30 req/min per IP)
-router.use(executeRateLimiter);
+// Execution limits from environment
+const EXECUTION_TIMEOUT_MS = parseInt(process.env.EXECUTION_TIMEOUT_MS || '3000', 10);
+const IVM_MEMORY_MB = parseInt(process.env.IVM_MEMORY_MB || '64', 10);
+const EXECUTION_MAX_BYTES = parseInt(process.env.EXECUTION_MAX_BYTES || '65536', 10);
 
 // Validation schema
 const executeCodeSchema = z.object({
-  language: z.string().min(1),
   code: z.string().min(1).max(50000), // Max 50KB of code
-  projectId: z.string().optional(),
 });
 
 /**
- * POST /api/execute
- * Execute code in a sandboxed environment
+ * Execute JavaScript code in isolated-vm sandbox
  */
-router.post("/", authMiddleware, async (req: Request, res: Response) => {
+async function executeJavaScript(code: string): Promise<{
+  stdout: string;
+  stderr: string;
+  result: any;
+  executionTimeMs: number;
+  status: 'completed' | 'timeout' | 'error';
+  error?: string;
+}> {
+  const startTime = Date.now();
+  let stdout = '';
+  let stderr = '';
+  let result: any = null;
+  let status: 'completed' | 'timeout' | 'error' = 'completed';
+  let error: string | undefined;
+
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: "Authentication required" });
+    // Create isolated VM with memory limit
+    const isolate = new ivm.Isolate({ memoryLimit: IVM_MEMORY_MB });
+    const context = await isolate.createContext();
+
+    // Create console.log capture
+    const jail = context.global;
+    await jail.set('global', jail.derefInto());
+
+    // Inject safe console.log
+    await jail.set('_logCapture', new ivm.Reference((msg: string) => {
+      const output = String(msg) + '\n';
+      if (stdout.length + output.length <= EXECUTION_MAX_BYTES) {
+        stdout += output;
+      } else {
+        stdout += output.substring(0, EXECUTION_MAX_BYTES - stdout.length);
+        stdout += '\n[OUTPUT TRUNCATED - MAX SIZE EXCEEDED]\n';
+      }
+    }));
+
+    await jail.set('_errorCapture', new ivm.Reference((msg: string) => {
+      const output = String(msg) + '\n';
+      if (stderr.length + output.length <= EXECUTION_MAX_BYTES) {
+        stderr += output;
+      } else {
+        stderr += output.substring(0, EXECUTION_MAX_BYTES - stderr.length);
+        stderr += '\n[ERROR OUTPUT TRUNCATED - MAX SIZE EXCEEDED]\n';
+      }
+    }));
+
+    // Setup console in sandbox
+    await context.eval(`
+      global.console = {
+        log: (...args) => {
+          const msg = args.map(arg => {
+            if (typeof arg === 'object') {
+              try {
+                return JSON.stringify(arg, null, 2);
+              } catch (e) {
+                return String(arg);
+              }
+            }
+            return String(arg);
+          }).join(' ');
+          _logCapture.applySync(undefined, [msg]);
+        },
+        error: (...args) => {
+          const msg = args.map(arg => String(arg)).join(' ');
+          _errorCapture.applySync(undefined, [msg]);
+        },
+        warn: (...args) => {
+          const msg = 'WARNING: ' + args.map(arg => String(arg)).join(' ');
+          _logCapture.applySync(undefined, [msg]);
+        }
+      };
+    `);
+
+    // Wrap user code to capture result
+    const wrappedCode = `
+      (function() {
+        ${code}
+      })();
+    `;
+
+    // Execute with timeout
+    const script = await isolate.compileScript(wrappedCode);
+    result = await script.run(context, { timeout: EXECUTION_TIMEOUT_MS });
+
+    // Convert result to transferable value
+    if (result && typeof result.copy === 'function') {
+      result = await result.copy();
     }
 
+    isolate.dispose();
+  } catch (err: any) {
+    if (err.message && err.message.includes('Script execution timed out')) {
+      status = 'timeout';
+      error = `Execution timed out after ${EXECUTION_TIMEOUT_MS}ms`;
+      stderr += `\nExecution timed out after ${EXECUTION_TIMEOUT_MS}ms\n`;
+    } else {
+      status = 'error';
+      error = err.message || 'Execution error';
+      stderr += `\nError: ${error}\n`;
+    }
+  }
+
+  const executionTimeMs = Date.now() - startTime;
+
+  return {
+    stdout,
+    stderr,
+    result,
+    executionTimeMs,
+    status,
+    error,
+  };
+}
+
+/**
+ * POST /api/execute
+ * Execute JavaScript code in sandboxed environment
+ */
+router.post('/', authOptional, async (req: Request, res: Response) => {
+  try {
     const validatedData = executeCodeSchema.parse(req.body);
 
-    // Check if language is supported
-    if (!isLanguageSupported(validatedData.language)) {
-      return res.status(400).json({
-        error: `Unsupported language: ${validatedData.language}`,
-        supportedLanguages: getSupportedLanguages(),
-      });
-    }
-
-    // Create execution record
-    const execution = await storage.createCodeExecution({
-      userId: String(req.user.id),
-      projectId: validatedData.projectId || null,
-      language: validatedData.language,
-      code: validatedData.code,
-    });
-
-    logger.info(`[CODE_EXEC] Starting execution ${execution.id} for user ${req.user.id}`);
-
-    // Execute code - use vm2 for JavaScript if available and enabled
-    let result;
-    const isJavaScript = validatedData.language.toLowerCase() === 'javascript';
-    const isExecutionEnabled = process.env.ENABLE_CODE_EXECUTION === 'true';
-    
-    if (isJavaScript && isExecutionEnabled) {
-      try {
-        logger.info(`[CODE_EXEC] Using vm2 for JavaScript execution`);
-        result = await executeJavaScriptWithVM2(validatedData.code);
-      } catch (vm2Error) {
-        logger.warn(`[CODE_EXEC] VM2 execution failed, falling back to standard executor:`, vm2Error);
-        result = await executeCode(validatedData.code, validatedData.language);
-      }
-    } else {
-      result = await executeCode(validatedData.code, validatedData.language);
-    }
-
-    // Update execution record with results
-    await storage.updateCodeExecution(execution.id, {
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-      executionTimeMs: result.executionTimeMs,
-      status: result.status === "completed" && result.exitCode === 0 ? "completed" : "failed",
-    });
-
     logger.info(
-      `[CODE_EXEC] Execution ${execution.id} completed in ${result.executionTimeMs}ms with status: ${result.status}`
+      { userId: req.user?.id || 'anonymous' },
+      'Executing JavaScript code'
     );
 
-    res.status(200).json({
-      executionId: execution.id,
-      ...result,
-    });
+    const result = await executeJavaScript(validatedData.code);
+
+    logger.info(
+      {
+        userId: req.user?.id || 'anonymous',
+        executionTimeMs: result.executionTimeMs,
+        status: result.status,
+      },
+      'Code execution completed'
+    );
+
+    res.status(200).json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
-        error: "Validation failed",
+        error: 'Validation failed',
         details: error.errors,
       });
     }
 
-    logger.error("Code execution error:", error);
-    res.status(500).json({ error: "Code execution failed" });
+    logger.error({ error }, 'Code execution error');
+    res.status(500).json({ error: 'Code execution failed' });
   }
 });
 
-/**
- * GET /api/execute/history
- * Get code execution history
- */
-router.get("/history", authMiddleware, async (req: Request, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
-    const projectId = req.query.projectId as string | undefined;
-    const limit = parseInt(req.query.limit as string) || 50;
-
-    const executions = await storage.getCodeExecutionHistory(String(req.user.id), projectId, limit);
-
-    res.status(200).json({ executions });
-  } catch (error) {
-    logger.error("Get execution history error:", error);
-    res.status(500).json({ error: "Failed to get execution history" });
-  }
-});
-
-/**
- * GET /api/execute/languages
- * Get list of supported languages
- */
-router.get("/languages", (req, res) => {
-  res.status(200).json({
-    languages: getSupportedLanguages(),
-  });
-});
-
-/**
- * GET /api/execute/:executionId
- * Get execution details
- */
-router.get("/:executionId", authMiddleware, async (req: Request, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
-    const executions = await storage.getCodeExecutionHistory(String(req.user.id));
-    const execution = executions.find((e) => e.id === req.params.executionId);
-
-    if (!execution) {
-      return res.status(404).json({ error: "Execution not found" });
-    }
-
-    res.status(200).json({ execution });
-  } catch (error) {
-    logger.error("Get execution error:", error);
-    res.status(500).json({ error: "Failed to get execution" });
-  }
-});
-
-  return router;
-}
+export default router;

@@ -1,0 +1,170 @@
+📋 MEGA PROMPT FOR REPLIT AI — “Backend Brain” (TS + SQLite + isolated-vm)
+You are the implementation agent. Do not ask follow-ups. Do the work and show the results. The repo is a full-stack TypeScript app (Express + React + Vite). Previous agent added a lowdb JSON DB and some middleware. We are now replacing that with a SQLite backend (using better-sqlite3) and a safe JS execution service using isolated-vm. Keep the codebase TypeScript-first, consistent, and small-hosting-friendly.
+Ground rules (non-negotiable)
+1. No clarifying questions. Make sensible defaults and proceed.
+2. TypeScript everywhere in server/. Use ES modules if project already does; otherwise match existing module system.
+3. Atomic files: whenever you change a file, output the full file content.
+4. Keep existing working frontend; only change client code if type or API mismatches require it.
+5. Security: no vm2 (deprecated). Use isolated-vm with strict memory/time/capability limits.
+6. Dev DX: maintain prior HMR exclusions in the rate limiter, and keep SSE streams healthy.
+7. Idempotent: if something already exists but conflicts (e.g., lowdb), migrate/replace cleanly.
+
+Objectives
+* Replace lowdb JSON storage with SQLite using better-sqlite3 and a thin query layer.
+* Auth (JWT), Projects CRUD, Chat persistence — all backed by SQLite.
+* Safe JS execution endpoint via isolated-vm with strict sandboxing.
+* Shared middleware: request-id, structured logging, CORS/Helmet, auth.
+* E2E sanity tests (Vitest) + simple seed/migration scripts.
+* Keep and solidify past fixes: rate limiter exclusions, SSE reliability, React Badge ref fix already done.
+
+Tech choices
+* DB: better-sqlite3 (already present). File path configurable via env.
+* Validation: zod.
+* Logging: pino (pretty for dev).
+* IDs: nanoid (or numeric autoincrement in SQL; we’ll use integers for users/projects/messages; nanoid for request correlation OK).
+* Passwords: bcryptjs.
+* JWT: jsonwebtoken (HS256).
+* Exec sandbox: isolated-vm (fallback: none; fail the build if it can’t install to avoid unsafe code).
+
+Environment & scripts
+Create/overwrite .env.example with at least:
+
+NODE_ENV=development
+PORT=3000
+
+# SQLite settings
+DATABASE_FILE=./data/app.db
+
+# Auth
+JWT_SECRET=replace_me
+JWT_EXPIRES_IN=7d
+
+# Security / execution
+EXECUTION_TIMEOUT_MS=3000
+EXECUTION_MAX_BYTES=65536
+IVM_MEMORY_MB=64
+Update package.json scripts (add or adjust):
+
+"scripts": {
+  "dev": "vite-node server/index.ts",
+  "build": "tsc -p tsconfig.json",
+  "start": "node dist/server/index.js",
+  "db:migrate": "ts-node server/db/migrate.ts",
+  "db:seed": "ts-node server/db/seed.ts",
+  "test": "vitest run"
+}
+Add deps if missing: zod pino pino-pretty isolated-vm bcryptjs jsonwebtoken nanoid dotenv helmet cors better-sqlite3 and types where needed.
+
+File plan (create/replace full contents)
+Output the complete code for each file you modify or add.
+1) Database layer (SQLite)
+Create server/db/sqlite.ts:
+* Export a singleton db (better-sqlite3 instance) using process.env.DATABASE_FILE.
+* Pragmas: journal_mode = WAL, foreign_keys = ON.
+* Helper run, get, all wrappers with typed parameters.
+Create server/db/migrations/001_init.sql:
+* Tables:
+    * users(id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now'))).
+    * projects(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, name TEXT NOT NULL, content TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE).
+    * chats(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, message TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE).
+Create server/db/migrate.ts:
+* Load .sql files in server/db/migrations by filename sort; run in a transaction; create _migrations(version INTEGER PRIMARY KEY, applied_at TEXT) to track applied files.
+Create server/db/seed.ts (optional):
+* If users empty, insert demo user demo@example.com with password demo1234; one project and a chat row.
+Remove/retire lowdb:
+* Delete or archive server/db.ts (lowdb JSON) and its uses.
+* Update imports to point to server/db/sqlite.ts.
+2) Middleware (shared)
+Ensure/replace server/middleware/logging.ts:
+* requestIdMiddleware: attach req.id (from header or nanoid); set X-Request-Id.
+* logger: pino instance (pretty in dev).
+* requestLogger: log start/finish with ms, path, status, req.id.
+Ensure/replace server/middleware/auth.ts:
+* declare global to add req.user: { id: number; email: string } | null.
+* authOptional: parse Authorization: Bearer, verify; on invalid => 401; on missing => req.user = null.
+* authRequired: like above but respond 401 when missing.
+* signJwt({ sub, email }) using HS256 and JWT_EXPIRES_IN.
+Add server/middleware/error.ts:
+* Central error handler: never leak stack in prod; include req.id.
+Keep existing rate limiter but ensure exclusions:
+* Exclude ^/(assets|previews|@vite|@react-refresh|@fs|@replit) and SSE endpoints from counting.
+* Keep cap around 500 req/min per IP in dev.
+3) Routes
+Refactor router composition in server/index.ts (or server/routes.ts, whichever mounts routers):
+* Use dotenv/config, helmet, cors, JSON body parser (limit 1mb).
+* Register middlewares: requestIdMiddleware, requestLogger, rateLimiter, authOptional where appropriate.
+* Mount:
+    * /api/auth → server/routes/auth.ts
+    * /api/projects → server/routes/projects.ts
+    * /api/chat → server/routes/chat.ts
+    * /api/execute → server/routes/execute.ts
+    * /api/status → simple health.
+Replace server/routes/auth.ts:
+* Factory not required; just import db.
+* POST /register (zod email + password ≥ 8): hash with bcryptjs, insert, return JWT {token, user:{id,email}}. On duplicate email → 409.
+* POST /login similar; compare hash → 401 on mismatch.
+* JWT payload: { sub: user.id, email: user.email }.
+Replace server/routes/projects.ts (all authRequired):
+* GET /: list user’s projects.
+* POST /: create {name, content?}; return created row.
+* GET /:id: enforce ownership; 404 if not found.
+* PUT /:id: update {name?, content?}; bump updated_at.
+* DELETE /:id: delete, 204.
+Replace server/routes/chat.ts (all authRequired):
+* GET /: list last N messages for user (e.g., 100).
+* POST /: create {message}; return created row.
+Replace server/routes/execute.ts (JS only; authOptional OK):
+* Uses isolated-vm. Inputs: { code: string }.
+* Constraints:
+    * timeout = +EXECUTION_TIMEOUT_MS (default 3000ms)
+    * memory = +IVM_MEMORY_MB (default 64)
+    * Disable require, process, global, eval outside controlled context.
+    * Provide safe console.log that captures logs, limit to EXECUTION_MAX_BYTES.
+* Return { stdout: string, result: any } (result JSON-serializable). On error, return { error: string } with safe message.
+4) SSE reliability (if present)
+* Ensure any SSE endpoints set:
+    * Content-Type: text/event-stream, Cache-Control: no-cache, Connection: keep-alive.
+    * Send a keepalive ping every 20s.
+    * Don’t run through the rate limiter.
+* In client hooks, only open SSE when jobId is valid.
+5) Validation & types
+* Use zod schemas per route; return 400 on parse errors with { fieldErrors }.
+* Server types: no any.
+* Prefer prepared statements with better-sqlite3 to avoid SQL injection.
+6) Tests (Vitest)
+Create minimal API tests under server/tests/:
+* Auth: register → login → protected route 401/200.
+* Projects: CRUD happy path + 403 on others’ project id.
+* Execute: small pure JS returns; infinite loop times out; large output is truncated at MAX_BYTES.
+7) Migrations & data migration
+* Implement db:migrate.
+* If old lowdb JSON exists (./data/db.json), write server/db/migrate-from-lowdb.ts to import users/projects/chats into SQLite honoring uniqueness; on conflict, skip with a warning. Provide a one-shot script.
+8) DX & scripts
+* Ensure npm run db:migrate && npm run dev starts server locally (Replit).
+* Pretty logs in dev (pino-pretty).
+
+Acceptance criteria (must pass)
+* No references to lowdb remain; SQLite file exists after db:migrate.
+* All routes above behave as specified; 100% TypeScript compile clean.
+* isolated-vm is used; if install fails, abort with a clear note (don’t fall back to vm2).
+* Rate limiter doesn’t block dev assets or SSE.
+* npm run test executes and passes the basic suite.
+* Provide curl examples in the output to verify each endpoint.
+* Post a final summary with:
+    * File tree of changed/added files
+    * Env vars needed
+    * How to run: npm i, npm run db:migrate, npm run dev
+    * Sample JWT payload
+    * Example requests/responses
+
+Output format
+1. For each file you change/add:
+
+=== FILE: <relative/path>
+<full file contents>
+1. After code: print:
+    * “MIGRATION & RUN STEPS”
+    * “CURL QUICKCHECK” (auth, project CRUD, chat, execute)
+    * “WHAT CHANGED” summary
+Do all of the above now. Do not ask for confirmation. If something is ambiguous, choose the secure, SQLite, TypeScript path and proceed.
+ END OF PROMPT

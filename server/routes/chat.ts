@@ -1,120 +1,104 @@
-import { Router, Request, Response } from "express";
-import { z } from "zod";
-import { storage } from "../storage.js";
-import { authMiddleware } from "../middleware/auth.js";
-import { chatRateLimiter } from "../middleware/rateLimiter.js";
-import { logger } from "../index.js";
-import { Database } from "../db.js";
+import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import { get, all, run } from '../db/sqlite.js';
+import { authRequired } from '../middleware/auth.js';
+import { logger } from '../middleware/logging.js';
 
-export default function chatRoutes(db: Database) {
-  const router = Router();
+const router = Router();
 
-// Apply endpoint-specific rate limiter (60 req/min per IP)
-router.use(chatRateLimiter);
-
-// Validation schemas
+// Validation schema
 const sendMessageSchema = z.object({
-  projectId: z.string().optional(),
-  content: z.string().min(1).max(5000),
-  type: z.enum(["ai-assistant", "collaboration", "support"]),
-  ticketId: z.string().optional(),
+  message: z.string().min(1).max(5000),
 });
 
 /**
- * POST /api/chat/messages
- * Send a chat message (REST fallback for WebSocket)
+ * GET /api/chat
+ * Get last N chat messages for authenticated user
  */
-router.post("/messages", authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authRequired, (req: Request, res: Response) => {
   try {
     if (!req.user) {
-      return res.status(401).json({ error: "Authentication required" });
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const limit = parseInt(req.query.limit as string) || 100;
+
+    const messages = all<{
+      id: number;
+      user_id: number;
+      message: string;
+      created_at: string;
+    }>(
+      'SELECT id, user_id, message, created_at FROM chats WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+      [req.user.id, limit]
+    );
+
+    res.status(200).json({
+      messages: messages.reverse().map(m => ({
+        id: m.id,
+        userId: m.user_id,
+        message: m.message,
+        createdAt: m.created_at,
+      })),
+    });
+  } catch (error) {
+    logger.error({ error }, 'Get chat messages error');
+    res.status(500).json({ error: 'Failed to get chat messages' });
+  }
+});
+
+/**
+ * POST /api/chat
+ * Send a chat message
+ */
+router.post('/', authRequired, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
     }
 
     const validatedData = sendMessageSchema.parse(req.body);
 
-    // Create user message
-    const message = await storage.createChatMessage({
-      userId: String(req.user.id),
-      projectId: validatedData.projectId || null,
-      role: "user",
-      content: validatedData.content,
-      metadata: {
-        type: validatedData.type,
-        ticketId: validatedData.ticketId,
-      },
-    });
+    const result = run(
+      'INSERT INTO chats (user_id, message) VALUES (?, ?)',
+      [req.user.id, validatedData.message]
+    );
 
-    // For AI assistant, generate a response
-    if (validatedData.type === "ai-assistant") {
-      // TODO: Integrate with OpenAI
-      const aiResponse = await storage.createChatMessage({
-        userId: String(req.user.id),
-        projectId: validatedData.projectId || null,
-        role: "assistant",
-        content: `I understand you want to: "${validatedData.content}". How can I help you build that?`,
-        metadata: { type: "ai-assistant" },
-      });
+    const messageId = Number(result.lastInsertRowid);
 
-      return res.status(201).json({
-        userMessage: message,
-        aiResponse,
-      });
+    const message = get<{
+      id: number;
+      user_id: number;
+      message: string;
+      created_at: string;
+    }>(
+      'SELECT id, user_id, message, created_at FROM chats WHERE id = ?',
+      [messageId]
+    );
+
+    if (!message) {
+      throw new Error('Failed to create message');
     }
 
-    res.status(201).json({ message });
+    logger.info({ messageId, userId: req.user.id }, 'Chat message created');
+
+    res.status(201).json({
+      id: message.id,
+      userId: message.user_id,
+      message: message.message,
+      createdAt: message.created_at,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
-        error: "Validation failed",
+        error: 'Validation failed',
         details: error.errors,
       });
     }
 
-    logger.error("Send message error:", error);
-    res.status(500).json({ error: "Failed to send message" });
+    logger.error({ error }, 'Send message error');
+    res.status(500).json({ error: 'Failed to send message' });
   }
 });
 
-/**
- * GET /api/chat/history
- * Get chat history for current user
- */
-router.get("/history", authMiddleware, async (req: Request, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
-    const projectId = req.query.projectId as string | undefined;
-    const limit = parseInt(req.query.limit as string) || 100;
-
-    const messages = await storage.getChatHistory(String(req.user.id), projectId, limit);
-
-    res.status(200).json({ messages });
-  } catch (error) {
-    logger.error("Get chat history error:", error);
-    res.status(500).json({ error: "Failed to get chat history" });
-  }
-});
-
-/**
- * DELETE /api/chat/messages/:messageId
- * Delete a chat message
- */
-router.delete("/messages/:messageId", authMiddleware, async (req: Request, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
-    await storage.deleteChatMessage(req.params.messageId);
-
-    res.status(200).json({ message: "Message deleted successfully" });
-  } catch (error) {
-    logger.error("Delete message error:", error);
-    res.status(500).json({ error: "Failed to delete message" });
-  }
-});
-
-  return router;
-}
+export default router;
