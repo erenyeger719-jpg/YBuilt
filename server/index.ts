@@ -1,8 +1,18 @@
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
+import helmet from "helmet";
+import cors from "cors";
 import morgan from "morgan";
-import { registerRoutes } from "./routes";
+import fs from "fs";
+import { createServer } from "http";
 import { setupVite, serveStatic, log } from "./vite";
 import { rateLimiter } from "./middleware/rateLimiter";
+import { initDb } from './db.js';
+import { requestIdMiddleware, requestLogger } from './middleware/logging.js';
+import authRoutes from './routes/auth.js';
+import projectsRoutes from './routes/projects.js';
+import chatRoutes from './routes/chat.js';
+import executeRoutes from './routes/execute.js';
 
 // LOG_LEVEL support
 const LOG_LEVEL = process.env.LOG_LEVEL || 'INFO';
@@ -27,64 +37,71 @@ logger.info(`[RAZORPAY] Mode: ${RAZORPAY_MODE}`);
 
 const app = express();
 
-// Capture raw body for webhook signature verification
-app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-// Morgan HTTP request logging
-const morganFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
-app.use(morgan(morganFormat, {
-  skip: (req) => req.path.startsWith('/assets') || req.path.startsWith('/src'),
-  stream: {
-    write: (message) => logger.info(message.trim())
+(async () => {
+  // Ensure data directory exists
+  const dataDir = './data';
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
   }
-}));
 
-// Rate limiting (100 req/min per IP)
-app.use(rateLimiter);
+  // Initialize database
+  const DATABASE_FILE = process.env.DATABASE_FILE || './data/db.json';
+  const db = await initDb(DATABASE_FILE);
+  logger.info('[DB] Database initialized at', DATABASE_FILE);
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+  // Security headers
+  app.use(helmet());
+  
+  // CORS support
+  app.use(cors());
 
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
+  // Capture raw body for webhook signature verification
+  app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
 
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
+  // Body parsing
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
 
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
+  // Request ID middleware (before logging)
+  app.use(requestIdMiddleware);
 
-      log(logLine);
+  // Request logger (after requestId)
+  app.use(requestLogger);
+
+  // Morgan HTTP request logging (simplified since requestLogger handles basic logging)
+  const morganFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
+  app.use(morgan(morganFormat, {
+    skip: (req) => req.path.startsWith('/assets') || req.path.startsWith('/src'),
+    stream: {
+      write: (message) => logger.info(message.trim())
     }
+  }));
+
+  // Rate limiting (100 req/min per IP)
+  app.use(rateLimiter);
+
+  // Health check route
+  app.get('/api/status', (req: Request, res: Response) => {
+    res.json({ status: 'ok' });
   });
 
-  next();
-});
+  // Mount modular routes
+  app.use('/api/auth', authRoutes(db));
+  app.use('/api/projects', projectsRoutes(db));
+  app.use('/api/chat', chatRoutes(db));
+  app.use('/api/execute', executeRoutes(db));
 
-(async () => {
-  const server = await registerRoutes(app);
+  // Create HTTP server
+  const server = createServer(app);
 
-  // Centralized error handling middleware
+  // Centralized error handling middleware (enhanced with req.id)
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    // Log error with context
+    // Log error with context including request ID if available
     logger.error(`[ERROR] ${req.method} ${req.path} - ${status}: ${message}`, {
+      requestId: (req as any).id,
       error: err.stack,
       userId: (req as any).user?.id,
       body: req.body,
@@ -101,25 +118,58 @@ app.use((req, res, next) => {
     });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // Setup Vite in development or serve static files in production
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
+  // Server startup with port retry logic
+  async function startServer(attemptPort: number, maxAttempts: number = 3): Promise<void> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const currentPort = attemptPort + attempt;
+      
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const listener = server.listen({
+            port: currentPort,
+            host: "0.0.0.0",
+            reusePort: true,
+          }, () => {
+            log(`serving on port ${currentPort}`);
+            logger.info(`[SERVER] Successfully started on port ${currentPort}`);
+            resolve();
+          });
+
+          listener.on('error', (err: NodeJS.ErrnoException) => {
+            if (err.code === 'EADDRINUSE') {
+              logger.warn(`[SERVER] Port ${currentPort} is busy, trying next port...`);
+              reject(err);
+            } else {
+              reject(err);
+            }
+          });
+        });
+        
+        // If we get here, server started successfully
+        return;
+      } catch (err: any) {
+        if (err.code === 'EADDRINUSE' && attempt < maxAttempts - 1) {
+          // Try next port
+          continue;
+        } else {
+          // Last attempt failed or different error
+          logger.error(`[SERVER] Failed to start server:`, err);
+          throw err;
+        }
+      }
+    }
+    
+    throw new Error(`Failed to start server after ${maxAttempts} attempts`);
+  }
+
+  // Start server
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+  await startServer(port);
 })();

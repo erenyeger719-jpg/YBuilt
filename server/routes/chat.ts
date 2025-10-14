@@ -4,8 +4,10 @@ import { storage } from "../storage.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { chatRateLimiter } from "../middleware/rateLimiter.js";
 import { logger } from "../index.js";
+import { Database } from "../db.js";
 
-const router = Router();
+export default function chatRoutes(db: Database) {
+  const router = Router();
 
 // Apply endpoint-specific rate limiter (60 req/min per IP)
 router.use(chatRateLimiter);
@@ -114,4 +116,5 @@ router.delete("/messages/:messageId", authMiddleware, async (req: Request, res: 
   }
 });
 
-export default router;
+  return router;
+}

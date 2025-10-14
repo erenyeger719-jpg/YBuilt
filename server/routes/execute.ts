@@ -6,8 +6,10 @@ import { executeRateLimiter } from "../middleware/rateLimiter.js";
 import { executeCode, getSupportedLanguages, isLanguageSupported } from "../services/codeExecution.js";
 import { executeJavaScriptWithVM2 } from "../services/vm2Executor.js";
 import { logger } from "../index.js";
+import { Database } from "../db.js";
 
-const router = Router();
+export default function executeRoutes(db: Database) {
+  const router = Router();
 
 // Apply endpoint-specific rate limiter (30 req/min per IP)
 router.use(executeRateLimiter);
@@ -152,4 +154,5 @@ router.get("/:executionId", authMiddleware, async (req: Request, res: Response) 
   }
 });
 
-export default router;
+  return router;
+}

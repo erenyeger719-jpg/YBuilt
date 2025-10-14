@@ -3,8 +3,10 @@ import { z } from "zod";
 import { storage } from "../storage.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { logger } from "../index.js";
+import { Database } from "../db.js";
 
-const router = Router();
+export default function projectsRoutes(db: Database) {
+  const router = Router();
 
 // Validation schemas
 const addCollaboratorSchema = z.object({
@@ -224,4 +226,5 @@ router.get("/user/:userId", authMiddleware, async (req: Request, res: Response) 
   }
 });
 
-export default router;
+  return router;
+}
