@@ -155,6 +155,81 @@ module.exports = {
   getRetentionPolicy
 };
 
+// SERVER EXAMPLE: Express app with trace correlation
+/*
+const express = require('express');
+const { createTraceAwareLogger } = require('./tools/log-trace-correlation');
+
+const app = express();
+const logger = createTraceAwareLogger('ybuilt-api');
+
+// Apply trace middleware globally
+app.use(logger.middleware());
+
+app.get('/api/users/:id', async (req, res) => {
+  logger.info('Fetching user', { user_id: req.params.id, trace_id: req.trace_id });
+  
+  try {
+    const user = await db.getUser(req.params.id);
+    logger.info('User fetched successfully', { user_id: req.params.id, trace_id: req.trace_id });
+    res.json(user);
+  } catch (error) {
+    logger.error('Failed to fetch user', { 
+      user_id: req.params.id, 
+      trace_id: req.trace_id, 
+      error: error.message 
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.listen(5000, () => {
+  logger.info('Server started', { port: 5000 });
+});
+*/
+
+// BROWSER EXAMPLE: Fetch with trace propagation (commented)
+/*
+// Client-side trace propagation (browser)
+async function fetchWithTrace(url, options = {}) {
+  // Extract trace ID from response headers if available
+  const traceId = sessionStorage.getItem('trace_id') || 'browser-' + Math.random().toString(36).substr(2, 16);
+  
+  const headers = {
+    ...options.headers,
+    'X-Trace-Id': traceId,
+    'X-Client-Version': '1.0.0'
+  };
+  
+  const response = await fetch(url, { ...options, headers });
+  
+  // Store trace ID from server response
+  const serverTraceId = response.headers.get('X-Trace-Id');
+  if (serverTraceId) {
+    sessionStorage.setItem('trace_id', serverTraceId);
+    console.log('🔍 Trace ID:', serverTraceId);
+  }
+  
+  return response;
+}
+
+// Usage in React/frontend
+async function loadUserData(userId) {
+  try {
+    const response = await fetchWithTrace(`/api/users/${userId}`);
+    const data = await response.json();
+    console.log('✅ User loaded with trace:', sessionStorage.getItem('trace_id'));
+    return data;
+  } catch (error) {
+    console.error('❌ Failed to load user:', {
+      trace_id: sessionStorage.getItem('trace_id'),
+      error: error.message
+    });
+    throw error;
+  }
+}
+*/
+
 // CLI usage
 if (require.main === module) {
   const logger = createTraceAwareLogger('ybuilt-cli');

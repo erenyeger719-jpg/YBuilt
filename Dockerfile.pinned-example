@@ -1,0 +1,53 @@
+# EXAMPLE: Pinned Base Images with Digests
+# This file shows how to pin base images to specific digests for reproducibility
+
+# === METHOD 1: Fetch and pin digest ===
+# Step 1: Pull the image you want to pin
+#   docker pull node:20-bullseye
+#
+# Step 2: Get the digest
+#   docker inspect --format='{{index .RepoDigests 0}}' node:20-bullseye
+#   # Output: node@sha256:abc123def456...
+#
+# Step 3: Use the digest in FROM
+FROM node@sha256:YOUR_DIGEST_HERE
+
+# === METHOD 2: Multi-stage with pinned images ===
+# Build stage - pinned Node.js
+FROM node@sha256:YOUR_BUILD_DIGEST_HERE AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --prefer-offline --no-audit
+COPY . .
+RUN npm run build
+
+# Runtime stage - pinned distroless or alpine
+FROM gcr.io/distroless/nodejs20-debian12@sha256:YOUR_RUNTIME_DIGEST_HERE
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+CMD ["dist/index.js"]
+
+# === HOW TO UPDATE DIGESTS ===
+# Run these commands periodically and update the Dockerfile:
+#
+# For Node.js base:
+#   docker pull node:20-bullseye
+#   docker inspect --format='{{index .RepoDigests 0}}' node:20-bullseye
+#
+# For distroless:
+#   docker pull gcr.io/distroless/nodejs20-debian12:latest
+#   docker inspect --format='{{index .RepoDigests 0}}' gcr.io/distroless/nodejs20-debian12:latest
+#
+# Then replace the digests above and commit to git
+
+# === ALTERNATIVE: Use renovate/dependabot ===
+# Add this to .github/dependabot.yml:
+#
+# version: 2
+# updates:
+#   - package-ecosystem: "docker"
+#     directory: "/"
+#     schedule:
+#       interval: "weekly"

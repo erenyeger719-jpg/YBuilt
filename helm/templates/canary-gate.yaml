@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: canary-promotion-gate
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+    component: canary-gate
+data:
+  requirements: |
+    cosign.sigstore.dev/signed: "true"
+    sbom.ybuilt.io/verified: "true"
+  
+  verification-script: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    IMAGE="${1:-}"
+    if [ -z "$IMAGE" ]; then
+      echo "❌ No image specified"
+      exit 1
+    fi
+    
+    echo "🔐 Verifying image: $IMAGE"
+    
+    # Check cosign signature
+    if cosign verify --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+         --certificate-identity-regexp="^https://github.com/.*/.*/.github/workflows/.*@refs/.*$" \
+         "$IMAGE" > /dev/null 2>&1; then
+      echo "✅ Cosign signature verified"
+    else
+      echo "❌ Cosign signature verification failed"
+      exit 1
+    fi
+    
+    # Check SBOM attestation
+    if cosign verify-attestation --type cyclonedx \
+         --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+         --certificate-identity-regexp="^https://github.com/.*/.*/.github/workflows/.*@refs/.*$" \
+         "$IMAGE" > /dev/null 2>&1; then
+      echo "✅ SBOM attestation verified"
+    else
+      echo "❌ SBOM attestation verification failed"
+      exit 1
+    fi
+    
+    echo "✅ All verifications passed - image is promotion-ready"
+    exit 0
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: canary-gate-verifier
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: canary-gate-verifier
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: canary-gate-verifier
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: canary-gate-verifier
+subjects:
+  - kind: ServiceAccount
+    name: canary-gate-verifier
+    namespace: {{ .Release.Namespace }}

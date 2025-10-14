@@ -47,6 +47,11 @@ jobs:
           sudo apt-get update && sudo apt-get install -y jq wget curl git tar gzip ca-certificates
           mkdir -p ${{ env.ARTIFACT_DIR }}
 
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=moby/buildkit:latest
+
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
         with:
@@ -87,12 +92,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & push image (optional, only if not dry-run)
+      - name: Build & push image with cache (only if not dry-run)
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: |
-          # Example build; adjust Dockerfile path and build args as needed
-          docker build -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" --build-arg SOURCE_DATE_EPOCH="${{ steps.build.outputs.SOURCE_DATE_EPOCH || '' }}" .
-          docker push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          build-args: |
+            SOURCE_DATE_EPOCH=${{ steps.build.outputs.SOURCE_DATE_EPOCH || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Sign artifacts / image with cosign
         id: sign

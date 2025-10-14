@@ -48,7 +48,7 @@
   
   "forwardPorts": [5000, 9090],
   
-  "postCreateCommand": "npm ci && chmod +x scripts/*.sh ci/*.sh",
+  "postCreateCommand": "npm ci --prefer-offline --no-audit && chmod +x scripts/*.sh ci/*.sh && curl -sL https://github.com/sigstore/cosign/releases/download/v2.11.0/cosign-linux-amd64 -o /tmp/cosign && sudo install /tmp/cosign /usr/local/bin/cosign && rm /tmp/cosign",
   
   "postStartCommand": "echo '✅ Dev container ready! Run: npm run dev'",
   

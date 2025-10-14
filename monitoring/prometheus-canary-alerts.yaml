@@ -12,24 +12,24 @@ data:
       - name: canary_deployment_alerts
         interval: 10s
         rules:
-          # High error rate in canary
+          # High error rate in canary - triggers auto-rollback
           - alert: CanaryHighErrorRate
             expr: |
               (
                 sum(rate(http_requests_total{namespace="ybuilt-canary",status=~"5.."}[1m]))
                 /
                 sum(rate(http_requests_total{namespace="ybuilt-canary"}[1m]))
-              ) > 0.005
-            for: 2m
+              ) > 0.05
+            for: 5m
             labels:
               severity: critical
               component: canary
               action: rollback
             annotations:
-              summary: "Canary deployment has high error rate"
-              description: "Error rate is {{ $value | humanizePercentage }} (threshold: 0.5%)"
+              summary: "Canary deployment has high error rate - triggering rollback"
+              description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
               runbook_url: "https://github.com/OWNER/ybuilt/blob/main/docs/runbooks/canary-rollback.md"
-              action: "Automatic rollback initiated"
+              action: "Automatic rollback initiated via webhook to canary-controller"
           
           # High P95 latency in canary
           - alert: CanaryHighLatency

@@ -1,0 +1,42 @@
+name: Verify Lockfile
+
+on:
+  push:
+    branches: [main, develop, 'feat/**', 'fix/**']
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-lockfile:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Verify lockfile integrity
+        run: node scripts/verify-lockfile.js
+      
+      - name: Install dependencies (fail on mismatch)
+        run: npm ci --prefer-offline --no-audit
+      
+      - name: Report success
+        run: |
+          echo "✅ Lockfile verification passed"
+          echo "package-lock.json is in sync with package.json"

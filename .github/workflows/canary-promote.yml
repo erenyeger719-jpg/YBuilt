@@ -121,6 +121,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Setup cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.11.0'
+      
+      - name: Verify SBOM and Cosign signatures
+        run: |
+          chmod +x ci/verify-sbom-and-cosign.sh
+          
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo "🔐 Verifying image before promotion: $IMAGE"
+          
+          if ! bash ci/verify-sbom-and-cosign.sh "$IMAGE"; then
+            echo "❌ Verification failed - cannot promote to production"
+            exit 1
+          fi
+          
+          echo "✅ Verification passed - proceeding with promotion"
+        env:
+          REGISTRY: ghcr.io
+          IMAGE_NAME: ${{ github.repository }}
+      
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
       
