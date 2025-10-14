@@ -1,0 +1,132 @@
+Mega Prompt —————————————>  Next steps (prioritized — do these in order)
+1. CI / build performance & hermetic builds
+    * Add reliable caching for node_modules and Docker layers in CI (Actions cache + buildx cache).
+    * Introduce BuildKit + docker buildx build --cache-from for faster incremental image builds.
+    * Add optional remote cache for reproducible builds (sccache or registry-based layer cache).
+2. Pin and verify all base images and dependencies
+    * Replace floating base image tags with pinned digests or provide clear instructions and tooling for locking them (brew-like workflow).
+    * Add npm ci + package-lock.json validation step and a dependabot config for safe upgrades.
+    * Add a verify-lockfile.sh CI job to ensure lockfile matches package.json.
+3. Local dev ergonomics & reliability
+    * Guarantee npx tsx fallback: change dev scripts to npx tsx when tsx might not appear in PATH.
+    * Add postinstall that ensures node_modules/.bin links are created (safely).
+    * Add dev Makefile/tasks.json and pre-commit hooks (lint, tests, SBOM quick check).
+4. Stronger delivery automation
+    * Add Flagger (if not already) or Argo Rollouts option for richer canary metrics and automated promotions/rollbacks.
+    * Add a “promotion gate” that requires: successful synthetic tests + cosign attestations + SBOM match.
+5. Observability as code
+    * Add automatic correlation of logs → traces (inject trace id in logs).
+    * Add a Grafana dashboard manifest and pre-baked panels for canary, latency percentiles, error budget.
+    * Add sampling guidance + default OpenTelemetry config for server + browser.
+6. Developer feedback loops
+    * Add “fast local self-test”: a script that builds a dev artifact, runs SBOM generation, and runs a local cosign dry-run. Hook this to npm run smoke.
+    * Add clear repl instructions and the replit.md note about environment caveats (e.g., vite PATH issue + npx fallback).
+7. Hardening and runbook
+    * Finalize IMPLEMENTATION_PLATFORM10X_NEXT.md with: what must be run manually, exact kubectlcommands, and the exact GH Actions permissions to enable.
+    * Add on-failure playbook that enumerates fixes for the five most common failures and one-line remediations.
+
+MEGA PROMPT — Paste this into Replit AI (or other CI agent)
+Use this exact block. It tells the agent everything to do next and exactly how to validate it. It must produce a single final response following the “Final output” format in the checklist.
+MEGA PROMPT: Make platform 10× better than Replit — implement performance, UX, and resilience improvements (run now)
+Branch: fix/platform-10x-next
+Quick offer (print at start): “I can immediately patch the repo with performance & ergonomics upgrades (dev scripts, CI cache, buildx caching, lockfile checks, and promotion gates). If you want a preview of any specific file before I change it, say its path now.”
+Scope (do not exceed): modify/create repo files listed below, run local verification where possible, produce unified diffs for every changed file, and produce IMPLEMENTATION_PLATFORM10X_NEXT.md and PR_BODY_PLATFORM10X_NEXT.md. If git or cluster access is not available inside this environment, create files and print the exact git & kubectl commands humans should run. Never print secrets.
+Top-level goals:
+1. Speed up CI/builds (cache, buildx, layered images).
+2. Guarantee hermetic, reproducible builds and lockfile verification.
+3. Improve developer ergonomics (npx fallbacks, devcontainer, Makefile, smoke tests).
+4. Harden progressive delivery (promotion gate: cosign + SBOM + synthetic tests).
+5. Improve observability & auto-rollback confidence (traces + dashboards).
+Files to create/modify (must show unified diffs):
+* .github/workflows/ci-cache.yml (new) — add actions/cache for ~/.npm / ~/.cache/buildx, BuildKit setup, and docker/setup-buildx-action + docker/login-action + docker/build-push-action using --cache-from.
+* .github/workflows/verify-lockfile.yml (new) — runs npm ci and node scripts/verify-lockfile.js to ensure package-lock.json matches package.json.
+* scripts/verify-lockfile.js (new) — exit non-zero if mismatch.
+* .github/workflows/publish.yml (ensure updated) — must include id-token: write and use cached buildx where possible. No || true.
+* Dockerfile snippets (commented) — show how to pin base image digests, with placeholder for digest plus exact docker command to fetch digest.
+* Makefile (new) — tasks: make dev, make build, make smoke, make sbom.
+* scripts/smoke.sh (new) — fast local sequence: npm ci --prefer-offline --no-audit, SOURCE_DATE_EPOCH=$(git commit timestamp) build, SBOM generation, provenance create (dry-run), cosign dry-run.
+* package.json (small edits) — change dev script to npx tsx fallback and add postinstall that ensures node_modules/.bin presence safely.
+* .devcontainer/devcontainer.json and .devcontainer/Dockerfile — add BuildKit & cosign & map /workspace caching and ensure postCreateCommand: npm ci.
+* helm/templates/canary-gate.yaml (new) — require annotations cosign.sigstore.dev/signed: "true" and sbom.ybuilt.io/verified: "true" for promotion; use Helm values toggle.
+* .github/workflows/canary-promote.yml (update) — require ci/verify-sbom-and-cosign.shsuccess prior to promote; use docker/build-push-action cache.
+* monitoring/prometheus-canary-alerts.yaml (update) — add an alert that triggers when canary error-rate > X% for Y mins and call the rollback webhook.
+* tools/log-trace-correlation.js (update) — add example of middleware that logs trace_idfrom OpenTelemetry context; include server and browser example.
+* IMPLEMENTATION_PLATFORM10X_NEXT.md (new) — final report with diffs, verification outputs, secrets list, and one-line remediations.
+* PR_BODY_PLATFORM10X_NEXT.md (new).
+Behavioral constraints & rules:
+* Do not print secrets. Use ${{ secrets.NAME }} placeholders in workflows and api_url_file / K8s secrets for cluster manifests. When you need a secret name, list the exact name (e.g., COSIGN_KEY, GHCR_PAT, ALERTMANAGER_SLACK_WEBHOOK).
+* If a verification step fails due to environment limits (no docker, missing OIDC in runner, no cluster credentials), capture the failing command, the exact stderr (last 200 lines), and produce a clear one-line remediation for humans to run.
+* If editing CI workflows, ensure they use actions/checkout@v4 with fetch-depth: 0.
+* Ensure all new scripts are executable (chmod +x).
+* All changed files must have a unified diff in the final output.
+Implementation tasks (step-by-step):
+1. Preflight — print outputs for:    node -v && npm -v && git --version || true
+2. git branch --show-current || echo "git unavailable"
+3. uname -a
+4. ls -la | sed -n '1,200p'
+5.   
+6. Create branch (or print commands if git unavailable):    git checkout -b fix/platform-10x-next
+7.   
+8. Add CI caching: create .github/workflows/ci-cache.yml implementing:
+    * actions/cache for ~/.npm keyed on lockfile checksum.
+    * docker/setup-buildx-action and docker/build-push-action with cache-from and cache-to.
+    * Validate incrementally that builds are faster in CI (capture timings).
+9. Lockfile verification:
+    * Add scripts/verify-lockfile.js and workflow verify-lockfile.yml to ensure package-lock.json is in git and matches package.json. Fail hard if mismatch.
+10. Make dev scripts resilient:
+    * Edit package.json dev script: dev: "npx tsx src/server.ts"; add postinstall to verify node_modules/.bin links exist.
+    * Add Makefile with make smoke that runs scripts/smoke.sh.
+11. Build cache & pinned base images:
+    * Add commented Dockerfile snippet showing how to pin base image with digest and include the docker command to fetch the digest: docker pull node:20-bullseye && docker inspect --format='{{index .RepoDigests 0}}' node:20-bullseye.
+    * Update publish workflow to use docker/build-push-action with --cache-from and --cache-to (registry or buildcache).
+12. Promotion gate & canary:
+    * Update helm/templates/canary-config.yaml or add helm/templates/canary-gate.yamlrequiring annotations. Update canary-promote.yml to call ci/verify-sbom-and-cosign.shbefore promoting.
+13. Observability:
+    * Update tools/log-trace-correlation.js to flush trace IDs onto each log line and include a 2-line example insertion for server/index.ts.
+    * Add recommended Grafana dashboard JSON skeleton (or a README with panels to import).
+14. Devcontainer:
+    * Ensure devcontainer installs BuildKit, cosign, trivy, opa, and runs npm ci in postCreateCommand.
+15. Testing & verification:
+* Run make smoke locally. If environment lacks docker or cosign, run what’s possible and capture exact outputs + one-line remediation.
+* Run bash scripts/reproducible-build.sh and create artifacts/dist.tar.gz + sha256.
+* Run npm run build (use npx vite build fallback if needed).
+1. Docs & PR:
+* Create IMPLEMENTATION_PLATFORM10X_NEXT.md with diffs, verification logs (commands, stdout tail, exit codes), exact secrets list, and remediation steps.
+* Create PR_BODY_PLATFORM10X_NEXT.md with acceptance checklist.
+Secrets required (list exact names to include in docs):
+* COSIGN_KEY (fallback)
+* GHCR_PAT (if not using OIDC)
+* ALERTMANAGER_SLACK_WEBHOOK (k8s secret mount)
+* SNYK_TOKEN or TRIVY_GITHUB_TOKEN (optional)
+* GPG_PRIVATE_KEY (optional)
+Verification checklist (agent must run or capture exact error): A. Preflight (print outputs). B. Local smoke: make smoke — capture stdout tail and exit code. C. Reproducible build: bash scripts/reproducible-build.sh (check files + sha). D. SBOM: bash scripts/generate-cyclonedx-sbom.sh → artifacts/sbom.json (validate JSON). E. Provenance: run node scripts/provenance/attest-oci.js --out artifacts/provenance.json. F. Cosign dry-run: bash scripts/cosign-sign-artifacts.sh --artifact artifacts/dist.tar.gz --dry-run (if no cosign binary/credentials -> capture error and remediation). G. CI caching: run the CI-local simulation or show timing improvements in logs (or provide commands to measure locally).
+Acceptance criteria (all must be satisfied or documented with remediation):
+* make smoke completes and creates artifacts/dist.tar.gz and its .sha256 (or exact error recorded).
+* npm ci uses cache and is faster on second run (timing evidence or explanation).
+* publish workflow uses buildx cache and has id-token: write.
+* Lockfile verification job fails on mismatch.
+* Dev scripts use npx tsx fallback and postinstall assures bin links.
+* Promotion gate requires cosign + SBOM verification before promotion.
+* IMPLEMENTATION_PLATFORM10X_NEXT.md and PR_BODY_PLATFORM10X_NEXT.md created and include diffs + remediation.
+Final output (single response) — agent must include all items below:
+1. Branch name used or “git unavailable”
+2. Files created/modified list (paths)
+3. For each changed file: unified diff block
+4. Verification checklist results (command run, stdout tail, exit code) — for every step attempted
+5. Artifacts produced (paths)
+6. If any step skipped: exact error + one-line remediation
+7. IMPLEMENTATION_PLATFORM10X_NEXT.md content (summary + manual steps)
+8. PR_BODY_PLATFORM10X_NEXT.md content (ready to paste)
+9. 3 recommended follow-ups with short risk/benefit notes
+Finish now. If a step cannot be executed due to environment limits (no docker, no cosign, no cluster access, git disabled), the agent must still:
+* create/modify files,
+* make scripts executable,
+* show unified diffs,
+* and print exact git and kubectl commands humans should run locally.
+That’s it — run the plan now and return the single final response described above.
+
+Three short, practical followups I’d run after the agent finishes
+1. Run the new ci-cache workflow on a PR — ensure second-run timings are 30–70% faster. Risk: small config flubs; Benefit: major CI cost/time savings.
+2. Deploy Gatekeeper + Sigstore Policy Controller to a staging cluster and test unsigned image rejection. Risk: admission controller misconfig → block deploys (mitigate by canary constraint first); Benefit: real admission-time protection.
+3. Schedule a 1-hour dev workshop where each dev runs make smoke and we trim the feedback loop. Risk: time commitment; Benefit: immediate reduction of “works on my Replit” tickets.
+  END OF PROMPT   EXECUTE THE PLAN
