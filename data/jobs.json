@@ -1264,5 +1264,35 @@
     "error": null,
     "createdAt": "2025-10-13T15:33:23.674Z",
     "updatedAt": "2025-10-13T15:33:26.307Z"
+  },
+  "2617c464-d313-4cc7-91f7-dd800731cc9b": {
+    "id": "2617c464-d313-4cc7-91f7-dd800731cc9b",
+    "userId": "10",
+    "prompt": "Create a simple smoke test project",
+    "templateId": null,
+    "status": "created",
+    "result": null,
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-14T12:22:07.702Z",
+    "updatedAt": "2025-10-14T12:22:07.702Z"
+  },
+  "7a8d90c7-5f42-420b-959b-2b24c6a7cd3d": {
+    "id": "7a8d90c7-5f42-420b-959b-2b24c6a7cd3d",
+    "userId": "11",
+    "prompt": "Create a simple smoke test project",
+    "templateId": null,
+    "status": "created",
+    "result": null,
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-14T12:22:31.364Z",
+    "updatedAt": "2025-10-14T12:22:31.364Z"
   }
 }

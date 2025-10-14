@@ -9,6 +9,11 @@ export default function projectsRoutes(db: Database) {
   const router = Router();
 
 // Validation schemas
+const createProjectSchema = z.object({
+  prompt: z.string().min(1).max(5000),
+  templateId: z.string().optional(),
+});
+
 const addCollaboratorSchema = z.object({
   userId: z.string(),
   role: z.enum(["owner", "editor", "viewer"]),
@@ -21,6 +26,75 @@ const createCommitSchema = z.object({
     diff: z.any(),
   }),
   parentCommitId: z.string().optional(),
+});
+
+/**
+ * POST /api/projects
+ * Create a new project
+ */
+router.post("/", authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const validatedData = createProjectSchema.parse(req.body);
+
+    const project = await storage.createJob({
+      userId: String(req.user.id),
+      prompt: validatedData.prompt,
+      templateId: validatedData.templateId,
+    });
+
+    logger.info(`[PROJECT] Created project ${project.id} for user ${req.user.id}`);
+
+    res.status(201).json({
+      id: project.id,
+      userId: project.userId,
+      prompt: project.prompt,
+      status: project.status,
+      createdAt: project.createdAt,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: error.errors,
+      });
+    }
+
+    logger.error("Create project error:", error);
+    res.status(500).json({ error: "Failed to create project" });
+  }
+});
+
+/**
+ * GET /api/projects
+ * Get all projects for the authenticated user
+ */
+router.get("/", authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const projects = await storage.getUserJobs(String(req.user.id));
+
+    res.status(200).json({
+      projects: projects.map(p => ({
+        id: p.id,
+        userId: p.userId,
+        prompt: p.prompt,
+        status: p.status,
+        templateId: p.templateId,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      })),
+    });
+  } catch (error) {
+    logger.error("Get projects error:", error);
+    res.status(500).json({ error: "Failed to get projects" });
+  }
 });
 
 /**

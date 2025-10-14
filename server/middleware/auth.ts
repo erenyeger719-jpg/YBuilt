@@ -15,7 +15,7 @@ declare global {
 }
 
 export interface JWTPayload {
-  id: number;
+  sub: number;
   email: string;
 }
 
@@ -33,8 +33,28 @@ export function generateToken(payload: JWTPayload): string {
  */
 export function verifyToken(token: string): JWTPayload {
   try {
-    return jwt.verify(token, JWT_SECRET) as JWTPayload;
+    const decoded = jwt.verify(token, JWT_SECRET);
+    
+    // Type guard: jwt.verify can return string | JwtPayload
+    if (typeof decoded === 'string') {
+      throw new Error("Invalid token payload format");
+    }
+    
+    // Validate required fields exist and have correct types
+    if (!decoded || typeof decoded !== 'object') {
+      throw new Error("Invalid token payload");
+    }
+    
+    if (typeof decoded.sub !== 'number' || typeof decoded.email !== 'string') {
+      throw new Error("Invalid token payload: missing or invalid required fields");
+    }
+    
+    // Now we can safely cast to our JWTPayload type (cast through unknown for type safety)
+    return decoded as unknown as JWTPayload;
   } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
     throw new Error("Invalid or expired token");
   }
 }
@@ -63,7 +83,7 @@ export function authMiddleware(
     }
 
     const decoded = verifyToken(token);
-    req.user = { id: decoded.id, email: decoded.email };
+    req.user = { id: decoded.sub, email: decoded.email };
     next();
   } catch (error) {
     res.status(401).json({

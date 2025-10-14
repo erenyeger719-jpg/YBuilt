@@ -11,6 +11,60 @@
       "email": "user2@example.com",
       "password_hash": "$2b$10$TT3H2yyP01mizaSUJ7KcKO3tPC.ZeJ9yKuthqMvPYeI/zWZFHkYfm",
       "created_at": 1760442362191
+    },
+    {
+      "id": 3,
+      "email": "test-1760444077-17436@example.com",
+      "password_hash": "$2b$10$BmcZfEk2WcGOUTWTd.rZDuOVZui8Q2sqaAyu/D.bo2l16OshvL36y",
+      "created_at": 1760444078203
+    },
+    {
+      "id": 4,
+      "email": "test-1760444238-30772@example.com",
+      "password_hash": "$2b$10$AGYHK1FAzwNcvIcCjOS9buPI3lxpXah04ymCFjtZ7s/b6Vm8twet.",
+      "created_at": 1760444238790
+    },
+    {
+      "id": 5,
+      "email": "test-1760444358-16921@example.com",
+      "password_hash": "$2b$10$X2Wl9t1ZSp4NZrFl7Xuw5e2M7w8GwiXWVAl/zd1XWhSasZfuDzXL.",
+      "created_at": 1760444359348
+    },
+    {
+      "id": 6,
+      "email": "quicktest@test.com",
+      "password_hash": "$2b$10$OCyl5Q2Ty.3KUcqB3Nf0o.v9.uvnB/iItx8NgidWp3JiWmLsFpy6S",
+      "created_at": 1760444424144
+    },
+    {
+      "id": 7,
+      "email": "test-1760444432-4764@example.com",
+      "password_hash": "$2b$10$lh7pr/b8ur5khZ3MtpbGY.hWfFvw64GzAqRykVNMsfKYLlTihpbay",
+      "created_at": 1760444433170
+    },
+    {
+      "id": 8,
+      "email": "test-1760444474-26175@example.com",
+      "password_hash": "$2b$10$dXIbE1FYq6sx4FDbrH6VFOXJbiw1b.3GMP4k5XYXXJO9IQ8tIV3Hu",
+      "created_at": 1760444474316
+    },
+    {
+      "id": 9,
+      "email": "debug@test.com",
+      "password_hash": "$2b$10$Lesu.LGf/PJrb.sgG1ukJ.gUjnTAI33WmxNsR/DNM6EAMeHlxglDG",
+      "created_at": 1760444485699
+    },
+    {
+      "id": 10,
+      "email": "test-1760444527-31085@example.com",
+      "password_hash": "$2b$10$EP7.sBPLi1n6Ha9SLdB3melsB7Vwhvjeg06tWgI3G7ct6IB2keGwS",
+      "created_at": 1760444527320
+    },
+    {
+      "id": 11,
+      "email": "test-1760444550-14539@example.com",
+      "password_hash": "$2b$10$O70ZzKtSa8XiKWRLxgIGtuZbw6jPKoPZVfwjlo1V1KeUzqs4LG4GC",
+      "created_at": 1760444551096
     }
   ],
   "projects": [],

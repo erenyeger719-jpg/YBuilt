@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { Database } from '../db.js';
 import { authRateLimiter } from '../middleware/rateLimiter.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'replace_me';
 
 export default function authRoutes(db: Database) {
   const router = Router();
