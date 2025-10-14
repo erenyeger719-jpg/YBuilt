@@ -1,0 +1,193 @@
+# Canary Deployment Configuration
+# Progressive delivery with traffic splitting and automated promotion/rollback
+
+# Canary settings
+canary:
+  enabled: true
+  
+  # Traffic weights (percentage to canary)
+  weights:
+    initial: 10      # Start with 10% traffic
+    increment: 20    # Increase by 20% each step
+    max: 100         # Full promotion at 100%
+  
+  # Canary analysis (Flagger metrics)
+  analysis:
+    interval: 1m          # Check metrics every 1 minute
+    threshold: 5          # Number of successful checks before promotion
+    maxWeight: 50         # Max traffic weight during analysis
+    stepWeight: 10        # Traffic increment per step
+    
+    metrics:
+      # Success rate threshold
+      - name: request-success-rate
+        thresholdRange:
+          min: 99         # Minimum 99% success rate
+        interval: 1m
+      
+      # Request duration (latency) threshold
+      - name: request-duration
+        thresholdRange:
+          max: 500        # Maximum 500ms p95 latency
+        interval: 1m
+      
+      # Error rate threshold  
+      - name: error-rate
+        thresholdRange:
+          max: 1          # Maximum 1% error rate
+        interval: 1m
+  
+  # Webhooks for notifications
+  webhooks:
+    - name: load-test
+      type: rollout
+      url: http://flagger-loadtester.test/
+      timeout: 15s
+      metadata:
+        type: cmd
+        cmd: "hey -z 1m -q 10 -c 2 http://ybuilt-canary.production/"
+    
+    - name: slack-notification
+      type: event
+      url: https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK
+      metadata:
+        channel: deployments
+        username: flagger
+  
+  # Rollback configuration
+  rollback:
+    # Automatic rollback on failures
+    enabled: true
+    
+    # Rollback triggers
+    triggers:
+      - metric: request-success-rate
+        threshold: 95     # Rollback if success rate < 95%
+      
+      - metric: request-duration
+        threshold: 1000   # Rollback if p95 latency > 1s
+      
+      - metric: error-rate
+        threshold: 5      # Rollback if error rate > 5%
+
+# Deployment configuration
+deployment:
+  canary:
+    image:
+      repository: ghcr.io/ybuilt/ybuilt
+      tag: canary        # Canary image tag
+      pullPolicy: Always
+    
+    replicas: 2          # Canary replica count
+    
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    
+    env:
+      - name: DEPLOYMENT_TYPE
+        value: "canary"
+      - name: LOG_LEVEL
+        value: "debug"   # More verbose logging for canary
+
+# Service configuration
+service:
+  canary:
+    type: ClusterIP
+    port: 80
+    targetPort: 5000
+    
+    # Service mesh configuration (Istio/Linkerd)
+    mesh:
+      enabled: true
+      trafficPolicy:
+        connectionPool:
+          tcp:
+            maxConnections: 100
+          http:
+            http1MaxPendingRequests: 50
+            http2MaxRequests: 100
+
+# Monitoring configuration
+monitoring:
+  prometheus:
+    enabled: true
+    interval: 15s
+    
+    # Custom metrics for canary analysis
+    customMetrics:
+      - name: ybuilt_jobs_processed_total
+        type: counter
+        labels:
+          - deployment
+      
+      - name: ybuilt_job_duration_seconds
+        type: histogram
+        labels:
+          - deployment
+          - status
+  
+  grafana:
+    dashboard: true
+    datasource: Prometheus
+
+# Progressive delivery strategy
+strategy:
+  # Blue-Green fallback
+  blueGreen:
+    enabled: false
+    autoPromotionEnabled: false
+  
+  # Canary (primary strategy)
+  canary:
+    enabled: true
+    
+    # Traffic management
+    trafficRouting:
+      provider: istio     # or linkerd, nginx, traefik
+      
+      istio:
+        virtualService:
+          gateways:
+            - ybuilt-gateway
+          hosts:
+            - ybuilt.production.svc.cluster.local
+        
+        destinationRule:
+          trafficPolicy:
+            tls:
+              mode: ISTIO_MUTUAL
+    
+    # Automated promotion
+    autoPromotion:
+      enabled: true
+      minPodsReady: 1
+      statusCheckInterval: 1m
+      statusCheckTimeout: 5m
+
+# Alerting configuration  
+alerting:
+  enabled: true
+  
+  rules:
+    - alert: CanaryDeploymentFailing
+      expr: flagger_canary_status{name="ybuilt"} > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Canary deployment failing"
+        description: "Canary deployment for ybuilt is in failed state"
+    
+    - alert: CanaryRollbackTriggered
+      expr: flagger_canary_status{name="ybuilt"} == 2
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Canary rollback triggered"
+        description: "Canary deployment rolled back due to failed metrics"

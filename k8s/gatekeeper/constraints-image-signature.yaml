@@ -1,0 +1,172 @@
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequirecosignsignature
+  annotations:
+    description: "Requires container images to be signed with cosign"
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequireCosignSignature
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            exemptImages:
+              description: "Images exempt from signature requirement"
+              type: array
+              items:
+                type: string
+            exemptNamespaces:
+              description: "Namespaces exempt from signature requirement"
+              type: array
+              items:
+                type: string
+
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequirecosignsignature
+        
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not exempt_image(container.image)
+          not exempt_namespace
+          not has_signature_annotation
+          msg := sprintf("Container image '%s' must be signed with cosign (no signature annotation found)", [container.image])
+        }
+        
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.initContainers[_]
+          not exempt_image(container.image)
+          not exempt_namespace
+          not has_signature_annotation
+          msg := sprintf("Init container image '%s' must be signed with cosign (no signature annotation found)", [container.image])
+        }
+        
+        exempt_image(image) {
+          exempt := input.parameters.exemptImages[_]
+          startswith(image, exempt)
+        }
+        
+        exempt_namespace {
+          namespace := input.review.object.metadata.namespace
+          exempt := input.parameters.exemptNamespaces[_]
+          namespace == exempt
+        }
+        
+        has_signature_annotation {
+          input.review.object.metadata.annotations["cosign.sigstore.dev/signature"]
+        }
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireCosignSignature
+metadata:
+  name: require-cosign-signature
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - gatekeeper-system
+  parameters:
+    exemptImages:
+      - "gcr.io/distroless/"
+      - "docker.io/library/"
+      - "k8s.gcr.io/"
+    exemptNamespaces:
+      - development
+      - testing
+
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8sdenyroot
+  annotations:
+    description: "Denies containers running as root"
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sDenyRoot
+  
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sdenyroot
+        
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not container.securityContext.runAsNonRoot
+          msg := sprintf("Container '%s' must set runAsNonRoot: true", [container.name])
+        }
+        
+        violation[{"msg": msg}] {
+          input.review.object.spec.securityContext.runAsUser == 0
+          msg := "Pod cannot run as root user (UID 0)"
+        }
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sDenyRoot
+metadata:
+  name: deny-root-execution
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system
+
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8sdenyprivileged
+  annotations:
+    description: "Denies privileged containers"
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sDenyPrivileged
+  
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sdenyprivileged
+        
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          container.securityContext.privileged == true
+          msg := sprintf("Privileged container '%s' is not allowed", [container.name])
+        }
+        
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.initContainers[_]
+          container.securityContext.privileged == true
+          msg := sprintf("Privileged init container '%s' is not allowed", [container.name])
+        }
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sDenyPrivileged
+metadata:
+  name: deny-privileged-containers
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system

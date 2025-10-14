@@ -1,0 +1,274 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: sbom-verify-webhook
+  annotations:
+    cert-manager.io/inject-ca-from: ybuilt-system/sbom-verify-cert
+spec:
+  webhooks:
+    - name: sbom-verify.ybuilt.dev
+      admissionReviewVersions: ["v1", "v1beta1"]
+      
+      clientConfig:
+        service:
+          name: sbom-verify-webhook
+          namespace: ybuilt-system
+          path: /validate
+        caBundle: Cg==  # Injected by cert-manager
+      
+      rules:
+        - operations: ["CREATE", "UPDATE"]
+          apiGroups: [""]
+          apiVersions: ["v1"]
+          resources: ["pods"]
+        
+        - operations: ["CREATE", "UPDATE"]
+          apiGroups: ["apps"]
+          apiVersions: ["v1"]
+          resources: ["deployments", "statefulsets", "daemonsets"]
+      
+      failurePolicy: Fail
+      sideEffects: None
+      timeoutSeconds: 5
+      
+      namespaceSelector:
+        matchExpressions:
+          - key: sbom-verify
+            operator: In
+            values: ["enabled"]
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sbom-verify-webhook
+  namespace: ybuilt-system
+spec:
+  selector:
+    app: sbom-verify-webhook
+  ports:
+    - port: 443
+      targetPort: 8443
+      protocol: TCP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sbom-verify-webhook
+  namespace: ybuilt-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sbom-verify-webhook
+  
+  template:
+    metadata:
+      labels:
+        app: sbom-verify-webhook
+    
+    spec:
+      serviceAccountName: sbom-verify-webhook
+      
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+      
+      containers:
+        - name: webhook
+          image: ghcr.io/ybuilt/sbom-verify-webhook:latest
+          
+          ports:
+            - containerPort: 8443
+              name: webhook
+          
+          env:
+            - name: TLS_CERT_FILE
+              value: /certs/tls.crt
+            - name: TLS_KEY_FILE
+              value: /certs/tls.key
+          
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      
+      volumes:
+        - name: certs
+          secret:
+            secretName: sbom-verify-webhook-cert
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sbom-verify-webhook
+  namespace: ybuilt-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sbom-verify-webhook
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: sbom-verify-webhook
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: sbom-verify-webhook
+subjects:
+  - kind: ServiceAccount
+    name: sbom-verify-webhook
+    namespace: ybuilt-system
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sbom-verify-cert
+  namespace: ybuilt-system
+spec:
+  secretName: sbom-verify-webhook-cert
+  dnsNames:
+    - sbom-verify-webhook.ybuilt-system.svc
+    - sbom-verify-webhook.ybuilt-system.svc.cluster.local
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+
+---
+# Webhook Implementation (Pseudo-code reference)
+# File: webhook-server.js
+
+# const express = require('express');
+# const https = require('https');
+# const fs = require('fs');
+# 
+# const app = express();
+# app.use(express.json());
+# 
+# app.post('/validate', async (req, res) => {
+#   const admissionReview = req.body;
+#   const pod = admissionReview.request.object;
+#   
+#   // Extract image references
+#   const images = pod.spec.containers.map(c => c.image);
+#   
+#   // Validate SBOM for each image
+#   const validationResults = await Promise.all(
+#     images.map(image => validateImageSBOM(image))
+#   );
+#   
+#   // Check if all images have valid SBOMs
+#   const allowed = validationResults.every(r => r.valid);
+#   
+#   // Respond to admission request
+#   res.json({
+#     apiVersion: 'admission.k8s.io/v1',
+#     kind: 'AdmissionReview',
+#     response: {
+#       uid: admissionReview.request.uid,
+#       allowed: allowed,
+#       status: {
+#         message: allowed 
+#           ? 'All images have valid SBOMs' 
+#           : 'One or more images missing SBOM'
+#       }
+#     }
+#   });
+# });
+# 
+# async function validateImageSBOM(image) {
+#   try {
+#     // Fetch SBOM from registry annotation
+#     const sbom = await fetchSBOMFromRegistry(image);
+#     
+#     // Validate SBOM structure
+#     if (!sbom || !sbom.components) {
+#       return { valid: false, reason: 'Missing SBOM' };
+#     }
+#     
+#     // Check for banned packages
+#     const bannedPackages = ['lodash@4.17.0', 'minimist@1.2.0'];
+#     const hasBanned = sbom.components.some(c => 
+#       bannedPackages.includes(`${c.name}@${c.version}`)
+#     );
+#     
+#     if (hasBanned) {
+#       return { valid: false, reason: 'Banned package detected' };
+#     }
+#     
+#     // Verify cosign signature
+#     const signatureValid = await verifyCosignSignature(image);
+#     if (!signatureValid) {
+#       return { valid: false, reason: 'Invalid signature' };
+#     }
+#     
+#     return { valid: true };
+#   } catch (error) {
+#     return { valid: false, reason: error.message };
+#   }
+# }
+# 
+# const server = https.createServer({
+#   key: fs.readFileSync(process.env.TLS_KEY_FILE),
+#   cert: fs.readFileSync(process.env.TLS_CERT_FILE)
+# }, app);
+# 
+# server.listen(8443, () => {
+#   console.log('SBOM verification webhook listening on :8443');
+# });
+
+---
+# Enable webhook for namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    sbom-verify: enabled  # Webhook will validate pods in this namespace

@@ -1,0 +1,267 @@
+name: Canary Deployment with Flagger
+
+on:
+  workflow_dispatch:
+    inputs:
+      weight:
+        description: 'Initial canary weight (10-50%)'
+        required: false
+        default: '10'
+        type: choice
+        options:
+          - '10'
+          - '20'
+          - '30'
+          - '50'
+      
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - deploy
+          - promote
+          - rollback
+
+env:
+  HELM_RELEASE: ybuilt
+  NAMESPACE: production
+  CANARY_WEIGHT: ${{ github.event.inputs.weight || '10' }}
+
+jobs:
+  deploy-canary:
+    name: Deploy Canary
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'deploy'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+      
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.12.0'
+      
+      - name: Configure Kubernetes
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+      
+      - name: Deploy canary with Flagger
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ./helm \
+            --namespace ${{ env.NAMESPACE }} \
+            --values helm/values-canary.yaml \
+            --set canary.enabled=true \
+            --set canary.weights.initial=${{ env.CANARY_WEIGHT }} \
+            --set deployment.canary.image.tag=${{ github.sha }} \
+            --wait --timeout 5m
+      
+      - name: Verify Flagger canary resource
+        run: |
+          kubectl get canary ${{ env.HELM_RELEASE }} \
+            -n ${{ env.NAMESPACE }} -o yaml
+      
+      - name: Wait for canary initialization
+        run: |
+          kubectl wait --for=condition=Promoted=False \
+            canary/${{ env.HELM_RELEASE }} \
+            -n ${{ env.NAMESPACE }} \
+            --timeout=2m
+      
+      - name: Check initial metrics
+        run: |
+          echo "📊 Initial canary metrics:"
+          kubectl get canary ${{ env.HELM_RELEASE }} \
+            -n ${{ env.NAMESPACE }} \
+            -o jsonpath='{.status.conditions[?(@.type=="Promoted")].message}'
+  
+  metric-validation:
+    name: Validate Canary Metrics
+    runs-on: ubuntu-latest
+    needs: deploy-canary
+    if: github.event.inputs.action == 'deploy'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure Kubernetes
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+      
+      - name: Monitor canary analysis
+        run: |
+          echo "🔍 Monitoring canary analysis (max 10 minutes)..."
+          
+          for i in {1..20}; do
+            STATUS=$(kubectl get canary ${{ env.HELM_RELEASE }} \
+              -n ${{ env.NAMESPACE }} \
+              -o jsonpath='{.status.phase}')
+            
+            WEIGHT=$(kubectl get canary ${{ env.HELM_RELEASE }} \
+              -n ${{ env.NAMESPACE }} \
+              -o jsonpath='{.status.canaryWeight}')
+            
+            echo "[$i/20] Status: $STATUS | Weight: $WEIGHT%"
+            
+            # Check for completion
+            if [ "$STATUS" == "Succeeded" ]; then
+              echo "✅ Canary analysis succeeded - ready for promotion"
+              exit 0
+            elif [ "$STATUS" == "Failed" ]; then
+              echo "❌ Canary analysis failed - triggering rollback"
+              exit 1
+            fi
+            
+            sleep 30
+          done
+          
+          echo "⏰ Canary analysis timeout - check manually"
+          exit 1
+      
+      - name: Fetch Prometheus metrics
+        if: always()
+        run: |
+          echo "📊 Canary metrics from Prometheus:"
+          
+          # Request success rate
+          kubectl exec -n monitoring deployment/prometheus \
+            -- promtool query instant \
+            'sum(rate(http_requests_total{deployment="canary",status!~"5.."}[2m])) / sum(rate(http_requests_total{deployment="canary"}[2m]))' \
+            || echo "Failed to fetch success rate"
+          
+          # Request duration (p95)
+          kubectl exec -n monitoring deployment/prometheus \
+            -- promtool query instant \
+            'histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{deployment="canary"}[2m]))' \
+            || echo "Failed to fetch p95 latency"
+          
+          # Error rate
+          kubectl exec -n monitoring deployment/prometheus \
+            -- promtool query instant \
+            'sum(rate(http_requests_total{deployment="canary",status=~"5.."}[2m])) / sum(rate(http_requests_total{deployment="canary"}[2m]))' \
+            || echo "Failed to fetch error rate"
+  
+  auto-promote:
+    name: Auto-Promote Canary
+    runs-on: ubuntu-latest
+    needs: metric-validation
+    if: github.event.inputs.action == 'deploy' && success()
+    
+    steps:
+      - name: Configure Kubernetes
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+      
+      - name: Promote canary
+        run: |
+          echo "🚀 Promoting canary to stable..."
+          
+          kubectl patch canary ${{ env.HELM_RELEASE }} \
+            -n ${{ env.NAMESPACE }} \
+            --type merge \
+            -p '{"spec":{"skipAnalysis":true}}'
+          
+          # Wait for promotion
+          kubectl wait --for=condition=Promoted \
+            canary/${{ env.HELM_RELEASE }} \
+            -n ${{ env.NAMESPACE }} \
+            --timeout=5m
+          
+          echo "✅ Canary promoted successfully"
+      
+      - name: Verify stable deployment
+        run: |
+          kubectl rollout status deployment/${{ env.HELM_RELEASE }} \
+            -n ${{ env.NAMESPACE }} --timeout=3m
+          
+          echo "✅ Stable deployment verified"
+  
+  manual-promote:
+    name: Manual Promotion
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'promote'
+    
+    steps:
+      - name: Configure Kubernetes
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+      
+      - name: Force promote canary
+        run: |
+          echo "🚀 Forcing canary promotion..."
+          
+          kubectl patch canary ${{ env.HELM_RELEASE }} \
+            -n ${{ env.NAMESPACE }} \
+            --type merge \
+            -p '{"spec":{"skipAnalysis":true}}'
+          
+          kubectl wait --for=condition=Promoted \
+            canary/${{ env.HELM_RELEASE }} \
+            -n ${{ env.NAMESPACE }} \
+            --timeout=5m
+          
+          echo "✅ Manual promotion completed"
+  
+  rollback:
+    name: Rollback Canary
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'rollback' || failure()
+    
+    steps:
+      - name: Configure Kubernetes
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+      
+      - name: Trigger rollback
+        run: |
+          echo "⏪ Rolling back canary deployment..."
+          
+          # Reset canary weight to 0
+          kubectl patch canary ${{ env.HELM_RELEASE }} \
+            -n ${{ env.NAMESPACE }} \
+            --type merge \
+            -p '{"spec":{"analysis":{"maxWeight":0}}}'
+          
+          # Wait for rollback
+          sleep 30
+          
+          WEIGHT=$(kubectl get canary ${{ env.HELM_RELEASE }} \
+            -n ${{ env.NAMESPACE }} \
+            -o jsonpath='{.status.canaryWeight}')
+          
+          if [ "$WEIGHT" -eq 0 ]; then
+            echo "✅ Canary rolled back successfully"
+          else
+            echo "❌ Rollback failed - manual intervention required"
+            exit 1
+          fi
+      
+      - name: Notify team
+        if: always()
+        run: |
+          echo "📢 Sending rollback notification to Slack..."
+          
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "🚨 Canary Rollback Triggered",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Canary rollback completed*\n\nRelease: `${{ env.HELM_RELEASE }}`\nNamespace: `${{ env.NAMESPACE }}`\nTriggered by: ${{ github.actor }}"
+                  }
+                }
+              ]
+            }' || echo "Failed to send Slack notification"

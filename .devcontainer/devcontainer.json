@@ -1,0 +1,66 @@
+{
+  "name": "YBUILT Industrial Dev Container",
+  "dockerFile": "Dockerfile",
+  
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+      "version": "latest",
+      "helm": "latest",
+      "minikube": "none"
+    }
+  },
+  
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-playwright.playwright",
+        "tsandall.opa",
+        "ms-azuretools.vscode-docker",
+        "GitHub.vscode-pull-request-github",
+        "eamodio.gitlens",
+        "redhat.vscode-yaml",
+        "ms-kubernetes-tools.vscode-kubernetes-tools"
+      ],
+      
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "eslint.validate": [
+          "javascript",
+          "javascriptreact",
+          "typescript",
+          "typescriptreact"
+        ],
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "playwright.reuseBrowser": true
+      }
+    }
+  },
+  
+  "forwardPorts": [5000, 9090],
+  
+  "postCreateCommand": "npm ci && chmod +x scripts/*.sh ci/*.sh",
+  
+  "postStartCommand": "echo '✅ Dev container ready! Run: npm run dev'",
+  
+  "remoteUser": "node",
+  
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/node/.ssh,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.gitconfig,target=/home/node/.gitconfig,type=bind,consistency=cached"
+  ],
+  
+  "containerEnv": {
+    "NODE_ENV": "development",
+    "LOG_LEVEL": "debug"
+  }
+}

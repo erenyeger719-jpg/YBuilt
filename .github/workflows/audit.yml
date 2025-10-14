@@ -1,0 +1,346 @@
+name: Security Audit & Vulnerability Scanning
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  
+  push:
+    branches: [main, develop]
+  
+  pull_request:
+    branches: [main]
+  
+  workflow_dispatch:
+
+permissions:
+  contents: write      # Create issues
+  security-events: write  # Upload SARIF
+  issues: write       # Create vulnerability issues
+
+jobs:
+  npm-audit:
+    name: npm Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+      
+      - name: Run npm audit
+        id: audit
+        run: |
+          npm audit --json > artifacts/npm-audit.json || true
+          
+          # Count vulnerabilities by severity
+          CRITICAL=$(jq '[.vulnerabilities[] | select(.severity == "critical")] | length' artifacts/npm-audit.json)
+          HIGH=$(jq '[.vulnerabilities[] | select(.severity == "high")] | length' artifacts/npm-audit.json)
+          MODERATE=$(jq '[.vulnerabilities[] | select(.severity == "moderate")] | length' artifacts/npm-audit.json)
+          
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "moderate=$MODERATE" >> $GITHUB_OUTPUT
+          
+          # Fail if critical or high vulnerabilities found
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "❌ Found $CRITICAL critical and $HIGH high vulnerabilities"
+            exit 1
+          fi
+      
+      - name: Upload npm audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-${{ github.sha }}
+          path: artifacts/npm-audit.json
+          retention-days: 90
+      
+      - name: Create issue for vulnerabilities
+        if: failure() && (steps.audit.outputs.critical > 0 || steps.audit.outputs.high > 0)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const audit = JSON.parse(fs.readFileSync('artifacts/npm-audit.json', 'utf8'));
+            
+            const critical = Object.entries(audit.vulnerabilities || {})
+              .filter(([, v]) => v.severity === 'critical');
+            const high = Object.entries(audit.vulnerabilities || {})
+              .filter(([, v]) => v.severity === 'high');
+            
+            const body = `
+            ## 🚨 Security Vulnerabilities Detected
+            
+            **Critical:** ${critical.length}  
+            **High:** ${high.length}
+            
+            ### Critical Vulnerabilities
+            ${critical.map(([name, v]) => `
+            - **${name}** (${v.severity})
+              - Via: ${v.via.map(via => typeof via === 'string' ? via : via.name).join(', ')}
+              - Range: ${v.range}
+              - Fix: ${v.fixAvailable ? 'Available' : 'Not available'}
+            `).join('\n')}
+            
+            ### High Vulnerabilities
+            ${high.map(([name, v]) => `
+            - **${name}** (${v.severity})
+              - Via: ${v.via.map(via => typeof via === 'string' ? via : via.name).join(', ')}
+              - Range: ${v.range}
+              - Fix: ${v.fixAvailable ? 'Available' : 'Not available'}
+            `).join('\n')}
+            
+            ### Actions Required
+            1. Run \`npm audit fix\` locally
+            2. Review and test fixes
+            3. If no automatic fix available, upgrade manually
+            
+            **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Security Vulnerabilities: ${critical.length} critical, ${high.length} high`,
+              body: body,
+              labels: ['security', 'vulnerability', 'automated']
+            });
+  
+  trivy-image-scan:
+    name: Trivy Image Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Build Docker image
+        run: docker build -t ybuilt:scan .
+      
+      - name: Run Trivy scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ybuilt:scan
+          format: 'json'
+          output: 'artifacts/vuln-report.json'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'  # Don't fail, just report
+      
+      - name: Generate SARIF report
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ybuilt:scan
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Parse Trivy results
+        id: trivy
+        run: |
+          mkdir -p artifacts
+          
+          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' artifacts/vuln-report.json)
+          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' artifacts/vuln-report.json)
+          
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          
+          echo "📊 Trivy Scan Results:"
+          echo "   Critical: $CRITICAL"
+          echo "   High: $HIGH"
+      
+      - name: Upload Trivy results
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-${{ github.sha }}
+          path: artifacts/vuln-report.json
+          retention-days: 90
+      
+      - name: Create issue for image vulnerabilities
+        if: steps.trivy.outputs.critical > 0 || steps.trivy.outputs.high > 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('artifacts/vuln-report.json', 'utf8'));
+            
+            const vulns = report.Results?.flatMap(r => r.Vulnerabilities || []) || [];
+            const critical = vulns.filter(v => v.Severity === 'CRITICAL');
+            const high = vulns.filter(v => v.Severity === 'HIGH');
+            
+            const body = `
+            ## 🐳 Docker Image Vulnerabilities
+            
+            **Critical:** ${critical.length}  
+            **High:** ${high.length}
+            
+            ### Critical Vulnerabilities
+            ${critical.slice(0, 10).map(v => `
+            - **${v.VulnerabilityID}** - ${v.PkgName}
+              - Severity: ${v.Severity}
+              - Installed: ${v.InstalledVersion}
+              - Fixed: ${v.FixedVersion || 'Not available'}
+              - Title: ${v.Title}
+            `).join('\n')}
+            ${critical.length > 10 ? `\n... and ${critical.length - 10} more` : ''}
+            
+            ### High Vulnerabilities
+            ${high.slice(0, 10).map(v => `
+            - **${v.VulnerabilityID}** - ${v.PkgName}
+              - Severity: ${v.Severity}
+              - Installed: ${v.InstalledVersion}
+              - Fixed: ${v.FixedVersion || 'Not available'}
+            `).join('\n')}
+            ${high.length > 10 ? `\n... and ${high.length - 10} more` : ''}
+            
+            ### Actions Required
+            1. Update base image: \`FROM node:20-bullseye\` → latest version
+            2. Rebuild with \`docker build --pull\`
+            3. Consider distroless migration (see docs/distroless-migration.md)
+            
+            **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🐳 Image Vulnerabilities: ${critical.length} critical, ${high.length} high`,
+              body: body,
+              labels: ['security', 'docker', 'vulnerability', 'automated']
+            });
+  
+  sbom-audit:
+    name: SBOM Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+      
+      - name: Generate SBOM
+        run: |
+          chmod +x scripts/generate-cyclonedx-sbom.sh
+          ./scripts/generate-cyclonedx-sbom.sh
+      
+      - name: Audit SBOM for banned packages
+        run: |
+          # Check for known vulnerable/banned packages
+          BANNED_PACKAGES=$(jq -r '
+            .components[] |
+            select(
+              (.name == "lodash" and .version | startswith("4.17")) or
+              (.name == "minimist" and .version | startswith("1.2.0")) or
+              (.name == "axios" and .version | startswith("0.21"))
+            ) |
+            "\(.name)@\(.version)"
+          ' artifacts/sbom.json)
+          
+          if [ -n "$BANNED_PACKAGES" ]; then
+            echo "❌ Banned packages detected:"
+            echo "$BANNED_PACKAGES"
+            exit 1
+          else
+            echo "✅ No banned packages found"
+          fi
+      
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: artifacts/sbom.json
+          retention-days: 90
+  
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-2.0, GPL-3.0
+  
+  summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [npm-audit, trivy-image-scan, sbom-audit]
+    if: always()
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-${{ github.sha }}'
+          path: artifacts/
+          merge-multiple: true
+      
+      - name: Generate summary
+        run: |
+          echo "## 🛡️ Security Audit Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "artifacts/npm-audit.json" ]; then
+            NPM_CRITICAL=$(jq '[.vulnerabilities[] | select(.severity == "critical")] | length' artifacts/npm-audit.json)
+            NPM_HIGH=$(jq '[.vulnerabilities[] | select(.severity == "high")] | length' artifacts/npm-audit.json)
+            echo "### npm Audit" >> $GITHUB_STEP_SUMMARY
+            echo "- Critical: $NPM_CRITICAL" >> $GITHUB_STEP_SUMMARY
+            echo "- High: $NPM_HIGH" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f "artifacts/vuln-report.json" ]; then
+            IMG_CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' artifacts/vuln-report.json)
+            IMG_HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' artifacts/vuln-report.json)
+            echo "### Docker Image Scan" >> $GITHUB_STEP_SUMMARY
+            echo "- Critical: $IMG_CRITICAL" >> $GITHUB_STEP_SUMMARY
+            echo "- High: $IMG_HIGH" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f "artifacts/sbom.json" ]; then
+            COMPONENTS=$(jq '.components | length' artifacts/sbom.json)
+            echo "### SBOM" >> $GITHUB_STEP_SUMMARY
+            echo "- Components: $COMPONENTS" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "**Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY

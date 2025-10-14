@@ -1,0 +1,170 @@
+{{- if .Values.canary.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ybuilt.fullname" . }}-canary
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+    deployment: canary
+spec:
+  replicas: {{ .Values.deployment.canary.replicas | default 2 }}
+  selector:
+    matchLabels:
+      {{- include "ybuilt.selectorLabels" . | nindent 6 }}
+      deployment: canary
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        flagger.app/track: "canary"
+      labels:
+        {{- include "ybuilt.selectorLabels" . | nindent 8 }}
+        deployment: canary
+        version: {{ .Values.deployment.canary.image.tag | quote }}
+    spec:
+      serviceAccountName: {{ include "ybuilt.serviceAccountName" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.deployment.canary.image.repository }}:{{ .Values.deployment.canary.image.tag }}"
+        imagePullPolicy: {{ .Values.deployment.canary.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 5000
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        {{- toYaml .Values.deployment.canary.env | nindent 8 }}
+        resources:
+          {{- toYaml .Values.deployment.canary.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /api/status
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/status
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ybuilt.fullname" . }}-canary
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+    deployment: canary
+spec:
+  type: {{ .Values.service.canary.type }}
+  ports:
+    - port: {{ .Values.service.canary.port }}
+      targetPort: {{ .Values.service.canary.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "ybuilt.selectorLabels" . | nindent 4 }}
+    deployment: canary
+
+{{- if .Values.service.mesh.enabled }}
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: {{ include "ybuilt.fullname" . }}-canary
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+spec:
+  hosts:
+    - {{ include "ybuilt.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  http:
+    - match:
+        - headers:
+            x-canary:
+              exact: "true"
+      route:
+        - destination:
+            host: {{ include "ybuilt.fullname" . }}-canary
+            port:
+              number: {{ .Values.service.canary.port }}
+    
+    - route:
+        - destination:
+            host: {{ include "ybuilt.fullname" . }}
+            port:
+              number: {{ .Values.service.port }}
+          weight: {{ sub 100 (.Values.canary.weights.initial | default 10) }}
+        - destination:
+            host: {{ include "ybuilt.fullname" . }}-canary
+            port:
+              number: {{ .Values.service.canary.port }}
+          weight: {{ .Values.canary.weights.initial | default 10 }}
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ include "ybuilt.fullname" . }}-canary
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+spec:
+  host: {{ include "ybuilt.fullname" . }}-canary
+  trafficPolicy:
+    {{- toYaml .Values.service.mesh.trafficPolicy | nindent 4 }}
+{{- end }}
+
+---
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: {{ include "ybuilt.fullname" . }}
+  labels:
+    {{- include "ybuilt.labels" . | nindent 4 }}
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "ybuilt.fullname" . }}
+  
+  service:
+    port: {{ .Values.service.canary.port }}
+    targetPort: {{ .Values.service.canary.targetPort }}
+  
+  analysis:
+    interval: {{ .Values.canary.analysis.interval }}
+    threshold: {{ .Values.canary.analysis.threshold }}
+    maxWeight: {{ .Values.canary.analysis.maxWeight }}
+    stepWeight: {{ .Values.canary.analysis.stepWeight }}
+    
+    metrics:
+    {{- range .Values.canary.analysis.metrics }}
+    - name: {{ .name }}
+      {{- if .thresholdRange }}
+      thresholdRange:
+        {{- toYaml .thresholdRange | nindent 8 }}
+      {{- end }}
+      interval: {{ .interval }}
+    {{- end }}
+    
+    {{- if .Values.canary.webhooks }}
+    webhooks:
+    {{- toYaml .Values.canary.webhooks | nindent 4 }}
+    {{- end }}
+
+{{- end }}

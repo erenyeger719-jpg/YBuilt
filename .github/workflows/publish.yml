@@ -1,0 +1,312 @@
+name: Publish Release (Zero-Trust Pipeline)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.2.3)'
+        required: true
+        type: string
+
+permissions:
+  id-token: write      # OIDC token for keyless signing
+  packages: write      # Push to GitHub Packages
+  contents: write      # Create releases
+  attestations: write  # Publish attestations
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  reproducible-build:
+    name: Reproducible Build
+    runs-on: ubuntu-latest
+    
+    outputs:
+      artifact-hash: ${{ steps.build.outputs.artifact_hash }}
+      sbom-hash: ${{ steps.sbom.outputs.sbom_hash }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for provenance
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Reproducible build
+        id: build
+        run: |
+          chmod +x scripts/reproducible-build.sh
+          ./scripts/reproducible-build.sh
+          
+          ARTIFACT_HASH=$(cat artifacts/dist.tar.gz.sha256)
+          echo "artifact_hash=$ARTIFACT_HASH" >> $GITHUB_OUTPUT
+          echo "✅ Build hash: $ARTIFACT_HASH"
+      
+      - name: Generate SBOM
+        id: sbom
+        run: |
+          chmod +x scripts/generate-cyclonedx-sbom.sh
+          ./scripts/generate-cyclonedx-sbom.sh
+          
+          SBOM_HASH=$(cat artifacts/sbom.json.sha256)
+          echo "sbom_hash=$SBOM_HASH" >> $GITHUB_OUTPUT
+          echo "✅ SBOM hash: $SBOM_HASH"
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            artifacts/dist.tar.gz
+            artifacts/dist.tar.gz.sha256
+            artifacts/sbom.json
+            artifacts/sbom.json.sha256
+          retention-days: 90
+  
+  generate-provenance:
+    name: Generate Provenance
+    runs-on: ubuntu-latest
+    needs: reproducible-build
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: artifacts/
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Generate provenance attestation
+        run: |
+          chmod +x scripts/provenance/attest-oci.js
+          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" \
+            node scripts/provenance/attest-oci.js
+      
+      - name: Upload provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: provenance
+          path: artifacts/provenance.json
+          retention-days: 90
+  
+  sign-with-cosign:
+    name: Sign with Cosign
+    runs-on: ubuntu-latest
+    needs: [reproducible-build, generate-provenance]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: artifacts/
+          merge-multiple: true
+      
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      
+      - name: Check OIDC availability
+        id: oidc-check
+        run: |
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+            echo "oidc_available=true" >> $GITHUB_OUTPUT
+            echo "✅ OIDC token available for keyless signing"
+          else
+            echo "oidc_available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ OIDC token not available"
+          fi
+      
+      - name: Sign with cosign (OIDC)
+        if: steps.oidc-check.outputs.oidc_available == 'true'
+        run: |
+          chmod +x scripts/cosign-publish.sh
+          ./scripts/cosign-publish.sh \
+            artifacts/dist.tar.gz \
+            artifacts/sbom.json \
+            artifacts/provenance.json
+      
+      - name: Sign with cosign (Key fallback)
+        if: steps.oidc-check.outputs.oidc_available == 'false' && secrets.COSIGN_KEY != ''
+        env:
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+        run: |
+          chmod +x scripts/cosign-publish.sh
+          ./scripts/cosign-publish.sh \
+            artifacts/dist.tar.gz \
+            artifacts/sbom.json \
+            artifacts/provenance.json
+      
+      - name: Signing remediation (no method available)
+        if: steps.oidc-check.outputs.oidc_available == 'false' && secrets.COSIGN_KEY == ''
+        run: |
+          echo "⚠️⚠️⚠️ SIGNING SKIPPED - NO METHOD AVAILABLE ⚠️⚠️⚠️"
+          echo ""
+          echo "📝 REMEDIATION OPTIONS:"
+          echo ""
+          echo "Option 1: Enable OIDC (Recommended for zero-trust)"
+          echo "  ✓ Already configured: permissions.id-token = write"
+          echo "  ✓ No additional setup needed"
+          echo "  ✓ Keyless signing via Sigstore"
+          echo ""
+          echo "Option 2: Add COSIGN_KEY secret"
+          echo "  1. Generate key pair locally:"
+          echo "     cosign generate-key-pair"
+          echo "  2. Add COSIGN_KEY secret to GitHub:"
+          echo "     Settings → Secrets → Actions → New repository secret"
+          echo "     Name: COSIGN_KEY"
+          echo "     Value: <contents of cosign.key>"
+          echo ""
+          echo "⚠️ Workflow will continue, but artifacts are UNSIGNED"
+          echo "⚠️ DO NOT use unsigned artifacts in production"
+          
+          # Create unsigned marker
+          echo '{"signed": false, "reason": "no_signing_method"}' > artifacts/UNSIGNED.json
+      
+      - name: Upload signatures
+        uses: actions/upload-artifact@v4
+        with:
+          name: signatures
+          path: |
+            artifacts/cosign.bundle
+            artifacts/UNSIGNED.json
+          retention-days: 90
+          if-no-files-found: ignore
+  
+  verify-supply-chain:
+    name: Verify Supply Chain
+    runs-on: ubuntu-latest
+    needs: sign-with-cosign
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: artifacts/
+          merge-multiple: true
+      
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      
+      - name: Verify supply chain
+        run: |
+          chmod +x ci/verify-sbom-and-cosign.sh
+          ./ci/verify-sbom-and-cosign.sh || {
+            echo "❌ Supply chain verification failed"
+            exit 1
+          }
+  
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: verify-supply-chain
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: artifacts/
+          merge-multiple: true
+      
+      - name: Check if unsigned
+        id: unsigned-check
+        run: |
+          if [ -f "artifacts/UNSIGNED.json" ]; then
+            echo "unsigned=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Release contains UNSIGNED artifacts"
+          else
+            echo "unsigned=false" >> $GITHUB_OUTPUT
+            echo "✅ Release is signed"
+          fi
+      
+      - name: Create release notes
+        run: |
+          cat > release-notes.md <<EOF
+          # Release ${{ github.ref_name }}
+          
+          ## 📦 Artifacts
+          
+          - \`dist.tar.gz\` - Built application
+          - \`sbom.json\` - Software Bill of Materials (CycloneDX)
+          - \`provenance.json\` - SLSA Provenance Attestation
+          $(if [ "${{ steps.unsigned-check.outputs.unsigned }}" == "true" ]; then
+            echo "- ⚠️ **UNSIGNED** - No cosign signature available"
+          else
+            echo "- \`cosign.bundle\` - Cosign signature bundle"
+          fi)
+          
+          ## 🔐 Supply Chain Verification
+          
+          ### Verify SBOM
+          \`\`\`bash
+          sha256sum -c dist.tar.gz.sha256
+          jq . sbom.json
+          \`\`\`
+          
+          $(if [ "${{ steps.unsigned-check.outputs.unsigned }}" == "false" ]; then
+            cat <<VERIFY
+          ### Verify Cosign Signature
+          \`\`\`bash
+          cosign verify-blob \\
+            --bundle cosign.bundle \\
+            dist.tar.gz
+          \`\`\`
+          VERIFY
+          fi)
+          
+          ### Verify Provenance
+          \`\`\`bash
+          jq . provenance.json
+          \`\`\`
+          
+          ## 📊 Build Info
+          
+          - **Artifact SHA256**: ${{ needs.reproducible-build.outputs.artifact-hash }}
+          - **SBOM SHA256**: ${{ needs.reproducible-build.outputs.sbom-hash }}
+          - **Git SHA**: ${{ github.sha }}
+          - **Build Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          EOF
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: |
+            artifacts/dist.tar.gz
+            artifacts/dist.tar.gz.sha256
+            artifacts/sbom.json
+            artifacts/provenance.json
+            artifacts/cosign.bundle
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
