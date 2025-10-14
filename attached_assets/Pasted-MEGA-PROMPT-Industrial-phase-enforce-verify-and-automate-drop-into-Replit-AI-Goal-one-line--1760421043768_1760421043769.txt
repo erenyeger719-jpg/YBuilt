@@ -1,0 +1,490 @@
+MEGA PROMPT — Industrial phase: enforce, verify, and automate (drop into Replit AI)
+
+Goal (one line)
+Make the repository production-enforceable and supply-chain-proof: enforce cosign-based image signature verification end-to-end; ensure SBOM attestation verification at deploy/admission time; make builds reproducible; add progressive canary promotion with metric-based promotion + rollback; tighten policy-as-code so unsigned or vulnerable artifacts are rejected; and produce a full verification bundle and actionable remediation steps.
+
+Branch
+Create and work on branch: fix/industrial-enforce
+- If git operations are blocked in this environment: create files and print exact git commands the human must run locally. Do NOT attempt to set or expose secrets.
+
+Quick user offers (show these at the start of the agent response)
+1) If you want, tell me which files from the short list you want printed now (I’ll paste exact contents + unified diffs instantly):
+   - k8s/sigstore-policy-controller-install.sh
+   - .github/workflows/publish.yml (fixed)
+   - k8s/gatekeeper/constraint-verify-cosign.yaml (real verification guard + instruction)
+   - scripts/cosign-sign-artifacts.sh (fixed)
+   - ci/verify-publish-dryrun.sh (verification helper)
+   Pick any or "all".
+2) If you want, I’ll (optionally) produce any of these files immediately (pick from short list). Otherwise, start implementing and return the final response per the output format.
+3) Want me to immediately paste the corrected `.github/workflows/publish.yml`, `scripts/cosign-sign-artifacts.sh`, and `k8s/gatekeeper/constraint-verify-cosign.yaml` here so you can copy/paste them into Replit right now? If so, say which three and I’ll dump the full contents + unified diffs.
+
+Scope & non-goals
+- IN SCOPE: create/modify repo files (scripts, GH workflows, k8s manifests, OPA/regos), run local dry-runs where possible, produce unified diffs and final `IMPLEMENTATION_ENFORCE.md` + `PR_BODY_ENFORCE.md`.
+- OUT OF SCOPE: cluster-level `kubectl apply` actions and pushing to registries **unless** the agent has credentials in this environment. For such steps: produce exact commands + one-line remediation so humans can run them.
+- DO NOT print secrets. Use `${{ secrets.NAME }}` placeholders.
+
+Top-level checklist (agent must complete)
+- Enforce cosign verification in CI and at admission (recommend Sigstore Policy Controller; otherwise: CI-enforced pre-deploy + Gatekeeper gating).
+- Fix publish workflow so cosign is installed and used correctly (no `|| true`).
+- Create reproducible build script and produce `artifacts/dist.tar.gz` and `artifacts/dist.tar.gz.sha256`.
+- Generate CycloneDX SBOM `artifacts/sbom.json`.
+- Produce provenance JSON `artifacts/provenance.json` containing `git_sha`, `built_at`, `sbom_sha256`, `image_ref`.
+- Sign image and attach SBOM & provenance attestations via cosign.
+- Add admission-time verify examples + exact kubectl commands to install cert-manager + Sigstore Policy Controller.
+- Add canary promotion workflow that requires signature + SBOM before promote and rolls back automatically on metrics failure.
+- Add trace-log correlation shim and Prometheus canary alert rules.
+- Update devcontainer to include cosign/opa/trivy/reproducible-build helper.
+- Produce `IMPLEMENTATION_ENFORCE.md` and `PR_BODY_ENFORCE.md` with diffs, verification outputs, secrets list, and one-liner remediations.
+
+Files created / modified (must show unified diffs)
+- `.github/workflows/publish.yml` — fixed OIDC publish workflow (cosign installer, reproducible-build, sign, attest, verify).
+- `.github/workflows/canary-promote.yml` — post-publish canary promotion (helm deploy, synthetic checks, verify attestations, promote/rollback).
+- `.github/workflows/policy-check.yml` — CI policy-check job (verify attestations, trivy, npm audit).
+- `scripts/cosign-sign-artifacts.sh` — robust signing helper (keyless and key-based).
+- `scripts/reproducible-build.sh` — deterministic build producing `artifacts/*`.
+- `scripts/generate-cyclonedx-sbom.sh` — produce `artifacts/sbom.json`.
+- `scripts/provenance/attest-oci.js` — produce `artifacts/provenance.json`.
+- `ci/verify-sbom-and-cosign.sh` — verify cosign signature + attestations + sbom sha.
+- `k8s/cert-manager/clusterissuer-selfsigned.yaml` & `k8s/cert-manager/clusterissuer-ca.yaml` — valid sample issuers.
+- `k8s/gatekeeper/constraint-verify-cosign.yaml` & `opa/policies/verify-cosign.rego` — Gatekeeper enforcement & rego fallback (and docs to deploy Sigstore).
+- `k8s/admission/sbom-verify-admission.yaml` — admission webhook manifest with cert-manager note.
+- `helm/values-canary.yaml` & `helm/templates/canary-config.yaml` — canary that requires attestations pre-promote.
+- `monitoring/prometheus-canary-alerts.yaml`
+- `tools/log-trace-correlation.js`
+- `.devcontainer/devcontainer.json` and `.devcontainer/Dockerfile`
+- `IMPLEMENTATION_ENFORCE.md` and `PR_BODY_ENFORCE.md   Unified diffs — three corrected files
+These diffs show the files as new file creations (if a file already exists, the agent should show the actual repo diffs; here we present canonical unified diffs to create/replace the files).
+
+1) .github/workflows/publish.yml
+
+--- /dev/null
++++ b/.github/workflows/publish.yml
+@@ -0,0 +1,150 @@
++name: Publish (OIDC + Cosign + Reproducible Build)
++
++on:
++  push:
++    branches: [ main ]
++  workflow_dispatch:
++    inputs:
++      dry_run:
++        description: 'Dry run (skip push and sign)'
++        required: false
++        default: 'true'
++        type: choice
++        options:
++          - 'true'
++          - 'false'
++
++permissions:
++  contents: write
++  packages: write
++  id-token: write
++  pull-requests: write
++
++env:
++  REGISTRY: ghcr.io
++  IMAGE_NAME: ${{ github.repository }}
++
++jobs:
++  build-and-publish:
++    name: Build, Attest & Publish
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++
++      - name: Setup Node.js
++        uses: actions/setup-node@v4
++        with:
++          node-version: '20'
++          cache: 'npm'
++
++      - name: Install cosign
++        uses: sigstore/cosign-installer@v3
++        with:
++          cosign-release: 'v2.2.2'
++
++      - name: Install dependencies
++        run: npm ci --prefer-offline --no-audit
++
++      - name: Reproducible build
++        run: |
++          chmod +x scripts/reproducible-build.sh
++          SOURCE_DATE_EPOCH=${{ github.event.head_commit.timestamp }} TZ=UTC bash scripts/reproducible-build.sh
++
++      - name: Generate SBOM (CycloneDX)
++        run: |
++          chmod +x scripts/generate-cyclonedx-sbom.sh
++          bash scripts/generate-cyclonedx-sbom.sh
++
++      - name: Create provenance JSON
++        run: |
++          node --version
++          chmod +x scripts/provenance/attest-oci.js
++          node scripts/provenance/attest-oci.js --out artifacts/provenance.json
++        env:
++          GITHUB_SHA: ${{ github.sha }}
++          GITHUB_REF: ${{ github.ref }}
++
++      - name: Login to GHCR (only if publishing)
++        if: ${{ github.event.inputs.dry_run != 'true' }}
++        uses: docker/login-action@v3
++        with:
++          registry: ${{ env.REGISTRY }}
++          username: ${{ github.actor }}
++          password: ${{ secrets.GITHUB_TOKEN }}
++
++      - name: Build/push image and sign/attest
++        env:
++          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
++          DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
++          SBOM_PATH: artifacts/sbom.json
++          PROVENANCE_PATH: artifacts/provenance.json
++        run: |
++          chmod +x scripts/cosign-sign-artifacts.sh
++          # Build image and push (cosign script handles dry-run)
++          bash scripts/cosign-sign-artifacts.sh --image "${IMAGE_REF}"
++
++      - name: Verify SBOM + Cosign attestations
++        if: ${{ github.event.inputs.dry_run != 'true' }}
++        run: |
++          chmod +x ci/verify-sbom-and-cosign.sh
++          bash ci/verify-sbom-and-cosign.sh "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
++
++      - name: Create release & upload artifacts (only on tag and not dry-run)
++        if: ${{ github.event.inputs.dry_run != 'true' && startsWith(github.ref, 'refs/tags/') }}
++        uses: softprops/action-gh-release@v1
++        with:
++          files: |
++            artifacts/dist.tar.gz
++            artifacts/dist.tar.gz.sha256
++            artifacts/sbom.json
++            artifacts/provenance.json
++          draft: false
++          prerelease: false
++        env:
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++
++      - name: Upload artifacts (always keep for debugging)
++        uses: actions/upload-artifact@v4
++        with:
++          name: build-artifacts
++          path: |
++            artifacts/dist.tar.gz
++            artifacts/dist.tar.gz.sha256
++            artifacts/sbom.json
++            artifacts/provenance.json
++          retention-days: 90
++
++      - name: Success marker
++        run: echo "Publish workflow finished (dry_run=${{ github.event.inputs.dry_run }})"
+
+2) scripts/cosign-sign-artifacts.sh
+
+--- /dev/null
++++ b/scripts/cosign-sign-artifacts.sh
+@@ -0,0 +1,220 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++# scripts/cosign-sign-artifacts.sh
++# Usage:
++#   bash scripts/cosign-sign-artifacts.sh --image ghcr.io/OWNER/REPO:SHA [--dry-run]
++#   bash scripts/cosign-sign-artifacts.sh --artifact artifacts/dist.tar.gz [--dry-run]
++#
++# Behavior:
++#  - If COSIGN_KEY env set (e.g., 'env://COSIGN_KEY') uses key-based signing.
++#  - Otherwise attempts keyless OIDC signing (requires runner with id-token; GH Actions supports this).
++#  - Attaches SBOM and provenance as attestations if files exist; fails loudly if missing when not in dry-run.
++
++usage() {
++  cat <<EOF
++Usage:
++  $0 --image IMAGE_REF [--dry-run]
++  $0 --artifact artifacts/dist.tar.gz [--dry-run]
++Environment:
++  COSIGN_KEY   - optional (e.g., 'env://COSIGN_KEY') for key-based signing fallback
++  DRY_RUN      - set to 'true' to avoid pushing/signing
++  SBOM_PATH    - path to SBOM (default: artifacts/sbom.json)
++  PROVENANCE_PATH - path to provenance (default: artifacts/provenance.json)
++EOF
++  exit 2
++}
++
++IMAGE_REF=""
++ARTIFACT_PATH=""
++DRY_RUN="${DRY_RUN:-false}"
++SBOM_PATH="${SBOM_PATH:-artifacts/sbom.json}"
++PROVENANCE_PATH="${PROVENANCE_PATH:-artifacts/provenance.json}"
++
++while [[ $# -gt 0 ]]; do
++  case "$1" in
++    --image) IMAGE_REF="$2"; shift 2;;
++    --artifact) ARTIFACT_PATH="$2"; shift 2;;
++    --dry-run) DRY_RUN="true"; shift;;
++    -h|--help) usage;;
++    *) echo "Unknown arg: $1"; usage;;
++  esac
++done
++
++if [[ -z "${IMAGE_REF}" && -z "${ARTIFACT_PATH}" ]]; then
++  echo "[ERROR] Either --image or --artifact must be provided"
++  usage
++fi
++
++echo "COSIGN signing helper"
++echo "DRY_RUN=${DRY_RUN}"
++echo "IMAGE_REF=${IMAGE_REF}"
++echo "ARTIFACT_PATH=${ARTIFACT_PATH}"
++echo "SBOM_PATH=${SBOM_PATH}"
++echo "PROVENANCE_PATH=${PROVENANCE_PATH}"
++
++if [[ "${DRY_RUN}" == "true" ]]; then
++  echo "Running in dry-run mode: will print commands but not push or sign."
++fi
++
++# If artifact path provided, create a tarball if needed and set IMAGE_REF fallback name
++if [[ -n "${ARTIFACT_PATH}" ]]; then
++  if [[ ! -f "${ARTIFACT_PATH}" ]]; then
++    echo "[ERROR] Artifact path '${ARTIFACT_PATH}' not found"; exit 1
++  fi
++  # For artifact signing we create a temporary image-less attestation flow:
++  IMAGE_REF="${IMAGE_REF:-local-artifact:$(sha256sum "${ARTIFACT_PATH}" | awk '{print $1}' )}"
++fi
++
++# Validate SBOM/provenance presence (if not dry-run)
++if [[ "${DRY_RUN}" != "true" ]]; then
++  if [[ ! -f "${SBOM_PATH}" ]]; then
++    echo "[ERROR] SBOM not found at ${SBOM_PATH}. Aborting."; exit 1
++  fi
++  if [[ ! -f "${PROVENANCE_PATH}" ]]; then
++    echo "[ERROR] Provenance not found at ${PROVENANCE_PATH}. Aborting."; exit 1
++  fi
++fi
++
++# Build image if docker context exists and image looks like a ghcr/ registry ref (best-effort)
++if command -v docker >/dev/null 2>&1 && grep -qE '^[^/]+/[^/]+:' <<< "${IMAGE_REF:-}" && [[ "${DRY_RUN}" != "true" ]]; then
++  echo "Attempting docker build for ${IMAGE_REF} (if Dockerfile exists)"
++  if [[ -f Dockerfile ]]; then
++    docker build -t "${IMAGE_REF}" --label "org.opencontainers.image.revision=${GITHUB_SHA:-local}" .
++  else
++    echo "No Dockerfile found; skipping docker build."
++  fi
++fi
++
++# Push image if registry reachable and not dry-run
++if [[ "${DRY_RUN}" != "true" ]] && grep -q '^[^/]\+/[^/]\+:' <<< "${IMAGE_REF:-}"; then
++  echo "Pushing image ${IMAGE_REF}"
++  docker push "${IMAGE_REF}"
++fi
++
++# Signing
++if [[ "${DRY_RUN}" == "true" ]]; then
++  echo "[DRY RUN] Will sign image: cosign sign ${IMAGE_REF}  OR cosign sign --key env://COSIGN_KEY ${IMAGE_REF}"
++else
++  if [[ -n "${COSIGN_KEY:-}" ]]; then
++    echo "Using key-based cosign signing with COSIGN_KEY"
++    cosign sign --key "${COSIGN_KEY}" "${IMAGE_REF}"
++  else
++    echo "Using keyless OIDC cosign signing (requires id-token permission in CI)"
++    cosign sign --yes "${IMAGE_REF}"
++  fi
++fi
++
++# Attest SBOM
++if [[ -f "${SBOM_PATH}" ]]; then
++  echo "Attaching SBOM attestation of type cyclonedx"
++  if [[ "${DRY_RUN}" == "true" ]]; then
++    echo "[DRY RUN] cosign attest --type cyclonedx --predicate ${SBOM_PATH} ${IMAGE_REF}"
++  else
++    cosign attest --yes --type cyclonedx --predicate "${SBOM_PATH}" "${IMAGE_REF}"
++  fi
++else
++  echo "SBOM not found at ${SBOM_PATH}; skipping SBOM attestation"
++fi
++
++# Attest provenance
++if [[ -f "${PROVENANCE_PATH}" ]]; then
++  echo "Attaching provenance attestation"
++  if [[ "${DRY_RUN}" == "true" ]]; then
++    echo "[DRY RUN] cosign attest --type slsaprovenance --predicate ${PROVENANCE_PATH} ${IMAGE_REF}"
++  else
++    cosign attest --yes --type slsaprovenance --predicate "${PROVENANCE_PATH}" "${IMAGE_REF}"
++  fi
++else
++  echo "Provenance not found at ${PROVENANCE_PATH}; skipping provenance attestation"
++fi
++
++# Verify signature (fail if verification fails)
++if [[ "${DRY_RUN}" == "true" ]]; then
++  echo "[DRY RUN] cosign verify ${IMAGE_REF}"
++else
++  echo "Verifying signature for ${IMAGE_REF}"
++  if ! cosign verify "${IMAGE_REF}"; then
++    echo "[ERROR] cosign verify failed for ${IMAGE_REF}"; exit 2
++  fi
++  echo "Signature verified."
++fi
++
++echo "Signing & attestation completed for ${IMAGE_REF}"
++exit 0
+
+3) k8s/gatekeeper/constraint-verify-cosign.yaml
+
+--- /dev/null
++++ b/k8s/gatekeeper/constraint-verify-cosign.yaml
+@@ -0,0 +1,120 @@
++# Gatekeeper Constraint: Require Cosign Attestation Annotation
++# NOTE:
++#  - This constraint enforces presence of a Cosign attestation annotation on Deployments/Pods.
++#  - **Important**: Gatekeeper alone cannot run `cosign verify` — to *enforce* real signature verification
++#    at admission-time install the Sigstore Policy Controller (recommended). See INSTALL section below.
++#  - If cluster owners cannot install Sigstore, use the CI-enforced pre-deploy policy-check workflow that
++#    verifies signatures/attestations and blocks merges. See docs/ for exact CI commands.
++
++apiVersion: templates.gatekeeper.sh/v1
++kind: ConstraintTemplate
++metadata:
++  name: k8srequiredcosignannotation
++spec:
++  crd:
++    spec:
++      names:
++        kind: K8sRequiredCosignAnnotation
++  targets:
++    - target: admission.k8s.gatekeeper.sh
++      rego: |
++        package k8srequiredcosignannotation
++
++        violation[{"msg": msg}] {
++          input.review.kind.kind == "Deployment"
++          not has_cosign_annotation(input.review.object)
++          msg := sprintf("Missing required cosign attestation annotation on Deployment %v", [input.review.object.metadata.name])
++        }
++
++        has_cosign_annotation(obj) {
++          ann := obj.metadata.annotations
++          ann["cosign.sigstore.dev/signature"]
++        }
++
++---
++# Constraint using the template: deny Deployments lacking cosign annotations
++apiVersion: constraints.gatekeeper.sh/v1beta1
++kind: K8sRequiredCosignAnnotation
++metadata:
++  name: require-cosign-attestation
++spec:
++  match:
++    kinds:
++      - apiGroups: ["apps"]
++        kinds: ["Deployment"]
++    namespaces: [""] # empty -> all namespaces; adjust as needed
++
++---
++# OPTIONAL: Sigstore Policy Controller (recommended) - installation instructions (not a manifest)
++# To enforce *real* cosign verification at admission time, install Sigstore Policy Controller:
++#   kubectl apply -f https://github.com/sigstore/policy-controller/releases/latest/download/policy-controller.yaml
++# Then create a ClusterImagePolicy (example) that requires cosign signatures and linked attestations.
++# See: https://sigstore.dev and https://github.com/sigstore/policy-controller for examples.
+ 
+
+Preflight step (agent must print)
+- Run and include output in final reply:
+node -v && npm -v && git --version || true
+git branch --show-current || echo "git unavailable"
+uname -a
+ls -la | sed -n '1,120p'
+
+Implementation steps (do these, commit as you go)
+1. Try `git checkout -b fix/industrial-enforce`. If git disabled: create files and at end print exact git commands to run locally.
+2. Create `scripts/reproducible-build.sh`: sets `SOURCE_DATE_EPOCH`, `TZ=UTC`, runs `npm ci --prefer-offline --no-audit`, builds server/client, packages `dist/` into `artifacts/dist.tar.gz` and computes sha256.
+3. Create `scripts/generate-cyclonedx-sbom.sh` to output CycloneDX to `artifacts/sbom.json`. If `@cyclonedx/builder` not present, produce guidance for CI to install and run it.
+4. Create `scripts/provenance/attest-oci.js` to write `artifacts/provenance.json` with `git_sha`, `built_at`, `sbom_sha256`, and `image_ref`.
+5. Create `scripts/cosign-sign-artifacts.sh` (robust: `--image`, `--artifact`, keyless & key-based, attach SBOM & provenance via `cosign attest`, verify signature).
+6. Create `ci/verify-sbom-and-cosign.sh` (verify `cosign verify` and that SBOM sha in attestation matches provided `artifacts/sbom.json`).
+7. Replace `.github/workflows/publish.yml` (use the content appended below in this prompt — the agent must write that file).
+8. Add `.github/workflows/policy-check.yml` to run the verify script, trivy, npm audit on PRs.
+9. Add `.github/workflows/canary-promote.yml` to perform canary deploy → synthetic checks → verify attestations → promote/rollback.
+10. Add Gatekeeper constraint (`k8s/gatekeeper/constraint-verify-cosign.yaml`) and provide clear instructions to install Sigstore Policy Controller & cert-manager; document exact `kubectl apply` commands.
+11. Add canary alert rules and log-trace correlation shim.
+12. Update `.devcontainer` to include cosign/opa/trivy; ensure `postCreateCommand: npm ci`.
+13. Make all created scripts executable (`chmod +x`).
+14. Commit each logical change. If git disabled: accumulate file list and print a final `git` command block for the human.
+
+Verification checklist (agent must attempt; if something can't run, copy exact error + provide one-line remediation)
+Run and capture stdout (tail) and exit code for each:
+A. Preflight run (see above)
+B. `bash scripts/reproducible-build.sh` → check `artifacts/dist.tar.gz` and `artifacts/dist.tar.gz.sha256` exist
+C. `bash scripts/generate-cyclonedx-sbom.sh` → check `artifacts/sbom.json`
+D. `node scripts/provenance/attest-oci.js --out artifacts/provenance.json` → check file
+E. `bash scripts/cosign-sign-artifacts.sh --image ghcr.io/OWNER/REPO:DRYRUN --dry-run` → capture
+F. `bash ci/verify-sbom-and-cosign.sh ghcr.io/OWNER/REPO:DRYRUN` → capture
+G. `npx trivy --version` and `npm audit --json > artifacts/npm-audit.json` → capture
+H. `opa eval --data opa/policies -i <example-deployment.json> 'data.ybuilt.security.deny'` → capture
+I. If possible: helm template + synthetic check run and canary dry-run
+
+Acceptance criteria (must be satisfied or documented)
+- `artifacts/dist.tar.gz` and `.sha256` created by reproducible build.
+- `artifacts/sbom.json` exists and is valid JSON (CycloneDX).
+- `artifacts/provenance.json` exists with `git_sha` and `sbom_sha256`.
+- `scripts/cosign-sign-artifacts.sh` runs dry-run and prints cosign commands; in CI it will sign when credentials are present.
+- `publish.yml` installs cosign and verifies attestations; contains no silent `|| true`.
+- Gatekeeper/CSP docs present; if Sigstore installed, admission-time verification possible.
+- `IMPLEMENTATION_ENFORCE.md` + `PR_BODY_ENFORCE.md` produced.
+
+Secrets required (exact names to include in IMPLEMENTATION_ENFORCE.md)
+- `COSIGN_KEY` (if using key-based signing; prefer keyless)
+- `GHCR_PAT` or OIDC (ensure `id-token: write` in workflows)
+- `SEMANTIC_RELEASE_TOKEN` (if releasing)
+- `SNYK_TOKEN` (optional)
+- `CERT_MANAGER_ISSUER_SECRET` (optional)
+- `GPG_PRIVATE_KEY` (optional fallback)
+
+Behavior rules
+- Never print secret values.
+- If a step requires external resources (docker, cosign, cluster), do a dry-run and produce the exact one-line remediation a human must run in CI or locally.
+- For heavy tasks, run a smoke-mode and provide exact `full` commands and approximate runtime to run them in CI.
+- If git is disabled: produce a final `git` command block to commit and push created files locally.
+
+FINAL OUTPUT FORMAT (single response)
+Return exactly one response that contains:
+1. Branch name used or “git unavailable”
+2. Files created / modified list (paths)
+3. For each file changed: unified diff block
+4. Verification checklist results (command, stdout tail, exit code)
+5. Artifacts produced (paths)
+6. If any step skipped: exact error and one-line remediation
+7. Full `IMPLEMENTATION_ENFORCE.md` content (summary + final manual steps)
+8. Full `PR_BODY_ENFORCE.md` content (ready-to-paste)
+9. Next recommended follow-ups (3 bullets) with short risk/benefit notes
+
+RUN NOW
+Start implementing now. If any checks cannot be executed, still:
+- create files,
+- make them executable,
+- show unified diffs,
+- and produce exact remediation commands to run in CI/local.
+
+---- Files to create now (these exact contents should be written into the repo) ----
+
+(1) **Write** `.github/workflows/publish.yml` with the content shown below (this is the authoritative publish workflow that installs cosign and runs the reproducible build + sign/attest/verify steps):
+
+[**Insert the full contents of `.github/workflows/publish.yml` here** — use the file content provided in the earlier diff block above.]
+
+(2) **Write** `scripts/cosign-sign-artifacts.sh` with the content shown below (robust signing helper, keyless & key-based, attaches SBOM & provenance and verifies signature):
+
+[**Insert the full contents of `scripts/cosign-sign-artifacts.sh` here** — use the file content provided in the earlier diff block above.]
+
+(3) **Write** `k8s/gatekeeper/constraint-verify-cosign.yaml` with the content shown below (Gatekeeper constraint requiring cosign annotation and comment pointing to Sigstore Policy Controller installation):
+
+[**Insert the full contents of `k8s/gatekeeper/constraint-verify-cosign.yaml` here** — use the file content provided in the earlier diff block above.]
+
+---- End file section. ----
+
+When finished: produce `IMPLEMENTATION_ENFORCE.md` and `PR_BODY_ENFORCE.md` (include diffs and verification output).
+
+
+END OF PROMPT
