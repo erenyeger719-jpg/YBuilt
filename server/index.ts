@@ -1,4 +1,8 @@
 import 'dotenv/config';
+
+// Fail fast if JWT_SECRET is missing (loads from server/config.ts)
+import "./config.js";
+
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import cors from "cors";
@@ -13,36 +17,8 @@ import projectsRoutes from './routes/projects.js';
 import chatRoutes from './routes/chat.js';
 import executeRoutes from './routes/execute.js';
 
-// CRITICAL SECURITY: Validate JWT_SECRET at startup
-// Server must refuse to start without a secure JWT_SECRET
-const NODE_ENV = process.env.NODE_ENV || 'production';
-
-if (!process.env.JWT_SECRET) {
-  if (NODE_ENV === 'development') {
-    // Allow development mode to continue with warning
-    logger.warn('[SECURITY] ⚠️  Using development JWT_SECRET. Set JWT_SECRET env var for production!');
-  } else {
-    // Production or any other environment: require JWT_SECRET
-    logger.error('[SECURITY] JWT_SECRET environment variable is not set!');
-    logger.error('[SECURITY] Generate a secure secret with: openssl rand -base64 32');
-    throw new Error(
-      'CRITICAL SECURITY ERROR: JWT_SECRET environment variable is required but not set. ' +
-      'This is a mandatory security requirement. Generate a secure secret with: openssl rand -base64 32'
-    );
-  }
-} else {
-  // Validate JWT_SECRET length for security
-  const MIN_SECRET_LENGTH = 32;
-  if (process.env.JWT_SECRET.length < MIN_SECRET_LENGTH) {
-    logger.warn(
-      `[SECURITY WARNING] JWT_SECRET is only ${process.env.JWT_SECRET.length} characters long. ` +
-      `Recommended minimum is ${MIN_SECRET_LENGTH} characters for security. ` +
-      `Generate a secure secret with: openssl rand -base64 32`
-    );
-  }
-  
-  logger.info('[SECURITY] JWT_SECRET is configured and validated');
-}
+// Log that JWT_SECRET is configured (config.ts already validated it)
+logger.info('[SECURITY] JWT_SECRET is configured and validated');
 
 // Razorpay mode validation
 const RAZORPAY_MODE = process.env.RAZORPAY_MODE || 'mock';
@@ -85,9 +61,13 @@ const app = express();
   // Rate limiting (100 req/min per IP)
   app.use(rateLimiter);
 
-  // Health check route
+  // Health check routes
   app.get('/api/status', (req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+  
+  app.get('/api/health', (_req: Request, res: Response) => {
+    res.json({ ok: true });
   });
 
   // Mount modular routes (no db parameter needed - routes import SQLite directly)
