@@ -1,0 +1,295 @@
+name: Daily Self-Test (Platform 10x Verification)
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6 AM UTC
+  workflow_dispatch:      # Manual trigger
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/policy-check.yml'
+
+permissions:
+  id-token: write   # OIDC for cosign keyless signing
+  contents: read
+
+jobs:
+  verify-infrastructure:
+    name: Verify Platform 10x Infrastructure
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for SOURCE_DATE_EPOCH
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Verify critical dependencies exist
+        run: |
+          echo "🔍 Verifying critical dependencies..."
+          
+          # Check package-lock.json exists
+          if [ ! -f "package-lock.json" ]; then
+            echo "❌ package-lock.json missing"
+            exit 1
+          fi
+          echo "✅ package-lock.json exists"
+          
+          # Install with locked versions
+          npm ci --prefer-offline --no-audit
+          
+          # Verify critical packages are installed
+          MISSING=()
+          
+          if [ ! -d "node_modules/vite" ]; then
+            MISSING+=("vite")
+          fi
+          
+          if [ ! -d "node_modules/tsx" ]; then
+            MISSING+=("tsx")
+          fi
+          
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "❌ Missing critical packages:"
+            printf '  - %s\n' "${MISSING[@]}"
+            exit 1
+          fi
+          
+          echo "✅ All critical dependencies installed"
+          
+          # Check Vite chunks
+          if [ ! -f "node_modules/vite/dist/node/chunks/dep-D-7KCb9p.js" ]; then
+            echo "❌ Vite chunks incomplete"
+            exit 1
+          fi
+          echo "✅ Vite chunks verified"
+          
+          # Display versions
+          npm ls vite tsx --depth=0 || true
+      
+      - name: Test reproducible build
+        run: |
+          echo "🔨 Testing reproducible build..."
+          chmod +x scripts/reproducible-build.sh
+          
+          # First build
+          ./scripts/reproducible-build.sh
+          HASH1=$(cat artifacts/dist.tar.gz.sha256)
+          echo "First build SHA256: $HASH1"
+          
+          # Clean and rebuild
+          rm -rf artifacts/
+          sleep 2
+          ./scripts/reproducible-build.sh
+          HASH2=$(cat artifacts/dist.tar.gz.sha256)
+          echo "Second build SHA256: $HASH2"
+          
+          # Verify reproducibility
+          if [ "$HASH1" = "$HASH2" ]; then
+            echo "✅ Builds are reproducible (hashes match)"
+          else
+            echo "❌ Builds are NOT reproducible"
+            echo "  Hash 1: $HASH1"
+            echo "  Hash 2: $HASH2"
+            exit 1
+          fi
+      
+      - name: Test SBOM generation
+        run: |
+          echo "📦 Testing SBOM generation..."
+          chmod +x scripts/generate-cyclonedx-sbom.sh
+          ./scripts/generate-cyclonedx-sbom.sh
+          
+          # Verify SBOM exists and is valid JSON
+          if [ ! -f "artifacts/sbom.json" ]; then
+            echo "❌ SBOM not generated"
+            exit 1
+          fi
+          
+          jq empty artifacts/sbom.json || {
+            echo "❌ SBOM is not valid JSON"
+            exit 1
+          }
+          
+          echo "✅ SBOM generated successfully"
+      
+      - name: Test provenance generation
+        run: |
+          echo "📜 Testing provenance generation..."
+          chmod +x scripts/provenance/attest-oci.js
+          
+          IMAGE_REF="ghcr.io/test/repo:selftest" \
+            node scripts/provenance/attest-oci.js
+          
+          # Verify provenance exists and is valid JSON
+          if [ ! -f "artifacts/provenance.json" ]; then
+            echo "❌ Provenance not generated"
+            exit 1
+          fi
+          
+          jq empty artifacts/provenance.json || {
+            echo "❌ Provenance is not valid JSON"
+            exit 1
+          }
+          
+          # Verify required fields
+          REQUIRED_FIELDS=("git_sha" "built_at" "sbom_sha256" "image_ref")
+          for field in "${REQUIRED_FIELDS[@]}"; do
+            if ! jq -e ".${field}" artifacts/provenance.json > /dev/null; then
+              echo "❌ Provenance missing required field: ${field}"
+              exit 1
+            fi
+          done
+          
+          echo "✅ Provenance generated with all required fields"
+      
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      
+      - name: Test cosign signing (dry-run)
+        env:
+          DRY_RUN: "false"  # Actually sign in self-test
+        run: |
+          echo "🔐 Testing cosign signing..."
+          chmod +x scripts/cosign-sign-artifacts.sh
+          
+          # Sign artifacts (keyless OIDC)
+          ./scripts/cosign-sign-artifacts.sh \
+            artifacts/dist.tar.gz \
+            artifacts/sbom.json \
+            artifacts/provenance.json || {
+              echo "❌ Cosign signing failed"
+              exit 1
+            }
+          
+          # Verify bundles were created
+          BUNDLES=(
+            "artifacts/dist.tar.gz.cosign.bundle"
+            "artifacts/sbom.json.cosign.bundle"
+            "artifacts/provenance.json.cosign.bundle"
+          )
+          
+          for bundle in "${BUNDLES[@]}"; do
+            if [ ! -f "$bundle" ]; then
+              echo "❌ Bundle not created: $bundle"
+              exit 1
+            fi
+          done
+          
+          echo "✅ All cosign bundles created"
+      
+      - name: Test signature verification
+        run: |
+          echo "🔍 Testing signature verification..."
+          
+          # Verify tarball signature
+          cosign verify-blob \
+            --bundle artifacts/dist.tar.gz.cosign.bundle \
+            artifacts/dist.tar.gz || {
+              echo "❌ Tarball signature verification failed"
+              exit 1
+            }
+          
+          echo "✅ Signatures verified successfully"
+      
+      - name: Test supply chain verification script
+        run: |
+          echo "🔗 Testing supply chain verification script..."
+          chmod +x ci/verify-sbom-and-cosign.sh
+          
+          # This should pass if all previous steps succeeded
+          ./ci/verify-sbom-and-cosign.sh || {
+            echo "❌ Supply chain verification failed"
+            exit 1
+          }
+          
+          echo "✅ Supply chain verification passed"
+      
+      - name: Summary
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✨ Platform 10x Self-Test PASSED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Verified components:"
+          echo "  ✅ Critical dependencies (vite, tsx)"
+          echo "  ✅ Reproducible builds (deterministic SHA256)"
+          echo "  ✅ SBOM generation (CycloneDX JSON)"
+          echo "  ✅ Provenance attestation (SLSA fields)"
+          echo "  ✅ Cosign signing (keyless OIDC)"
+          echo "  ✅ Signature verification"
+          echo "  ✅ Supply chain verification"
+          echo ""
+          echo "Platform 10x infrastructure is OPERATIONAL ✨"
+          echo ""
+      
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-artifacts
+          path: |
+            artifacts/
+          retention-days: 7
+  
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: verify-infrastructure
+    if: failure()
+    
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🚨 Platform 10x Self-Test Failed'
+            const body = `
+            ## Self-Test Failure
+            
+            The daily Platform 10x infrastructure self-test has failed.
+            
+            **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            **Possible causes:**
+            - Missing or corrupted dependencies (vite, tsx)
+            - Build not reproducible (non-deterministic)
+            - SBOM generation failure
+            - Provenance generation failure
+            - Cosign signing failure
+            - Signature verification failure
+            
+            **Remediation:**
+            1. Review workflow logs
+            2. Run \`npm ci\` to reinstall dependencies
+            3. Test reproducible build locally: \`./scripts/reproducible-build.sh\`
+            4. Verify cosign is installed: \`cosign version\`
+            
+            **Auto-created by:** Platform 10x Self-Test Workflow
+            `
+            
+            // Check if issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'platform-10x,self-test-failure'
+            })
+            
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['platform-10x', 'self-test-failure', 'bug']
+              })
+            }

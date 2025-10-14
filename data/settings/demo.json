@@ -2,7 +2,7 @@
   "userId": "demo",
   "appearance": {
     "theme": "system",
-    "glassIntensity": 10,
+    "glassIntensity": 5,
     "glossFinish": true,
     "parallaxIntensity": 40,
     "motion": "full",
