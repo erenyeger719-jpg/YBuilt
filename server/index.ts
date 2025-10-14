@@ -80,7 +80,8 @@ const app = express();
   const server = createServer(app);
 
   // Setup Vite in development or serve static files in production
-  if (app.get("env") === "development") {
+  const isDev = process.env.NODE_ENV === "development" || app.get("env") === "development";
+  if (isDev) {
     await setupVite(app, server);
   } else {
     serveStatic(app);
