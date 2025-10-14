@@ -2,11 +2,15 @@ import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { storage } from "../storage.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { executeRateLimiter } from "../middleware/rateLimiter.js";
 import { executeCode, getSupportedLanguages, isLanguageSupported } from "../services/codeExecution.js";
 import { executeJavaScriptWithVM2 } from "../services/vm2Executor.js";
 import { logger } from "../index.js";
 
 const router = Router();
+
+// Apply endpoint-specific rate limiter (30 req/min per IP)
+router.use(executeRateLimiter);
 
 // Validation schema
 const executeCodeSchema = z.object({

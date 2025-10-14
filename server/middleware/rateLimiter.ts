@@ -7,20 +7,21 @@ interface RateLimitStore {
   };
 }
 
-const store: RateLimitStore = {};
+const globalStore: RateLimitStore = {};
 const WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 500; // 500 requests per minute (increased from 100)
+const GLOBAL_MAX_REQUESTS = 500; // 500 requests per minute
 
 // Cleanup old entries every 5 minutes
 setInterval(() => {
   const now = Date.now();
-  Object.keys(store).forEach((key) => {
-    if (store[key].resetTime < now) {
-      delete store[key];
+  Object.keys(globalStore).forEach((key) => {
+    if (globalStore[key].resetTime < now) {
+      delete globalStore[key];
     }
   });
 }, 5 * 60 * 1000);
 
+// Global rate limiter
 export function rateLimiter(req: Request, res: Response, next: NextFunction) {
   // Skip rate limiting for static assets and Vite HMR
   if (req.path.startsWith('/assets') || 
@@ -35,22 +36,22 @@ export function rateLimiter(req: Request, res: Response, next: NextFunction) {
   const identifier = req.ip || req.socket.remoteAddress || 'unknown';
   const now = Date.now();
   
-  if (!store[identifier] || store[identifier].resetTime < now) {
-    store[identifier] = {
+  if (!globalStore[identifier] || globalStore[identifier].resetTime < now) {
+    globalStore[identifier] = {
       count: 1,
       resetTime: now + WINDOW_MS,
     };
     return next();
   }
   
-  store[identifier].count++;
+  globalStore[identifier].count++;
   
-  if (store[identifier].count > MAX_REQUESTS) {
-    const retryAfter = Math.ceil((store[identifier].resetTime - now) / 1000);
+  if (globalStore[identifier].count > GLOBAL_MAX_REQUESTS) {
+    const retryAfter = Math.ceil((globalStore[identifier].resetTime - now) / 1000);
     res.setHeader('Retry-After', retryAfter.toString());
-    res.setHeader('X-RateLimit-Limit', MAX_REQUESTS.toString());
+    res.setHeader('X-RateLimit-Limit', GLOBAL_MAX_REQUESTS.toString());
     res.setHeader('X-RateLimit-Remaining', '0');
-    res.setHeader('X-RateLimit-Reset', store[identifier].resetTime.toString());
+    res.setHeader('X-RateLimit-Reset', globalStore[identifier].resetTime.toString());
     
     return res.status(429).json({
       error: 'Too many requests',
@@ -58,9 +59,75 @@ export function rateLimiter(req: Request, res: Response, next: NextFunction) {
     });
   }
   
-  res.setHeader('X-RateLimit-Limit', MAX_REQUESTS.toString());
-  res.setHeader('X-RateLimit-Remaining', (MAX_REQUESTS - store[identifier].count).toString());
-  res.setHeader('X-RateLimit-Reset', store[identifier].resetTime.toString());
+  res.setHeader('X-RateLimit-Limit', GLOBAL_MAX_REQUESTS.toString());
+  res.setHeader('X-RateLimit-Remaining', (GLOBAL_MAX_REQUESTS - globalStore[identifier].count).toString());
+  res.setHeader('X-RateLimit-Reset', globalStore[identifier].resetTime.toString());
   
   next();
 }
+
+// Factory function to create endpoint-specific rate limiters
+export function createEndpointRateLimiter(
+  maxRequests: number,
+  pathPattern: string | RegExp
+) {
+  const store: RateLimitStore = {};
+  
+  // Cleanup old entries every 5 minutes
+  setInterval(() => {
+    const now = Date.now();
+    Object.keys(store).forEach((key) => {
+      if (store[key].resetTime < now) {
+        delete store[key];
+      }
+    });
+  }, 5 * 60 * 1000);
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    // Check if path matches the pattern
+    const pathMatches = typeof pathPattern === 'string' 
+      ? req.path.startsWith(pathPattern)
+      : pathPattern.test(req.path);
+
+    if (!pathMatches) {
+      return next();
+    }
+
+    const identifier = req.ip || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    
+    if (!store[identifier] || store[identifier].resetTime < now) {
+      store[identifier] = {
+        count: 1,
+        resetTime: now + WINDOW_MS,
+      };
+      return next();
+    }
+    
+    store[identifier].count++;
+    
+    if (store[identifier].count > maxRequests) {
+      const retryAfter = Math.ceil((store[identifier].resetTime - now) / 1000);
+      res.setHeader('Retry-After', retryAfter.toString());
+      res.setHeader('X-RateLimit-Limit', maxRequests.toString());
+      res.setHeader('X-RateLimit-Remaining', '0');
+      res.setHeader('X-RateLimit-Reset', store[identifier].resetTime.toString());
+      
+      return res.status(429).json({
+        error: 'Too many requests',
+        retryAfter: `${retryAfter}s`,
+      });
+    }
+    
+    res.setHeader('X-RateLimit-Limit', maxRequests.toString());
+    res.setHeader('X-RateLimit-Remaining', (maxRequests - store[identifier].count).toString());
+    res.setHeader('X-RateLimit-Reset', store[identifier].resetTime.toString());
+    
+    next();
+  };
+}
+
+// Endpoint-specific rate limiters
+export const executeRateLimiter = createEndpointRateLimiter(30, '/api/execute');
+export const authRateLimiter = createEndpointRateLimiter(30, '/api/auth');
+export const chatRateLimiter = createEndpointRateLimiter(60, '/api/chat');

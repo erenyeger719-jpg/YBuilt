@@ -2,9 +2,13 @@ import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { storage } from "../storage.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { chatRateLimiter } from "../middleware/rateLimiter.js";
 import { logger } from "../index.js";
 
 const router = Router();
+
+// Apply endpoint-specific rate limiter (60 req/min per IP)
+router.use(chatRateLimiter);
 
 // Validation schemas
 const sendMessageSchema = z.object({
