@@ -1,13 +1,13 @@
 // server/lib/jwt.ts
-import jwt, { JwtPayload, SignOptions } from "jsonwebtoken";
+import jwt, { JwtPayload } from "jsonwebtoken";
 import { JWT_SECRET, JWT_SECRET_PREVIOUS, JWT_EXPIRES_IN } from "../config.js";
 
-type Payload = Record<string, unknown>;
+export type Payload = Record<string, unknown>;
 
 export function signJwt(payload: Payload): string {
   return jwt.sign(payload, JWT_SECRET, {
-    algorithm: "HS256",
-    expiresIn: JWT_EXPIRES_IN as string | number,
+    algorithm: "HS256" as const,
+    expiresIn: JWT_EXPIRES_IN,
   });
 }
 

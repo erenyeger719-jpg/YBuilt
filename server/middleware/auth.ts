@@ -1,28 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import { signJwt as sign, verifyJwt } from "../lib/jwt.js";
 import { logger } from "./logging.js";
-
-// SECURITY: JWT_SECRET is required and must be set in environment variables
-// Fail fast if not configured to prevent security vulnerabilities
-const NODE_ENV = process.env.NODE_ENV || 'production';
-let JWT_SECRET: string;
-
-if (!process.env.JWT_SECRET) {
-  if (NODE_ENV === 'development') {
-    // Allow development fallback with clear warning
-    JWT_SECRET = 'dev-secret-change-in-production';
-    console.warn('⚠️  Using development JWT_SECRET. Set JWT_SECRET env var for production!');
-  } else {
-    // Production or any other environment: require JWT_SECRET
-    throw new Error(
-      'CRITICAL SECURITY ERROR: JWT_SECRET environment variable is required but not set. ' +
-      'Generate a secure secret with: openssl rand -base64 32'
-    );
-  }
-} else {
-  JWT_SECRET = process.env.JWT_SECRET;
-}
-const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "7d";
 
 // Extend Express Request type to include user
 declare global {
@@ -40,20 +18,19 @@ export interface JWTPayload {
 
 /**
  * Generate JWT token for authenticated user (HS256)
+ * Wraps the centralized signJwt from lib/jwt
  */
 export function signJwt(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, {
-    algorithm: 'HS256',
-    expiresIn: JWT_EXPIRES_IN,
-  });
+  return sign(payload as Record<string, unknown>);
 }
 
 /**
  * Verify JWT token
+ * Wraps the centralized verifyJwt from lib/jwt
  */
 export function verifyToken(token: string): JWTPayload {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = verifyJwt(token);
     
     // Type guard: jwt.verify can return string | JwtPayload
     if (typeof decoded === 'string') {
