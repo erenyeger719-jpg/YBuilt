@@ -1,0 +1,926 @@
+MEGA PROMPT — Fix Vite chunk error + Platform-10x hardening (drop into Replit AI)
+
+GOAL (single line)
+Fix the dev preview error (Vite chunk module missing), harden dependency installs, and then implement Platform-10x improvements (remote build cache, deterministic builds, cosign+SBOM enforcement, canary promotion and observability), producing diffs, verification logs, and remediation steps.
+
+BRANCH
+Work on branch: fix/platform-10x-fixes
+If git operations are blocked, create/modify files and at the end print exact git commands the human can run locally; do not attempt to push secrets.
+
+QUICK OFFER (show at start)
+If you want file contents printed before changes, say which of these (pick any):
+- package.json
+- package-lock.json
+- scripts/reproducible-build.sh
+- scripts/cosign-sign-artifacts.sh
+- .github/workflows/publish.yml
+
+IMMEDIATE TASK: Fix Vite/TSX ERR_MODULE_NOT_FOUND
+1. Run the following checks and capture outputs (command + tail 200 lines + exit code):
+   - `ls -la node_modules/vite/dist/node/chunks/ || true`
+   - `ls -la node_modules/vite | sed -n '1,200p' || true`
+   - `node -v && npm -v`
+   - `npm ls vite --depth=0 || true`
+   - `cat package.json | jq -r '.devDependencies.vite // .dependencies.vite' 2>/dev/null || true`
+
+2. If any `node_modules/vite/dist/node/chunks/*.js` files are missing, run:
+   - `rm -rf node_modules package-lock.json`
+   - `npm ci`
+   Capture stdout/stderr and exit code. If `npm ci` fails, then run:
+   - `npm install --no-audit --prefer-offline`
+   Capture outputs.
+
+3. If `npm ci` cannot run or fails with network or permission errors, try:
+   - `npm uninstall vite --no-save && npm install -D vite@<version>` (pick version from package.json or latest stable).
+   Capture outputs.
+
+4. After install, confirm:
+   - `ls -la node_modules/vite/dist/node/chunks/dep-D-7KCb9p.js || echo "MISSING"`
+   - `npm run dev` (or the project start command). Capture logs (200 lines) and exit code.
+
+5. If `node_modules` trashes persist, as fallback run:
+   - `rm -rf node_modules package-lock.json && npm cache clean --force && npm ci`
+   Document the failure details and exact remediation lines.
+
+PLATFORM-10X HARDENING TASKS (once immediate error is fixed)
+A. Lockfiles & deterministic installs
+   - Ensure `package-lock.json` exists and is used in CI; change CI to `npm ci`.
+   - Pin `vite`, `tsx`, and other devtools in devDependencies.
+   - Optionally add a `pnpm-lock.yaml` migration script (if switching to pnpm is desired). Document tradeoffs.
+
+B. Reliability & caching
+   - Add a remote build cache (instructions and scripts for BuildKit/registry cache).
+   - Add `cache: node_modules` CI key with `package-lock.json` hash as part of cache key.
+
+C. Reproducible builds & SBOM/Attestation
+   - Ensure `scripts/reproducible-build.sh` sets `SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)`, TZ=UTC, and produces `artifacts/dist.tar.gz` + `sha256`.
+   - Ensure `scripts/generate-cyclonedx-sbom.sh` → `artifacts/sbom.json`
+   - Ensure `scripts/provenance/attest-oci.js` writes `artifacts/provenance.json` containing `{git_sha, built_at, sbom_sha256, image_ref}`.
+
+D. Cosign enforcement & verification
+   - Ensure `.github/workflows/publish.yml` installs `sigstore/cosign-installer@v*` before using cosign and has `permissions: id-token: write`.
+   - Ensure `scripts/cosign-sign-artifacts.sh` supports `--image` and `--artifact`, keyless OIDC and `--key env://COSIGN_KEY`, attaches SBOM & provenance via `cosign attest`, and runs `cosign verify`.
+   - Ensure `ci/verify-sbom-and-cosign.sh` runs in PR gating workflow and fails CI on invalid/missing signatures.
+
+E. Canary promotion & auto-rollback
+   - Ensure `.github/workflows/canary-promote.yml` deploys canary, runs synthetic checks (ci/synthetic-check.sh), checks signature & SBOM via `ci/verify-sbom-and-cosign.sh`, ramps traffic only if checks pass, otherwise calls `scripts/rollback.sh`.
+   - Ensure `monitoring/prometheus-canary-alerts.yaml` is valid and uses Kubernetes secrets (mounted file paths) rather than `${{ secrets.* }}` placeholders.
+
+F. Observability & dev ergonomics
+   - Add `tools/log-trace-correlation.js` to server template and example integration.
+   - Update `.devcontainer/` to include `cosign`, `opa`, `trivy`, `pnpm`, reproducible-build helper, and a `postCreateCommand` that runs `npm ci`.
+
+G. CI policy & daily self-test
+   - Create/ensure `.github/workflows/policy-check.yml` hard-fails on signature/SBOM issues and runs vulnerability scans (Trivy, npm audit).
+   - Add daily CI job `self-test.yml` that runs build→sbom→attest→verify in dry-run and reports failure.    1) scripts/reproducible-build.sh
+Creates artifacts/dist.tar.gz deterministically (SOURCE_DATE_EPOCH from git commit time if available), runs npm ci safely, builds, and produces SHA256.
+
+#!/usr/bin/env bash
+# scripts/reproducible-build.sh
+# Produces a deterministic tarball artifacts/dist.tar.gz and artifacts/dist.tar.gz.sha256
+set -euo pipefail
+
+# Where outputs land
+ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts}"
+DIST_TGZ="${ARTIFACT_DIR}/dist.tar.gz"
+DIST_SHA="${DIST_TGZ}.sha256"
+
+mkdir -p "${ARTIFACT_DIR}"
+
+# Determine SOURCE_DATE_EPOCH in a deterministic way (prefer git commit time)
+if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
+  : # use provided
+else
+  if git rev-parse --git-dir > /dev/null 2>&1; then
+    SOURCE_DATE_EPOCH="$(git log -1 --format=%ct 2>/dev/null || date +%s)"
+  else
+    SOURCE_DATE_EPOCH="$(date +%s)"
+  fi
+fi
+
+export SOURCE_DATE_EPOCH
+export TZ=UTC
+
+echo "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}"
+echo "Building reproducible artifact..."
+
+# Install exact dependencies according to lockfile (CI-friendly)
+if [ -f package-lock.json ]; then
+  echo "Running npm ci --prefer-offline --no-audit"
+  npm ci --prefer-offline --no-audit
+else
+  echo "No package-lock.json found — running npm install (not ideal for reproducibility)"
+  npm install --no-audit --prefer-offline
+fi
+
+# Ensure build script exists
+if npm run | grep -q "build"; then
+  echo "Running npm run build with SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}"
+  # Export SOURCE_DATE_EPOCH for tools that honor it
+  env SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" TZ=UTC npm run build
+else
+  echo "No npm build script detected — packaging repo sources as-is"
+fi
+
+# Decide what to include in the tarball:
+# Prefer dist/ then build/ then fallback to package files
+TEMP_DIR="$(mktemp -d)"
+cleanup() { rm -rf "$TEMP_DIR"; }
+trap cleanup EXIT
+
+if [ -d dist ]; then
+  echo "Packaging dist/ directory"
+  cp -a dist "$TEMP_DIR"/dist
+elif [ -d build ]; then
+  echo "Packaging build/ directory"
+  cp -a build "$TEMP_DIR"/build
+else
+  echo "Packaging project files (src, package.json, package-lock.json)"
+  mkdir -p "$TEMP_DIR"/src
+  if [ -d src ]; then cp -a src "$TEMP_DIR"/src; fi
+  cp -a package.json package-lock.json README.md 2>/dev/null || true
+fi
+
+# Create deterministic tarball:
+# - --sort=name ensures deterministic ordering
+# - --mtime set to SOURCE_DATE_EPOCH
+# - --owner/--group to remove uid/gid differences
+echo "Creating deterministic tarball ${DIST_TGZ}"
+tar --sort=name \
+    --owner=0 --group=0 --numeric-owner \
+    --mtime="@${SOURCE_DATE_EPOCH}" \
+    -C "$TEMP_DIR" -czf "${DIST_TGZ}" .
+
+# Compute sha256
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum "${DIST_TGZ}" | awk '{print $1}' > "${DIST_SHA}"
+elif command -v shasum >/dev/null 2>&1; then
+  shasum -a 256 "${DIST_TGZ}" | awk '{print $1}' > "${DIST_SHA}"
+else
+  echo "No sha256 tool found; cannot create ${DIST_SHA}" >&2
+  exit 2
+fi
+
+echo "Created artifacts:"
+ls -lah "${DIST_TGZ}" "${DIST_SHA}"
+echo "Done."
+Unified diff replacement (file replacement):
+
+--- a/scripts/reproducible-build.sh
++++ b/scripts/reproducible-build.sh
+@@ -0,0 +1,140 @@
++#!/usr/bin/env bash
++# scripts/reproducible-build.sh
++# Produces a deterministic tarball artifacts/dist.tar.gz and artifacts/dist.tar.gz.sha256
++set -euo pipefail
++
++# Where outputs land
++ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts}"
++DIST_TGZ="${ARTIFACT_DIR}/dist.tar.gz"
++DIST_SHA="${DIST_TGZ}.sha256"
++
++mkdir -p "${ARTIFACT_DIR}"
++
++# Determine SOURCE_DATE_EPOCH in a deterministic way (prefer git commit time)
++if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
++  : # use provided
++else
++  if git rev-parse --git-dir > /dev/null 2>&1; then
++    SOURCE_DATE_EPOCH="$(git log -1 --format=%ct 2>/dev/null || date +%s)"
++  else
++    SOURCE_DATE_EPOCH="$(date +%s)"
++  fi
++fi
++
++export SOURCE_DATE_EPOCH
++export TZ=UTC
++
++echo "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}"
++echo "Building reproducible artifact..."
++
++# Install exact dependencies according to lockfile (CI-friendly)
++if [ -f package-lock.json ]; then
++  echo "Running npm ci --prefer-offline --no-audit"
++  npm ci --prefer-offline --no-audit
++else
++  echo "No package-lock.json found — running npm install (not ideal for reproducibility)"
++  npm install --no-audit --prefer-offline
++fi
++
++# Ensure build script exists
++if npm run | grep -q "build"; then
++  echo "Running npm run build with SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}"
++  # Export SOURCE_DATE_EPOCH for tools that honor it
++  env SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" TZ=UTC npm run build
++else
++  echo "No npm build script detected — packaging repo sources as-is"
++fi
++
++# Decide what to include in the tarball:
++# Prefer dist/ then build/ then fallback to package files
++TEMP_DIR="$(mktemp -d)"
++cleanup() { rm -rf "$TEMP_DIR"; }
++trap cleanup EXIT
++
++if [ -d dist ]; then
++  echo "Packaging dist/ directory"
++  cp -a dist "$TEMP_DIR"/dist
++elif [ -d build ]; then
++  echo "Packaging build/ directory"
++  cp -a build "$TEMP_DIR"/build
++else
++  echo "Packaging project files (src, package.json, package-lock.json)"
++  mkdir -p "$TEMP_DIR"/src
++  if [ -d src ]; then cp -a src "$TEMP_DIR"/src; fi
++  cp -a package.json package-lock.json README.md 2>/dev/null || true
++fi
++
++# Create deterministic tarball:
++# - --sort=name ensures deterministic ordering
++# - --mtime set to SOURCE_DATE_EPOCH
++# - --owner/--group to remove uid/gid differences
++echo "Creating deterministic tarball ${DIST_TGZ}"
++tar --sort=name \
++    --owner=0 --group=0 --numeric-owner \
++    --mtime="@${SOURCE_DATE_EPOCH}" \
++    -C "$TEMP_DIR" -czf "${DIST_TGZ}" .
++
++# Compute sha256
++if command -v sha256sum >/dev/null 2>&1; then
++  sha256sum "${DIST_TGZ}" | awk '{print $1}' > "${DIST_SHA}"
++elif command -v shasum >/dev/null 2>&1; then
++  shasum -a 256 "${DIST_TGZ}" | awk '{print $1}' > "${DIST_SHA}"
++else
++  echo "No sha256 tool found; cannot create ${DIST_SHA}" >&2
++  exit 2
++fi
++
++echo "Created artifacts:"
++ls -lah "${DIST_TGZ}" "${DIST_SHA}"
++echo "Done."
+
+2) scripts/cosign-sign-artifacts.sh
+A robust cosign helper that supports images or blob artifacts, keyless OIDC (via id-token in GH Actions) or --key env://COSIGN_KEY, attaches SBOM and provenance, and verifies. Fails loudly if required inputs are missing.
+
+#!/usr/bin/env bash
+# scripts/cosign-sign-artifacts.sh
+# Usage:
+#   scripts/cosign-sign-artifacts.sh --image ghcr.io/OWNER/REPO:TAG [--dry-run]
+#   scripts/cosign-sign-artifacts.sh --artifact artifacts/dist.tar.gz [--dry-run]
+set -euo pipefail
+
+print_usage() {
+  cat <<EOF
+Usage:
+  $0 --image <image_ref> [--dry-run]
+  $0 --artifact <path_to_file> [--dry-run]
+
+Environment:
+  COSIGN_KEY      optional (e.g. env://COSIGN_KEY) for key-based signing. If unset, keyless signing is attempted.
+  SBOM_PATH       path to SBOM json (default: artifacts/sbom.json)
+  PROVENANCE_PATH path to provenance json (default: artifacts/provenance.json)
+EOF
+}
+
+# Defaults
+SBOM_PATH="${SBOM_PATH:-artifacts/sbom.json}"
+PROVENANCE_PATH="${PROVENANCE_PATH:-artifacts/provenance.json}"
+DRY_RUN=false
+MODE=""
+TARGET=""
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --image) MODE="image"; TARGET="$2"; shift 2;;
+    --artifact) MODE="artifact"; TARGET="$2"; shift 2;;
+    --dry-run) DRY_RUN=true; shift;;
+    -h|--help) print_usage; exit 0;;
+    *) echo "Unknown arg: $1"; print_usage; exit 2;;
+  esac
+done
+
+if [ -z "$MODE" ]; then
+  echo "Must pass --image or --artifact"
+  print_usage
+  exit 2
+fi
+
+if [ ! -x "$(command -v cosign)" ]; then
+  echo "cosign not found in PATH. Please install cosign (see https://github.com/sigstore/cosign) or add it to the container/devcontainer."
+  exit 3
+fi
+
+echo "COSIGN_SIGN: mode=${MODE}, target=${TARGET}, dry_run=${DRY_RUN}"
+if [ "$MODE" = "image" ]; then
+  IMAGE_REF="${TARGET}"
+  echo "Target image: ${IMAGE_REF}"
+  if [ "${DRY_RUN}" = "true" ]; then
+    echo "[dry-run] Would sign image: ${IMAGE_REF}"
+  else
+    if [ -n "${COSIGN_KEY:-}" ]; then
+      echo "Signing image with key: COSIGN_KEY (using env var)"
+      cosign sign --key "${COSIGN_KEY}" "${IMAGE_REF}"
+    else
+      echo "Signing image keylessly (OIDC - requires id-token permissions in CI)"
+      cosign sign --yes "${IMAGE_REF}"
+    fi
+  fi
+
+  # Attach SBOM attestation if present
+  if [ -f "${SBOM_PATH}" ]; then
+    if [ "${DRY_RUN}" = "true" ]; then
+      echo "[dry-run] Would attach SBOM attestation from ${SBOM_PATH} to ${IMAGE_REF}"
+    else
+      echo "Attaching SBOM attestation (cyclonedx) to ${IMAGE_REF}"
+      if [ -n "${COSIGN_KEY:-}" ]; then
+        cosign attest --type cyclonedx --predicate "${SBOM_PATH}" --key "${COSIGN_KEY}" "${IMAGE_REF}"
+      else
+        cosign attest --type cyclonedx --predicate "${SBOM_PATH}" --yes "${IMAGE_REF}"
+      fi
+    fi
+  else
+    echo "Warning: SBOM not found at ${SBOM_PATH} — skipping SBOM attestation" >&2
+  fi
+
+  # Attach provenance attestation if present
+  if [ -f "${PROVENANCE_PATH}" ]; then
+    if [ "${DRY_RUN}" = "true" ]; then
+      echo "[dry-run] Would attach provenance attestation from ${PROVENANCE_PATH} to ${IMAGE_REF}"
+    else
+      echo "Attaching provenance attestation to ${IMAGE_REF}"
+      if [ -n "${COSIGN_KEY:-}" ]; then
+        cosign attest --type slsaprovenance --predicate "${PROVENANCE_PATH}" --key "${COSIGN_KEY}" "${IMAGE_REF}"
+      else
+        cosign attest --type slsaprovenance --predicate "${PROVENANCE_PATH}" --yes "${IMAGE_REF}"
+      fi
+    fi
+  else
+    echo "Warning: provenance not found at ${PROVENANCE_PATH} — skipping provenance attestation" >&2
+  fi
+
+  # Verify
+  if [ "${DRY_RUN}" = "false" ]; then
+    echo "Verifying signature for ${IMAGE_REF}"
+    cosign verify "${IMAGE_REF}" || { echo "Signature verification failed for ${IMAGE_REF}"; exit 4; }
+    echo "Signature verified for ${IMAGE_REF}"
+  fi
+
+else
+  # artifact (blob) signing
+  ARTIFACT_PATH="${TARGET}"
+  if [ ! -f "${ARTIFACT_PATH}" ]; then
+    echo "Artifact not found: ${ARTIFACT_PATH}" >&2
+    exit 2
+  fi
+
+  if [ "${DRY_RUN}" = "true" ]; then
+    echo "[dry-run] Would sign artifact blob: ${ARTIFACT_PATH}"
+  else
+    if [ -n "${COSIGN_KEY:-}" ]; then
+      echo "Signing blob with key..."
+      cosign sign-blob --key "${COSIGN_KEY}" --output-signature "${ARTIFACT_PATH}.cosign" "${ARTIFACT_PATH}"
+    else
+      echo "Signing blob keylessly (cosign sign-blob --yes)..."
+      cosign sign-blob --yes --output-signature "${ARTIFACT_PATH}.cosign" "${ARTIFACT_PATH}"
+    fi
+    echo "Signed blob -> ${ARTIFACT_PATH}.cosign"
+  fi
+
+  # Attestations for artifact: attach SBOM/provenance as separate attestations using cosign attest-blob
+  if [ -f "${SBOM_PATH}" ]; then
+    if [ "${DRY_RUN}" = "true" ]; then
+      echo "[dry-run] Would attest SBOM for blob"
+    else
+      if [ -n "${COSIGN_KEY:-}" ]; then
+        cosign attest-blob --type cyclonedx --predicate "${SBOM_PATH}" --key "${COSIGN_KEY}" --output-attestation "${ARTIFACT_PATH}.sbom.att" "${ARTIFACT_PATH}"
+      else
+        cosign attest-blob --type cyclonedx --predicate "${SBOM_PATH}" --yes --output-attestation "${ARTIFACT_PATH}.sbom.att" "${ARTIFACT_PATH}"
+      fi
+    fi
+  fi
+
+  if [ -f "${PROVENANCE_PATH}" ]; then
+    if [ "${DRY_RUN}" = "true" ]; then
+      echo "[dry-run] Would attest provenance for blob"
+    else
+      if [ -n "${COSIGN_KEY:-}" ]; then
+        cosign attest-blob --type slsaprovenance --predicate "${PROVENANCE_PATH}" --key "${COSIGN_KEY}" --output-attestation "${ARTIFACT_PATH}.prov.att" "${ARTIFACT_PATH}"
+      else
+        cosign attest-blob --type slsaprovenance --predicate "${PROVENANCE_PATH}" --yes --output-attestation "${ARTIFACT_PATH}.prov.att" "${ARTIFACT_PATH}"
+      fi
+    fi
+  fi
+
+  if [ "${DRY_RUN}" = "false" ]; then
+    echo "Verifying blob signature"
+    cosign verify-blob --signature "${ARTIFACT_PATH}.cosign" "${ARTIFACT_PATH}" || { echo "Blob signature verification failed"; exit 4; }
+    echo "Blob signature verified"
+  fi
+
+fi
+
+echo "cosign-sign-artifacts.sh completed successfully"
+Unified diff replacement:
+
+--- a/scripts/cosign-sign-artifacts.sh
++++ b/scripts/cosign-sign-artifacts.sh
+@@ -0,0 +1,220 @@
++#!/usr/bin/env bash
++# scripts/cosign-sign-artifacts.sh
++# Usage:
++#   scripts/cosign-sign-artifacts.sh --image ghcr.io/OWNER/REPO:TAG [--dry-run]
++#   scripts/cosign-sign-artifacts.sh --artifact artifacts/dist.tar.gz [--dry-run]
++set -euo pipefail
++
++print_usage() {
++  cat <<EOF
++Usage:
++  $0 --image <image_ref> [--dry-run]
++  $0 --artifact <path_to_file> [--dry-run]
++
++Environment:
++  COSIGN_KEY      optional (e.g. env://COSIGN_KEY) for key-based signing. If unset, keyless signing is attempted.
++  SBOM_PATH       path to SBOM json (default: artifacts/sbom.json)
++  PROVENANCE_PATH path to provenance json (default: artifacts/provenance.json)
++EOF
++}
++
++# Defaults
++SBOM_PATH="${SBOM_PATH:-artifacts/sbom.json}"
++PROVENANCE_PATH="${PROVENANCE_PATH:-artifacts/provenance.json}"
++DRY_RUN=false
++MODE=""
++TARGET=""
++
++# Parse args
++while [[ $# -gt 0 ]]; do
++  case "$1" in
++    --image) MODE="image"; TARGET="$2"; shift 2;;
++    --artifact) MODE="artifact"; TARGET="$2"; shift 2;;
++    --dry-run) DRY_RUN=true; shift;;
++    -h|--help) print_usage; exit 0;;
++    *) echo "Unknown arg: $1"; print_usage; exit 2;;
++  esac
++done
++
++if [ -z "$MODE" ]; then
++  echo "Must pass --image or --artifact"
++  print_usage
++  exit 2
++fi
++
++if [ ! -x "$(command -v cosign)" ]; then
++  echo "cosign not found in PATH. Please install cosign (see https://github.com/sigstore/cosign) or add it to the container/devcontainer."
++  exit 3
++fi
++
++echo "COSIGN_SIGN: mode=${MODE}, target=${TARGET}, dry_run=${DRY_RUN}"
++if [ "$MODE" = "image" ]; then
++  IMAGE_REF="${TARGET}"
++  echo "Target image: ${IMAGE_REF}"
++  if [ "${DRY_RUN}" = "true" ]; then
++    echo "[dry-run] Would sign image: ${IMAGE_REF}"
++  else
++    if [ -n "${COSIGN_KEY:-}" ]; then
++      echo "Signing image with key: COSIGN_KEY (using env var)"
++      cosign sign --key "${COSIGN_KEY}" "${IMAGE_REF}"
++    else
++      echo "Signing image keylessly (OIDC - requires id-token permissions in CI)"
++      cosign sign --yes "${IMAGE_REF}"
++    fi
++  fi
++
++  # Attach SBOM attestation if present
++  if [ -f "${SBOM_PATH}" ]; then
++    if [ "${DRY_RUN}" = "true" ]; then
++      echo "[dry-run] Would attach SBOM attestation from ${SBOM_PATH} to ${IMAGE_REF}"
++    else
++      echo "Attaching SBOM attestation (cyclonedx) to ${IMAGE_REF}"
++      if [ -n "${COSIGN_KEY:-}" ]; then
++        cosign attest --type cyclonedx --predicate "${SBOM_PATH}" --key "${COSIGN_KEY}" "${IMAGE_REF}"
++      else
++        cosign attest --type cyclonedx --predicate "${SBOM_PATH}" --yes "${IMAGE_REF}"
++      fi
++    fi
++  else
++    echo "Warning: SBOM not found at ${SBOM_PATH} — skipping SBOM attestation" >&2
++  fi
++
++  # Attach provenance attestation if present
++  if [ -f "${PROVENANCE_PATH}" ]; then
++    if [ "${DRY_RUN}" = "true" ]; then
++      echo "[dry-run] Would attach provenance attestation from ${PROVENANCE_PATH} to ${IMAGE_REF}"
++    else
++      echo "Attaching provenance attestation to ${IMAGE_REF}"
++      if [ -n "${COSIGN_KEY:-}" ]; then
++        cosign attest --type slsaprovenance --predicate "${PROVENANCE_PATH}" --key "${COSIGN_KEY}" "${IMAGE_REF}"
++      else
++        cosign attest --type slsaprovenance --predicate "${PROVENANCE_PATH}" --yes "${IMAGE_REF}"
++      fi
++    fi
++  else
++    echo "Warning: provenance not found at ${PROVENANCE_PATH} — skipping provenance attestation" >&2
++  fi
++
++  # Verify
++  if [ "${DRY_RUN}" = "false" ]; then
++    echo "Verifying signature for ${IMAGE_REF}"
++    cosign verify "${IMAGE_REF}" || { echo "Signature verification failed for ${IMAGE_REF}"; exit 4; }
++    echo "Signature verified for ${IMAGE_REF}"
++  fi
++
++else
++  # artifact (blob) signing
++  ARTIFACT_PATH="${TARGET}"
++  if [ ! -f "${ARTIFACT_PATH}" ]; then
++    echo "Artifact not found: ${ARTIFACT_PATH}" >&2
++    exit 2
++  fi
++
++  if [ "${DRY_RUN}" = "true" ]; then
++    echo "[dry-run] Would sign artifact blob: ${ARTIFACT_PATH}"
++  else
++    if [ -n "${COSIGN_KEY:-}" ]; then
++      echo "Signing blob with key..."
++      cosign sign-blob --key "${COSIGN_KEY}" --output-signature "${ARTIFACT_PATH}.cosign" "${ARTIFACT_PATH}"
++    else
++      echo "Signing blob keylessly (cosign sign-blob --yes)..."
++      cosign sign-blob --yes --output-signature "${ARTIFACT_PATH}.cosign" "${ARTIFACT_PATH}"
++    fi
++    echo "Signed blob -> ${ARTIFACT_PATH}.cosign"
++  fi
++
++  # Attestations for artifact: attach SBOM/provenance as separate attestations using cosign attest-blob
++  if [ -f "${SBOM_PATH}" ]; then
++    if [ "${DRY_RUN}" = "true" ]; then
++      echo "[dry-run] Would attest SBOM for blob"
++    else
++      if [ -n "${COSIGN_KEY:-}" ]; then
++        cosign attest-blob --type cyclonedx --predicate "${SBOM_PATH}" --key "${COSIGN_KEY}" --output-attestation "${ARTIFACT_PATH}.sbom.att" "${ARTIFACT_PATH}"
++      else
++        cosign attest-blob --type cyclonedx --predicate "${SBOM_PATH}" --yes --output-attestation "${ARTIFACT_PATH}.sbom.att" "${ARTIFACT_PATH}"
++      fi
++    fi
++  fi
++
++  if [ -f "${PROVENANCE_PATH}" ]; then
++    if [ "${DRY_RUN}" = "true" ]; then
++      echo "[dry-run] Would attest provenance for blob"
++    else
++      if [ -n "${COSIGN_KEY:-}" ]; then
++        cosign attest-blob --type slsaprovenance --predicate "${PROVENANCE_PATH}" --key "${COSIGN_KEY}" --output-attestation "${ARTIFACT_PATH}.prov.att" "${ARTIFACT_PATH}"
++      else
++        cosign attest-blob --type slsaprovenance --predicate "${PROVENANCE_PATH}" --yes --output-attestation "${ARTIFACT_PATH}.prov.att" "${ARTIFACT_PATH}"
++      fi
++    fi
++  fi
++
++  if [ "${DRY_RUN}" = "false" ]; then
++    echo "Verifying blob signature"
++    cosign verify-blob --signature "${ARTIFACT_PATH}.cosign" "${ARTIFACT_PATH}" || { echo "Blob signature verification failed"; exit 4; }
++    echo "Blob signature verified"
++  fi
++
++fi
++
++echo "cosign-sign-artifacts.sh completed successfully"
+
+3) .github/workflows/publish.yml
+Fixed: installs cosign before use, sets permissions.id-token: write, uses actions/checkout@v4 with fetch-depth: 0, runs reproducible build, SBOM, provenance, signs via the script above (with correct args), verifies, and uploads artifacts (dry-run support).
+
+name: Publish (OIDC + Cosign)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip push and release)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: write       # for releases/uploading
+  packages: write       # push to registry
+  id-token: write       # OIDC token for keyless cosign
+  actions: read
+  security-events: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  ARTIFACT_DIR: artifacts
+
+jobs:
+  build-and-publish:
+    name: Build, SBOM, Sign & Publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Build Tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq wget curl git tar gzip ca-certificates
+          mkdir -p ${{ env.ARTIFACT_DIR }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.11.0'  # pin a tested version
+
+      - name: Reproducible build (artifacts)
+        id: build
+        run: |
+          chmod +x scripts/reproducible-build.sh
+          # Use commit timestamp for determinism
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          export TZ=UTC
+          bash scripts/reproducible-build.sh
+        env:
+          CI: true
+
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          chmod +x scripts/generate-cyclonedx-sbom.sh
+          bash scripts/generate-cyclonedx-sbom.sh
+        env:
+          ARTIFACT_DIR: ${{ env.ARTIFACT_DIR }}
+
+      - name: Generate provenance (SLSA)
+        run: |
+          chmod +x scripts/provenance/attest-oci.js
+          node scripts/provenance/attest-oci.js --out "${{ env.ARTIFACT_DIR }}/provenance.json" --image "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+
+      - name: Login to GHCR (only if not dry-run)
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push image (optional, only if not dry-run)
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          # Example build; adjust Dockerfile path and build args as needed
+          docker build -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" --build-arg SOURCE_DATE_EPOCH="${{ steps.build.outputs.SOURCE_DATE_EPOCH || '' }}" .
+          docker push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+
+      - name: Sign artifacts / image with cosign
+        id: sign
+        run: |
+          chmod +x scripts/cosign-sign-artifacts.sh
+          # If you published an image above, sign the image; otherwise sign the bundle artifact
+          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          ARTIFACT="${{ env.ARTIFACT_DIR }}/dist.tar.gz"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "Dry run: signing in dry-run mode"
+            bash scripts/cosign-sign-artifacts.sh --artifact "${ARTIFACT}" --dry-run
+          else
+            # Prefer image signing if image exists
+            if docker manifest inspect "${IMAGE_REF}" >/dev/null 2>&1; then
+              bash scripts/cosign-sign-artifacts.sh --image "${IMAGE_REF}"
+            else
+              bash scripts/cosign-sign-artifacts.sh --artifact "${ARTIFACT}"
+            fi
+          fi
+        env:
+          ARTIFACT_DIR: ${{ env.ARTIFACT_DIR }}
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }} # optional fallback; keyless will be used if not set
+
+      - name: Verify SBOM & signature
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          chmod +x ci/verify-sbom-and-cosign.sh
+          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          bash ci/verify-sbom-and-cosign.sh "${IMAGE_REF}"
+        env:
+          ARTIFACT_DIR: ${{ env.ARTIFACT_DIR }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-artifacts
+          path: |
+            artifacts/dist.tar.gz
+            artifacts/dist.tar.gz.sha256
+            artifacts/sbom.json
+            artifacts/provenance.json
+          retention-days: 90
+
+      - name: Create GitHub release (if tag and not dry-run)
+        if: ${{ github.event.inputs.dry_run != 'true' && startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/dist.tar.gz
+            artifacts/dist.tar.gz.sha256
+            artifacts/sbom.json
+            artifacts/provenance.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+Unified diff replacement:
+
+--- a/.github/workflows/publish.yml
++++ b/.github/workflows/publish.yml
+@@ -0,0 +1,200 @@
++name: Publish (OIDC + Cosign)
++
++on:
++  push:
++    branches: [ main ]
++  workflow_dispatch:
++    inputs:
++      dry_run:
++        description: 'Dry run (skip push and release)'
++        required: false
++        default: 'true'
++        type: choice
++        options:
++          - 'true'
++          - 'false'
++
++permissions:
++  contents: write       # for releases/uploading
++  packages: write       # push to registry
++  id-token: write       # OIDC token for keyless cosign
++  actions: read
++  security-events: write
++
++env:
++  REGISTRY: ghcr.io
++  IMAGE_NAME: ${{ github.repository }}
++  ARTIFACT_DIR: artifacts
++
++jobs:
++  build-and-publish:
++    name: Build, SBOM, Sign & Publish
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout code
++        uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++
++      - name: Setup Node.js
++        uses: actions/setup-node@v4
++        with:
++          node-version: '20'
++          cache: 'npm'
++
++      - name: Install Build Tools
++        run: |
++          sudo apt-get update && sudo apt-get install -y jq wget curl git tar gzip ca-certificates
++          mkdir -p ${{ env.ARTIFACT_DIR }}
++
++      - name: Install cosign
++        uses: sigstore/cosign-installer@v3
++        with:
++          cosign-release: 'v2.11.0'  # pin a tested version
++
++      - name: Reproducible build (artifacts)
++        id: build
++        run: |
++          chmod +x scripts/reproducible-build.sh
++          # Use commit timestamp for determinism
++          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
++          export TZ=UTC
++          bash scripts/reproducible-build.sh
++        env:
++          CI: true
++
++      - name: Generate SBOM (CycloneDX)
++        run: |
++          chmod +x scripts/generate-cyclonedx-sbom.sh
++          bash scripts/generate-cyclonedx-sbom.sh
++        env:
++          ARTIFACT_DIR: ${{ env.ARTIFACT_DIR }}
++
++      - name: Generate provenance (SLSA)
++        run: |
++          chmod +x scripts/provenance/attest-oci.js
++          node scripts/provenance/attest-oci.js --out "${{ env.ARTIFACT_DIR }}/provenance.json" --image "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
++        env:
++          GITHUB_SHA: ${{ github.sha }}
++          GITHUB_REF: ${{ github.ref }}
++          GITHUB_RUN_ID: ${{ github.run_id }}
++
++      - name: Login to GHCR (only if not dry-run)
++        if: ${{ github.event.inputs.dry_run != 'true' }}
++        uses: docker/login-action@v3
++        with:
++          registry: ${{ env.REGISTRY }}
++          username: ${{ github.actor }}
++          password: ${{ secrets.GITHUB_TOKEN }}
++
++      - name: Build & push image (optional, only if not dry-run)
++        if: ${{ github.event.inputs.dry_run != 'true' }}
++        run: |
++          # Example build; adjust Dockerfile path and build args as needed
++          docker build -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" --build-arg SOURCE_DATE_EPOCH="${{ steps.build.outputs.SOURCE_DATE_EPOCH || '' }}" .
++          docker push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
++
++      - name: Sign artifacts / image with cosign
++        id: sign
++        run: |
++          chmod +x scripts/cosign-sign-artifacts.sh
++          # If you published an image above, sign the image; otherwise sign the bundle artifact
++          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
++          ARTIFACT="${{ env.ARTIFACT_DIR }}/dist.tar.gz"
++          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
++            echo "Dry run: signing in dry-run mode"
++            bash scripts/cosign-sign-artifacts.sh --artifact "${ARTIFACT}" --dry-run
++          else
++            # Prefer image signing if image exists
++            if docker manifest inspect "${IMAGE_REF}" >/dev/null 2>&1; then
++              bash scripts/cosign-sign-artifacts.sh --image "${IMAGE_REF}"
++            else
++              bash scripts/cosign-sign-artifacts.sh --artifact "${ARTIFACT}"
++            fi
++          fi
++        env:
++          ARTIFACT_DIR: ${{ env.ARTIFACT_DIR }}
++          COSIGN_KEY: ${{ secrets.COSIGN_KEY }} # optional fallback; keyless will be used if not set
++
++      - name: Verify SBOM & signature
++        if: ${{ github.event.inputs.dry_run != 'true' }}
++        run: |
++          chmod +x ci/verify-sbom-and-cosign.sh
++          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
++          bash ci/verify-sbom-and-cosign.sh "${IMAGE_REF}"
++        env:
++          ARTIFACT_DIR: ${{ env.ARTIFACT_DIR }}
++
++      - name: Upload artifacts
++        uses: actions/upload-artifact@v4
++        with:
++          name: signed-artifacts
++          path: |
++            artifacts/dist.tar.gz
++            artifacts/dist.tar.gz.sha256
++            artifacts/sbom.json
++            artifacts/provenance.json
++          retention-days: 90
++
++      - name: Create GitHub release (if tag and not dry-run)
++        if: ${{ github.event.inputs.dry_run != 'true' && startsWith(github.ref, 'refs/tags/') }}
++        uses: softprops/action-gh-release@v1
++        with:
++          files: |
++            artifacts/dist.tar.gz
++            artifacts/dist.tar.gz.sha256
++            artifacts/sbom.json
++            artifacts/provenance.json
++        env:
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+
+VERIFICATION & REPORTING (required)
+- For each file changed: print unified diff.
+- For each verification step (install, build, sign, verify, canary dry-run): print the exact command run, last 200 lines of stdout/stderr, and exit code.
+- Produce `IMPLEMENTATION_PLATFORM10X.md` containing:
+  * Branch used or "git unavailable"
+  * Files modified/created with diffs
+  * Verification outputs, artifacts produced, required secrets list and exact remediation steps for failures
+- Produce `PR_BODY_PLATFORM10X.md` ready to paste.
+
+BEHAVIOR RULES
+- Never print secret values.
+- If cluster operations needed but not possible: produce exact `kubectl` one-liners and say “run me in the cluster”.
+- If a step cannot be executed due to environment limits, still create files, mark them executable, and give local/CI commands to run them.
+- Fail loudly and provide one-line remediations for each failing command.
+
+FINAL OUTPUT (single response)
+At the end, reply with:
+1. Branch used or “git unavailable”
+2. List of files created/modified
+3. Unified diffs for each file
+4. Verification checklist results (commands, last 200 lines, exit codes)
+5. Artifacts produced (paths)
+6. Skipped steps with exact error messages and one-liner remediation
+7. `IMPLEMENTATION_PLATFORM10X.md` content
+8. `PR_BODY_PLATFORM10X.md` content
+9. Three follow-ups with short risk/benefit notes
+
+START NOW — fix the vite chunk error first and report results. If you cannot run `npm ci` due to environment constraints, report exact failing `npm ci` stdout/stderr lines and then continue creating all scripts/workflows/doc files and print the git commands to apply them locally.
+
+END
