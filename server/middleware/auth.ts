@@ -2,7 +2,16 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { logger } from "../index.js";
 
-const JWT_SECRET: string = process.env.JWT_SECRET || "replace_me";
+// SECURITY: JWT_SECRET is required and must be set in environment variables
+// Fail fast if not configured to prevent security vulnerabilities
+if (!process.env.JWT_SECRET) {
+  throw new Error(
+    'CRITICAL SECURITY ERROR: JWT_SECRET environment variable is required but not set. ' +
+    'Generate a secure secret with: openssl rand -base64 32'
+  );
+}
+
+const JWT_SECRET: string = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "7d";
 
 // Extend Express Request type to include user

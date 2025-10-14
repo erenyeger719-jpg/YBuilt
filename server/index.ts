@@ -26,6 +26,29 @@ export const logger = {
   error: (...args: any[]) => currentLevel <= 3 && console.error('[ERROR]', ...args)
 };
 
+// CRITICAL SECURITY: Validate JWT_SECRET at startup
+// Server must refuse to start without a secure JWT_SECRET
+if (!process.env.JWT_SECRET) {
+  logger.error('[SECURITY] JWT_SECRET environment variable is not set!');
+  logger.error('[SECURITY] Generate a secure secret with: openssl rand -base64 32');
+  throw new Error(
+    'CRITICAL SECURITY ERROR: JWT_SECRET environment variable is required but not set. ' +
+    'This is a mandatory security requirement. Generate a secure secret with: openssl rand -base64 32'
+  );
+}
+
+// Validate JWT_SECRET length for security
+const MIN_SECRET_LENGTH = 32;
+if (process.env.JWT_SECRET.length < MIN_SECRET_LENGTH) {
+  logger.warn(
+    `[SECURITY WARNING] JWT_SECRET is only ${process.env.JWT_SECRET.length} characters long. ` +
+    `Recommended minimum is ${MIN_SECRET_LENGTH} characters for security. ` +
+    `Generate a secure secret with: openssl rand -base64 32`
+  );
+}
+
+logger.info('[SECURITY] JWT_SECRET is configured and validated');
+
 // Razorpay mode validation
 const RAZORPAY_MODE = process.env.RAZORPAY_MODE || 'mock';
 if (RAZORPAY_MODE === 'live') {

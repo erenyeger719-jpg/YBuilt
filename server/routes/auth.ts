@@ -4,7 +4,16 @@ import jwt from 'jsonwebtoken';
 import { Database } from '../db.js';
 import { authRateLimiter } from '../middleware/rateLimiter.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'replace_me';
+// SECURITY: JWT_SECRET must be set - this should be caught at server startup
+// but we check again here as defense in depth
+if (!process.env.JWT_SECRET) {
+  throw new Error(
+    'CRITICAL SECURITY ERROR: JWT_SECRET environment variable is required. ' +
+    'Generate a secure secret with: openssl rand -base64 32'
+  );
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export default function authRoutes(db: Database) {
   const router = Router();

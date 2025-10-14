@@ -505,9 +505,11 @@ Get execution details.
 
 ### Required Variables
 
+> **🔒 SECURITY WARNING**: `JWT_SECRET` is a **MANDATORY** environment variable. The server will refuse to start if it's not set. Never use a hardcoded or default value. Generate a secure secret with: `openssl rand -base64 32`
+
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `JWT_SECRET` | Secret key for JWT token signing | `replace_me` | ✅ Yes (production) |
+| `JWT_SECRET` | **Secret key for JWT token signing** ⚠️ **REQUIRED** - Must be at least 32 characters. Generate with: `openssl rand -base64 32` | **NONE** (must be set) | ✅ **YES (all environments)** |
 | `DATABASE_FILE` | Path to LowDB database file | `./data/db.json` | No |
 
 ### Optional Variables
@@ -616,7 +618,8 @@ Get execution details.
 ```bash
 NODE_ENV=development
 PORT=5000
-JWT_SECRET=your-dev-secret-key
+# REQUIRED: Generate with: openssl rand -base64 32
+JWT_SECRET=<your-secure-random-32-char-string>
 DATABASE_FILE=./data/db.json
 ENABLE_CODE_EXECUTION=false  # ⚠️ Only enable for trusted development
 LOG_LEVEL=DEBUG
@@ -626,7 +629,9 @@ LOG_LEVEL=DEBUG
 ```bash
 NODE_ENV=production
 PORT=5000
-JWT_SECRET=your-strong-production-secret  # MUST be changed!
+# REQUIRED: Generate with: openssl rand -base64 32
+# Minimum 32 characters, NEVER use default values!
+JWT_SECRET=<your-secure-random-64-char-string>
 DATABASE_FILE=/var/data/db.json
 ENABLE_CODE_EXECUTION=false  # ⚠️ NEVER enable in production
 LOG_LEVEL=INFO
@@ -770,12 +775,21 @@ Test results are exported to `tests/test-results.json`:
 - Token format: `Authorization: Bearer <token>`
 
 **Security Best Practices:**
-```typescript
-// ✅ DO: Use strong, random secrets
-JWT_SECRET=<64-character-random-string>
+```bash
+# ✅ DO: Generate strong, random secrets (32+ characters)
+# Use this command to generate a secure secret:
+openssl rand -base64 32
 
-// ❌ DON'T: Use default or weak secrets
-JWT_SECRET=replace_me  // NEVER in production!
+# Example of a properly generated secret:
+JWT_SECRET=xK9mP2nQ7vR8wS3tU4yV5zA6bC7dE8fG9hI0jK1lM2n=
+
+# ❌ DON'T: Use weak, predictable, or default secrets
+JWT_SECRET=secret           # Too short and predictable
+JWT_SECRET=replace_me       # Default value - NEVER acceptable!
+JWT_SECRET=myapp123         # Weak and guessable
+
+# ⚠️ CRITICAL: The server will refuse to start without JWT_SECRET set
+# There is NO fallback value for security reasons
 ```
 
 **Token Storage:**
@@ -925,7 +939,7 @@ app.use(cors({
 
 ### Production Deployment Checklist
 
-- [ ] Change `JWT_SECRET` to strong random value
+- [ ] **Set `JWT_SECRET` to strong random value** (REQUIRED - generate with `openssl rand -base64 32`, minimum 32 characters)
 - [ ] Disable code execution (`ENABLE_CODE_EXECUTION=false`)
 - [ ] Configure proper CORS origins
 - [ ] Use HTTPS/TLS for all connections

@@ -65,6 +65,12 @@
       "email": "test-1760444550-14539@example.com",
       "password_hash": "$2b$10$O70ZzKtSa8XiKWRLxgIGtuZbw6jPKoPZVfwjlo1V1KeUzqs4LG4GC",
       "created_at": 1760444551096
+    },
+    {
+      "id": 12,
+      "email": "test-1760445573-31744@example.com",
+      "password_hash": "$2b$10$BU4Uf70Za2muWN5GYpjLoeQCy25.4UI0NHlUpPh.aW3EJJwQW256u",
+      "created_at": 1760445573670
     }
   ],
   "projects": [],

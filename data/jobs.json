@@ -1294,5 +1294,20 @@
     "error": null,
     "createdAt": "2025-10-14T12:22:31.364Z",
     "updatedAt": "2025-10-14T12:22:31.364Z"
+  },
+  "4f52371a-6d1d-40bd-95bb-a40c657323b9": {
+    "id": "4f52371a-6d1d-40bd-95bb-a40c657323b9",
+    "userId": "12",
+    "prompt": "Create a simple smoke test project",
+    "templateId": null,
+    "status": "created",
+    "result": null,
+    "artifacts": null,
+    "settings": null,
+    "versionIds": null,
+    "logsPath": null,
+    "error": null,
+    "createdAt": "2025-10-14T12:39:34.035Z",
+    "updatedAt": "2025-10-14T12:39:34.035Z"
   }
 }
