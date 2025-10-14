@@ -1,7 +1,7 @@
-import { Router, Response } from "express";
+import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { storage } from "../storage.js";
-import { authenticateToken, type AuthRequest } from "../middleware/auth.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { logger } from "../index.js";
 
 const router = Router();
@@ -25,7 +25,7 @@ const createCommitSchema = z.object({
  * GET /api/projects/:projectId/collaborators
  * Get all collaborators for a project
  */
-router.get("/:projectId/collaborators", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get("/:projectId/collaborators", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -45,7 +45,7 @@ router.get("/:projectId/collaborators", authenticateToken, async (req: AuthReque
  * POST /api/projects/:projectId/collaborators
  * Add a collaborator to a project
  */
-router.post("/:projectId/collaborators", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post("/:projectId/collaborators", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -60,10 +60,10 @@ router.post("/:projectId/collaborators", authenticateToken, async (req: AuthRequ
       return res.status(404).json({ error: "Project not found" });
     }
 
-    if (project.userId !== req.user.id) {
+    if (project.userId !== String(req.user.id)) {
       // Check if user is at least an editor
       const collaborators = await storage.getCollaborators(projectId);
-      const userCollab = collaborators.find(c => c.userId === req.user!.id);
+      const userCollab = collaborators.find(c => c.userId === String(req.user!.id));
       
       if (!userCollab || (userCollab.role !== "owner" && userCollab.role !== "editor")) {
         return res.status(403).json({ error: "Forbidden: Only project owners/editors can add collaborators" });
@@ -96,7 +96,7 @@ router.post("/:projectId/collaborators", authenticateToken, async (req: AuthRequ
  * DELETE /api/projects/:projectId/collaborators/:userId
  * Remove a collaborator from a project
  */
-router.delete("/:projectId/collaborators/:userId", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.delete("/:projectId/collaborators/:userId", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -110,7 +110,7 @@ router.delete("/:projectId/collaborators/:userId", authenticateToken, async (req
       return res.status(404).json({ error: "Project not found" });
     }
 
-    if (project.userId !== req.user.id) {
+    if (project.userId !== String(req.user.id)) {
       return res.status(403).json({ error: "Forbidden: Only project owners can remove collaborators" });
     }
     
@@ -129,7 +129,7 @@ router.delete("/:projectId/collaborators/:userId", authenticateToken, async (req
  * GET /api/projects/:projectId/commits
  * Get commit history for a project
  */
-router.get("/:projectId/commits", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get("/:projectId/commits", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -151,7 +151,7 @@ router.get("/:projectId/commits", authenticateToken, async (req: AuthRequest, re
  * POST /api/projects/:projectId/commits
  * Create a new commit (version snapshot)
  */
-router.post("/:projectId/commits", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post("/:projectId/commits", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -167,9 +167,9 @@ router.post("/:projectId/commits", authenticateToken, async (req: AuthRequest, r
     }
 
     // User must be owner or editor to create commits
-    if (project.userId !== req.user.id) {
+    if (project.userId !== String(req.user.id)) {
       const collaborators = await storage.getCollaborators(projectId);
-      const userCollab = collaborators.find(c => c.userId === req.user!.id);
+      const userCollab = collaborators.find(c => c.userId === String(req.user!.id));
       
       if (!userCollab || (userCollab.role !== "owner" && userCollab.role !== "editor")) {
         return res.status(403).json({ error: "Forbidden: Only project owners/editors can create commits" });
@@ -178,7 +178,7 @@ router.post("/:projectId/commits", authenticateToken, async (req: AuthRequest, r
 
     const commit = await storage.createCommit({
       projectId,
-      userId: req.user.id,
+      userId: String(req.user.id),
       message: validatedData.message,
       changes: validatedData.changes,
       parentCommitId: validatedData.parentCommitId || null,
@@ -204,14 +204,14 @@ router.post("/:projectId/commits", authenticateToken, async (req: AuthRequest, r
  * GET /api/projects/user/:userId
  * Get all projects for a user (their own + collaborations)
  */
-router.get("/user/:userId", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get("/user/:userId", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
     }
 
     // Only allow users to get their own projects
-    if (req.user.id !== req.params.userId) {
+    if (String(req.user.id) !== req.params.userId) {
       return res.status(403).json({ error: "Forbidden" });
     }
 

@@ -1,7 +1,7 @@
-import { Router, Response } from "express";
+import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { storage } from "../storage.js";
-import { authenticateToken, type AuthRequest } from "../middleware/auth.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { logger } from "../index.js";
 
 const router = Router();
@@ -18,7 +18,7 @@ const sendMessageSchema = z.object({
  * POST /api/chat/messages
  * Send a chat message (REST fallback for WebSocket)
  */
-router.post("/messages", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post("/messages", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -28,7 +28,7 @@ router.post("/messages", authenticateToken, async (req: AuthRequest, res: Respon
 
     // Create user message
     const message = await storage.createChatMessage({
-      userId: req.user.id,
+      userId: String(req.user.id),
       projectId: validatedData.projectId || null,
       role: "user",
       content: validatedData.content,
@@ -42,7 +42,7 @@ router.post("/messages", authenticateToken, async (req: AuthRequest, res: Respon
     if (validatedData.type === "ai-assistant") {
       // TODO: Integrate with OpenAI
       const aiResponse = await storage.createChatMessage({
-        userId: req.user.id,
+        userId: String(req.user.id),
         projectId: validatedData.projectId || null,
         role: "assistant",
         content: `I understand you want to: "${validatedData.content}". How can I help you build that?`,
@@ -73,7 +73,7 @@ router.post("/messages", authenticateToken, async (req: AuthRequest, res: Respon
  * GET /api/chat/history
  * Get chat history for current user
  */
-router.get("/history", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get("/history", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -82,7 +82,7 @@ router.get("/history", authenticateToken, async (req: AuthRequest, res: Response
     const projectId = req.query.projectId as string | undefined;
     const limit = parseInt(req.query.limit as string) || 100;
 
-    const messages = await storage.getChatHistory(req.user.id, projectId, limit);
+    const messages = await storage.getChatHistory(String(req.user.id), projectId, limit);
 
     res.status(200).json({ messages });
   } catch (error) {
@@ -95,7 +95,7 @@ router.get("/history", authenticateToken, async (req: AuthRequest, res: Response
  * DELETE /api/chat/messages/:messageId
  * Delete a chat message
  */
-router.delete("/messages/:messageId", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.delete("/messages/:messageId", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });

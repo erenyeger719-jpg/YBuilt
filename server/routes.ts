@@ -12,7 +12,8 @@ import archiver from "archiver";
 import { validateAndResolvePath } from "./utils/paths.js";
 import { logger } from "./index";
 import { metricsHandler } from "./telemetry";
-import authRouter from "./routes/auth.js";
+import { initDb } from "./db.js";
+import authRoutes from "./routes/auth.js";
 import chatRouter from "./routes/chat.js";
 import executeRouter from "./routes/execute.js";
 import projectsRouter from "./routes/projects.js";
@@ -119,8 +120,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Log Razorpay mode on server startup
   logger.info(`[RAZORPAY] Running in ${RAZORPAY_MODE} mode`);
   
+  // Initialize database for auth routes
+  const db = await initDb();
+  logger.info('[DB] Database initialized for authentication');
+  
   // Register authentication routes
-  app.use("/api/auth", authRouter);
+  app.use("/api/auth", authRoutes(db));
   
   // Register chat routes
   app.use("/api/chat", chatRouter);

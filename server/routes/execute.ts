@@ -1,8 +1,9 @@
-import { Router, Response } from "express";
+import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { storage } from "../storage.js";
-import { authenticateToken, type AuthRequest } from "../middleware/auth.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { executeCode, getSupportedLanguages, isLanguageSupported } from "../services/codeExecution.js";
+import { executeJavaScriptWithVM2 } from "../services/vm2Executor.js";
 import { logger } from "../index.js";
 
 const router = Router();
@@ -18,7 +19,7 @@ const executeCodeSchema = z.object({
  * POST /api/execute
  * Execute code in a sandboxed environment
  */
-router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post("/", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -36,7 +37,7 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 
     // Create execution record
     const execution = await storage.createCodeExecution({
-      userId: req.user.id,
+      userId: String(req.user.id),
       projectId: validatedData.projectId || null,
       language: validatedData.language,
       code: validatedData.code,
@@ -44,8 +45,22 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 
     logger.info(`[CODE_EXEC] Starting execution ${execution.id} for user ${req.user.id}`);
 
-    // Execute code
-    const result = await executeCode(validatedData.code, validatedData.language);
+    // Execute code - use vm2 for JavaScript if available and enabled
+    let result;
+    const isJavaScript = validatedData.language.toLowerCase() === 'javascript';
+    const isExecutionEnabled = process.env.ENABLE_CODE_EXECUTION === 'true';
+    
+    if (isJavaScript && isExecutionEnabled) {
+      try {
+        logger.info(`[CODE_EXEC] Using vm2 for JavaScript execution`);
+        result = await executeJavaScriptWithVM2(validatedData.code);
+      } catch (vm2Error) {
+        logger.warn(`[CODE_EXEC] VM2 execution failed, falling back to standard executor:`, vm2Error);
+        result = await executeCode(validatedData.code, validatedData.language);
+      }
+    } else {
+      result = await executeCode(validatedData.code, validatedData.language);
+    }
 
     // Update execution record with results
     await storage.updateCodeExecution(execution.id, {
@@ -81,7 +96,7 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
  * GET /api/execute/history
  * Get code execution history
  */
-router.get("/history", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get("/history", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
@@ -90,7 +105,7 @@ router.get("/history", authenticateToken, async (req: AuthRequest, res: Response
     const projectId = req.query.projectId as string | undefined;
     const limit = parseInt(req.query.limit as string) || 50;
 
-    const executions = await storage.getCodeExecutionHistory(req.user.id, projectId, limit);
+    const executions = await storage.getCodeExecutionHistory(String(req.user.id), projectId, limit);
 
     res.status(200).json({ executions });
   } catch (error) {
@@ -113,13 +128,13 @@ router.get("/languages", (req, res) => {
  * GET /api/execute/:executionId
  * Get execution details
  */
-router.get("/:executionId", authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get("/:executionId", authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
     }
 
-    const executions = await storage.getCodeExecutionHistory(req.user.id);
+    const executions = await storage.getCodeExecutionHistory(String(req.user.id));
     const execution = executions.find((e) => e.id === req.params.executionId);
 
     if (!execution) {
