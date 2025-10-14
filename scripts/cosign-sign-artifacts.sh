@@ -1,118 +1,159 @@
 #!/usr/bin/env bash
-# cosign-sign-artifacts.sh - Sign build artifacts (not container images)
+# scripts/cosign-sign-artifacts.sh
+# Usage:
+#   scripts/cosign-sign-artifacts.sh --image ghcr.io/OWNER/REPO:TAG [--dry-run]
+#   scripts/cosign-sign-artifacts.sh --artifact artifacts/dist.tar.gz [--dry-run]
 set -euo pipefail
 
-TARBALL="${1:-artifacts/dist.tar.gz}"
-SBOM="${2:-artifacts/sbom.json}"
-PROVENANCE="${3:-artifacts/provenance.json}"
-DRY_RUN="${DRY_RUN:-false}"
+print_usage() {
+  cat <<EOF
+Usage:
+  $0 --image <image_ref> [--dry-run]
+  $0 --artifact <path_to_file> [--dry-run]
 
-echo "🔐 Signing Build Artifacts with Cosign"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Tarball: ${TARBALL}"
-echo "SBOM: ${SBOM}"
-echo "Provenance: ${PROVENANCE}"
-echo "Dry Run: ${DRY_RUN}"
+Environment:
+  COSIGN_KEY      optional (e.g. env://COSIGN_KEY) for key-based signing. If unset, keyless signing is attempted.
+  SBOM_PATH       path to SBOM json (default: artifacts/sbom.json)
+  PROVENANCE_PATH path to provenance json (default: artifacts/provenance.json)
+EOF
+}
 
-# Check cosign availability
-if ! command -v cosign &> /dev/null; then
-  echo "⚠️  WARNING: cosign not installed"
-  echo ""
-  echo "📝 Installation instructions:"
-  echo "  # macOS"
-  echo "  brew install cosign"
-  echo ""
-  echo "  # Linux (binary)"
-  echo "  curl -sLO https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
-  echo "  sudo mv cosign-linux-amd64 /usr/local/bin/cosign"
-  echo "  sudo chmod +x /usr/local/bin/cosign"
-  echo ""
-  echo "  # GitHub Actions"
-  echo "  - uses: sigstore/cosign-installer@v3"
-  
+# Defaults
+SBOM_PATH="${SBOM_PATH:-artifacts/sbom.json}"
+PROVENANCE_PATH="${PROVENANCE_PATH:-artifacts/provenance.json}"
+DRY_RUN=false
+MODE=""
+TARGET=""
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --image) MODE="image"; TARGET="$2"; shift 2;;
+    --artifact) MODE="artifact"; TARGET="$2"; shift 2;;
+    --dry-run) DRY_RUN=true; shift;;
+    -h|--help) print_usage; exit 0;;
+    *) echo "Unknown arg: $1"; print_usage; exit 2;;
+  esac
+done
+
+if [ -z "$MODE" ]; then
+  echo "Must pass --image or --artifact"
+  print_usage
+  exit 2
+fi
+
+if [ ! -x "$(command -v cosign)" ]; then
+  echo "cosign not found in PATH. Please install cosign (see https://github.com/sigstore/cosign) or add it to the container/devcontainer."
+  exit 3
+fi
+
+echo "COSIGN_SIGN: mode=${MODE}, target=${TARGET}, dry_run=${DRY_RUN}"
+if [ "$MODE" = "image" ]; then
+  IMAGE_REF="${TARGET}"
+  echo "Target image: ${IMAGE_REF}"
   if [ "${DRY_RUN}" = "true" ]; then
-    echo "✅ DRY_RUN mode: Continuing without cosign..."
-    exit 0
+    echo "[dry-run] Would sign image: ${IMAGE_REF}"
   else
-    echo "❌ cosign required for signing. Exiting."
-    exit 1
+    if [ -n "${COSIGN_KEY:-}" ]; then
+      echo "Signing image with key: COSIGN_KEY (using env var)"
+      cosign sign --key "${COSIGN_KEY}" "${IMAGE_REF}"
+    else
+      echo "Signing image keylessly (OIDC - requires id-token permissions in CI)"
+      cosign sign --yes "${IMAGE_REF}"
+    fi
   fi
-fi
 
-# Skip signing in dry-run mode
-if [ "${DRY_RUN}" = "true" ]; then
-  echo "⏭️  DRY_RUN mode: Skipping actual signing"
-  exit 0
-fi
+  # Attach SBOM attestation if present
+  if [ -f "${SBOM_PATH}" ]; then
+    if [ "${DRY_RUN}" = "true" ]; then
+      echo "[dry-run] Would attach SBOM attestation from ${SBOM_PATH} to ${IMAGE_REF}"
+    else
+      echo "Attaching SBOM attestation (cyclonedx) to ${IMAGE_REF}"
+      if [ -n "${COSIGN_KEY:-}" ]; then
+        cosign attest --type cyclonedx --predicate "${SBOM_PATH}" --key "${COSIGN_KEY}" "${IMAGE_REF}"
+      else
+        cosign attest --type cyclonedx --predicate "${SBOM_PATH}" --yes "${IMAGE_REF}"
+      fi
+    fi
+  else
+    echo "Warning: SBOM not found at ${SBOM_PATH} — skipping SBOM attestation" >&2
+  fi
 
-# Determine signing method
-SIGN_CMD="cosign sign-blob --yes"
-if [ -n "${COSIGN_KEY:-}" ]; then
-  echo "🔑 Using key-based signing"
-  SIGN_CMD="cosign sign-blob --yes --key env://COSIGN_KEY"
+  # Attach provenance attestation if present
+  if [ -f "${PROVENANCE_PATH}" ]; then
+    if [ "${DRY_RUN}" = "true" ]; then
+      echo "[dry-run] Would attach provenance attestation from ${PROVENANCE_PATH} to ${IMAGE_REF}"
+    else
+      echo "Attaching provenance attestation to ${IMAGE_REF}"
+      if [ -n "${COSIGN_KEY:-}" ]; then
+        cosign attest --type slsaprovenance --predicate "${PROVENANCE_PATH}" --key "${COSIGN_KEY}" "${IMAGE_REF}"
+      else
+        cosign attest --type slsaprovenance --predicate "${PROVENANCE_PATH}" --yes "${IMAGE_REF}"
+      fi
+    fi
+  else
+    echo "Warning: provenance not found at ${PROVENANCE_PATH} — skipping provenance attestation" >&2
+  fi
+
+  # Verify
+  if [ "${DRY_RUN}" = "false" ]; then
+    echo "Verifying signature for ${IMAGE_REF}"
+    cosign verify "${IMAGE_REF}" || { echo "Signature verification failed for ${IMAGE_REF}"; exit 4; }
+    echo "Signature verified for ${IMAGE_REF}"
+  fi
+
 else
-  echo "🔓 Using keyless (OIDC) signing"
+  # artifact (blob) signing
+  ARTIFACT_PATH="${TARGET}"
+  if [ ! -f "${ARTIFACT_PATH}" ]; then
+    echo "Artifact not found: ${ARTIFACT_PATH}" >&2
+    exit 2
+  fi
+
+  if [ "${DRY_RUN}" = "true" ]; then
+    echo "[dry-run] Would sign artifact blob: ${ARTIFACT_PATH}"
+  else
+    if [ -n "${COSIGN_KEY:-}" ]; then
+      echo "Signing blob with key..."
+      cosign sign-blob --key "${COSIGN_KEY}" --output-signature "${ARTIFACT_PATH}.cosign" "${ARTIFACT_PATH}"
+    else
+      echo "Signing blob keylessly (cosign sign-blob --yes)..."
+      cosign sign-blob --yes --output-signature "${ARTIFACT_PATH}.cosign" "${ARTIFACT_PATH}"
+    fi
+    echo "Signed blob -> ${ARTIFACT_PATH}.cosign"
+  fi
+
+  # Attestations for artifact: attach SBOM/provenance as separate attestations using cosign attest-blob
+  if [ -f "${SBOM_PATH}" ]; then
+    if [ "${DRY_RUN}" = "true" ]; then
+      echo "[dry-run] Would attest SBOM for blob"
+    else
+      if [ -n "${COSIGN_KEY:-}" ]; then
+        cosign attest-blob --type cyclonedx --predicate "${SBOM_PATH}" --key "${COSIGN_KEY}" --output-attestation "${ARTIFACT_PATH}.sbom.att" "${ARTIFACT_PATH}"
+      else
+        cosign attest-blob --type cyclonedx --predicate "${SBOM_PATH}" --yes --output-attestation "${ARTIFACT_PATH}.sbom.att" "${ARTIFACT_PATH}"
+      fi
+    fi
+  fi
+
+  if [ -f "${PROVENANCE_PATH}" ]; then
+    if [ "${DRY_RUN}" = "true" ]; then
+      echo "[dry-run] Would attest provenance for blob"
+    else
+      if [ -n "${COSIGN_KEY:-}" ]; then
+        cosign attest-blob --type slsaprovenance --predicate "${PROVENANCE_PATH}" --key "${COSIGN_KEY}" --output-attestation "${ARTIFACT_PATH}.prov.att" "${ARTIFACT_PATH}"
+      else
+        cosign attest-blob --type slsaprovenance --predicate "${PROVENANCE_PATH}" --yes --output-attestation "${ARTIFACT_PATH}.prov.att" "${ARTIFACT_PATH}"
+      fi
+    fi
+  fi
+
+  if [ "${DRY_RUN}" = "false" ]; then
+    echo "Verifying blob signature"
+    cosign verify-blob --signature "${ARTIFACT_PATH}.cosign" "${ARTIFACT_PATH}" || { echo "Blob signature verification failed"; exit 4; }
+    echo "Blob signature verified"
+  fi
+
 fi
 
-# Sign tarball
-if [ -f "${TARBALL}" ]; then
-  echo "📦 Signing tarball..."
-  ${SIGN_CMD} \
-    --bundle="${TARBALL}.cosign.bundle" \
-    "${TARBALL}"
-  echo "✅ Tarball signed: ${TARBALL}.cosign.bundle"
-else
-  echo "⚠️  Tarball not found: ${TARBALL}"
-fi
-
-# Sign SBOM
-if [ -f "${SBOM}" ]; then
-  echo "📋 Signing SBOM..."
-  ${SIGN_CMD} \
-    --bundle="${SBOM}.cosign.bundle" \
-    "${SBOM}"
-  echo "✅ SBOM signed: ${SBOM}.cosign.bundle"
-else
-  echo "⚠️  SBOM not found: ${SBOM}"
-fi
-
-# Sign provenance
-if [ -f "${PROVENANCE}" ]; then
-  echo "📜 Signing provenance..."
-  ${SIGN_CMD} \
-    --bundle="${PROVENANCE}.cosign.bundle" \
-    "${PROVENANCE}"
-  echo "✅ Provenance signed: ${PROVENANCE}.cosign.bundle"
-else
-  echo "⚠️  Provenance not found: ${PROVENANCE}"
-fi
-
-# Create combined bundle for workflow upload
-echo "📦 Creating combined bundle..."
-mkdir -p artifacts
-
-# Verify all bundles exist
-MISSING_BUNDLES=()
-[ ! -f "${TARBALL}.cosign.bundle" ] && MISSING_BUNDLES+=("${TARBALL}.cosign.bundle")
-[ ! -f "${SBOM}.cosign.bundle" ] && MISSING_BUNDLES+=("${SBOM}.cosign.bundle")
-[ ! -f "${PROVENANCE}.cosign.bundle" ] && MISSING_BUNDLES+=("${PROVENANCE}.cosign.bundle")
-
-if [ ${#MISSING_BUNDLES[@]} -gt 0 ]; then
-  echo "❌ ERROR: Missing signature bundles:"
-  printf '  - %s\n' "${MISSING_BUNDLES[@]}"
-  echo ""
-  echo "Signing must complete for all artifacts before release."
-  exit 1
-fi
-
-# All bundles present, create combined bundle
-cat "${TARBALL}.cosign.bundle" "${SBOM}.cosign.bundle" "${PROVENANCE}.cosign.bundle" > artifacts/cosign.bundle
-echo "✅ Combined bundle created: artifacts/cosign.bundle"
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✨ Artifact signing complete!"
-echo ""
-echo "Verification commands:"
-echo "  cosign verify-blob --bundle ${TARBALL}.cosign.bundle ${TARBALL}"
-echo "  cosign verify-blob --bundle ${SBOM}.cosign.bundle ${SBOM}"
-echo "  cosign verify-blob --bundle ${PROVENANCE}.cosign.bundle ${PROVENANCE}"
+echo "cosign-sign-artifacts.sh completed successfully"

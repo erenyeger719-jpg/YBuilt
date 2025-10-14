@@ -310,7 +310,7 @@
     "userId": "demo",
     "prompt": "fdd",
     "templateId": null,
-    "status": "editing",
+    "status": "deleted",
     "result": "/previews/b2acf7b4-bb78-4cba-8cf1-9c5fd77aad21/index.html",
     "artifacts": null,
     "settings": "{\"title\":\"\",\"description\":\"\",\"theme\":\"monochrome\",\"heroText\":\"fdd\"}",
@@ -318,7 +318,7 @@
     "logsPath": null,
     "error": null,
     "createdAt": "2025-10-11T19:25:03.546Z",
-    "updatedAt": "2025-10-11T19:25:12.511Z"
+    "updatedAt": "2025-10-14T07:17:58.139Z"
   },
   "f9ac11cd-c978-473c-b53d-59fe82aef7fb": {
     "id": "f9ac11cd-c978-473c-b53d-59fe82aef7fb",
