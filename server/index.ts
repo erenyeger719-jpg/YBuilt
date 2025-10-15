@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import * as Sentry from "@sentry/node";
 
 // Fail fast if JWT_SECRET is missing (loads from server/config.ts)
 import "./config.js";
@@ -15,6 +16,12 @@ import { requestIdMiddleware, logger } from './middleware/logging.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { initializeSocket } from './socket.js';
 
+// ---- Sentry init (after dotenv) ----
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || "",
+  tracesSampleRate: 0.1,
+});
+
 // Log that JWT_SECRET is configured (config.ts already validated it)
 logger.info('[SECURITY] JWT_SECRET is configured and validated');
 
@@ -28,6 +35,9 @@ if (RAZORPAY_MODE === 'live') {
 logger.info(`[RAZORPAY] Mode: ${RAZORPAY_MODE}`);
 
 const app = express();
+
+// ---- Sentry request handler (right after app is created) ----
+app.use(Sentry.Handlers.requestHandler());
 
 (async () => {
   // Ensure data directory exists
@@ -100,15 +110,17 @@ const app = express();
   logger.info('[SOCKET.IO] Real-time server initialized');
 
   // Setup Vite in development or serve static files in production
-  const isDev = process.env.NODE_ENV === "development" || app.get("env") === "development";
-  if (isDev) {
-    await setupVite(app, server);
+  if (process.env.NODE_ENV === "production") {
+    serveStatic(app);              // ← serve built client
   } else {
-    serveStatic(app);
+    await setupVite(app, server);  // ← dev middleware
   }
 
   // 404 handler (must be after all routes)
   app.use(notFoundHandler);
+
+  // ---- Sentry error handler (just before your centralized error handler) ----
+  app.use(Sentry.Handlers.errorHandler());
 
   // Centralized error handling middleware (must be last)
   app.use(errorHandler);
