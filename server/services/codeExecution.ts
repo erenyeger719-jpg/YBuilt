@@ -2,7 +2,7 @@ import { spawn } from "child_process";
 import { writeFile, unlink, mkdir } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
-import { logger } from "../index.js";
+import { logger } from "../middleware/logging.js";
 
 /**
  * ⚠️ SECURITY WARNING ⚠️
@@ -181,7 +181,8 @@ export async function executeCode(
     };
   } catch (error) {
     const executionTime = Date.now() - startTime;
-    logger.error(`[CODE_EXEC] Error executing code:`, error);
+    const errMsg = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    logger.error(`[CODE_EXEC] Error executing code: ${errMsg}`);
 
     return {
       stdout: "",

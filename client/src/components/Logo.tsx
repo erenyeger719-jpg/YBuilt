@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 
 interface LogoProps {
   className?: string;
@@ -6,7 +6,7 @@ interface LogoProps {
 }
 
 export default function Logo({ className = "", animate = false }: LogoProps) {
-  const logoVariants = {
+  const logoVariants: Variants = {
     hidden: { opacity: 0, scale: 0.8 },
     visible: {
       opacity: 1,

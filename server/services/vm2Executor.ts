@@ -1,5 +1,5 @@
 import { VM } from "vm2";
-import { logger } from "../index.js";
+import { logger } from "../middleware/logging.js";
 
 /**
  * VM2-based JavaScript executor for safer code execution

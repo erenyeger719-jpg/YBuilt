@@ -98,14 +98,16 @@ export default function Workspace() {
   // Fetch workspace data with error handling
   const { data: workspace, isLoading, error } = useQuery<WorkspaceData>({
     queryKey: ["/api/workspace", jobId, "files"],
+    queryFn: () => apiRequest<WorkspaceData>("GET", `/api/workspace/${jobId}/files`),
     enabled: !!jobId,
-    retry: 2,
+    retry: 2
   });
 
   // Fetch and apply theme on workspace load
   const { data: theme } = useQuery<any>({
     queryKey: ["/api/workspace", jobId, "theme"],
-    enabled: !!jobId,
+    queryFn: () => apiRequest<any>("GET", `/api/workspace/${jobId}/theme`),
+    enabled: !!jobId
   });
 
   // Save index.html mutation - moved before early returns to fix hook order
@@ -798,7 +800,7 @@ export default function Workspace() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex-1 overflow-hidden pt-16">
+            <div className="flex-1 overflow-hidden pt-16">
         <ResizableSplitter
           leftPane={leftPane}
           rightPane={rightPane}
@@ -811,3 +813,5 @@ export default function Workspace() {
     </div>
   );
 }
+
+  

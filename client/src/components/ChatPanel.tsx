@@ -29,7 +29,7 @@ export default function ChatPanel({ projectId, className }: ChatPanelProps) {
 
   const [inputValue, setInputValue] = useState('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentUser = mockAuth.getUserFromToken();
 
   useEffect(() => {

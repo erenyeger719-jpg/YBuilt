@@ -7,16 +7,13 @@ import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import cors from "cors";
 import fs from "fs";
+import path from "path";
 import { createServer } from "http";
 import { setupVite, serveStatic, log } from "./vite.js";
 import { rateLimiter } from "./middleware/rateLimiter.js";
 import { requestIdMiddleware, logger } from './middleware/logging.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { initializeSocket } from './socket.js';
-import authRoutes from './routes/auth.js';
-import projectsRoutes from './routes/projects.js';
-import chatRoutes from './routes/chat.js';
-import executeRoutes from './routes/execute.js';
 
 // Log that JWT_SECRET is configured (config.ts already validated it)
 logger.info('[SECURITY] JWT_SECRET is configured and validated');
@@ -44,9 +41,11 @@ const app = express();
   logger.info(`[DB] Using SQLite database at ${DATABASE_FILE}`);
 
   // Security headers (disable CSP in development for Vite inline scripts)
-  app.use(helmet({
-    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
-  }));
+  if (process.env.NODE_ENV === 'production') {
+    app.use(helmet());
+  } else {
+    app.use(helmet({ contentSecurityPolicy: false }));
+  }
   
   // CORS support
   app.use(cors());
@@ -57,6 +56,9 @@ const app = express();
   // Body parsing (limit 1MB)
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
+  
+  // Serve previews directory
+  app.use('/previews', express.static(path.resolve(process.env.PREVIEWS_DIR || 'previews')));
 
   // Request ID middleware (before logging)
   app.use(requestIdMiddleware);
@@ -73,11 +75,22 @@ const app = express();
     res.json({ ok: true });
   });
 
-  // Mount modular routes (no db parameter needed - routes import SQLite directly)
-  app.use('/api/auth', authRoutes);
-  app.use('/api/projects', projectsRoutes);
-  app.use('/api/chat', chatRoutes);
-  app.use('/api/execute', executeRoutes);
+  // Mount modular routes (dynamic import)
+  const { default: jobsRouter } = await import('./routes/jobs.js');
+  const { default: workspaceRouter } = await import('./routes/workspace.js');
+
+  const { default: authRoutes } = await import('./routes/auth.js').catch(() => ({ default: undefined as any }));
+  const { default: projectsRoutes } = await import('./routes/projects.js').catch(() => ({ default: undefined as any }));
+  const { default: chatRoutes } = await import('./routes/chat.js').catch(() => ({ default: undefined as any }));
+  const { default: executeRoutes } = await import('./routes/execute.js').catch(() => ({ default: undefined as any }));
+
+  if (authRoutes)     app.use('/api/auth', authRoutes);
+  if (projectsRoutes) app.use('/api/projects', projectsRoutes);
+  if (chatRoutes)     app.use('/api/chat', chatRoutes);
+  if (executeRoutes)  app.use('/api/execute', executeRoutes);
+
+  app.use('/api', jobsRouter);
+  app.use('/api', workspaceRouter);
 
   // Create HTTP server
   const server = createServer(app);
@@ -109,8 +122,7 @@ const app = express();
         await new Promise<void>((resolve, reject) => {
           const listener = server.listen({
             port: currentPort,
-            host: "0.0.0.0",
-            reusePort: true,
+            host: "0.0.0.0"
           }, () => {
             log(`serving on port ${currentPort}`);
             logger.info(`[SERVER] Successfully started on port ${currentPort}`);
@@ -145,6 +157,6 @@ const app = express();
   }
 
   // Start server
-  const port = parseInt(process.env.PORT || '5000', 10);
+  const port = parseInt(process.env.PORT || '5050', 10);
   await startServer(port);
 })();

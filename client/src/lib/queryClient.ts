@@ -1,4 +1,4 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient, type QueryFunction, type QueryFunctionContext } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -7,38 +7,36 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-export async function apiRequest(
-  method: string,
+export async function apiRequest<T = any>(
+  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
   url: string,
-  data?: unknown | undefined,
-): Promise<Response> {
+  body?: unknown
+): Promise<T> {
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
-
   await throwIfResNotOk(res);
-  return res;
+  const ct = res.headers.get("content-type") || "";
+  return ct.includes("application/json") ? ((await res.json()) as T) : (null as any);
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-    });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+export const getQueryFn =
+  <T>(opts: { on401: UnauthorizedBehavior }): QueryFunction<T> =>
+  async (ctx: QueryFunctionContext) => {
+    const url = (ctx.queryKey as readonly (string | number)[]).join("/");
+    const res = await fetch(url, { credentials: "include" });
+
+    if (opts.on401 === "returnNull" && res.status === 401) {
+      return null as unknown as T;
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    return (await res.json()) as T;
   };
 
 export const queryClient = new QueryClient({
@@ -50,8 +48,6 @@ export const queryClient = new QueryClient({
       staleTime: Infinity,
       retry: false,
     },
-    mutations: {
-      retry: false,
-    },
+    mutations: { retry: false },
   },
 });

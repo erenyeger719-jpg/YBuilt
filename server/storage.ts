@@ -283,7 +283,7 @@ export class MemStorage implements IStorage {
       });
       await atomicWriteFile(USERS_FILE, usersData);
     } catch (error) {
-      logger.error("Error saving users:", error);
+      logger.error({ err: error }, "Error saving users");
     }
   }
 
@@ -291,7 +291,7 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     
     // [JOB_CREATE] Debug logging and validation
-    logger.info('[JOB_CREATE] Generated UUID:', id, 'Length:', id.length);
+    logger.info({ id, length: id.length }, "[JOB_CREATE] Generated UUID");
     
     // Validate UUID format and length
     if (id.length !== 36) {
@@ -324,7 +324,7 @@ export class MemStorage implements IStorage {
       updatedAt: new Date(),
     };
     
-    logger.info('[JOB_CREATE] Created job object with id:', job.id, 'Length:', job.id.length);
+    logger.info({ id: job.id, length: job.id.length }, "[JOB_CREATE] Created job object");
     
     this.jobs.set(id, job);
     await this.saveJobs();
@@ -335,7 +335,7 @@ export class MemStorage implements IStorage {
       throw new Error(`[JOB_CREATE] ERROR: Failed to save job with id: ${id}`);
     }
     
-    logger.info('[JOB_CREATE] Job saved successfully. ID:', savedJob.id, 'Length:', savedJob.id.length);
+    logger.info({ id: savedJob.id, length: savedJob.id.length }, "[JOB_CREATE] Job saved successfully");
     
     return job;
   }
@@ -651,7 +651,7 @@ export class MemStorage implements IStorage {
       const invoicesArray = Array.from(this.invoices.values());
       await atomicWriteFile(billingFile, { invoices: invoicesArray });
     } catch (error) {
-      logger.error("Error saving invoices:", error);
+      logger.error({ err: error }, "Error saving invoices");
     }
   }
 
@@ -800,7 +800,7 @@ export class MemStorage implements IStorage {
       const ticketsObj = Object.fromEntries(this.supportTickets);
       await atomicWriteFile(SUPPORT_TICKETS_FILE, ticketsObj);
     } catch (error) {
-      logger.error("Error saving support tickets:", error);
+      logger.error({ err: error }, "Error saving support tickets");
     }
   }
 
