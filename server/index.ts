@@ -49,9 +49,19 @@ app.use(Sentry.expressRequestMiddleware?.() || ((_req, _res, next) => next()));
   const DATABASE_FILE = process.env.DATABASE_FILE || './data/app.db';
   logger.info(`[DB] Using SQLite database at ${DATABASE_FILE}`);
 
-  // Security headers
+  // Security headers (PROD CSP replaced as instructed)
   if (process.env.NODE_ENV === 'production') {
-    app.use(helmet());
+    app.use(helmet({
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          "script-src": ["'self'"],                         // your code only
+          "style-src": ["'self'", "'unsafe-inline'"],       // allow inline styles
+          "connect-src": ["'self'", "https://*.sentry.io"], // allow Sentry beacons
+          "img-src": ["'self'", "https:", "data:"],         // images for reports
+        },
+      },
+    }));
   } else {
     app.use(helmet({ contentSecurityPolicy: false }));
   }
@@ -105,7 +115,7 @@ app.use(Sentry.expressRequestMiddleware?.() || ((_req, _res, next) => next()));
   initializeSocket(server);
   logger.info('[SOCKET.IO] Real-time server initialized');
 
-  // Static vs Vite dev
+  // Static vs Vite dev (AFTER all API routes)
   if (process.env.NODE_ENV === 'production') {
     serveStatic(app);
   } else {
