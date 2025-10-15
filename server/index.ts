@@ -12,21 +12,21 @@ import { requestIdMiddleware, logger } from './middleware/logging.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { initializeSocket } from './socket.js';
 
-// Sentry (works with v7/v8/v10)
+// Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
 
-// Fail fast if JWT_SECRET is missing (loads validations from server/config.ts)
+// Fail fast if JWT_SECRET is missing (loads from server/config.ts)
 import './config.js';
 
-// ---- Sentry init ----
+// ---- Sentry init (after dotenv) ----
 Sentry.init({
   dsn: process.env.SENTRY_DSN || '',
   tracesSampleRate: 0.1,
 });
 
+// Basic app setup
 logger.info('[SECURITY] JWT_SECRET is configured and validated');
 
-// Razorpay mode validation
 const RAZORPAY_MODE = process.env.RAZORPAY_MODE || 'mock';
 if (RAZORPAY_MODE === 'live') {
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
@@ -37,43 +37,45 @@ logger.info(`[RAZORPAY] Mode: ${RAZORPAY_MODE}`);
 
 const app = express();
 
-// ---- Sentry request middleware (compat shim) ----
+// ---- Sentry request middleware (v7/v8/v10 safe) ----
 const reqMw =
-  // v8+ API
+  // v8/v10
   (Sentry as any).expressRequestMiddleware?.() ||
-  // v7 API
+  // v7
   (Sentry as any).Handlers?.requestHandler?.();
 if (reqMw) app.use(reqMw);
 
 (async () => {
-  // Ensure data directory exists
+  // Ensure data dir
   const dataDir = './data';
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-  // DB path
+  // DB path log
   const DATABASE_FILE = process.env.DATABASE_FILE || './data/app.db';
   logger.info(`[DB] Using SQLite database at ${DATABASE_FILE}`);
 
   // Security headers (CSP allows Sentry beacons)
   if (process.env.NODE_ENV === 'production') {
-    app.use(helmet({
-      contentSecurityPolicy: {
-        useDefaults: true,
-        directives: {
-          "script-src": ["'self'"],
-          "style-src": ["'self'", "'unsafe-inline'"],
-          "connect-src": ["'self'", "https://*.sentry.io"],
-          "img-src": ["'self'", "https:", "data:"],
+    app.use(
+      helmet({
+        contentSecurityPolicy: {
+          useDefaults: true,
+          directives: {
+            "script-src": ["'self'"],
+            "style-src": ["'self'", "'unsafe-inline'"],
+            "connect-src": ["'self'", "https://*.sentry.io"],
+            "img-src": ["'self'", "https:", "data:"],
+          },
         },
-      },
-    }));
+      })
+    );
   } else {
     app.use(helmet({ contentSecurityPolicy: false }));
   }
 
   // CORS + parsers
   app.use(cors());
-  app.use('/webhooks/razorpay', express.raw({ type: 'application/json' })); // raw first
+  app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
@@ -84,7 +86,7 @@ if (reqMw) app.use(reqMw);
   app.use(requestIdMiddleware);
   app.use(rateLimiter);
 
-  // Health checks early
+  // Health checks (early)
   app.get('/api/status', (_req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
@@ -92,7 +94,7 @@ if (reqMw) app.use(reqMw);
     res.json({ ok: true });
   });
 
-  // --- TEMP: Sentry test route (remove when done) ---
+  // TEMP test route for Sentry server
   app.get('/api/boom', () => {
     throw new Error('boom');
   });
@@ -113,14 +115,14 @@ if (reqMw) app.use(reqMw);
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
 
-  // HTTP server (Socket.IO + Vite dev need this)
+  // HTTP server (Socket.IO + Vite dev)
   const server = createServer(app);
 
   // Realtime
   initializeSocket(server);
   logger.info('[SOCKET.IO] Real-time server initialized');
 
-  // Static vs Vite dev (AFTER all API routes)
+  // Static vs Vite dev (AFTER API)
   if (process.env.NODE_ENV === 'production') {
     serveStatic(app);
   } else {
@@ -130,15 +132,13 @@ if (reqMw) app.use(reqMw);
   // 404 last route
   app.use(notFoundHandler);
 
-  // ---- Sentry error middleware (compat shim) ----
+  // ---- Sentry error middleware (v7/v8/v10 safe) ----
   const errMw =
-    // v8+ API
     (Sentry as any).expressErrorHandler?.() ||
-    // v7 API
     (Sentry as any).Handlers?.errorHandler?.();
   if (errMw) app.use(errMw);
 
-  // Centralized error handling
+  // Your centralized error handler (must be last)
   app.use(errorHandler);
 
   // Start + retry ports
@@ -152,11 +152,9 @@ if (reqMw) app.use(reqMw);
             logger.info(`[SERVER] Successfully started on port ${currentPort}`);
             resolve();
           });
-          listener.on('error', (err: NodeJS.ErrnoException) => {
-            reject(err);
-          });
+          listener.on('error', (err: NodeJS.ErrnoException) => reject(err));
         });
-        return; // started ok
+        return;
       } catch (e: any) {
         if (e.code === 'EADDRINUSE' && attempt < maxAttempts - 1) continue;
         logger.error(`[SERVER] Failed to start server:`, e);
