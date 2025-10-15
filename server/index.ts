@@ -38,7 +38,7 @@ logger.info(`[RAZORPAY] Mode: ${RAZORPAY_MODE}`);
 const app = express();
 
 // ---- Sentry request middleware (v8 API) ----
-app.use(Sentry.expressRequestMiddleware?.() || ((_req, _res, next) => next()));
+app.use(Sentry.expressRequestMiddleware());
 
 (async () => {
   // Ensure data directory exists
@@ -126,7 +126,7 @@ app.use(Sentry.expressRequestMiddleware?.() || ((_req, _res, next) => next()));
   app.use(notFoundHandler);
 
   // ---- Sentry error middleware (v8 API) ----
-  app.use(Sentry.expressErrorHandler?.() || ((_err, _req, _res, next) => next()));
+  app.use(Sentry.expressErrorHandler());
 
   // Centralized error handling
   app.use(errorHandler);
