@@ -1,5 +1,5 @@
+// server/index.ts
 import 'dotenv/config';
-import * as Sentry from '@sentry/node';
 import express, { type Request, type Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -12,18 +12,18 @@ import { requestIdMiddleware, logger } from './middleware/logging.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { initializeSocket } from './socket.js';
 
-// Fail fast if JWT_SECRET is missing (loads from server/config.ts)
+// Sentry (works with v7/v8/v10)
+import * as Sentry from '@sentry/node';
+
+// Fail fast if JWT_SECRET is missing (loads validations from server/config.ts)
 import './config.js';
 
-// ---- Sentry init (after dotenv) ----
+// ---- Sentry init ----
 Sentry.init({
   dsn: process.env.SENTRY_DSN || '',
   tracesSampleRate: 0.1,
-  // optional: better express integration (works even without this)
-  // integrations: [Sentry.expressIntegration?.({ app })].filter(Boolean) as any
 });
 
-// Log that JWT_SECRET is configured (config.ts already validated it)
 logger.info('[SECURITY] JWT_SECRET is configured and validated');
 
 // Razorpay mode validation
@@ -37,8 +37,13 @@ logger.info(`[RAZORPAY] Mode: ${RAZORPAY_MODE}`);
 
 const app = express();
 
-// ---- Sentry request middleware (v8 API) ----
-app.use(Sentry.expressRequestMiddleware());
+// ---- Sentry request middleware (compat shim) ----
+const reqMw =
+  // v8+ API
+  (Sentry as any).expressRequestMiddleware?.() ||
+  // v7 API
+  (Sentry as any).Handlers?.requestHandler?.();
+if (reqMw) app.use(reqMw);
 
 (async () => {
   // Ensure data directory exists
@@ -49,16 +54,16 @@ app.use(Sentry.expressRequestMiddleware());
   const DATABASE_FILE = process.env.DATABASE_FILE || './data/app.db';
   logger.info(`[DB] Using SQLite database at ${DATABASE_FILE}`);
 
-  // Security headers (PROD CSP replaced as instructed)
+  // Security headers (CSP allows Sentry beacons)
   if (process.env.NODE_ENV === 'production') {
     app.use(helmet({
       contentSecurityPolicy: {
         useDefaults: true,
         directives: {
-          "script-src": ["'self'"],                         // your code only
-          "style-src": ["'self'", "'unsafe-inline'"],       // allow inline styles
-          "connect-src": ["'self'", "https://*.sentry.io"], // allow Sentry beacons
-          "img-src": ["'self'", "https:", "data:"],         // images for reports
+          "script-src": ["'self'"],
+          "style-src": ["'self'", "'unsafe-inline'"],
+          "connect-src": ["'self'", "https://*.sentry.io"],
+          "img-src": ["'self'", "https:", "data:"],
         },
       },
     }));
@@ -68,7 +73,7 @@ app.use(Sentry.expressRequestMiddleware());
 
   // CORS + parsers
   app.use(cors());
-  app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
+  app.use('/webhooks/razorpay', express.raw({ type: 'application/json' })); // raw first
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
@@ -87,7 +92,7 @@ app.use(Sentry.expressRequestMiddleware());
     res.json({ ok: true });
   });
 
-  // --- TEMP: Sentry test route (remove after you see it in Sentry) ---
+  // --- TEMP: Sentry test route (remove when done) ---
   app.get('/api/boom', () => {
     throw new Error('boom');
   });
@@ -108,7 +113,7 @@ app.use(Sentry.expressRequestMiddleware());
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
 
-  // HTTP server (needed for Socket.IO + Vite dev)
+  // HTTP server (Socket.IO + Vite dev need this)
   const server = createServer(app);
 
   // Realtime
@@ -125,8 +130,13 @@ app.use(Sentry.expressRequestMiddleware());
   // 404 last route
   app.use(notFoundHandler);
 
-  // ---- Sentry error middleware (v8 API) ----
-  app.use(Sentry.expressErrorHandler());
+  // ---- Sentry error middleware (compat shim) ----
+  const errMw =
+    // v8+ API
+    (Sentry as any).expressErrorHandler?.() ||
+    // v7 API
+    (Sentry as any).Handlers?.errorHandler?.();
+  if (errMw) app.use(errMw);
 
   // Centralized error handling
   app.use(errorHandler);
@@ -143,11 +153,10 @@ app.use(Sentry.expressRequestMiddleware());
             resolve();
           });
           listener.on('error', (err: NodeJS.ErrnoException) => {
-            if (err.code === 'EADDRINUSE') reject(err);
-            else reject(err);
+            reject(err);
           });
         });
-        return;
+        return; // started ok
       } catch (e: any) {
         if (e.code === 'EADDRINUSE' && attempt < maxAttempts - 1) continue;
         logger.error(`[SERVER] Failed to start server:`, e);
