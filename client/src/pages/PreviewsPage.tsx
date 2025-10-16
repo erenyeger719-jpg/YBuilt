@@ -36,7 +36,9 @@ export default function PreviewsPage() {
             Forked templates you can open and share.
           </p>
         </div>
-        <Button variant="secondary" onClick={clearAll}>Clear list</Button>
+        <Button variant="secondary" onClick={clearAll}>
+          Clear list
+        </Button>
       </div>
 
       <ul className="space-y-3">
@@ -59,7 +61,20 @@ export default function PreviewsPage() {
             </div>
             <div className="flex items-center gap-2">
               <Button asChild>
-                <a href={it.previewPath} target="_blank" rel="noreferrer">Open</a>
+                <a href={it.previewPath} target="_blank" rel="noreferrer">
+                  Open
+                </a>
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  const url = location.origin + it.previewPath;
+                  try {
+                    await navigator.clipboard.writeText(url);
+                  } catch {}
+                }}
+              >
+                Copy link
               </Button>
             </div>
           </li>

@@ -92,8 +92,12 @@ if (reqMw) app.use(reqMw);
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
-  // Static previews
-  app.use('/previews', express.static(path.resolve(process.env.PREVIEWS_DIR || 'previews')));
+  // Previews directory (ensure and reuse same path everywhere)
+  const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || 'previews');
+  if (!fs.existsSync(PREVIEWS_DIR)) fs.mkdirSync(PREVIEWS_DIR, { recursive: true });
+
+  // Static previews (use the resolved dir)
+  app.use('/previews', express.static(PREVIEWS_DIR));
 
   // Observability + rate limiting
   app.use(requestIdMiddleware);
@@ -124,6 +128,38 @@ if (reqMw) app.use(reqMw);
     }
     // mock mode: don't throw, just return a clear payload
     return res.json({ mock: true, key: null });
+  });
+
+  // --- Add: fork a preview template into a unique slug under /previews/forks/<slug> ---
+  app.post('/api/previews/fork', async (req: Request, res: Response) => {
+    try {
+      const sourceId = String((req.body as any)?.sourceId || '').trim();
+
+      // basic guard: only simple slugs
+      if (!/^[a-z0-9-]+$/i.test(sourceId)) {
+        return res.status(400).json({ error: 'invalid sourceId' });
+      }
+
+      const sourceDir = path.join(PREVIEWS_DIR, sourceId);
+      const indexPath = path.join(sourceDir, 'index.html');
+      if (!fs.existsSync(indexPath)) {
+        return res.status(404).json({ error: 'template not found' });
+      }
+
+      const forksDir = path.join(PREVIEWS_DIR, 'forks');
+      await fs.promises.mkdir(forksDir, { recursive: true });
+
+      const slug = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}-${sourceId}`;
+      const destDir = path.join(forksDir, slug);
+
+      // Node 22 has fs.promises.cp
+      await fs.promises.cp(sourceDir, destDir, { recursive: true });
+
+      const publicPath = `/previews/forks/${slug}/`;
+      return res.json({ path: publicPath });
+    } catch (err) {
+      return res.status(500).json({ error: 'fork failed' });
+    }
   });
 
   // TEMP test route for Sentry server (gated)

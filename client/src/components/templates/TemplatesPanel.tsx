@@ -25,22 +25,34 @@ export default function TemplatesPanel() {
     );
   }, [query]);
 
-  function handleFork(t: Template) {
-    const item: StoredPreview = {
-      id: t.id,
-      name: t.name,
-      previewPath: t.previewPath,
-      createdAt: Date.now(),
-    };
-    const existing: StoredPreview[] = JSON.parse(
-      localStorage.getItem(STORE_KEY) || "[]"
-    );
-    localStorage.setItem(STORE_KEY, JSON.stringify([item, ...existing]));
+  async function handleFork(t: Template) {
+    try {
+      const res = await fetch("/api/previews/fork", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ sourceId: t.id }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
 
-    toast({
-      title: "Project forked",
-      description: `Created from “${t.name}”. Find it under Previews.`,
-    });
+      // Store + toast
+      const item: StoredPreview = {
+        id: t.id,
+        name: t.name,
+        previewPath: String(data.path || t.previewPath),
+        createdAt: Date.now(),
+      };
+      const existing: StoredPreview[] = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+      localStorage.setItem(STORE_KEY, JSON.stringify([item, ...existing]));
+
+      toast({ title: "Project forked", description: `Ready at ${item.previewPath}` });
+    } catch (_e) {
+      toast({
+        title: "Fork failed",
+        description: "Please try again in a bit.",
+        variant: "destructive",
+      });
+    }
   }
 
   // focus search on mount
@@ -58,7 +70,9 @@ export default function TemplatesPanel() {
             Pick a starter. Preview live. Fork to begin.
           </p>
         </div>
-        <a className="text-sm underline" href="/previews">Previews →</a>
+        <a className="text-sm underline" href="/previews">
+          Previews →
+        </a>
       </div>
 
       <div>
