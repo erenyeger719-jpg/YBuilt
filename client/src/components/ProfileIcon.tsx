@@ -60,6 +60,7 @@ export default function ProfileIcon() {
         <DropdownMenuContent
           align="end"
           sideOffset={8}
+          collisionPadding={16}
           className="z-[100] min-w-[220px]"
         >
           <DropdownMenuLabel>

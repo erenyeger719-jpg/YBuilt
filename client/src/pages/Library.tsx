@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import ChatDock from "@/components/ChatDock";
 
 interface Draft {
   draftId: string;
@@ -29,14 +30,14 @@ export default function Library() {
   useEffect(() => {
     // Force library theme unless user opts to respect system theme
     if (!respectSystemTheme) {
-      document.body.dataset.forceTheme = 'library';
+      (document.body as HTMLBodyElement).dataset.forceTheme = "library";
     } else {
-      delete document.body.dataset.forceTheme;
+      delete (document.body as HTMLBodyElement).dataset.forceTheme;
     }
-    
+
     return () => {
       // Cleanup on unmount
-      delete document.body.dataset.forceTheme;
+      delete (document.body as HTMLBodyElement).dataset.forceTheme;
     };
   }, [respectSystemTheme]);
 
@@ -67,7 +68,9 @@ export default function Library() {
             <motion.div
               initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.8, delay: 0.2 }}
+              transition={
+                shouldReduceMotion ? { duration: 0 } : { duration: 0.8, delay: 0.2 }
+              }
               className="flex items-center gap-2 bg-black/30 backdrop-blur-md px-4 py-2 rounded-lg border border-white/20"
             >
               <Switch
@@ -76,7 +79,10 @@ export default function Library() {
                 onCheckedChange={setRespectSystemTheme}
                 data-testid="switch-respect-theme"
               />
-              <Label htmlFor="theme-toggle" className="text-sm text-white/90 cursor-pointer">
+              <Label
+                htmlFor="theme-toggle"
+                className="text-sm text-white/90 cursor-pointer"
+              >
                 Respect system theme
               </Label>
             </motion.div>
@@ -86,7 +92,12 @@ export default function Library() {
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className={`bg-black/30 backdrop-blur-md h-64 rounded-lg border border-white/20 ${shouldReduceMotion ? '' : 'animate-pulse'}`} />
+                <div
+                  key={i}
+                  className={`bg-black/30 backdrop-blur-md h-64 rounded-lg border border-white/20 ${
+                    shouldReduceMotion ? "" : "animate-pulse"
+                  }`}
+                />
               ))}
             </div>
           ) : hasDrafts ? (
@@ -94,36 +105,50 @@ export default function Library() {
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
               initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.6, delay: 0.2 }}
+              transition={
+                shouldReduceMotion ? { duration: 0 } : { duration: 0.6, delay: 0.2 }
+              }
             >
               {drafts.map((draft, index) => (
                 <motion.div
                   key={draft.draftId}
-                  initial={shouldReduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+                  initial={
+                    shouldReduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }
+                  }
                   animate={{ opacity: 1, y: 0 }}
-                  transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.6, delay: index * 0.1 }}
+                  transition={
+                    shouldReduceMotion
+                      ? { duration: 0 }
+                      : { duration: 0.6, delay: index * 0.1 }
+                  }
                   className="bg-black/30 backdrop-blur-md rounded-lg border border-white/20 overflow-hidden hover-elevate cursor-pointer"
                   whileHover={shouldReduceMotion ? {} : { y: -8 }}
                   data-testid={`card-draft-${draft.draftId}`}
                 >
                   <div className="aspect-video bg-gradient-to-br from-neutral-800 to-neutral-900 overflow-hidden">
-                    <img 
-                      src={draft.thumbnail} 
+                    <img
+                      src={draft.thumbnail}
                       alt={draft.title}
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  
+
                   <div className="p-4">
-                    <h3 className="font-semibold text-white mb-1">{draft.title || "Untitled"}</h3>
-                    <p className="text-sm text-white/70 mb-4">{new Date(draft.createdAt).toLocaleDateString()}</p>
-                    
+                    <h3 className="font-semibold text-white mb-1">
+                      {draft.title || "Untitled"}
+                    </h3>
+                    <p className="text-sm text-white/70 mb-4">
+                      {new Date(draft.createdAt).toLocaleDateString()}
+                    </p>
+
                     <div className="flex gap-2">
                       <Button
                         size="sm"
                         variant="secondary"
                         className="flex-1"
-                        onClick={() => window.location.href = `/workspace/${draft.jobId}`}
+                        onClick={() =>
+                          (window.location.href = `/workspace/${draft.jobId}`)
+                        }
                         data-testid={`button-open-${draft.draftId}`}
                       >
                         <ExternalLink className="h-3 w-3 mr-1" />
@@ -156,11 +181,11 @@ export default function Library() {
                     Generate a website and save it to your library
                   </p>
                 </div>
-                
-                <Button 
+
+                <Button
                   className="gap-2"
                   size="lg"
-                  onClick={() => window.location.href = '/'}
+                  onClick={() => (window.location.href = "/")}
                   data-testid="button-create-now"
                 >
                   <Sparkles className="h-4 w-4" />
@@ -170,6 +195,9 @@ export default function Library() {
             </motion.div>
           )}
         </div>
+
+        {/* Right-side chat dock for Library page */}
+        <ChatDock />
       </div>
     </div>
   );
