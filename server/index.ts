@@ -55,20 +55,30 @@ if (reqMw) app.use(reqMw);
   const DATABASE_FILE = process.env.DATABASE_FILE || './data/app.db';
   logger.info(`[DB] Using SQLite database at ${DATABASE_FILE}`);
 
-  // Security headers (CSP allows Sentry beacons)
+  // Security headers (CSP allows Sentry beacons; fonts optional; Razorpay only in live)
   if (process.env.NODE_ENV === 'production') {
+    const directives: Record<string, string[]> = {
+      "script-src": ["'self'"],
+      "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
+      "connect-src": ["'self'", "https://*.sentry.io"],
+      "img-src": ["'self'", "https:", "data:"],
+    };
+
+    if (RAZORPAY_MODE === 'live') {
+      // When you flip to live payments, allow Razorpay endpoints
+      directives["script-src"].push("https://checkout.razorpay.com");
+      directives["connect-src"].push("https://api.razorpay.com");
+    }
+    // While in mock mode, Razorpay stays blocked (no additions)
+
     app.use(
       helmet({
         contentSecurityPolicy: {
           useDefaults: true,
-          directives: {
-            "script-src": ["'self'"],
-            "style-src": ["'self'", "'unsafe-inline'"],
-            "connect-src": ["'self'", "https://*.sentry.io"],
-            "img-src": ["'self'", "https:", "data:"],
-          },
+          directives,
         },
-      })
+      }),
     );
   } else {
     app.use(helmet({ contentSecurityPolicy: false }));
