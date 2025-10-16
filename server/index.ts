@@ -105,6 +105,15 @@ if (reqMw) app.use(reqMw);
     res.json({ ok: true });
   });
 
+  // Return a key in live mode, or a harmless JSON in mock mode
+  app.get('/api/razorpay_key', (_req: Request, res: Response) => {
+    if (process.env.RAZORPAY_MODE === 'live') {
+      return res.json({ key: process.env.RAZORPAY_KEY_ID || null });
+    }
+    // mock mode: don't throw, just return a clear payload
+    return res.json({ mock: true, key: null });
+  });
+
   // TEMP test route for Sentry server
   app.get('/api/boom', () => {
     throw new Error('boom');
