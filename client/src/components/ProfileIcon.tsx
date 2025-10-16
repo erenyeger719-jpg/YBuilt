@@ -1,152 +1,106 @@
-import { useState, useEffect } from "react";
-import { User, Settings, LogOut, LogIn, CreditCard } from "lucide-react";
-import { useLocation } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+import { User2, LogIn, LogOut, Settings } from "lucide-react";
 import { SignInModal } from "./SignInModal";
 import { mockAuth, type MockUser } from "@/lib/mockAuth";
-import { useToast } from "@/hooks/use-toast";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function ProfileIcon() {
-  const [, setLocation] = useLocation();
-  const [currentUser, setCurrentUser] = useState<MockUser | null>(null);
-  const [showSignIn, setShowSignIn] = useState(false);
-  const { toast } = useToast();
+  const [openSignIn, setOpenSignIn] = useState(false);
+  const [user, setUser] = useState<MockUser | null>(null);
 
+  // Load current user on mount (mock mode)
   useEffect(() => {
-    // Load current user on mount
-    const loadUser = async () => {
-      const user = await mockAuth.getCurrentUser();
-      setCurrentUser(user);
-    };
-    loadUser();
+    (async () => {
+      const u = await mockAuth.getCurrentUser();
+      setUser(u);
+      // keep localStorage in sync so other tabs/pages can read it if needed
+      if (u) localStorage.setItem("user", JSON.stringify(u));
+      else localStorage.removeItem("user");
+    })();
   }, []);
 
-  const handleSelect = (path: string) => {
-    if (path === "signout") {
-      mockAuth.signOut();
-      setCurrentUser(null);
-      toast({
-        title: "Signed out successfully",
-        description: "You have been signed out of your account",
-      });
-      return;
-    }
-    if (path === "signin") {
-      setShowSignIn(true);
-      return;
-    }
-    setLocation(path);
-  };
+  const isAuthed = useMemo(() => Boolean(user?.email), [user]);
 
-  const handleSignInSuccess = (user: MockUser) => {
-    setCurrentUser(user);
-  };
+  function handleLogout() {
+    mockAuth.signOut();
+    setUser(null);
+    localStorage.removeItem("user");
+  }
 
-  // Get user initials for avatar from email
-  const getUserInitials = () => {
-    if (!currentUser) return "?";
-    // Get first 2 characters from email (before @)
-    const emailPart = currentUser.email.split('@')[0];
-    return emailPart.substring(0, 2).toUpperCase();
-  };
+  function handleSignInSuccess(u: MockUser) {
+    setUser(u);
+    localStorage.setItem("user", JSON.stringify(u));
+  }
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
+          {/* square, centered, no stray padding */}
           <Button
-            variant="ghost"
+            variant="secondary"
             size="icon"
-            className="rounded-full card-glass w-9 h-9"
+            aria-label="Open profile menu"
+            className="h-9 w-9 md:h-10 md:w-10 rounded-xl p-0 grid place-items-center shadow-sm"
             data-testid="button-profile"
-            aria-label="Profile menu"
           >
-            <div className="gloss-sheen rounded-full" />
-            {currentUser ? (
-              <Avatar className="h-7 w-7 relative z-10">
-                <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
-                  {getUserInitials()}
-                </AvatarFallback>
-              </Avatar>
-            ) : (
-              <User className="h-4 w-4 relative z-10" />
-            )}
+            <User2 className="h-5 w-5" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56 card-glass">
-          <div className="gloss-sheen" />
-          {currentUser ? (
-            <>
-              <DropdownMenuLabel className="relative z-10">
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{currentUser.email}</p>
-                  <p className="text-xs leading-none text-muted-foreground">ID: {currentUser.id}</p>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => handleSelect("/library")}
-                className="cursor-pointer relative z-10"
-                data-testid="menu-item-library"
-              >
-                <User className="mr-2 h-4 w-4" />
-                My Library
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => handleSelect("/settings")}
-                className="cursor-pointer relative z-10"
-                data-testid="menu-item-settings"
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => handleSelect("/settings/billing")}
-                className="cursor-pointer relative z-10"
-                data-testid="menu-item-manage-billing"
-              >
-                <CreditCard className="mr-2 h-4 w-4" />
-                Manage Billing
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => handleSelect("signout")}
-                className="cursor-pointer relative z-10"
-                data-testid="menu-item-signout"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign Out
-              </DropdownMenuItem>
-            </>
+
+        {/* ensure this renders above sticky header */}
+        <DropdownMenuContent
+          align="end"
+          sideOffset={8}
+          className="z-[100] min-w-[220px]"
+        >
+          <DropdownMenuLabel>
+            {isAuthed ? user?.email : "Account"}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+
+          {!isAuthed ? (
+            <DropdownMenuItem
+              onSelect={() => setOpenSignIn(true)}
+              className="gap-2 cursor-pointer"
+              data-testid="menu-item-signin"
+            >
+              <LogIn className="h-4 w-4" />
+              <span>Sign in</span>
+            </DropdownMenuItem>
           ) : (
             <>
-              <DropdownMenuLabel className="relative z-10">Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild className="gap-2 cursor-pointer">
+                <a href="/settings">
+                  <Settings className="h-4 w-4" />
+                  <span>Settings</span>
+                </a>
+              </DropdownMenuItem>
               <DropdownMenuItem
-                onSelect={() => handleSelect("signin")}
-                className="cursor-pointer relative z-10"
-                data-testid="menu-item-signin"
+                onSelect={handleLogout}
+                className="gap-2 cursor-pointer"
+                data-testid="menu-item-signout"
               >
-                <LogIn className="mr-2 h-4 w-4" />
-                Sign In
+                <LogOut className="h-4 w-4" />
+                <span>Sign out</span>
               </DropdownMenuItem>
             </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {/* Pass onSuccess so TS stops complaining and state updates */}
       <SignInModal
-        open={showSignIn}
-        onOpenChange={setShowSignIn}
+        open={openSignIn}
+        onOpenChange={setOpenSignIn}
         onSuccess={handleSignInSuccess}
       />
     </>
