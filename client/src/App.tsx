@@ -4,7 +4,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SettingsProvider } from "@/contexts/SettingsContext";
-import SiteShell from "@/layouts/SiteShell";
 
 // Existing pages
 import Studio from "@/pages/Studio";
@@ -56,9 +55,7 @@ function App() {
       <SettingsProvider>
         <TooltipProvider>
           <Toaster />
-          <SiteShell>
-            <Router />
-          </SiteShell>
+          <Router />
         </TooltipProvider>
       </SettingsProvider>
     </QueryClientProvider>

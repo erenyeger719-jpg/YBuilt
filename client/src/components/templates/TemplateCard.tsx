@@ -2,15 +2,14 @@ import { ExternalLink, Rocket, FolderPlus } from "lucide-react";
 import { Button } from "../ui/button";
 import type { Template } from "../../data/templates";
 
-export default function TemplateCard({
-  template,
-  onFork,
-}: {
+type Props = {
   template: Template;
   onFork: (t: Template) => void;
-}) {
+};
+
+export default function TemplateCard({ template, onFork }: Props) {
   return (
-    <div className="h-full rounded-2xl border bg-white/60 dark:bg-zinc-900/60 p-5 shadow-sm flex flex-col gap-4 transition-all hover:shadow-md hover:border-zinc-300/80 dark:hover:border-zinc-700/80">
+    <div className="rounded-2xl border bg-white/50 dark:bg-zinc-900/50 p-5 shadow-sm flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold leading-tight">{template.name}</h3>
