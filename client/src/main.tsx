@@ -7,9 +7,12 @@ import App from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 Sentry.init({
-  dsn: import.meta.env.VITE_SENTRY_DSN || "",
+  dsn: import.meta.env.VITE_SENTRY_DSN || '',
+  environment: import.meta.env.MODE,
+  release: import.meta.env.VITE_COMMIT || 'local',
   tracesSampleRate: 0.1,
 });
+
 
 // --- sanity logs so we know DSN is actually in the bundle ---
 console.info("[Sentry client] DSN present?", Boolean(import.meta.env.VITE_SENTRY_DSN));

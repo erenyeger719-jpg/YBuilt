@@ -21,8 +21,11 @@ import './config.js';
 // ---- Sentry init (after dotenv) ----
 Sentry.init({
   dsn: process.env.SENTRY_DSN || '',
+  environment: process.env.NODE_ENV,
+  release: process.env.RENDER_GIT_COMMIT || 'local',
   tracesSampleRate: 0.1,
 });
+
 
 logger.info(`[SENTRY] server DSN present: ${Boolean(process.env.SENTRY_DSN)}`);
 // Basic app setup
