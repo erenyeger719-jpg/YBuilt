@@ -13,6 +13,12 @@ Sentry.init({
   tracesSampleRate: 0.1,
 });
 
+// One-time production release check via ?sentry=1
+if (import.meta.env.MODE === 'production' &&
+    new URLSearchParams(location.search).has('sentry')) {
+  Sentry.captureException(new Error('release-check'));
+}
+
 
 // --- sanity logs so we know DSN is actually in the bundle ---
 console.info("[Sentry client] DSN present?", Boolean(import.meta.env.VITE_SENTRY_DSN));
