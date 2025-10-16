@@ -88,12 +88,12 @@ export default function Header({
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      {/* Centered, responsive container with sane side paddings */}
-      <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8">
+      {/* Full-width container with tighter side padding */}
+      <div className="w-full px-2 sm:px-4 lg:px-6">
         {/* Row: logo left, actions right */}
         <div className="flex h-14 md:h-16 items-center justify-between gap-2">
           {/* LEFT: Logo / launcher */}
-          <div className="shrink-0">
+          <div className="shrink-0 -ml-2 sm:-ml-3">
             <LogoButton
               currentProjectName={workspaceName}
               currentProjectPath={currentProjectPath}
@@ -108,7 +108,7 @@ export default function Header({
           </div>
 
           {/* RIGHT (desktop) */}
-          <nav className="hidden md:flex items-center gap-2">
+          <nav className="hidden md:flex items-center gap-2 -mr-2 sm:-mr-3">
             {isWorkspace && logSummary && (
               <Badge
                 variant={
@@ -177,7 +177,7 @@ export default function Header({
           </nav>
 
           {/* RIGHT (mobile) — compact so nothing overflows */}
-          <div className="md:hidden flex items-center gap-1">
+          <div className="md:hidden flex items-center gap-1 -mr-2 sm:-mr-3">
             <Button variant="ghost" size="icon" asChild aria-label="Library">
               <Link href="/library">
                 <Library className="h-4 w-4" />
