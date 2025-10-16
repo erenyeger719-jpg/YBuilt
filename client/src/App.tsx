@@ -4,6 +4,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SettingsProvider } from "@/contexts/SettingsContext";
+import SiteShell from "@/layouts/SiteShell";
+
+// Existing pages
 import Studio from "@/pages/Studio";
 import Library from "@/pages/Library";
 import Settings from "@/pages/Settings";
@@ -17,6 +20,10 @@ import ReportAbuse from "@/pages/ReportAbuse";
 import Docs from "@/pages/Docs";
 import Community from "@/pages/Community";
 import NotFound from "@/pages/not-found";
+
+// New pages
+import TemplatesPage from "@/pages/TemplatesPage";
+import PreviewsPage from "@/pages/PreviewsPage";
 
 function Router() {
   return (
@@ -33,6 +40,11 @@ function Router() {
       <Route path="/report-abuse" component={ReportAbuse} />
       <Route path="/docs" component={Docs} />
       <Route path="/community" component={Community} />
+
+      {/* New routes */}
+      <Route path="/templates" component={TemplatesPage} />
+      <Route path="/previews" component={PreviewsPage} />
+
       <Route component={NotFound} />
     </Switch>
   );
@@ -44,7 +56,9 @@ function App() {
       <SettingsProvider>
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <SiteShell>
+            <Router />
+          </SiteShell>
         </TooltipProvider>
       </SettingsProvider>
     </QueryClientProvider>
