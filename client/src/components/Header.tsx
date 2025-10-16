@@ -1,18 +1,11 @@
-import { Moon, Sun, Sparkles, Library, Upload } from "lucide-react";
+import { Moon, Sun, Sparkles, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import Logo from "./Logo";
 import LogoButton from "./LogoButton";
 import PaymentButton from "./PaymentButton";
 import CurrencyToggle from "./CurrencyToggle";
 import ProfileIcon from "./ProfileIcon";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useState, useEffect } from "react";
 
 interface HeaderProps {
@@ -24,21 +17,25 @@ interface HeaderProps {
   onThemeModalOpen?: () => void;
 }
 
-export default function Header({ logSummary, workspaceName, onThemeModalOpen }: HeaderProps) {
+export default function Header({
+  logSummary,
+  workspaceName,
+  onThemeModalOpen,
+}: HeaderProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [lowGloss, setLowGloss] = useState(false);
   const [currency, setCurrency] = useState<"INR" | "USD">("INR");
   const [location] = useLocation();
 
   const isWorkspace = location.startsWith("/workspace/");
-  const isHome = location === '/';
-  const isLibrary = location.startsWith('/library');
-  const isSettings = location.startsWith('/settings');
+  const isHome = location === "/";
+  const isLibrary = location.startsWith("/library");
+  const isSettings = location.startsWith("/settings");
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const savedLowGloss = localStorage.getItem("lowGloss") === "true";
-    
+
     if (savedTheme) {
       setTheme(savedTheme);
       if (savedTheme === "dark") {
@@ -50,7 +47,7 @@ export default function Header({ logSummary, workspaceName, onThemeModalOpen }: 
       setTheme("dark");
       document.documentElement.classList.add("dark");
     }
-    
+
     if (savedLowGloss) {
       setLowGloss(true);
       document.documentElement.classList.add("low-gloss");
@@ -90,27 +87,38 @@ export default function Header({ logSummary, workspaceName, onThemeModalOpen }: 
   const currentProjectPath = workspaceId ? `/workspace/${workspaceId}` : undefined;
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-[70] border-b border-border/50 backdrop-blur-md bg-background/80">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
-          <LogoButton
-            currentProjectName={workspaceName}
-            currentProjectPath={currentProjectPath}
-            onThemeToggle={toggleTheme}
-            onLogout={handleLogout}
-            isWorkspace={isWorkspace}
-            onThemeModalOpen={onThemeModalOpen}
-            isHome={isHome}
-            isLibrary={isLibrary}
-            isSettings={isSettings}
-          />
-          
-          <div className="flex items-center gap-2">
+    <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      {/* Centered, responsive container with sane side paddings */}
+      <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8">
+        {/* Row: logo left, actions right */}
+        <div className="flex h-14 md:h-16 items-center justify-between gap-2">
+          {/* LEFT: Logo / launcher */}
+          <div className="shrink-0">
+            <LogoButton
+              currentProjectName={workspaceName}
+              currentProjectPath={currentProjectPath}
+              onThemeToggle={toggleTheme}
+              onLogout={handleLogout}
+              isWorkspace={isWorkspace}
+              onThemeModalOpen={onThemeModalOpen}
+              isHome={isHome}
+              isLibrary={isLibrary}
+              isSettings={isSettings}
+            />
+          </div>
+
+          {/* RIGHT (desktop) */}
+          <nav className="hidden md:flex items-center gap-2">
             {isWorkspace && logSummary && (
-              <Badge 
-                variant={logSummary.status === "success" ? "default" : logSummary.status === "error" ? "destructive" : "secondary"}
-                className="gap-1.5 relative build-status -translate-x-[35px] max-[720px]:-translate-x-[18px]"
-                style={{ zIndex: 9999 }}
+              <Badge
+                variant={
+                  logSummary.status === "success"
+                    ? "default"
+                    : logSummary.status === "error"
+                    ? "destructive"
+                    : "secondary"
+                }
+                className="gap-1.5"
                 data-testid="badge-log-summary"
               >
                 <span className="text-xs">
@@ -118,22 +126,28 @@ export default function Header({ logSummary, workspaceName, onThemeModalOpen }: 
                 </span>
               </Badge>
             )}
-            
+
             <Button
               variant="ghost"
               size="sm"
-              className="gap-2"
+              className="gap-2 whitespace-nowrap"
               data-testid="button-library"
               aria-label="Library"
               asChild
             >
               <Link href="/library">
                 <Library className="h-4 w-4" />
-                <span className="hidden sm:inline">Library</span>
+                <span>Library</span>
               </Link>
             </Button>
-            <PaymentButton amount={amount} currency={currency} />
+
+            {/* Keep payment visible on desktop only to avoid crowding on mobile */}
+            <div className="hidden md:inline-flex">
+              <PaymentButton amount={amount} currency={currency} />
+            </div>
+
             <CurrencyToggle onCurrencyChange={setCurrency} />
+
             <Button
               size="icon"
               variant="ghost"
@@ -144,11 +158,45 @@ export default function Header({ logSummary, workspaceName, onThemeModalOpen }: 
             >
               <Sparkles className="h-5 w-5" />
             </Button>
+
             <Button
               size="icon"
               variant="ghost"
               onClick={toggleTheme}
               data-testid="button-toggle-theme"
+              aria-label="Toggle theme"
+            >
+              {theme === "dark" ? (
+                <Sun className="h-5 w-5" />
+              ) : (
+                <Moon className="h-5 w-5" />
+              )}
+            </Button>
+
+            <ProfileIcon />
+          </nav>
+
+          {/* RIGHT (mobile) — compact so nothing overflows */}
+          <div className="md:hidden flex items-center gap-1">
+            <Button variant="ghost" size="icon" asChild aria-label="Library">
+              <Link href="/library">
+                <Library className="h-4 w-4" />
+              </Link>
+            </Button>
+            <CurrencyToggle onCurrencyChange={setCurrency} />
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={toggleLowGloss}
+              aria-label="Toggle low gloss mode"
+              title="Toggle low gloss / high contrast mode"
+            >
+              <Sparkles className="h-5 w-5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={toggleTheme}
               aria-label="Toggle theme"
             >
               {theme === "dark" ? (
