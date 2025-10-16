@@ -52,7 +52,7 @@ export default function Hero() {
   }, [redirectUrl, setLocation]);
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
+    <section className="-mt-14 md:-mt-16 pt-20 md:pt-24 relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Ultra-HDR Background */}
       <div className="absolute inset-0 bg-gradient-to-r from-black via-neutral-800 to-neutral-300 dark:from-black dark:via-neutral-900 dark:to-neutral-700">
         {/* Smoke overlay effect */}
@@ -69,13 +69,11 @@ export default function Hero() {
           {[...Array(12)].map((_, i) => (
             <div
               key={i}
-              className={`glass-stripe ${i % 2 === 0 ? 'glass-stripe-white' : 'glass-stripe-black'}`}
-              style={{
-                left: `${i * 10 - 10}%`,
-              }}
+              className={`glass-stripe ${i % 2 === 0 ? "glass-stripe-white" : "glass-stripe-black"}`}
+              style={{ left: `${i * 10 - 10}%` }}
             />
           ))}
-          
+
           {/* Reflected headline text */}
           <div className="hero-reflection" aria-hidden="true">
             From Idea to Digital Reality
@@ -91,16 +89,16 @@ export default function Hero() {
         animate="visible"
       >
         <motion.h1
-          className="text-hero-mobile md:text-hero font-bold mb-6 metal-text relative"
+          className="h-display text-4xl sm:text-6xl md:text-7xl lg:text-8xl text-hero-mobile md:text-hero font-bold mb-6 metal-text relative"
           variants={itemVariants}
         >
           <span className="relative z-10">From Idea to Digital Reality</span>
           {/* Text readability overlay */}
           <span className="absolute inset-0 bg-black/20 dark:bg-black/30 blur-xl -z-10" aria-hidden="true" />
         </motion.h1>
-        
+
         <motion.p
-          className="text-xl md:text-2xl mb-12 text-muted-foreground font-light tracking-wide"
+          className="h-tagline text-sm sm:text-base md:text-lg opacity-80 mt-4 text-muted-foreground mb-12 font-light tracking-wide"
           variants={itemVariants}
         >
           Build smarter. Launch faster.

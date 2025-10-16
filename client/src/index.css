@@ -2,6 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --- Premium display fonts (wire-in, with fallbacks) --- */
+@font-face {
+  font-family: "Biospace";
+  src: url("/fonts/Biospace.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Dirty Queen";
+  src: url("/fonts/Dirty%20Queen.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* CSS Vars for consistent usage */
+:root {
+  --font-display: "Biospace", Cinzel, Marcellus, serif;
+  --font-tagline: "Dirty Queen", "Cormorant Garamond", serif;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans";
+}
+
+/* Global UI font (keeps everything else professional) */
+body { font-family: var(--font-ui); }
+
+/* Utilities for hero */
+.h-display {
+  font-family: var(--font-display);
+  letter-spacing: .01em;
+}
+.h-tagline {
+  font-family: var(--font-tagline);
+  letter-spacing: .18em; /* elegant caps */
+  text-transform: uppercase;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --shimmer-animation: none;
@@ -88,7 +125,8 @@
   --chart-4: 0 0% 40%;
   --chart-5: 0 0% 46%;
 
-  --font-sans: Open Sans, sans-serif;
+  /* Use UI font for Tailwind's font-sans pipeline */
+  --font-sans: var(--font-ui);
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --radius: .5rem; /* 8px */
@@ -108,13 +146,7 @@
   --glass-reflection: rgba(255,255,255,0.08);
   --rim-strength: rgba(255,255,255,0.10);
 
-  /* Workspace Prompt Bar Layout Variables
-   * Fixed height structure for consistent vertical layout
-   * - prompt-bar-height: Total fixed height of prompt bar container
-   * - file-chips-height: Height of file chips row at top
-   * - prompt-actions-height: Height of action buttons row at bottom
-   * - Input area takes remaining space (flex: 1) between chips and actions
-   */
+  /* Workspace Prompt Bar Layout Variables */
   --prompt-bar-height: 180px;
   --file-chips-height: 32px;
   --prompt-actions-height: 48px;
@@ -234,12 +266,12 @@
   --shadow-xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 8px 10px -1px hsl(0 0% 0% / 0.00);
   --shadow-2xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
 
-  /* Glass and Gloss System */
+  /* Glass and Gloss Material System */
   --glass-alpha: 0.12;
   --glass-reflection: rgba(255,255,255,0.08);
   --rim-strength: rgba(255,255,255,0.10);
 
-  /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
+  /* Automatically computed borders */
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
@@ -379,23 +411,6 @@ body[data-force-theme="settings"] .settings-text-dark {
 
 /**
  * Using the elevate system.
- * Automatic contrast adjustment.
- *
- * <element className="hover-elevate" />
- * <element className="active-elevate-2" />
- *
- * // Using the tailwind utility when a data attribute is "on"
- * <element className="toggle-elevate data-[state=on]:toggle-elevated" />
- * // Or manually controlling the toggle state
- * <element className="toggle-elevate toggle-elevated" />
- *
- * Elevation systems have to handle many states.
- * - not-hovered, vs. hovered vs. active  (three mutually exclusive states)
- * - toggled or not
- * - focused or not (this is not handled with these utilities)
- *
- * Even without handling focused or not, this is six possible combinations that
- * need to be distinguished from eachother visually.
  */
 @layer utilities {
 
@@ -411,20 +426,9 @@ body[data-force-theme="settings"] .settings-text-dark {
     pointer-events: none;
   }
 
-  /* .no-default-hover-elevate/no-default-active-elevate is an escape hatch so consumers of
-   * buttons/badges can remove the automatic brightness adjustment on interactions
-   * and program their own. */
   .no-default-hover-elevate {}
-
   .no-default-active-elevate {}
 
-
-  /**
-   * Toggleable backgrounds go behind the content. Hoverable/active goes on top.
-   * This way they can stack/compound. Both will overlap the parent's borders!
-   * So borders will be automatically adjusted both on toggle, and hover/active,
-   * and they will be compounded.
-   */
   .toggle-elevate::before,
   .toggle-elevate-2::before {
     content: "";
@@ -439,12 +443,10 @@ body[data-force-theme="settings"] .settings-text-dark {
     background-color: var(--elevate-2);
   }
 
-  /* If there's a 1px border, adjust the inset so that it covers that parent's border */
   .border.toggle-elevate::before {
     inset: -1px;
   }
 
-  /* Does not work on elements with overflow:hidden! */
   .hover-elevate:not(.no-default-hover-elevate),
   .active-elevate:not(.no-default-active-elevate),
   .hover-elevate-2:not(.no-default-hover-elevate),
@@ -475,7 +477,6 @@ body[data-force-theme="settings"] .settings-text-dark {
     background-color: var(--elevate-2);
   }
 
-  /* If there's a 1px border, adjust the inset so that it covers that parent's border */
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after,
   .border.active-elevate:not(.no-active-interaction-elevate)::after,
   .border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
@@ -642,72 +643,72 @@ body[data-force-theme="settings"] .settings-text-dark {
     }
   }
 
-/* Logo dropdown — premium glass style (workspace only) */
-.logo-menu.workspace {
-  min-width: 260px !important;
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)) !important;
-  border: 1px solid rgba(255,255,255,0.06) !important;
-  backdrop-filter: blur(10px) saturate(120%) !important;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.6) !important;
-  border-radius: 12px !important;
-  padding: 8px !important;
-  color: var(--text-main, #eaeaea) !important;
-  font-family: var(--font-display, 'Valmeria','Inter','Poppins',system-ui,sans-serif) !important;
-  z-index: 9999 !important;
-}
+  /* Logo dropdown — premium glass style (workspace only) */
+  .logo-menu.workspace {
+    min-width: 260px !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    backdrop-filter: blur(10px) saturate(120%) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6) !important;
+    border-radius: 12px !important;
+    padding: 8px !important;
+    color: var(--text-main, #eaeaea) !important;
+    font-family: var(--font-display, 'Valmeria','Inter','Poppins',system-ui,sans-serif) !important;
+    z-index: 9999 !important;
+  }
 
-/* menu items: modern spacing */
-.logo-menu.workspace [role="menuitem"] {
-  display: flex;
-  align-items: center;
-  justify-content: space-between; /* text left, icon right */
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background .12s ease, transform .06s ease;
-}
+  /* menu items: modern spacing */
+  .logo-menu.workspace [role="menuitem"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* text left, icon right */
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .12s ease, transform .06s ease;
+  }
 
-/* hover/focus states */
-.logo-menu.workspace [role="menuitem"]:hover,
-.logo-menu.workspace [role="menuitem"]:focus {
-  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-  transform: translateY(-1px);
-  outline: none;
-}
+  /* hover/focus states */
+  .logo-menu.workspace [role="menuitem"]:hover,
+  .logo-menu.workspace [role="menuitem"]:focus {
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    transform: translateY(-1px);
+    outline: none;
+  }
 
-/* right-aligned icon: keep "six spaces" effect via margin-left */
-.logo-menu.workspace .menu-label { 
-  white-space: nowrap; 
-  overflow: hidden; 
-  text-overflow: ellipsis; 
-  flex: 1;
-}
+  /* right-aligned icon: keep "six spaces" effect via margin-left */
+  .logo-menu.workspace .menu-label { 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    flex: 1;
+  }
 
-.logo-menu.workspace .menu-icon {
-  margin-left: 24px; /* ~6 spaces visual gap */
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  opacity: .95;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));
-}
+  .logo-menu.workspace .menu-icon {
+    margin-left: 24px; /* ~6 spaces visual gap */
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    opacity: .95;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));
+  }
 
-/* Dark mode adjustments for workspace menu */
-.dark .logo-menu.workspace {
-  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)) !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.8) !important;
-}
+  /* Dark mode adjustments for workspace menu */
+  .dark .logo-menu.workspace {
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8) !important;
+  }
 
-.dark .logo-menu.workspace [role="menuitem"]:hover,
-.dark .logo-menu.workspace [role="menuitem"]:focus {
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)) !important;
-}
+  .dark .logo-menu.workspace [role="menuitem"]:hover,
+  .dark .logo-menu.workspace [role="menuitem"]:focus {
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)) !important;
+  }
 
-/* Help submenu high z-index to prevent cropping */
-.help-side-popup {
-  position: fixed !important;
-  z-index: var(--modal-z) !important;
-}
+  /* Help submenu high z-index to prevent cropping */
+  .help-side-popup {
+    position: fixed !important;
+    z-index: var(--modal-z) !important;
+  }
 }

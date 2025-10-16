@@ -16,8 +16,8 @@ export default function Studio() {
       {/* Sticky global header */}
       <Header />
 
-      {/* Offset the sticky header height so first section isn't hidden */}
-      <main className="pt-14 md:pt-16">
+      {/* Main content */}
+      <main className="pt-0">
         <Hero />
         <Showcase />
       </main>
