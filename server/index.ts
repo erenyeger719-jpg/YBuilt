@@ -26,7 +26,6 @@ Sentry.init({
   tracesSampleRate: 0.1,
 });
 
-
 logger.info(`[SENTRY] server DSN present: ${Boolean(process.env.SENTRY_DSN)}`);
 // Basic app setup
 logger.info('[SECURITY] JWT_SECRET is configured and validated');
@@ -117,10 +116,10 @@ if (reqMw) app.use(reqMw);
     return res.json({ mock: true, key: null });
   });
 
-  // TEMP test route for Sentry server
-  app.get('/api/boom', () => {
-    throw new Error('boom');
-  });
+  // TEMP test route for Sentry server (gated)
+  if (process.env.ENABLE_TEST_ROUTES === 'true') {
+    app.get('/api/boom', () => { throw new Error('boom'); });
+  }
 
   // API routers
   const { default: jobsRouter } = await import('./routes/jobs.js');
