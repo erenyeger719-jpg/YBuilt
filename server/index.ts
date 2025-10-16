@@ -24,6 +24,7 @@ Sentry.init({
   tracesSampleRate: 0.1,
 });
 
+logger.info(`[SENTRY] server DSN present: ${Boolean(process.env.SENTRY_DSN)}`);
 // Basic app setup
 logger.info('[SECURITY] JWT_SECRET is configured and validated');
 
