@@ -7,6 +7,13 @@ Sentry.init({
   tracesSampleRate: 0.1,
 });
 
+
+// expose test hooks for DevTools
+// @ts-ignore
+window.triggerSentry = () => { throw new Error('client-sentry-test'); };
+// @ts-ignore
+window.reportSentry = () => { Sentry.captureException(new Error('client-sentry-test')); };
+
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
