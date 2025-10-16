@@ -107,6 +107,16 @@ if (reqMw) app.use(reqMw);
     res.json({ ok: true });
   });
 
+  // Default app settings for the client
+  app.get('/api/settings', (_req: Request, res: Response) => {
+    res.json({
+      version: '1',
+      themeDefault: 'system',
+      currencyDefault: 'INR',
+      payments: { razorpayMode: process.env.RAZORPAY_MODE || 'mock' },
+    });
+  });
+
   // Return a key in live mode, or a harmless JSON in mock mode
   app.get('/api/razorpay_key', (_req: Request, res: Response) => {
     if (process.env.RAZORPAY_MODE === 'live') {
