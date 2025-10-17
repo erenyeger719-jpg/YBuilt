@@ -21,10 +21,7 @@ function getJobIdAny(resp: CreateResp | undefined) {
 
 function withTimeout<T>(p: Promise<T>, ms = 25000) {
   return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(
-      () => reject(Object.assign(new Error("Timed out"), { status: 408 })),
-      ms
-    );
+    const t = setTimeout(() => reject(Object.assign(new Error("Timed out"), { status: 408 })), ms);
     p.then(
       (v) => { clearTimeout(t); resolve(v); },
       (e) => { clearTimeout(t); reject(e); }
@@ -35,37 +32,21 @@ function withTimeout<T>(p: Promise<T>, ms = 25000) {
 export default function HeroPage() {
   const { toast } = useToast();
 
-  // bare mutation (no onSuccess/onError)
   const createJobMutation = useMutation({
     mutationFn: async (payload: { prompt: string }) => {
       const body = { prompt: payload.prompt, promptText: payload.prompt };
-      return await withTimeout(
-        apiRequest<CreateResp>("POST", "/api/generate", body)
-      );
+      return await withTimeout(apiRequest<CreateResp>("POST", "/api/generate", body));
     },
     retry: false,
   });
 
-  // IMPORTANT: await the mutate promise here, then redirect here.
   async function handleCreate(promptText: string) {
-    const prompt = promptText?.trim();
-    if (!prompt) return;
-
     try {
-      const resp = await createJobMutation.mutateAsync({ prompt });
+      const resp = await createJobMutation.mutateAsync({ prompt: promptText });
       const id = getJobIdAny(resp);
-
-      if (!id) {
-        toast({
-          title: "Couldn’t start workspace",
-          description: "No job id in response.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Go to the finalize (studio) flow first — like before
-      window.location.assign(`/studio/${id}`);
+      if (!id) throw new Error("No job id in response");
+      // Hard redirect to a route we know exists in your repo
+      window.location.href = `/workspace/${id}`;
     } catch (err: any) {
       if (err?.status === 401) {
         toast({
@@ -75,23 +56,19 @@ export default function HeroPage() {
         });
         return;
       }
-      const msg =
-        err?.message || err?.statusText || (typeof err === "string" ? err : "Request failed");
-      const code = err?.status || "";
       toast({
         title: "Create failed",
-        description: code ? `${code}: ${msg}` : msg,
+        description: err?.message || "Request failed",
         variant: "destructive",
       });
+      // Let PromptInput stop its spinner via finally{}
+      throw err; // keep rejection so the submitter knows it ended
     }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <PromptInput
-        isGenerating={createJobMutation.isPending}
-        onGenerate={handleCreate} // PromptInput will await this
-      />
+      <PromptInput onGenerate={handleCreate} />
     </div>
   );
 }
