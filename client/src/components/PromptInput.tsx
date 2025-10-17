@@ -12,6 +12,36 @@ export default function PromptInput({ onGenerate }: PromptInputProps) {
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const defaultCreate = async (p: string) => {
+    console.log("[prompt] fallback create → /api/generate", { p });
+    const r = await fetch("/api/generate", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: p, promptText: p }),
+    });
+
+    const ct = r.headers.get("content-type") || "";
+    const raw = await r.text();
+    let data: any = {};
+    try {
+      data = ct.includes("application/json") && raw ? JSON.parse(raw) : {};
+    } catch (_) {}
+
+    if (!r.ok) {
+      const msg = data?.message || data?.error || r.statusText || "Request failed";
+      throw new Error(msg);
+    }
+
+    const id = data.jobId || data.id || data?.job?.id || data?.data?.jobId || data?.data?.id;
+    if (!id) throw new Error("No jobId in response");
+
+    const target = `/workspace/${id}`;
+    console.log("[prompt] redirect →", target);
+    window.location.assign(target);
+    setTimeout(() => (window.location.href = target), 50);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || submitting) return;
@@ -19,16 +49,18 @@ export default function PromptInput({ onGenerate }: PromptInputProps) {
     setSubmitting(true);
     try {
       console.log("[prompt] submit:", prompt);
-      await onGenerate?.(prompt);
+      const impl = onGenerate ?? defaultCreate;
+      await impl(prompt);
+    } catch (err) {
+      console.error("[prompt] error:", err);
     } finally {
-      // If we navigate, this won't matter; if we don't, spinner stops.
       setSubmitting(false);
       console.log("[prompt] done");
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto">
+    <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto" data-testid="prompt-input" data-build="fallback-v1">
       <div className="card-glass p-6 space-y-4">
         <div className="relative">
           <Input
@@ -72,9 +104,7 @@ export default function PromptInput({ onGenerate }: PromptInputProps) {
             className="gap-1"
             data-testid="button-explore"
             disabled={submitting}
-            onClick={() => {
-              document.getElementById("showcase")?.scrollIntoView({ behavior: "smooth" });
-            }}
+            onClick={() => document.getElementById("showcase")?.scrollIntoView({ behavior: "smooth" })}
           >
             Explore previews
             <ArrowRight className="h-3 w-3" />
