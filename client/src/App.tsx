@@ -1,65 +1,41 @@
-import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { SettingsProvider } from "@/contexts/SettingsContext";
+// client/src/App.tsx
+import { Route } from "wouter";
 
-// Existing pages
-import Studio from "@/pages/Studio";
-import Library from "@/pages/Library";
-import Settings from "@/pages/Settings";
-import Finalize from "@/pages/Finalize";
+// PAGES
+import Home from "@/pages/Hero";
+import Studio from "@/pages/Studio";          // <- param + non-param routes below
 import Workspace from "@/pages/Workspace";
-import Status from "@/pages/Status";
-import SupportBilling from "@/pages/SupportBilling";
-import SupportAccount from "@/pages/SupportAccount";
-import SupportTechnical from "@/pages/SupportTechnical";
-import ReportAbuse from "@/pages/ReportAbuse";
-import Docs from "@/pages/Docs";
-import Community from "@/pages/Community";
-import NotFound from "@/pages/not-found";
 
-// New pages
-import TemplatesPage from "@/pages/TemplatesPage";
-import PreviewsPage from "@/pages/PreviewsPage";
-
-function Router() {
+// Optional local NotFound so we don’t depend on anything else
+function NotFound() {
   return (
-    <Switch>
-      <Route path="/" component={Studio} />
-      <Route path="/library" component={Library} />
-      <Route path="/finalize/:jobId" component={Finalize} />
+    <div className="min-h-screen grid place-items-center px-6">
+      <div className="text-center">
+        <h1 className="text-2xl font-semibold mb-2">404 — Page Not Found</h1>
+        <p className="text-muted-foreground mb-4">
+          If you just created a job, make sure <code>/studio/:jobId</code> is registered.
+        </p>
+        <a className="underline" href="/">Go home</a>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <>
+      {/* Home */}
+      <Route path="/" component={Home} />
+
+      {/* Studio: BOTH routes matter */}
+      <Route path="/studio" component={Studio} />
+      <Route path="/studio/:jobId" component={Studio} />
+
+      {/* Workspace */}
       <Route path="/workspace/:jobId" component={Workspace} />
-      <Route path="/settings/:section?" component={Settings} />
-      <Route path="/status" component={Status} />
-      <Route path="/support/billing" component={SupportBilling} />
-      <Route path="/support/account" component={SupportAccount} />
-      <Route path="/support/technical" component={SupportTechnical} />
-      <Route path="/report-abuse" component={ReportAbuse} />
-      <Route path="/docs" component={Docs} />
-      <Route path="/community" component={Community} />
 
-      {/* New routes */}
-      <Route path="/templates" component={TemplatesPage} />
-      <Route path="/previews" component={PreviewsPage} />
-
-      <Route component={NotFound} />
-    </Switch>
+      {/* Catch-all LAST */}
+      <Route path="/:rest*" component={NotFound} />
+    </>
   );
 }
-
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <SettingsProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </SettingsProvider>
-    </QueryClientProvider>
-  );
-}
-
-export default App;
