@@ -4,17 +4,28 @@ import { Input } from "@/components/ui/input";
 import { Sparkles, ArrowRight, Loader2 } from "lucide-react";
 
 interface PromptInputProps {
-  onGenerate?: (prompt: string) => void;
+  onGenerate?: (prompt: string) => Promise<void> | void; // allow async
   isGenerating?: boolean;
 }
 
 export default function PromptInput({ onGenerate, isGenerating = false }: PromptInputProps) {
   const [prompt, setPrompt] = useState("");
+  const [submitting, setSubmitting] = useState(false); // local guard
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const busy = isGenerating || submitting;
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (prompt.trim() && !isGenerating) {
-      onGenerate?.(prompt);
+    const text = prompt.trim();
+    if (!text || busy) return;
+
+    try {
+      setSubmitting(true);
+      await onGenerate?.(text);      // <-- await the promise from Hero
+    } finally {
+      // If the page hard-redirects, we won’t hit this line (which is fine).
+      // If it doesn’t redirect (e.g., an error), we’ll clear the spinner.
+      setSubmitting(false);
     }
   };
 
@@ -29,17 +40,17 @@ export default function PromptInput({ onGenerate, isGenerating = false }: Prompt
             placeholder="Describe your website or app idea..."
             className="w-full h-14 text-lg bg-background/50 border-border/30 focus:border-primary/50 transition-colors pr-32"
             data-testid="input-prompt"
-            disabled={isGenerating}
+            disabled={busy}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2">
             <Button
               type="submit"
               size="default"
-              disabled={!prompt.trim() || isGenerating}
+              disabled={!prompt.trim() || busy}
               data-testid="button-create"
               className="gap-2"
             >
-              {isGenerating ? (
+              {busy ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Creating...
@@ -53,7 +64,7 @@ export default function PromptInput({ onGenerate, isGenerating = false }: Prompt
             </Button>
           </div>
         </div>
-        
+
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <span>or</span>
           <Button
@@ -62,10 +73,10 @@ export default function PromptInput({ onGenerate, isGenerating = false }: Prompt
             size="sm"
             className="gap-1"
             data-testid="button-explore"
-            disabled={isGenerating}
+            disabled={busy}
             onClick={() => {
-              const showcaseSection = document.getElementById('showcase');
-              showcaseSection?.scrollIntoView({ behavior: 'smooth' });
+              const showcaseSection = document.getElementById("showcase");
+              showcaseSection?.scrollIntoView({ behavior: "smooth" });
             }}
           >
             Explore previews
