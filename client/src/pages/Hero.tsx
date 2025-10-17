@@ -41,33 +41,16 @@ export default function HeroPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  // Robust creator: tries the modern endpoint, falls back to legacy path if needed
   const createJobMutation = useMutation({
     mutationFn: async (payload: { prompt: string }) => {
-      // send both keys to satisfy either server shape
       const body = { prompt: payload.prompt, promptText: payload.prompt };
-
-      try {
-        // Primary (modern) endpoint with timeout
-        return await withTimeout(
-          apiRequest<CreateResp>("POST", "/api/jobs", body)
-        );
-      } catch (e: any) {
-        // Fallback for older pathing
-        if (e?.status === 404) {
-          return await withTimeout(
-            apiRequest<CreateResp>("POST", "/api/workspace", body)
-          );
-        }
-        throw e;
-      }
+      return await withTimeout(
+        apiRequest<CreateResp>("POST", "/api/generate", body)
+      );
     },
     onSuccess: (resp) => {
-      // Optional: inspect what came back
-      // console.log("[create] raw response:", resp);
       const id = getJobIdAny(resp);
       if (id) {
-        // route to studio flow
         setLocation(`/studio/${id}`);
         return;
       }
