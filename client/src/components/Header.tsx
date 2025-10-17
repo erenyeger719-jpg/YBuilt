@@ -87,7 +87,10 @@ export default function Header({
   const currentProjectPath = workspaceId ? `/workspace/${workspaceId}` : undefined;
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header
+      data-header
+      className="sticky top-0 z-[50] border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+    >
       {/* Full-width container with tighter side padding */}
       <div className="w-full px-2 sm:px-4 lg:px-6">
         {/* Row: logo left, actions right */}
