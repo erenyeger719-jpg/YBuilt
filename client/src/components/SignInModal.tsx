@@ -94,23 +94,21 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
-        {/* Lighter, subtle tint (no heavy black, slight blur) */}
+        {/* Softer overlay that still receives clicks */}
         <DialogOverlay className="fixed inset-0 z-[900] bg-black/25 backdrop-blur-[1px] data-[state=open]:animate-in data-[state=closed]:animate-out" />
 
-        {/* Full-viewport layer that centers the card; avoids transform flicker */}
-        <DialogPrimitive.Content
-          className="fixed inset-0 z-[1000] flex items-center justify-center p-4 outline-none"
-          data-state={open ? "open" : "closed"}
-        >
-          {/* Modal card */}
-          <div
+        {/* Non-interactive wrapper that centers the card */}
+        <div className="fixed inset-0 z-[1000] grid place-items-center p-4 pointer-events-none">
+          {/* Make the Content just the card, NOT full-screen */}
+          <DialogPrimitive.Content
             className="
+              pointer-events-auto
               w-[92vw] max-w-md max-h-[85vh] overflow-y-auto
               rounded-2xl border bg-background p-4 sm:p-6 shadow-2xl
+              outline-none
             "
-            data-testid="modal-signin"
-            role="dialog"
-            aria-modal="true"
+            data-state={open ? "open" : "closed"}
+            onCloseAutoFocus={(e) => e.preventDefault()}
           >
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">
@@ -262,8 +260,8 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
                 </div>
               </motion.form>
             </div>
-          </div>
-        </DialogPrimitive.Content>
+          </DialogPrimitive.Content>
+        </div>
       </DialogPortal>
     </Dialog>
   );
