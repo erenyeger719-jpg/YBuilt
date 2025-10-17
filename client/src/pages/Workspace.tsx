@@ -48,6 +48,7 @@ import ResizableSplitter from "@/components/ResizableSplitter";
 import PageToolSheet from "@/components/PageToolSheet";
 import ThemeModal from "@/components/ThemeModal";
 import BuildTraceViewer from "@/components/BuildTraceViewer";
+import WorkspaceDock from "@/components/WorkspaceDock"; // ⬅️ added
 
 interface WorkspaceFile {
   path: string;
@@ -800,7 +801,7 @@ export default function Workspace() {
         </DialogContent>
       </Dialog>
 
-            <div className="flex-1 overflow-hidden pt-16">
+      <div className="flex-1 overflow-hidden pt-16">
         <ResizableSplitter
           leftPane={leftPane}
           rightPane={rightPane}
@@ -810,8 +811,9 @@ export default function Workspace() {
           storageKey="workspaceSplit"
         />
       </div>
+
+      {/* dock that keeps chat bottom-right, console bottom-left */}
+      <WorkspaceDock /> {/* ⬅️ mounted near the bottom */}
     </div>
   );
 }
-
-  
