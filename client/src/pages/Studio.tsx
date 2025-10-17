@@ -1,48 +1,59 @@
-import { useState, useEffect } from "react";
+// client/src/pages/Studio.tsx
+import { useEffect, useState } from "react";
 import { useParams } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+
+// --- marketing bits you already had ---
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Showcase from "@/components/Showcase";
-import ChatPanel from "@/components/ChatPanel";
-import TerminalPanel from "@/components/TerminalPanel";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { MessageCircle, X, Code2 } from "lucide-react";
 
 type Job = { id: string; status?: string; title?: string; prompt?: string };
 
 export default function Studio() {
+  // NOTE: jobId is optional; page serves both /studio and /studio/:jobId
   const { jobId } = useParams<{ jobId?: string }>();
+
+  // If no id → render your existing marketing Studio page
+  if (!jobId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <Hero />
+        <Showcase />
+      </div>
+    );
+  }
+
+  // If id exists → render the finalize-only strip (no marketing UI)
+  return <FinalizeStudio jobId={jobId} />;
+}
+
+function FinalizeStudio({ jobId }: { jobId: string }) {
   const { toast } = useToast();
-
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
-
-  // finalize helpers
-  const [loadingJob, setLoadingJob] = useState<boolean>(!!jobId);
   const [job, setJob] = useState<Job | null>(null);
+  const [loading, setLoading] = useState(true);
   const [finalizing, setFinalizing] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
 
   useEffect(() => {
-    if (!jobId) return;
     let alive = true;
     (async () => {
       try {
         const r = await fetch(`/api/jobs/${jobId}`, { credentials: "include" });
         const data = r.ok ? await r.json() : null;
         if (alive) setJob(data || null);
-      } catch { /* ignore */ }
-      finally { if (alive) setLoadingJob(false); }
+      } catch {/* ignore */}
+      finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; };
   }, [jobId]);
 
   async function openWorkspace() {
-    if (!jobId) return;
     try {
       setFinalizing(true);
       const r = await fetch(`/api/jobs/${jobId}/select`, {
@@ -66,7 +77,7 @@ export default function Studio() {
   }
 
   async function uploadInspiration() {
-    if (!jobId || !file) return;
+    if (!file) return;
     setUploading(true);
     try {
       const fd = new FormData();
@@ -90,87 +101,60 @@ export default function Studio() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Preparing studio…</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
+    <div className="min-h-screen flex items-center justify-center px-4 bg-background">
+      <div className="w-full max-w-3xl space-y-6">
+        <Card className="p-6 relative z-50"> {/* sits above anything else */}
+          <h1 className="text-xl font-semibold mb-1">Finalize your project</h1>
+          <p className="text-sm text-muted-foreground mb-4">
+            Job <span className="font-mono">{jobId}</span>
+            {job?.title ? <> — <span className="font-medium">{job.title}</span></> : null}
+          </p>
 
-      {/* Finalize strip (only when :jobId present) */}
-      {jobId && (
-        <div className="container mx-auto px-4 pt-6">
-          <Card className="p-6">
-            <div className="flex items-start justify-between gap-6 flex-wrap">
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold">Finalize your project</h2>
-                <p className="text-sm text-muted-foreground">
-                  Job <span className="font-mono">{jobId}</span>
-                  {loadingJob ? " — loading…" : job?.title ? <> — <span className="font-medium">{job.title}</span></> : null}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Input
-                  type="file"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  disabled={uploading || finalizing}
-                />
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Upload inspiration (optional)</label>
+              <div className="flex gap-2">
+                <Input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={uploading || finalizing} />
                 <Button onClick={uploadInspiration} disabled={!file || uploading || finalizing}>
-                  {uploading ? "Uploading…" : "Upload inspiration"}
-                </Button>
-                <Button onClick={openWorkspace} disabled={finalizing}>
-                  {finalizing ? "Opening…" : "Finalize & Open Workspace"}
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={finalizing}
-                  onClick={() => {
-                    const target = `/workspace/${jobId}`;
-                    window.location.assign(target);
-                    setTimeout(() => (window.location.href = target), 40);
-                  }}
-                >
-                  Skip
+                  {uploading ? "Uploading…" : "Upload"}
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                JPEG/PNG/SVG or text docs work fine. You can add more later inside the workspace.
+              </p>
             </div>
-          </Card>
-        </div>
-      )}
 
-      {/* original landing content */}
-      <Hero />
-      <Showcase />
-
-      {/* Terminal Toggle */}
-      <Button
-        size="icon"
-        className="fixed bottom-6 left-6 h-14 w-14 rounded-full shadow-lg z-50"
-        onClick={() => setIsTerminalOpen(!isTerminalOpen)}
-        data-testid="button-toggle-terminal"
-      >
-        {isTerminalOpen ? <X className="w-6 h-6" /> : <Code2 className="w-6 h-6" />}
-      </Button>
-
-      {/* Chat Toggle */}
-      <Button
-        size="icon"
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-50"
-        onClick={() => setIsChatOpen(!isChatOpen)}
-        data-testid="button-toggle-chat"
-      >
-        {isChatOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
-      </Button>
-
-      {/* Panels */}
-      {isTerminalOpen && (
-        <div className="fixed bottom-24 left-6 w-[600px] h-[700px] z-40 shadow-2xl" data-testid="terminal-panel-container">
-          <TerminalPanel />
-        </div>
-      )}
-      {isChatOpen && (
-        <div className="fixed bottom-24 right-6 w-[400px] h-[600px] z-40 shadow-2xl" data-testid="chat-panel-container">
-          <ChatPanel />
-        </div>
-      )}
+            <div className="flex gap-2 pt-2">
+              <Button onClick={openWorkspace} disabled={finalizing}>
+                {finalizing ? "Opening…" : "Finalize & Open Workspace"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const target = `/workspace/${jobId}`;
+                  window.location.assign(target);
+                  setTimeout(() => (window.location.href = target), 40);
+                }}
+                disabled={finalizing}
+              >
+                Skip for now
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
