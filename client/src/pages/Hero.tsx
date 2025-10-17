@@ -1,4 +1,3 @@
-// client/src/pages/Hero.tsx
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -11,7 +10,6 @@ type CreateResp =
 
 function getJobIdAny(resp: CreateResp | undefined) {
   if (!resp) return undefined;
-  // try several shapes
   return (
     (resp as any).jobId ||
     (resp as any).id ||
@@ -21,7 +19,6 @@ function getJobIdAny(resp: CreateResp | undefined) {
   );
 }
 
-// hard timeout so UI never hangs forever
 function withTimeout<T>(p: Promise<T>, ms = 25000) {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(
@@ -29,14 +26,8 @@ function withTimeout<T>(p: Promise<T>, ms = 25000) {
       ms
     );
     p.then(
-      (v) => {
-        clearTimeout(t);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(t);
-        reject(e);
-      }
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); }
     );
   });
 }
@@ -44,28 +35,38 @@ function withTimeout<T>(p: Promise<T>, ms = 25000) {
 export default function HeroPage() {
   const { toast } = useToast();
 
+  // bare mutation (no onSuccess/onError)
   const createJobMutation = useMutation({
     mutationFn: async (payload: { prompt: string }) => {
       const body = { prompt: payload.prompt, promptText: payload.prompt };
-      // ✅ real endpoint in your server
       return await withTimeout(
         apiRequest<CreateResp>("POST", "/api/generate", body)
       );
     },
-    onSuccess: (resp) => {
+    retry: false,
+  });
+
+  // IMPORTANT: await the mutate promise here, then redirect here.
+  async function handleCreate(promptText: string) {
+    const prompt = promptText?.trim();
+    if (!prompt) return;
+
+    try {
+      const resp = await createJobMutation.mutateAsync({ prompt });
       const id = getJobIdAny(resp);
-      if (id) {
-        // Hard redirect so we definitely leave the hero page
-        window.location.assign(`/workspace/${id}`);
+
+      if (!id) {
+        toast({
+          title: "Couldn’t start workspace",
+          description: "No job id in response.",
+          variant: "destructive",
+        });
         return;
       }
-      toast({
-        title: "Couldn’t start workspace",
-        description: "No job id in response.",
-        variant: "destructive",
-      });
-    },
-    onError: (err: any) => {
+
+      // Go to the finalize (studio) flow first — like before
+      window.location.assign(`/studio/${id}`);
+    } catch (err: any) {
       if (err?.status === 401) {
         toast({
           title: "Sign in required",
@@ -75,30 +76,21 @@ export default function HeroPage() {
         return;
       }
       const msg =
-        err?.message ||
-        err?.statusText ||
-        (typeof err === "string" ? err : "Request failed");
+        err?.message || err?.statusText || (typeof err === "string" ? err : "Request failed");
       const code = err?.status || "";
       toast({
         title: "Create failed",
         description: code ? `${code}: ${msg}` : msg,
         variant: "destructive",
       });
-    },
-  });
-
-  // Return the promise so PromptInput can stop its own spinner, too
-  function handleCreate(promptText: string) {
-    const prompt = promptText?.trim();
-    if (!prompt) return Promise.resolve();
-    return createJobMutation.mutateAsync({ prompt });
+    }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <PromptInput
         isGenerating={createJobMutation.isPending}
-        onGenerate={handleCreate}
+        onGenerate={handleCreate} // PromptInput will await this
       />
     </div>
   );
