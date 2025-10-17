@@ -43,7 +43,7 @@ export default function PromptInput(_: PromptInputProps) {
       data?.data?.id;
 
     if (!id) throw new Error("No jobId in response");
-    const target = `/workspace/${id}`;
+    const target = `/studio/${id}`;
     console.log("[prompt] redirect →", target);
 
     // double-tap redirect so frameworks/SW can’t swallow it
