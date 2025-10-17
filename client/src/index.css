@@ -712,3 +712,11 @@ body[data-force-theme="settings"] .settings-text-dark {
     z-index: var(--modal-z) !important;
   }
 }
+
+/* --- chat FAB safety pins (prevent rogue globals from flipping sides) --- */
+[data-testid="button-chat-dock"],
+[data-testid="button-chat-workspace"] {
+  position: fixed !important;
+  left: auto !important;
+  right: 1rem !important;        /* Home/Library uses md:right-6 at larger screens; this is just a guard */
+}
