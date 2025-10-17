@@ -1,9 +1,8 @@
-// client/src/App.tsx
 import { Route } from "wouter";
-
-// Pages
-import Studio from "@/pages/Studio";       // marketing when no :jobId
-import Workspace from "@/pages/Workspace"; // main editor
+import Home from "@/pages/Home";            // <- new
+import Studio from "@/pages/Studio";        // finalize page (param only)
+import Workspace from "@/pages/Workspace";
+import Library from "@/pages/Library";      // <- new
 
 function NotFound() {
   return (
@@ -19,14 +18,17 @@ function NotFound() {
 export default function App() {
   return (
     <>
-      {/* Home = marketing Studio */}
-      <Route path="/" component={Studio} />
+      {/* Marketing home */}
+      <Route path="/" component={Home} />
 
       {/* Finalize flow */}
       <Route path="/studio/:jobId" component={Studio} />
 
       {/* Workspace */}
       <Route path="/workspace/:jobId" component={Workspace} />
+
+      {/* Library */}
+      <Route path="/library" component={Library} />
 
       {/* Catch-all LAST */}
       <Route path="/:rest*" component={NotFound} />

@@ -47,33 +47,39 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         const r = await fetch(`/api/jobs/${jobId}`, { credentials: "include" });
         const data = r.ok ? await r.json() : null;
         if (alive) setJob(data || null);
-      } catch {/* ignore */}
-      finally { if (alive) setLoading(false); }
+      } catch {
+        /* ignore */
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [jobId]);
 
+  // ⬇️ Swallow select-route issues and always proceed to the workspace
   async function openWorkspace() {
+    setFinalizing(true);
     try {
-      setFinalizing(true);
       const r = await fetch(`/api/jobs/${jobId}/select`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ from: "studio" }),
       });
-      if (!r.ok) throw new Error((await r.text()) || r.statusText);
-      const target = `/workspace/${jobId}`;
-      window.location.assign(target);
-      setTimeout(() => (window.location.href = target), 40);
-    } catch (err: any) {
-      toast({
-        title: "Couldn’t open workspace",
-        description: err?.message || "Request failed",
-        variant: "destructive",
-      });
-      setFinalizing(false);
+
+      if (!r.ok) {
+        // swallow 404/405/etc and continue
+        console.warn("select endpoint missing or failed, opening workspace directly");
+      }
+    } catch (e) {
+      console.warn("select failed, opening workspace directly", e);
     }
+
+    const target = `/workspace/${jobId}`;
+    window.location.assign(target);
+    setTimeout(() => (window.location.href = target), 50);
   }
 
   async function uploadInspiration() {
@@ -115,18 +121,28 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-background">
       <div className="w-full max-w-3xl space-y-6">
-        <Card className="p-6 relative z-50"> {/* sits above anything else */}
+        <Card className="p-6 relative z-50">
+          {/* sits above anything else */}
           <h1 className="text-xl font-semibold mb-1">Finalize your project</h1>
           <p className="text-sm text-muted-foreground mb-4">
             Job <span className="font-mono">{jobId}</span>
-            {job?.title ? <> — <span className="font-medium">{job.title}</span></> : null}
+            {job?.title ? (
+              <>
+                {" "}
+                — <span className="font-medium">{job.title}</span>
+              </>
+            ) : null}
           </p>
 
           <div className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">Upload inspiration (optional)</label>
               <div className="flex gap-2">
-                <Input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={uploading || finalizing} />
+                <Input
+                  type="file"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  disabled={uploading || finalizing}
+                />
                 <Button onClick={uploadInspiration} disabled={!file || uploading || finalizing}>
                   {uploading ? "Uploading…" : "Upload"}
                 </Button>
