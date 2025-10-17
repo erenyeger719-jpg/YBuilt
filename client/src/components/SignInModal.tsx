@@ -1,9 +1,9 @@
 import { useState } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   Dialog,
   DialogPortal,
   DialogOverlay,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -70,7 +70,6 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
   const handleOAuthSignIn = async (provider: string) => {
     setLoading(true);
     try {
-      // In MOCK_MODE, simulate OAuth success
       const mockEmail = `demo-${provider}@ybuilt.com`;
       const result = await mockAuth.signIn(mockEmail, "mock-oauth-password");
       if (result.success && result.user) {
@@ -95,20 +94,23 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
-        {/* Softer tint */}
-        <DialogOverlay className="fixed inset-0 z-[900] bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out" />
+        {/* Lighter, subtle tint (no heavy black, slight blur) */}
+        <DialogOverlay className="fixed inset-0 z-[900] bg-black/25 backdrop-blur-[1px] data-[state=open]:animate-in data-[state=closed]:animate-out" />
 
-        {/* This wrapper grid truly centers the content, no transforms needed */}
-        <div className="fixed inset-0 z-[1000] grid place-items-center p-4 pointer-events-none">
-          <DialogContent
+        {/* Full-viewport layer that centers the card; avoids transform flicker */}
+        <DialogPrimitive.Content
+          className="fixed inset-0 z-[1000] flex items-center justify-center p-4 outline-none"
+          data-state={open ? "open" : "closed"}
+        >
+          {/* Modal card */}
+          <div
             className="
-              relative left-auto top-auto translate-x-0 translate-y-0 m-0
               w-[92vw] max-w-md max-h-[85vh] overflow-y-auto
               rounded-2xl border bg-background p-4 sm:p-6 shadow-2xl
-              data-[state=open]:animate-in data-[state=closed]:animate-out
-              pointer-events-auto
             "
             data-testid="modal-signin"
+            role="dialog"
+            aria-modal="true"
           >
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">
@@ -260,8 +262,8 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
                 </div>
               </motion.form>
             </div>
-          </DialogContent>
-        </div>
+          </div>
+        </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>
   );
