@@ -6,18 +6,23 @@ import { useToast } from "@/hooks/use-toast";
 import PromptInput from "@/components/PromptInput";
 
 type CreateResp =
-  | { jobId: string }
-  | { id: string }
-  | { job?: { id?: string } }
+  | { jobId?: string; id?: string; job?: { id?: string } }
+  | { data?: { jobId?: string; id?: string } }
   | Record<string, any>;
 
-// Extract a job/workspace id regardless of response shape
 function getJobIdAny(resp: CreateResp | undefined) {
   if (!resp) return undefined;
-  return (resp as any).jobId || (resp as any).id || (resp as any).job?.id;
+  // try several shapes
+  return (
+    (resp as any).jobId ||
+    (resp as any).id ||
+    (resp as any).job?.id ||
+    (resp as any).data?.jobId ||
+    (resp as any).data?.id
+  );
 }
 
-// Timeout guard so we fail fast instead of hanging forever
+// hard timeout so UI never hangs forever
 function withTimeout<T>(p: Promise<T>, ms = 25000) {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(
@@ -25,14 +30,8 @@ function withTimeout<T>(p: Promise<T>, ms = 25000) {
       ms
     );
     p.then(
-      (v) => {
-        clearTimeout(t);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(t);
-        reject(e);
-      }
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); }
     );
   });
 }
@@ -44,6 +43,7 @@ export default function HeroPage() {
   const createJobMutation = useMutation({
     mutationFn: async (payload: { prompt: string }) => {
       const body = { prompt: payload.prompt, promptText: payload.prompt };
+      // ✅ real endpoint in your server
       return await withTimeout(
         apiRequest<CreateResp>("POST", "/api/generate", body)
       );
@@ -51,7 +51,8 @@ export default function HeroPage() {
     onSuccess: (resp) => {
       const id = getJobIdAny(resp);
       if (id) {
-        setLocation(`/studio/${id}`);
+        // ✅ known-good route in this repo
+        setLocation(`/workspace/${id}`);
         return;
       }
       toast({
@@ -69,10 +70,7 @@ export default function HeroPage() {
         });
         return;
       }
-      const msg =
-        err?.message ||
-        err?.statusText ||
-        (typeof err === "string" ? err : "Request failed");
+      const msg = err?.message || err?.statusText || (typeof err === "string" ? err : "Request failed");
       const code = err?.status || "";
       toast({
         title: "Create failed",
@@ -82,7 +80,7 @@ export default function HeroPage() {
     },
   });
 
-  // Return the promise so upstream UI (PromptInput) can await it
+  // Return the promise so PromptInput can stop its own spinner, too
   function handleCreate(promptText: string) {
     const prompt = promptText?.trim();
     if (!prompt) return Promise.resolve();
