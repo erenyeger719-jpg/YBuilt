@@ -41,7 +41,7 @@ export default function HeroPage() {
   const createJobMutation = useMutation({
     mutationFn: async (payload: { prompt: string }) => {
       const body = { prompt: payload.prompt, promptText: payload.prompt };
-      return await withTimeout(apiRequest<CreateResp>("POST", "/api/ggenerate", body));
+      return await withTimeout(apiRequest<CreateResp>("POST", "/api/generate", body));
     },
     retry: false,
   });
