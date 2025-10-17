@@ -1,3 +1,4 @@
+// client/src/lib/queryClient.ts
 import { QueryClient, type QueryFunction, type QueryFunctionContext } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
@@ -7,20 +8,32 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-export async function apiRequest<T = any>(
-  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
+// Swapped helper: richer errors with status/body and robust JSON/text handling
+export async function apiRequest<T>(
+  method: string,
   url: string,
-  body?: unknown
+  body?: any
 ): Promise<T> {
-  const res = await fetch(url, {
+  const r = await fetch(url, {
     method,
     headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: body === undefined ? undefined : JSON.stringify(body),
+    credentials: "include", // keep cookies/sessions
+    body: body ? JSON.stringify(body) : undefined,
   });
-  await throwIfResNotOk(res);
-  const ct = res.headers.get("content-type") || "";
-  return ct.includes("application/json") ? ((await res.json()) as T) : (null as any);
+
+  const text = await r.text();
+  const isJSON = r.headers.get("content-type")?.includes("application/json");
+  const data = isJSON && text ? JSON.parse(text) : text;
+
+  if (!r.ok) {
+    const err: any = new Error(
+      (data && (data.message || data.error)) || r.statusText || "Request failed"
+    );
+    err.status = r.status; // <-- used by onError handlers
+    err.body = data;
+    throw err;
+  }
+  return data as T;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
