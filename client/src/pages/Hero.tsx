@@ -67,7 +67,8 @@ export default function HeroPage() {
       // console.log("[create] raw response:", resp);
       const id = getJobIdAny(resp);
       if (id) {
-        setLocation(`/workspace/${id}`);
+        // route to studio flow
+        setLocation(`/studio/${id}`);
         return;
       }
       toast({
@@ -98,10 +99,11 @@ export default function HeroPage() {
     },
   });
 
-  async function handleCreate(promptText: string) {
+  // Return the promise so upstream UI (PromptInput) can await it
+  function handleCreate(promptText: string) {
     const prompt = promptText?.trim();
-    if (!prompt) return;
-    createJobMutation.mutate({ prompt });
+    if (!prompt) return Promise.resolve();
+    return createJobMutation.mutateAsync({ prompt });
   }
 
   return (
