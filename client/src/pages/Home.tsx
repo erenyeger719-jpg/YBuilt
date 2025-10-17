@@ -1,45 +1,23 @@
+// client/src/pages/Home.tsx
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Showcase from "@/components/Showcase";
 import ChatPanel from "@/components/ChatPanel";
-import TerminalPanel from "@/components/TerminalPanel";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, X, Code2 } from "lucide-react";
+import { MessageCircle, X } from "lucide-react";
 
-function FloatingUI({
+function FloatingChat({
   isChatOpen,
   setIsChatOpen,
-  isTerminalOpen,
-  setIsTerminalOpen,
 }: {
   isChatOpen: boolean;
   setIsChatOpen: (v: boolean) => void;
-  isTerminalOpen: boolean;
-  setIsTerminalOpen: (v: boolean) => void;
 }) {
   return createPortal(
     <>
-      {/* Terminal toggle — bottom-left */}
-      <Button
-        size="icon"
-        style={{
-          position: "fixed",
-          bottom: 24,
-          left: 24,
-          right: "auto",
-          zIndex: 70,
-        }}
-        className="h-14 w-14 rounded-full shadow-lg"
-        onClick={() => setIsTerminalOpen(!isTerminalOpen)}
-        data-testid="button-toggle-terminal"
-        aria-label="Toggle terminal"
-      >
-        {isTerminalOpen ? <X className="w-6 h-6" /> : <Code2 className="w-6 h-6" />}
-      </Button>
-
-      {/* Chat toggle — bottom-right (force left:auto so nothing overrides it) */}
+      {/* Chat toggle — bottom-right only */}
       <Button
         size="icon"
         style={{
@@ -57,24 +35,7 @@ function FloatingUI({
         {isChatOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
       </Button>
 
-      {/* Panels — anchored away from toggles */}
-      {isTerminalOpen && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 120,
-            left: 24,
-            zIndex: 60,
-            width: 600,
-            height: 700,
-          }}
-          className="shadow-2xl"
-          data-testid="terminal-panel-container"
-        >
-          <TerminalPanel />
-        </div>
-      )}
-
+      {/* Chat panel */}
       {isChatOpen && (
         <div
           style={{
@@ -99,20 +60,13 @@ function FloatingUI({
 
 export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <Hero />
       <Showcase />
-
-      <FloatingUI
-        isChatOpen={isChatOpen}
-        setIsChatOpen={setIsChatOpen}
-        isTerminalOpen={isTerminalOpen}
-        setIsTerminalOpen={setIsTerminalOpen}
-      />
+      <FloatingChat isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} />
     </div>
   );
 }
