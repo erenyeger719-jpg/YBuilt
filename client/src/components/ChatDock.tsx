@@ -1,3 +1,4 @@
+// client/src/components/ChatDock.tsx
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
@@ -5,8 +6,9 @@ import { MessageCircle, X } from "lucide-react";
 import ChatPanel from "@/components/ChatPanel";
 
 /**
- * Right-edge chat for Home/Library.
- * Portaled to <body> so transforms/overflow on page sections can't clip it.
+ * Docked chat for Home & Library pages.
+ * Portaled to <body> so page containers can't clip it.
+ * Uses top offsets that align with the sticky header heights.
  */
 export default function ChatDock() {
   const [mounted, setMounted] = useState(false);
@@ -21,13 +23,14 @@ export default function ChatDock() {
 
   return createPortal(
     <>
-      {/* Launcher sits just below header (h-14 md:h-16) */}
+      {/* Launcher sits just under the sticky header (h-14/md:h-16) */}
       <Button
         size="icon"
         variant="secondary"
         aria-label={open ? "Close chat" : "Open chat"}
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="fixed top-14 md:top-16 right-4 md:right-6 z-[200] h-10 w-10 rounded-full shadow-md"
+        className="fixed top-14 md:top-16 right-4 md:right-6 z-[300] h-10 w-10 rounded-full shadow-md"
         data-testid="button-chat-dock"
       >
         {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
@@ -35,11 +38,14 @@ export default function ChatDock() {
 
       {open && (
         <div
+          role="dialog"
+          aria-label="Chat panel"
           className="
-            fixed z-[190]
-            top-20 md:top-[88px] right-4 md:right-6
-            w-[88vw] sm:w-[420px] max-w-[92vw]
-            h-[calc(100vh-112px)] md:h-[calc(100vh-124px)]
+            fixed z-[280]
+            top-20 md:top-[88px]
+            right-4 md:right-6
+            bottom-4
+            w-[min(92vw,420px)]
             rounded-2xl overflow-hidden shadow-2xl bg-background
           "
           data-testid="chat-panel-dock"

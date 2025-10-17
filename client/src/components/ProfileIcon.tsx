@@ -56,12 +56,12 @@ export default function ProfileIcon() {
           </Button>
         </DropdownMenuTrigger>
 
-        {/* ensure this renders above sticky header */}
+        {/* ensure this renders above sticky header and chat dock */}
         <DropdownMenuContent
           align="end"
           sideOffset={8}
           collisionPadding={16}
-          className="z-[100] min-w-[220px]"
+          className="z-[500] min-w-[220px]"
         >
           <DropdownMenuLabel>
             {isAuthed ? user?.email : "Account"}
