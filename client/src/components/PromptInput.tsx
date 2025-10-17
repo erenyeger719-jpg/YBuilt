@@ -1,25 +1,27 @@
+// client/src/components/PromptInput.tsx
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sparkles, ArrowRight, Loader2 } from "lucide-react";
 
 interface PromptInputProps {
-  onGenerate?: (prompt: string) => Promise<void> | void; // async allowed
+  onGenerate?: (prompt: string) => Promise<any> | any; // note: promise allowed
+  isGenerating?: boolean; // optional, but we’ll run our own local state
 }
 
-export default function PromptInput({ onGenerate }: PromptInputProps) {
+export default function PromptInput({ onGenerate, isGenerating = false }: PromptInputProps) {
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const busy = isGenerating || submitting;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const text = prompt.trim();
-    if (!text || submitting) return;
+    if (!prompt.trim() || busy) return;
 
     try {
       setSubmitting(true);
-      await onGenerate?.(text);
-      // if the page redirects, we won’t hit the next line—totally fine
+      await onGenerate?.(prompt);       // <- await the promise
     } finally {
       setSubmitting(false);
     }
@@ -36,17 +38,17 @@ export default function PromptInput({ onGenerate }: PromptInputProps) {
             placeholder="Describe your website or app idea..."
             className="w-full h-14 text-lg bg-background/50 border-border/30 focus:border-primary/50 transition-colors pr-32"
             data-testid="input-prompt"
-            disabled={submitting}
+            disabled={busy}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2">
             <Button
               type="submit"
               size="default"
-              disabled={!prompt.trim() || submitting}
+              disabled={!prompt.trim() || busy}
               data-testid="button-create"
               className="gap-2"
             >
-              {submitting ? (
+              {busy ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Creating...
@@ -69,7 +71,7 @@ export default function PromptInput({ onGenerate }: PromptInputProps) {
             size="sm"
             className="gap-1"
             data-testid="button-explore"
-            disabled={submitting}
+            disabled={busy}
             onClick={() => {
               document.getElementById("showcase")?.scrollIntoView({ behavior: "smooth" });
             }}
