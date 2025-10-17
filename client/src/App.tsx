@@ -1,8 +1,11 @@
-import { Route } from "wouter";
-import Home from "@/pages/Home";            // <- new
-import Studio from "@/pages/Studio";        // finalize page (param only)
-import Workspace from "@/pages/Workspace";
-import Library from "@/pages/Library";      // <- new
+// client/src/App.tsx
+import { Route, Switch } from "wouter";
+
+// Pages
+import Home from "@/pages/Home";           // marketing
+import Studio from "@/pages/Studio";       // finalize when :jobId present
+import Workspace from "@/pages/Workspace"; // editor
+import Library from "@/pages/Library";     // your library page
 
 function NotFound() {
   return (
@@ -17,21 +20,24 @@ function NotFound() {
 
 export default function App() {
   return (
-    <>
-      {/* Marketing home */}
+    <Switch>
+      {/* Home (marketing) */}
       <Route path="/" component={Home} />
 
-      {/* Finalize flow */}
+      {/* Studio: marketing at /studio, finalize at /studio/:jobId */}
+      <Route path="/studio" component={Studio} />
       <Route path="/studio/:jobId" component={Studio} />
-
-      {/* Workspace */}
-      <Route path="/workspace/:jobId" component={Workspace} />
 
       {/* Library */}
       <Route path="/library" component={Library} />
 
-      {/* Catch-all LAST */}
-      <Route path="/:rest*" component={NotFound} />
-    </>
+      {/* Workspace */}
+      <Route path="/workspace/:jobId" component={Workspace} />
+
+      {/* Fallback (must be last, no path) */}
+      <Route>
+        <NotFound />
+      </Route>
+    </Switch>
   );
 }
