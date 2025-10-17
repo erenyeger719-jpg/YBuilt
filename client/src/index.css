@@ -718,5 +718,14 @@ body[data-force-theme="settings"] .settings-text-dark {
 [data-testid="button-chat-workspace"] {
   position: fixed !important;
   left: auto !important;
-  right: 1rem !important;        /* Home/Library uses md:right-6 at larger screens; this is just a guard */
+  top: auto !important;
+  right: 1rem !important;
+  bottom: 1rem !important;
+}
+@media (min-width: 768px) {
+  [data-testid="button-chat-dock"],
+  [data-testid="button-chat-workspace"] {
+    right: 1.5rem !important;
+    bottom: 1.5rem !important;
+  }
 }
