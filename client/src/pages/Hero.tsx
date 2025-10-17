@@ -23,8 +23,14 @@ function withTimeout<T>(p: Promise<T>, ms = 25000) {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => reject(Object.assign(new Error("Timed out"), { status: 408 })), ms);
     p.then(
-      (v) => { clearTimeout(t); resolve(v); },
-      (e) => { clearTimeout(t); reject(e); }
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
     );
   });
 }
@@ -35,7 +41,7 @@ export default function HeroPage() {
   const createJobMutation = useMutation({
     mutationFn: async (payload: { prompt: string }) => {
       const body = { prompt: payload.prompt, promptText: payload.prompt };
-      return await withTimeout(apiRequest<CreateResp>("POST", "/api/generate", body));
+      return await withTimeout(apiRequest<CreateResp>("POST", "/api/ggenerate", body));
     },
     retry: false,
   });
@@ -43,10 +49,15 @@ export default function HeroPage() {
   async function handleCreate(promptText: string) {
     try {
       const resp = await createJobMutation.mutateAsync({ prompt: promptText });
-      const id = getJobIdAny(resp);
-      if (!id) throw new Error("No job id in response");
-      // Hard redirect to a route we know exists in your repo
-      window.location.href = `/workspace/${id}`;
+
+      // Your server returns { jobId: "..." } on 201
+      const id = (resp as any)?.jobId || (resp as any)?.id;
+      console.log("[create] response:", resp, "→ id:", id);
+
+      if (!id) throw new Error("No jobId in response");
+
+      // Hard redirect so nothing in the SPA can swallow it
+      window.location.replace(`/workspace/${id}`);
     } catch (err: any) {
       if (err?.status === 401) {
         toast({
@@ -61,8 +72,7 @@ export default function HeroPage() {
         description: err?.message || "Request failed",
         variant: "destructive",
       });
-      // Let PromptInput stop its spinner via finally{}
-      throw err; // keep rejection so the submitter knows it ended
+      throw err; // let PromptInput clear its spinner via finally
     }
   }
 
