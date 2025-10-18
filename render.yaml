@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: ybuilt1
+    env: static
+    rootDirectory: client
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
