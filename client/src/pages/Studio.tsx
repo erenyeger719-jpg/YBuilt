@@ -1,24 +1,44 @@
 // client/src/pages/Studio.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-
-// --- marketing bits you already had ---
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Showcase from "@/components/Showcase";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger
+} from "@/components/ui/dialog";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetTrigger
+} from "@/components/ui/sheet";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select";
+import { Sparkles, Upload, HardDrive, Palette, Server, ShieldCheck } from "lucide-react";
 
 type Job = { id: string; status?: string; title?: string; prompt?: string };
 
+type DeployPreset = "beginner" | "pro" | "business" | "custom";
+
+type ThemeDef = { id: string; name: string; colors: [string,string,string] };
+
+const PRESET_THEMES: ThemeDef[] = [
+  { id: "mono", name: "Monochrome", colors: ["#000000","#7A7A7A","#FFFFFF"] },
+  { id: "sunset", name: "Sunset Glow", colors: ["#0a0a0a","#ff4da6","#ffffff"] },
+  { id: "royal", name: "Royal", colors: ["#0b0b0b","#7A1FF3","#E8DDFF"] },
+  { id: "slate", name: "Slate Sky", colors: ["#0b0b0b","#3B82F6","#DBEAFE"] },
+];
+
 export default function Studio() {
-  // NOTE: jobId is optional; page serves both /studio and /studio/:jobId
   const { jobId } = useParams<{ jobId?: string }>();
 
-  // If no id → render your existing marketing Studio page
+  // No :jobId → show your marketing Studio (unchanged)
   if (!jobId) {
+    useForceStudioTheme(false); // be safe
     return (
       <div className="min-h-screen bg-background">
         <Header />
@@ -28,18 +48,67 @@ export default function Studio() {
     );
   }
 
-  // If id exists → render the finalize-only strip (no marketing UI)
+  // :jobId present → the Finalize view
   return <FinalizeStudio jobId={jobId} />;
 }
 
+/** Mount/unmount: toggle the Studio forced theme */
+function useForceStudioTheme(enable: boolean) {
+  useEffect(() => {
+    if (enable) {
+      document.body.dataset.forceTheme = "studio";
+    } else {
+      delete document.body.dataset.forceTheme;
+    }
+    return () => {
+      delete document.body.dataset.forceTheme;
+    };
+  }, [enable]);
+}
+
 function FinalizeStudio({ jobId }: { jobId: string }) {
+  useForceStudioTheme(true);
+
   const { toast } = useToast();
+
+  // Job + initial prompt
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
-  const [finalizing, setFinalizing] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
 
+  // Left panel state
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  // Deployment (defaults to beginner / low cost)
+  const [deployPreset, setDeployPreset] = useState<DeployPreset>("beginner");
+  const [deployDialogOpen, setDeployDialogOpen] = useState(false);
+  const [customPlatform, setCustomPlatform] = useState("Render");
+  const [customHost, setCustomHost] = useState("render.com");
+
+  // Themes
+  const [themeSheetOpen, setThemeSheetOpen] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState<ThemeDef>(PRESET_THEMES[1]); // sunset default
+  const [customA, setCustomA] = useState("#0a0a0a");
+  const [customB, setCustomB] = useState("#ff4da6");
+  const [customC, setCustomC] = useState("#ffffff");
+
+  // Middle “plan” text
+  const lastPrompt = useMemo(() => localStorage.getItem("lastPrompt") || "", []);
+  const plan = useMemo(() => {
+    const base = job?.prompt || lastPrompt || "New project";
+    const tier =
+      deployPreset === "beginner" ? "Starter stack (cheap hosting, simple CI)"
+      : deployPreset === "pro" ? "Pro stack (Git + CI, observability, CDN)"
+      : deployPreset === "business" ? "Business-ready (teams, SSO, tracing)"
+      : "Custom deployment";
+    return {
+      name: (base || "Project").slice(0, 60),
+      summary: `Plan based on your idea: “${base}”.`,
+      stack: tier,
+    };
+  }, [job?.prompt, lastPrompt, deployPreset]);
+
+  // Load job (for title/prompt)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -47,40 +116,12 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         const r = await fetch(`/api/jobs/${jobId}`, { credentials: "include" });
         const data = r.ok ? await r.json() : null;
         if (alive) setJob(data || null);
-      } catch {
-        /* ignore */
-      } finally {
+      } catch {/* ignore */} finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [jobId]);
-
-  // ⬇️ Swallow select-route issues and always proceed to the workspace
-  async function openWorkspace() {
-    setFinalizing(true);
-    try {
-      const r = await fetch(`/api/jobs/${jobId}/select`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: "studio" }),
-      });
-
-      if (!r.ok) {
-        // swallow 404/405/etc and continue
-        console.warn("select endpoint missing or failed, opening workspace directly");
-      }
-    } catch (e) {
-      console.warn("select failed, opening workspace directly", e);
-    }
-
-    const target = `/workspace/${jobId}`;
-    window.location.assign(target);
-    setTimeout(() => (window.location.href = target), 50);
-  }
 
   async function uploadInspiration() {
     if (!file) return;
@@ -97,20 +138,57 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
       toast({ title: "Uploaded", description: `${file.name} added to workspace` });
       setFile(null);
     } catch (err: any) {
-      toast({
-        title: "Upload failed",
-        description: err?.message || "Request failed",
-        variant: "destructive",
-      });
+      toast({ title: "Upload failed", description: err?.message || "Request failed", variant: "destructive" });
     } finally {
       setUploading(false);
     }
   }
 
+  async function saveToLibrary() {
+    try {
+      await fetch("/api/drafts", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId,
+          userId: "demo",
+          plan,
+          theme: selectedTheme,
+          deployPreset,
+        }),
+      });
+      toast({ title: "Saved", description: "Draft saved to your library." });
+      window.location.assign("/library");
+    } catch (err: any) {
+      toast({ title: "Couldn’t save", description: err?.message || "Request failed", variant: "destructive" });
+    }
+  }
+
+  async function openWorkspace() {
+    try {
+      // Try to notify backend (ok if it 404/405s)
+      await fetch(`/api/jobs/${jobId}/select`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "studio",
+          theme: selectedTheme,
+          deployPreset,
+        }),
+      }).catch(() => {});
+    } finally {
+      const target = `/workspace/${jobId}`;
+      window.location.assign(target);
+      setTimeout(() => (window.location.href = target), 40);
+    }
+  }
+
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
+      <div className="studio-root min-h-screen grid place-items-center">
+        <div className="relative z-10 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Preparing studio…</p>
         </div>
@@ -119,58 +197,256 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-background">
-      <div className="w-full max-w-3xl space-y-6">
-        <Card className="p-6 relative z-50">
-          {/* sits above anything else */}
-          <h1 className="text-xl font-semibold mb-1">Finalize your project</h1>
-          <p className="text-sm text-muted-foreground mb-4">
-            Job <span className="font-mono">{jobId}</span>
-            {job?.title ? (
-              <>
-                {" "}
-                — <span className="font-medium">{job.title}</span>
-              </>
-            ) : null}
-          </p>
+    <div className="studio-root min-h-screen">
+      {/* Keep your header on top of the glass */}
+      <div className="relative z-10">
+        <Header />
+      </div>
 
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Upload inspiration (optional)</label>
-              <div className="flex gap-2">
-                <Input
-                  type="file"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  disabled={uploading || finalizing}
-                />
-                <Button onClick={uploadInspiration} disabled={!file || uploading || finalizing}>
-                  {uploading ? "Uploading…" : "Upload"}
-                </Button>
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16">
+        {/* 3-column premium layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* LEFT — inputs & choices */}
+          <Card className="lg:col-span-4 p-6 card-glass">
+            <div className="gloss-sheen" />
+            <div className="relative z-10 space-y-6">
+              <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5" /> Finalize inputs
+              </h2>
+
+              {/* Deployment method */}
+              <div className="space-y-2">
+                <Label>Send to Internet</Label>
+                <Dialog open={deployDialogOpen} onOpenChange={setDeployDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="secondary" className="w-full justify-between">
+                      {deployPreset === "beginner" && "Beginner (low cost) — default"}
+                      {deployPreset === "pro" && "Professional (medium)"}
+                      {deployPreset === "business" && "Business"}
+                      {deployPreset === "custom" && `Custom: ${customPlatform}`}
+                      <Server className="h-4 w-4 opacity-75" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-xl">
+                    <DialogHeader>
+                      <DialogTitle>Select deployment method</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                      <PresetCard
+                        title="Beginner"
+                        desc="Very low cost, simple hosting"
+                        active={deployPreset === "beginner"}
+                        onClick={() => setDeployPreset("beginner")}
+                      />
+                      <PresetCard
+                        title="Professional"
+                        desc="Git repo + CI, monitoring"
+                        active={deployPreset === "pro"}
+                        onClick={() => setDeployPreset("pro")}
+                      />
+                      <PresetCard
+                        title="Business"
+                        desc="Teams, SSO, advanced tracing"
+                        active={deployPreset === "business"}
+                        onClick={() => setDeployPreset("business")}
+                      />
+                      <PresetCard
+                        title="Select your own"
+                        desc="Choose platform + host"
+                        active={deployPreset === "custom"}
+                        onClick={() => setDeployPreset("custom")}
+                      />
+                    </div>
+
+                    {deployPreset === "custom" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                        <div>
+                          <Label>Platform</Label>
+                          <Select value={customPlatform} onValueChange={setCustomPlatform}>
+                            <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Render">Render</SelectItem>
+                              <SelectItem value="Vercel">Vercel</SelectItem>
+                              <SelectItem value="Netlify">Netlify</SelectItem>
+                              <SelectItem value="Fly.io">Fly.io</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Host (notes)</Label>
+                          <Input className="mt-1.5" value={customHost} onChange={(e)=>setCustomHost(e.target.value)} />
+                        </div>
+                      </div>
+                    )}
+
+                    <DialogFooter className="mt-4">
+                      <Button onClick={() => setDeployDialogOpen(false)}>Done</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <p className="text-xs text-muted-foreground">
+                  API keys and URLs will be collected inside the Workspace.
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                JPEG/PNG/SVG or text docs work fine. You can add more later inside the workspace.
-              </p>
-            </div>
 
-            <div className="flex gap-2 pt-2">
-              <Button onClick={openWorkspace} disabled={finalizing}>
-                {finalizing ? "Opening…" : "Finalize & Open Workspace"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const target = `/workspace/${jobId}`;
-                  window.location.assign(target);
-                  setTimeout(() => (window.location.href = target), 40);
-                }}
-                disabled={finalizing}
-              >
-                Skip for now
-              </Button>
+              {/* Upload inspirations */}
+              <div className="space-y-2">
+                <Label>Upload inspiration</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="file"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    disabled={uploading}
+                  />
+                  <Button onClick={uploadInspiration} disabled={!file || uploading} className="gap-1">
+                    <Upload className="h-4 w-4" />
+                    {uploading ? "Uploading…" : "Upload"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  JPEG/PNG/SVG or text docs. You can add more later.
+                </p>
+              </div>
+
+              {/* Themes */}
+              <div className="space-y-2">
+                <Label>Theme</Label>
+                <Sheet open={themeSheetOpen} onOpenChange={setThemeSheetOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="secondary" className="w-full justify-between">
+                      {selectedTheme.name}
+                      <Palette className="h-4 w-4 opacity-75" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="bottom" className="max-h-[70vh] overflow-y-auto">
+                    <SheetHeader>
+                      <SheetTitle>Select a theme</SheetTitle>
+                    </SheetHeader>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                      {PRESET_THEMES.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => { setSelectedTheme(t); }}
+                          className={`p-3 rounded-lg border text-left hover-elevate ${selectedTheme.id===t.id ? "ring-2 ring-primary" : ""}`}
+                        >
+                          <div className="font-medium mb-2">{t.name}</div>
+                          <ThemeBar colors={t.colors} />
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 border-t pt-4 space-y-3">
+                      <div className="font-medium">Add your own</div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <input type="color" value={customA} onChange={(e)=>setCustomA(e.target.value)} className="h-10 w-full rounded" />
+                        <input type="color" value={customB} onChange={(e)=>setCustomB(e.target.value)} className="h-10 w-full rounded" />
+                        <input type="color" value={customC} onChange={(e)=>setCustomC(e.target.value)} className="h-10 w-full rounded" />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <ThemeBar colors={[customA, customB, customC]} />
+                        <Button
+                          onClick={() => {
+                            setSelectedTheme({ id: "custom", name: "Custom", colors: [customA, customB, customC] });
+                            setThemeSheetOpen(false);
+                          }}
+                          className="ml-3"
+                        >
+                          Save theme
+                        </Button>
+                      </div>
+                    </div>
+
+                    <SheetFooter className="mt-4">
+                      <Button variant="outline" onClick={()=>setThemeSheetOpen(false)}>Close</Button>
+                    </SheetFooter>
+                  </SheetContent>
+                </Sheet>
+
+                {/* Live preview chip under the button */}
+                <ThemeBar colors={selectedTheme.colors} className="mt-2" />
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+
+          {/* MIDDLE — plan + prompt */}
+          <Card className="lg:col-span-5 p-6 card-glass">
+            <div className="gloss-sheen" />
+            <div className="relative z-10 space-y-5">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                <h2 className="text-xl font-semibold">AI plan</h2>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-sm text-muted-foreground">Project name</div>
+                <div className="text-2xl font-semibold metal-text">{plan.name || "Your project"}</div>
+
+                <div className="mt-4 text-sm">
+                  <div className="text-muted-foreground mb-1">Summary</div>
+                  <p>{plan.summary}</p>
+                </div>
+
+                <div className="mt-4 text-sm">
+                  <div className="text-muted-foreground mb-1">Stack</div>
+                  <p>{plan.stack}</p>
+                </div>
+              </div>
+
+              {/* Prompt (read-only carryover) */}
+              <div className="mt-6">
+                <Label className="text-sm">Prompt</Label>
+                <Input
+                  value={job?.prompt || lastPrompt}
+                  readOnly
+                  className="mt-1.5 bg-background/50"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  This came from the Home prompt. You can refine inside the Workspace.
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {/* RIGHT — actions */}
+          <Card className="lg:col-span-3 p-6 card-glass">
+            <div className="gloss-sheen" />
+            <div className="relative z-10 space-y-4">
+              <h2 className="text-xl font-semibold">Actions</h2>
+              <Button onClick={openWorkspace} className="w-full">
+                Finalize & Open Workspace
+              </Button>
+              <Button onClick={saveToLibrary} variant="secondary" className="w-full">
+                Save to Library
+              </Button>
+
+              <div className="mt-3 text-xs text-muted-foreground">
+                Job <span className="font-mono">{jobId}</span>
+              </div>
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
+  );
+}
+
+function ThemeBar({ colors, className="" }: { colors: [string,string,string] | string[]; className?: string }) {
+  const [c1,c2,c3] = colors as string[];
+  return (
+    <div className={`rounded-md overflow-hidden border ${className}`} style={{ background: `linear-gradient(90deg, ${c1} 0 33%, ${c2} 33% 66%, ${c3} 66% 100%)`, height: 28 }} />
+  );
+}
+
+function PresetCard({ title, desc, active, onClick }:{ title:string; desc:string; active?:boolean; onClick:()=>void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`p-3 rounded-lg border text-left hover-elevate ${active ? "ring-2 ring-primary" : ""}`}
+    >
+      <div className="font-medium">{title}</div>
+      <div className="text-xs text-muted-foreground">{desc}</div>
+    </button>
   );
 }
