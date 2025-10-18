@@ -224,11 +224,12 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   const lastPrompt = useMemo(() => localStorage.getItem("lastPrompt") || "", []);
   const plan = useMemo(() => {
     const base = job?.prompt || lastPrompt || "New project";
-    the const tier =
+    const tier =
       deployPreset === "beginner" ? "Starter stack (cheap hosting, simple CI)"
         : deployPreset === "pro" ? "Pro stack (Git + CI, observability, CDN)"
           : deployPreset === "business" ? "Business-ready (teams, SSO, tracing)"
             : "Custom deployment";
+
     return {
       name: (base || "Project").slice(0, 60),
       summary: `Plan based on your idea: “${base}”.`,
