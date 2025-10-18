@@ -1,211 +1,198 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-/** Types */
-type NodeType = "image" | "video" | "text" | "gallery" | "cta";
-type Side = "l" | "r" | "t" | "b";
-type NodeDef = {
-  id: string;
-  type: NodeType;
-  title: string;
-  x: number; y: number; w: number; h: number;
-};
-type Edge = {
-  id: string;
-  from: { id: string; side: Side };
-  to:   { id: string; side: Side };
-};
+/** Utilities */
+type Pt = { x: number; y: number };
+type Node = { id: string; title: string; x: number; y: number; w: number; h: number };
 
-/** Helpers */
-function clamp(n: number, a: number, b: number) { return Math.max(a, Math.min(b, n)); }
-function anchorXY(n: NodeDef, side: Side) {
-  const cx = n.x + n.w / 2, cy = n.y + n.h / 2;
-  if (side === "l") return { x: n.x,        y: cy };
-  if (side === "r") return { x: n.x + n.w,  y: cy };
-  if (side === "t") return { x: cx,         y: n.y };
-  return                  { x: cx,         y: n.y + n.h }; // "b"
-}
-function cubicPath(a: {x:number;y:number}, b: {x:number;y:number}) {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const horiz = Math.abs(dx) >= Math.abs(dy);
-  const k = clamp(Math.hypot(dx,dy) * 0.35, 60, 220);           // tension
-  const sag = horiz ? Math.sign(dy||1) * Math.min(80, Math.abs(dy)*0.3) : 0; // gentle sag
-  const c1 = horiz ? { x: a.x + Math.sign(dx)*k, y: a.y + sag } : { x: a.x, y: a.y + Math.sign(dy)*k };
-  const c2 = horiz ? { x: b.x - Math.sign(dx)*k, y: b.y + sag } : { x: b.x, y: b.y - Math.sign(dy)*k };
-  return `M ${a.x},${a.y} C ${c1.x},${c1.y} ${c2.x},${c2.y} ${b.x},${b.y}`;
+const GRID = 16; // “one space”
+
+function snap(v: number) { return Math.round(v / GRID) * GRID; }
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
 }
 
-/** Draggable Weavy board */
+/** Cubic curve that feels like a wire (direction-aware handles) */
+function wirePath(a: Pt, b: Pt) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const k = 0.33; // handle strength
+  const cx1 = a.x + dx * k;
+  const cy1 = a.y + dy * 0.05;
+  const cx2 = b.x - dx * k;
+  const cy2 = b.y - dy * 0.05;
+  return `M ${a.x} ${a.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${b.x} ${b.y}`;
+}
+
+/** Anchor helpers (center of each edge) */
+function anchors(n: Node) {
+  return {
+    l: { x: n.x, y: n.y + n.h / 2 },
+    r: { x: n.x + n.w, y: n.y + n.h / 2 },
+    t: { x: n.x + n.w / 2, y: n.y },
+    b: { x: n.x + n.w / 2, y: n.y + n.h },
+  };
+}
+
+/** Initial nodes */
+const START: Node[] = [
+  { id: "portfolio", title: "Portfolio", x: 220, y: 120, w: 152, h: 48 },
+  { id: "blog",      title: "Blog / Magazine", x: 460, y: 90,  w: 192, h: 48 },
+  { id: "shop",      title: "Shop",            x: 780, y: 120, w: 112, h: 48 },
+  { id: "saas",      title: "SaaS Landing",    x: 980, y: 100, w: 168, h: 48 },
+  { id: "dashboard", title: "Dashboard",       x: 300, y: 240, w: 148, h: 48 },
+  { id: "docs",      title: "Docs",            x: 620, y: 240, w: 104, h: 48 },
+  { id: "mobile",    title: "Mobile Shell",    x: 900, y: 260, w: 164, h: 48 },
+  { id: "booking",   title: "Booking",         x: 240, y: 380, w: 128, h: 48 },
+  { id: "education", title: "Education",       x: 520, y: 400, w: 144, h: 48 },
+  { id: "community", title: "Community",       x: 760, y: 440, w: 152, h: 48 },
+  { id: "aiapp",     title: "AI App",          x: 1040,y: 460, w: 116, h: 48 },
+];
+
+/** Simple wiring map: [fromId, fromAnchor, toId, toAnchor] */
+const LINKS: Array<[string,"l"|"r"|"t"|"b",string,"l"|"r"|"t"|"b"]> = [
+  ["portfolio","r","blog","l"],
+  ["blog","r","shop","l"],
+  ["shop","r","saas","l"],
+  ["blog","b","docs","t"],
+  ["docs","b","education","t"],
+  ["education","r","community","l"],
+  ["community","r","aiapp","l"],
+  ["shop","b","mobile","t"],
+];
+
+/** Main board */
 export default function WeavyBoard() {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [dragOff, setDragOff] = useState({ x:0, y:0 });
-  const [nodes, setNodes] = useState<NodeDef[]>([
-    { id: "n1", type: "image",  title: "IMAGE — Stable Diffusion", x: 80,  y: 80,  w: 420, h: 340 },
-    { id: "n2", type: "text",   title: "TEXT",                      x: 580, y: 120, w: 260, h: 120 },
-    { id: "n3", type: "image",  title: "IMAGE — FLUX PRO 1.1",      x: 580, y: 300, w: 220, h: 230 },
-    { id: "n4", type: "video",  title: "VIDEO — Slot",              x: 880, y: 80,  w: 380, h: 460 },
-    { id: "n5", type: "gallery",title: "COLOR REFERENCE",           x: 120, y: 460, w: 300, h: 140 },
-    { id: "n6", type: "cta",    title: "Create project",            x: 980, y: 580, w: 220, h: 80  },
-  ]);
-  const edges: Edge[] = useMemo(() => ([
-    { id: "e1", from: { id: "n1", side: "r" }, to: { id: "n2", side: "l" } },
-    { id: "e2", from: { id: "n2", side: "r" }, to: { id: "n4", side: "l" } },
-    { id: "e3", from: { id: "n1", side: "b" }, to: { id: "n5", side: "t" } },
-    { id: "e4", from: { id: "n3", side: "r" }, to: { id: "n4", side: "l" } },
-  ]), []);
+  const [nodes, setNodes] = useState<Node[]>(START);
 
-  // Magnetic only inside this section
+  // dragging
+  const dragId = useRef<string | null>(null);
+  const grabOffset = useRef<Pt>({ x: 0, y: 0 });
+
   useEffect(() => {
-    const root = wrapRef.current;
-    if (!root) return;
-    let last: HTMLElement | null = null;
-    const onMove = (e: PointerEvent) => {
-      const m = (e.target as HTMLElement)?.closest<HTMLElement>(".btn-magnetic");
-      if (m) {
-        last = m;
-        const b = m.getBoundingClientRect();
-        const x = e.clientX - (b.left + b.width/2);
-        const y = e.clientY - (b.top  + b.height/2);
-        const clamp = (v:number)=> Math.max(-24, Math.min(24, v));
-        m.style.setProperty("--tx", clamp(x*0.15) + "px");
-        m.style.setProperty("--ty", clamp(y*0.15) + "px");
-      } else if (last) {
-        last.style.setProperty("--tx","0px");
-        last.style.setProperty("--ty","0px");
-        last = null;
-      }
+    const el = wrapRef.current!;
+    if (!el) return;
+
+    const onDown = (e: PointerEvent) => {
+      const target = (e.target as HTMLElement).closest<HTMLElement>('[data-node-id]');
+      if (!target) return;
+      const id = target.dataset.nodeId!;
+      const n = nodes.find(n => n.id === id);
+      if (!n) return;
+
+      dragId.current = id;
+      const rect = el.getBoundingClientRect();
+      grabOffset.current = { x: e.clientX - rect.left - n.x, y: e.clientY - rect.top - n.y };
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     };
-    const onLeave = () => { if (last) { last.style.setProperty("--tx","0px"); last.style.setProperty("--ty","0px"); last = null; } };
-    root.addEventListener("pointermove", onMove, { passive: true });
-    root.addEventListener("pointerleave", onLeave, { passive: true });
-    return () => { root.removeEventListener("pointermove", onMove); root.removeEventListener("pointerleave", onLeave); };
-  }, []);
 
-  /** Dragging */
-  useEffect(() => {
-    function onMove(e: PointerEvent) {
-      if (!dragId || !wrapRef.current) return;
-      const r = wrapRef.current.getBoundingClientRect();
-      setNodes(ns => ns.map(n => {
-        if (n.id !== dragId) return n;
-        const nx = clamp(e.clientX - r.left - dragOff.x, 20, r.width - n.w - 20);
-        const ny = clamp(e.clientY - r.top  - dragOff.y,  8, r.height - n.h - 8);
+    const onMove = (e: PointerEvent) => {
+      if (!dragId.current) return;
+      const rect = el.getBoundingClientRect();
+      const id = dragId.current;
+      setNodes(prev => prev.map(n => {
+        if (n.id !== id) return n;
+        let nx = e.clientX - rect.left - grabOffset.current.x;
+        let ny = e.clientY - rect.top - grabOffset.current.y;
+        // snap-to-grid & clamp to board
+        nx = snap(nx); ny = snap(ny);
+        nx = clamp(nx, 0, rect.width - n.w);
+        ny = clamp(ny, 0, rect.height - n.h);
         return { ...n, x: nx, y: ny };
       }));
-    }
-    function onUp() { setDragId(null); }
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
-  }, [dragId, dragOff]);
+    };
+
+    const onUp = () => { dragId.current = null; };
+
+    el.addEventListener("pointerdown", onDown);
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerup", onUp, { passive: true });
+    return () => {
+      el.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [nodes]);
+
+  // recompute anchor map fast
+  const map = Object.fromEntries(nodes.map(n => [n.id, n])) as Record<string, Node>;
 
   return (
     <section className="weavy-section relative">
-      {/* NEW: one wide grid band across the section */}
-      <div
-        className="grid-band absolute left-0 right-0"
-        style={{
-          top: 24,   // nudge down under the hero lip
-          height: 560,
-        }}
-      />
+      {/* one wide grid band across the white zone */}
+      <div className="grid-band" style={{ top: 24, height: 560 }} />
 
-      <div ref={wrapRef} className="relative mx-auto max-w-[1280px] min-h-[720px] sm:min-h-[840px] px-4 py-16">
-        {/* SVG wires */}
+      {/* board area; no rounded card around everything */}
+      <div
+        ref={wrapRef}
+        className="relative mx-auto max-w-[1360px] min-h-[720px] sm:min-h-[860px] px-4 py-16"
+        style={{ zIndex: 1 }}
+      >
+        {/* headline row (kept minimal to match your screenshot spacing) */}
+        <div className="mb-6">
+          <h2 className="text-3xl sm:text-4xl font-semibold">Pick what you want to build</h2>
+          <p className="text-sm text-muted-foreground mt-1">Move the nodes. Click one to open its spec sheet.</p>
+        </div>
+
+        {/* wires under nodes */}
         <svg className="absolute inset-0 pointer-events-none" width="100%" height="100%">
           <defs>
-            <linearGradient id="wireGrad" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%"  stopColor="#9CA3AF" stopOpacity=".55"/>
-              <stop offset="50%" stopColor="#CBD5E1" stopOpacity=".85"/>
-              <stop offset="100%" stopColor="#9CA3AF" stopOpacity=".55"/>
+            <radialGradient id="nub" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="100%" stopColor="#cbd5e1" />
+            </radialGradient>
+            {/* soft thread gradient */}
+            <linearGradient id="wire" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#b9c2cc" />
+              <stop offset="50%" stopColor="#94a3b8" />
+              <stop offset="100%" stopColor="#cbd5e1" />
             </linearGradient>
-            <filter id="wireBlur" x="-5%" y="-5%" width="110%" height="110%">
-              <feGaussianBlur stdDeviation="2" />
-            </filter>
           </defs>
 
-          {edges.map((e) => {
-            const a = nodes.find(n => n.id === e.from.id)!;
-            const b = nodes.find(n => n.id === e.to.id)!;
-            const p1 = anchorXY(a, e.from.side);
-            const p2 = anchorXY(b, e.to.side);
-            const d = cubicPath(p1, p2);
+          {LINKS.map(([aId, aEdge, bId, bEdge], i) => {
+            const A = map[aId], B = map[bId];
+            if (!A || !B) return null;
+            const pa = anchors(A)[aEdge];
+            const pb = anchors(B)[bEdge];
+            const d = wirePath(pa, pb);
             return (
-              <g key={e.id}>
-                {/* soft shadow/body */}
-                <path d={d} stroke="#0000001A" strokeWidth={8} fill="none" strokeLinecap="round" filter="url(#wireBlur)"/>
-                {/* cable */}
-                <path d={d} stroke="url(#wireGrad)" strokeWidth={2.6} fill="none" strokeLinecap="round"/>
-                {/* inner glints */}
-                <path d={d} stroke="#ffffff" strokeWidth={1.1} fill="none" strokeLinecap="round"
-                      strokeDasharray="10 14" opacity=".65"/>
-                {/* end dots */}
-                {[p1, p2].map((p, i) => (
-                  <g key={i}>
-                    <circle cx={p.x} cy={p.y} r={7.5} fill="#fff" stroke="#CBD5E1" strokeWidth={2}/>
-                    <circle cx={p.x} cy={p.y} r={2.5} fill="#94A3B8"/>
-                  </g>
-                ))}
+              <g key={i} style={{ filter: "drop-shadow(0 2px 2px rgba(0,0,0,.08))" }}>
+                {/* body */}
+                <path d={d} stroke="url(#wire)" strokeWidth={2.5} fill="none" strokeLinecap="round" />
+                {/* inner highlight (thread glint) */}
+                <path d={d} stroke="#ffffff" strokeWidth={1} fill="none" strokeLinecap="round" strokeOpacity={0.35} strokeDasharray="2 10" />
+                {/* endpoints */}
+                <circle cx={pa.x} cy={pa.y} r={5} fill="url(#nub)" stroke="#94a3b8" strokeWidth={1} />
+                <circle cx={pb.x} cy={pb.y} r={5} fill="url(#nub)" stroke="#94a3b8" strokeWidth={1} />
               </g>
             );
           })}
         </svg>
 
-        {/* Nodes */}
+        {/* nodes */}
         {nodes.map((n) => (
           <div
             key={n.id}
-            className="node-card"
-            style={{ left: n.x, top: n.y, width: n.w, height: n.h }}
-            onPointerDown={(e) => {
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              setDragId(n.id);
-              setDragOff({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-            }}
+            data-node-id={n.id}
+            className="node-card select-none"
+            style={{ left: n.x, top: n.y, width: n.w, height: n.h, position: "absolute" }}
           >
-            <div className="node-title">{n.title}</div>
-
-            {/* Slot content variations */}
-            {n.type === "text" && (
-              <div className="p-3 text-xs leading-relaxed text-neutral-700">
-                A Great-Tailed Grackle bird is flying from the background and
-                seating on the model’s shoulder slowly and barely moves. The model
-                looks at the camera, then bird flies away. <em>Cinematic.</em>
-              </div>
-            )}
-
-            {n.type === "image" && (
-              <div className="slot-media">
-                {/* leave blank area for you to drop image later */}
-                <div className="placeholder">Add image</div>
-              </div>
-            )}
-
-            {n.type === "video" && (
-              <div className="slot-media">
-                <div className="placeholder">Add video</div>
-              </div>
-            )}
-
-            {n.type === "gallery" && (
-              <div className="slot-media aspect-[16/7]">
-                <div className="placeholder">Add reference</div>
-              </div>
-            )}
-
-            {n.type === "cta" && (
-              <div className="p-4">
-                <Button className="btn-magnetic w-full">Create project</Button>
-                <div className="text-[11px] text-neutral-500 mt-2">Beginner → Pro → Business</div>
-              </div>
-            )}
-
-            {/* anchor nubs (visual) */}
+            {/* small nubs on sides so cables feel plugged-in */}
             <div className="nub nub-l" />
             <div className="nub nub-r" />
-            <div className="nub nub-t" />
-            <div className="nub nub-b" />
+
+            <button
+              className="w-full h-full rounded-full border bg-white/80 hover:bg-white shadow-sm flex items-center justify-between px-4 text-sm font-medium btn-magnetic"
+              onClick={() => {
+                // open a spec sheet later; for now just log
+                console.log("open spec:", n.id);
+              }}
+            >
+              <span>{n.title}</span>
+              <span>→</span>
+            </button>
           </div>
         ))}
       </div>

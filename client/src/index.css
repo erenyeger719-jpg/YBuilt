@@ -275,8 +275,8 @@ body { font-family: var(--font-ui); }
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
-  --sidebar-accent-border: hsl(var(--sidebar-accent));
-  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --sidebar-accent-border: hsl(var(--accent));
+  --sidebar-accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
   --primary-border: hsl(var(--primary));
   --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -880,80 +880,6 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
   }
 }
 
-/* === Additional interaction utilities === */
-@layer utilities {
-  /* Magnetic button */
-  .btn-magnetic {
-    --tx: 0px; --ty: 0px;
-    transform: translate3d(var(--tx), var(--ty), 0) scale(1);
-    transition: transform .12s ease, box-shadow .14s ease;
-    will-change: transform;
-  }
-  .btn-magnetic:hover { transform: translate3d(var(--tx), var(--ty), 0) scale(1.02); }
-
-  /* Tilted glass card */
-  .card-tilt {
-    transform: perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));
-    transition: transform .15s ease, box-shadow .2s ease;
-    will-change: transform;
-  }
-  /* (optional depth polish) */
-  .card-tilt { box-shadow: 0 28px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06); }
-
-  /* Diagonal text reveal */
-  .reveal-diag {
-    --clip: polygon(0 0, 0 0, 0 100%, 0 100%);
-    clip-path: var(--clip);
-    transition: clip-path .7s cubic-bezier(.2,.8,.2,1);
-    will-change: clip-path;
-  }
-  .reveal-diag.in {
-    --clip: polygon(0 0, 100% 0, 100% 100%, 0 100%);
-  }
-
-  /* Perf helper for heavy blocks */
-  .content-auto { content-visibility: auto; contain-intrinsic-size: 800px 1000px; }
-}
-
-/* =========================
-   WORKSPACE ONLY: purple press state
-   ========================= */
-body[data-page="workspace"] .workspace-root {
-  --press-purple: #7A1FF3;
-  --press-ink: #fff;
-  --press-border: color-mix(in oklch, #7A1FF3 88%, black);
-  --press-glow: 0 10px 32px #7A1FF333;
-}
-
-body[data-page="workspace"] .workspace-root :is(button, .btn, [role="button"]) {
-  transition: background-color .14s ease, border-color .14s ease,
-              color .14s ease, box-shadow .14s ease, transform .06s ease;
-}
-
-/* only buttons; no generic [data-state="open"] */
-body[data-page="workspace"] .workspace-root
-:is(button, .btn, [role="button"]):active,
-body[data-page="workspace"] .workspace-root
-:is(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
-body[data-page="workspace"] .workspace-root
-:is(button[data-state="on"], .btn[data-state="on"], [role="button"][data-state="on"]) {
-  background-color: var(--press-purple) !important;
-  border-color: var(--press-border) !important;
-  color: var(--press-ink) !important;
-  box-shadow: var(--press-glow) !important;
-}
-
-body[data-page="workspace"] .workspace-root
-:is(button, .btn, [role="button"]):focus-visible {
-  outline: 2px solid color-mix(in oklch, #7A1FF3 86%, white 14%);
-  outline-offset: 2px;
-}
-
-body[data-page="workspace"] .workspace-root
-:is(button, .btn, [role="button"]):hover {
-  box-shadow: 0 6px 24px #7A1FF326;
-}
-
 /* ===== View Transitions (global) ===== */
 /* Soft flash from orchid → white */
 ::view-transition-old(root) { animation: fadeOut .28s ease both; }
@@ -965,37 +891,28 @@ body[data-page="workspace"] .workspace-root
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }
 
-/* --- Weavy-style section --- */
+/* --- Weavy section + grid band ---------------------------------------- */
+/* Clean white weavy zone, no rounded "card", with a full-width grid band */
 .weavy-section {
-  --gap: 16px; /* “one space” for the big band grid */
+  --gap: 16px; /* “one space” for the band grid */
   position: relative;
-  background:
-    radial-gradient(1200px 480px at 50% -10%, rgba(0,0,0,0.08), transparent 60%),
-    linear-gradient(#ffffff, #ffffff); /* clean white */
-  border-top-left-radius: 28px; border-top-right-radius: 28px;
-  margin-top: -24px; /* overlaps hero edge a bit for the “slide into white” feel */
+  background: #fff;
   padding-bottom: 6rem;
 }
 
-/* NEW: full-width grid band (horizontal coverage only; top/height inline) */
-.grid-band{
-  position:absolute; left:0; right:0;
-  z-index:0;
-  pointer-events:none;
+/* Full-width grid band; set top/height inline in the component */
+.grid-band {
+  position: absolute; left: 0; right: 0;
+  z-index: 0; pointer-events: none;
   background:
-    /* soft paper underlay so grid isn’t floating */
-    linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,.98)),
-    /* subtle falloff so edges fade */
+    linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.98)),
     radial-gradient(900px 420px at 50% -20%, rgba(11,18,25,.06), transparent 60%),
-    /* horizontal + vertical grid lines, one-space apart */
-    repeating-linear-gradient(0deg,
-      rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px)),
-    repeating-linear-gradient(90deg,
-      rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px));
-  mask-image: linear-gradient(180deg, #000 25%, transparent 100%); /* fade bottom out */
+    repeating-linear-gradient(0deg, rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px)),
+    repeating-linear-gradient(90deg, rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px));
+  mask-image: linear-gradient(180deg, #000 30%, transparent 100%);
 }
 
-/* sparse grid islands (kept for reuse; not used by WeavyBoard now) */
+/* Legacy sparse grid islands (kept for reuse; currently unused) */
 .grid-island {
   position: absolute;
   background:
@@ -1007,17 +924,17 @@ body[data-page="workspace"] .workspace-root
   -webkit-mask-image: radial-gradient(150% 120% at 50% 50%, #000 30%, transparent 95%);
   filter: saturate(1.05);
 }
+/* .grid-island { display: none; } */
 
-/* node card look (soft mint glass) */
+/* --- Weavy node styling ------------------------------------------------ */
+/* Minimal pill nodes; remove glass card look */
 .node-card {
   position: absolute;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.55));
-  border: 1px solid rgba(0,0,0,.08);
-  box-shadow: 0 18px 40px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.35);
+  border-radius: 999px; /* pill */
+  background: transparent;
+  border: none;
   cursor: grab;
   user-select: none;
-  backdrop-filter: blur(6px) saturate(120%);
 }
 .node-card:active { cursor: grabbing; }
 
@@ -1029,8 +946,9 @@ body[data-page="workspace"] .workspace-root
   padding: 10px 12px 4px;
 }
 
+/* Keep the inner “one-space” grid for media slots */
 .slot-media {
-  --cell: 16px; /* one-space cells inside nodes */
+  --cell: 16px;
   margin: 8px 12px 12px;
   height: calc(100% - 40px);
   border-radius: 12px;
@@ -1045,12 +963,9 @@ body[data-page="workspace"] .workspace-root
   font-size: 12px; color: #64748B; opacity: .9;
 }
 
-/* tiny anchor nubs so ends feel physical */
+/* Tiny anchor nubs */
 .nub { position: absolute; width: 10px; height: 10px; background: #E5E7EB; border: 1px solid #CBD5E1; border-radius: 999px; }
 .nub-l { left: -5px; top: 50%; transform: translateY(-50%); }
 .nub-r { right: -5px; top: 50%; transform: translateY(-50%); }
 .nub-t { top: -5px; left: 50%; transform: translateX(-50%); }
 .nub-b { bottom: -5px; left: 50%; transform: translateX(-50%); }
-
-/* (optional) if you still have old .grid-island blocks on the page, you can hide them */
-/* .grid-island { display: none; } */
