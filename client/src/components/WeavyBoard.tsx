@@ -59,7 +59,6 @@ export default function WeavyBoard() {
       row.forEach((i) => {
         const n = placed[i];
         const x = xLeft;
- 
         const y = Math.round(midY - n.h / 2);
         placed[i] = { ...n, x, y, originX: x, originY: y };
         xLeft += n.w + gap;
@@ -102,23 +101,29 @@ export default function WeavyBoard() {
     );
   };
 
+  // patched spring-back
   const onPointerUp = () => {
     if (!drag) return;
     const id = drag.id;
     setDrag(null);
 
-    // snapshot the start + origin here to avoid any stale reads mid-animation
-    const snap = (arr: NodeT[]) => arr.find(n => n.id === id)!;
-    const current = snap(nodes);
+    // snapshot at release
+    const current = nodes.find(n => n.id === id)!;
     const ix = current.x, iy = current.y, ox = current.originX, oy = current.originY;
+
+    const easeOutBack = (p: number) => {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      // stable, no pre-decrement
+      return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
+    };
 
     const t0 = performance.now();
     const duration = 380;
 
     const tick = (t: number) => {
       const p = Math.min(1, (t - t0) / duration);
-      const s = 1.70158; // easeOutBack
-      const q = (-p) * p * ((s + 1) * p + s) + 1;
+      const q = easeOutBack(p);
 
       setNodes(ns =>
         ns.map(n =>
@@ -128,8 +133,9 @@ export default function WeavyBoard() {
         )
       );
 
-      if (q < 1) requestAnimationFrame(tick);
+      if (p < 1) requestAnimationFrame(tick);
     };
+
     requestAnimationFrame(tick);
   };
 
