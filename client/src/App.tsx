@@ -2,10 +2,10 @@
 import { Route, Switch } from "wouter";
 
 // Pages
-import Home from "@/pages/Home";           // marketing
-import Studio from "@/pages/Studio";       // finalize when :jobId present
-import Workspace from "@/pages/Workspace"; // editor
-import Library from "@/pages/Library";     // your library page
+import Home from "@/pages/Home";             // marketing
+import StudioPage from "@/pages/Studio";     // marketing at /studio, finalize when :jobId present
+import Workspace from "@/pages/Workspace";   // editor
+import Library from "@/pages/Library";       // your library page
 
 function NotFound() {
   return (
@@ -24,9 +24,8 @@ export default function App() {
       {/* Home (marketing) */}
       <Route path="/" component={Home} />
 
-      {/* Studio: marketing at /studio, finalize at /studio/:jobId */}
-      <Route path="/studio" component={Studio} />
-      <Route path="/studio/:jobId" component={Studio} />
+      {/* Studio: marketing at /studio, finalize at /studio/:jobId (optional param) */}
+      <Route path="/studio/:jobId?">{() => <StudioPage />}</Route>
 
       {/* Library */}
       <Route path="/library" component={Library} />
