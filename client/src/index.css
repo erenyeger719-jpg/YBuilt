@@ -964,3 +964,93 @@ body[data-page="workspace"] .workspace-root
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }
+
+/* --- Weavy-style section --- */
+.weavy-section {
+  --gap: 16px; /* “one space” for the big band grid */
+  position: relative;
+  background:
+    radial-gradient(1200px 480px at 50% -10%, rgba(0,0,0,0.08), transparent 60%),
+    linear-gradient(#ffffff, #ffffff); /* clean white */
+  border-top-left-radius: 28px; border-top-right-radius: 28px;
+  margin-top: -24px; /* overlaps hero edge a bit for the “slide into white” feel */
+  padding-bottom: 6rem;
+}
+
+/* NEW: full-width grid band (horizontal coverage only; top/height inline) */
+.grid-band{
+  position:absolute; left:0; right:0;
+  z-index:0;
+  pointer-events:none;
+  background:
+    /* soft paper underlay so grid isn’t floating */
+    linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,.98)),
+    /* subtle falloff so edges fade */
+    radial-gradient(900px 420px at 50% -20%, rgba(11,18,25,.06), transparent 60%),
+    /* horizontal + vertical grid lines, one-space apart */
+    repeating-linear-gradient(0deg,
+      rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px)),
+    repeating-linear-gradient(90deg,
+      rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px));
+  mask-image: linear-gradient(180deg, #000 25%, transparent 100%); /* fade bottom out */
+}
+
+/* sparse grid islands (kept for reuse; not used by WeavyBoard now) */
+.grid-island {
+  position: absolute;
+  background:
+    radial-gradient(800px 400px at 30% -20%, rgba(11,18,25,0.06), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(2,6,23,0.08) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(90deg, rgba(2,6,23,0.08) 0 1px, transparent 1px 24px);
+  border-radius: 16px;
+  mask-image: radial-gradient(150% 120% at 50% 50%, #000 30%, transparent 95%);
+  -webkit-mask-image: radial-gradient(150% 120% at 50% 50%, #000 30%, transparent 95%);
+  filter: saturate(1.05);
+}
+
+/* node card look (soft mint glass) */
+.node-card {
+  position: absolute;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.55));
+  border: 1px solid rgba(0,0,0,.08);
+  box-shadow: 0 18px 40px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.35);
+  cursor: grab;
+  user-select: none;
+  backdrop-filter: blur(6px) saturate(120%);
+}
+.node-card:active { cursor: grabbing; }
+
+.node-title {
+  font-size: 10px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #6B7280;
+  padding: 10px 12px 4px;
+}
+
+.slot-media {
+  --cell: 16px; /* one-space cells inside nodes */
+  margin: 8px 12px 12px;
+  height: calc(100% - 40px);
+  border-radius: 12px;
+  border: 1px dashed rgba(0,0,0,.18);
+  background:
+    linear-gradient(180deg, rgba(241,245,249,.65), rgba(248,250,252,.4)),
+    repeating-linear-gradient(0deg, rgba(2,6,23,.06) 0 1px, transparent 1px calc(var(--cell) + 1px)),
+    repeating-linear-gradient(90deg, rgba(2,6,23,.05) 0 1px, transparent 1px calc(var(--cell) + 1px));
+  display: grid; place-items: center;
+}
+.slot-media .placeholder {
+  font-size: 12px; color: #64748B; opacity: .9;
+}
+
+/* tiny anchor nubs so ends feel physical */
+.nub { position: absolute; width: 10px; height: 10px; background: #E5E7EB; border: 1px solid #CBD5E1; border-radius: 999px; }
+.nub-l { left: -5px; top: 50%; transform: translateY(-50%); }
+.nub-r { right: -5px; top: 50%; transform: translateY(-50%); }
+.nub-t { top: -5px; left: 50%; transform: translateX(-50%); }
+.nub-b { bottom: -5px; left: 50%; transform: translateX(-50%); }
+
+/* (optional) if you still have old .grid-island blocks on the page, you can hide them */
+/* .grid-island { display: none; } */
