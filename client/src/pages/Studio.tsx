@@ -1,4 +1,4 @@
-// client/src/pages/StudioPage.tsx
+// client/src/pages/Studio.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -31,47 +31,104 @@ const PRESET_THEMES: ThemeDef[] = [
   { id: "slate", name: "Slate Sky", colors: ["#0b0b0b", "#3B82F6", "#DBEAFE"] },
 ];
 
-/** Studio-only FX: pointer glow (updates --mx/--my), scroll stops (--scroll), reveal-diag intersection */
+/** Studio-only FX: pointer glow, scroll stops, magnetic buttons, card tilt, diagonal reveals */
 function useStudioFX() {
   useEffect(() => {
     const root = document.querySelector<HTMLElement>(".studio-root");
     if (!root) return;
 
-    // pointer position → CSS vars
-    const onMove = (e: MouseEvent) => {
-      const rect = root.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / Math.max(rect.width, 1)) * 100;
-      const y = ((e.clientY - rect.top) / Math.max(rect.height, 1)) * 100;
-      root.style.setProperty("--mx", `${x.toFixed(2)}%`);
-      root.style.setProperty("--my", `${y.toFixed(2)}%`);
+    /* 1) Pointer glow (rAF-throttled) */
+    let glowRAF = 0;
+    const onPointerMove = (e: PointerEvent) => {
+      if (glowRAF) return;
+      glowRAF = requestAnimationFrame(() => {
+        glowRAF = 0;
+        const r = root.getBoundingClientRect();
+        const x = ((e.clientX - r.left) / Math.max(1, r.width)) * 100;
+        const y = ((e.clientY - r.top) / Math.max(1, r.height)) * 100;
+        root.style.setProperty("--mx", x.toFixed(2) + "%");
+        root.style.setProperty("--my", y.toFixed(2) + "%");
+      });
     };
+    root.addEventListener("pointermove", onPointerMove, { passive: true });
 
-    // normalized scroll (0..1) → CSS var
+    /* 2) Scroll-scrub stops (rAF-throttled) */
+    let scrollRAF = 0;
     const onScroll = () => {
-      const el = document.documentElement;
-      const denom = Math.max(el.scrollHeight - el.clientHeight, 1);
-      const ratio = el.scrollTop / denom;
-      root.style.setProperty("--scroll", `${Math.min(Math.max(ratio, 0), 1).toFixed(3)}`);
+      if (scrollRAF) return;
+      scrollRAF = requestAnimationFrame(() => {
+        scrollRAF = 0;
+        const max = document.documentElement.scrollHeight - window.innerHeight || 1;
+        const p = Math.min(1, Math.max(0, window.scrollY / max));
+        root.style.setProperty("--scroll", p.toFixed(3));
+      });
     };
-
-    window.addEventListener("mousemove", onMove, { passive: true });
     window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
+    onScroll(); // init
 
-    // intersection: add .in to .reveal-diag when visible
+    /* 3) Magnetic buttons (scoped) */
+    const mags = Array.from(root.querySelectorAll<HTMLElement>(".btn-magnetic"));
+    const magOffs = mags.map((btn) => {
+      const R = 24;
+      const move = (e: PointerEvent) => {
+        const b = btn.getBoundingClientRect();
+        const x = e.clientX - (b.left + b.width / 2);
+        const y = e.clientY - (b.top + b.height / 2);
+        const clamp = (v: number) => Math.max(-R, Math.min(R, v));
+        btn.style.setProperty("--tx", clamp(x * 0.15) + "px");
+        btn.style.setProperty("--ty", clamp(y * 0.15) + "px");
+      };
+      const leave = () => {
+        btn.style.setProperty("--tx", "0px");
+        btn.style.setProperty("--ty", "0px");
+      };
+      btn.addEventListener("pointermove", move);
+      btn.addEventListener("pointerleave", leave);
+      return () => {
+        btn.removeEventListener("pointermove", move);
+        btn.removeEventListener("pointerleave", leave);
+      };
+    });
+
+    /* 4) Tilted cards (scoped) */
+    const cards = Array.from(root.querySelectorAll<HTMLElement>(".card-tilt"));
+    const tiltOffs = cards.map((card) => {
+      const max = 7;
+      const move = (e: PointerEvent) => {
+        const r = card.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width - 0.5;
+        const py = (e.clientY - r.top) / r.height - 0.5;
+        card.style.setProperty("--ry", (px * max) + "deg");
+        card.style.setProperty("--rx", (-py * max) + "deg");
+      };
+      const leave = () => {
+        card.style.removeProperty("--rx");
+        card.style.removeProperty("--ry");
+      };
+      card.addEventListener("pointermove", move);
+      card.addEventListener("pointerleave", leave);
+      return () => {
+        card.removeEventListener("pointermove", move);
+        card.removeEventListener("pointerleave", leave);
+      };
+    });
+
+    /* 5) Diagonal text reveal (more forgiving threshold) */
     const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) entry.target.classList.add("in");
-        }
-      },
-      { rootMargin: "0px 0px -10% 0px", threshold: 0.2 }
+      (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add("in")),
+      { threshold: 0.01 }
     );
-    document.querySelectorAll(".reveal-diag").forEach((el) => io.observe(el));
+    const reveals = Array.from(root.querySelectorAll<HTMLElement>(".reveal-diag"));
+    reveals.forEach((n) => io.observe(n));
 
+    /* Cleanup */
     return () => {
-      window.removeEventListener("mousemove", onMove);
+      root.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(glowRAF);
+      cancelAnimationFrame(scrollRAF);
+      magOffs.forEach((off) => off());
+      tiltOffs.forEach((off) => off());
       io.disconnect();
     };
   }, []);

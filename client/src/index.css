@@ -915,47 +915,41 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
 }
 
 /* =========================
-   STUDIO (workspace): purple press state
+   WORKSPACE ONLY: purple press state
    ========================= */
-
-/* Tokens */
-body[data-force-theme="studio"], .studio-root {
-  --press-purple: #7A1FF3; /* Render-ish purple */
+body[data-page="workspace"] .workspace-root {
+  --press-purple: #7A1FF3;
   --press-ink: #fff;
   --press-border: color-mix(in oklch, #7A1FF3 88%, black);
   --press-glow: 0 10px 32px #7A1FF333;
 }
 
-/* Smooth transitions for interactive controls */
-body[data-force-theme="studio"] :is(button, .btn, [role="button"]),
-.studio-root :is(button, .btn, [role="button"]) {
+body[data-page="workspace"] .workspace-root :is(button, .btn, [role="button"]) {
   transition: background-color .14s ease, border-color .14s ease,
               color .14s ease, box-shadow .14s ease, transform .06s ease;
 }
 
-/* Turn purple when pressed/active/toggled/open */
-body[data-force-theme="studio"] :is(button, .btn, [role="button"]):active,
-body[data-force-theme="studio"] :is(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
-body[data-force-theme="studio"] :is([data-state="on"], [data-state="open"], [data-pressed="true"], .active, .is-active),
-.studio-root :is(button, .btn, [role="button"]):active,
-.studio-root :is(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
-.studio-root :is([data-state="on"], [data-state="open"], [data-pressed="true"], .active, .is-active) {
+/* only buttons; no generic [data-state="open"] */
+body[data-page="workspace"] .workspace-root
+:is(button, .btn, [role="button"]):active,
+body[data-page="workspace"] .workspace-root
+:is(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
+body[data-page="workspace"] .workspace-root
+:is(button[data-state="on"], .btn[data-state="on"], [role="button"][data-state="on"]) {
   background-color: var(--press-purple) !important;
   border-color: var(--press-border) !important;
   color: var(--press-ink) !important;
   box-shadow: var(--press-glow) !important;
 }
 
-/* Keyboard focus ring */
-body[data-force-theme="studio"] :is(button, .btn, [role="button"]):focus-visible,
-.studio-root :is(button, .btn, [role="button"]):focus-visible {
+body[data-page="workspace"] .workspace-root
+:is(button, .btn, [role="button"]):focus-visible {
   outline: 2px solid color-mix(in oklch, #7A1FF3 86%, white 14%);
   outline-offset: 2px;
 }
 
-/* Optional: hint of purple glow on hover so it feels lively */
-body[data-force-theme="studio"] :is(button, .btn, [role="button"]):hover,
-.studio-root :is(button, .btn, [role="button"]):hover {
+body[data-page="workspace"] .workspace-root
+:is(button, .btn, [role="button"]):hover {
   box-shadow: 0 6px 24px #7A1FF326;
 }
 
