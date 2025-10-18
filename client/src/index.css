@@ -64,39 +64,57 @@ body { font-family: var(--font-ui); }
   --elevate-2: rgba(0,0,0, .08);
 
   --background: 0 0% 100%;
+
   --foreground: 0 0% 0%;
+
   --border: 0 0% 85%;
 
   --card: 0 0% 98%;
+
   --card-foreground: 0 0% 5%;
+
   --card-border: 0 0% 88%;
 
   --sidebar: 0 0% 94%;
+
   --sidebar-foreground: 0 0% 12%;
+
   --sidebar-border: 0 0% 86%;
+
   --sidebar-primary: 0 0% 15%;
+
   --sidebar-primary-foreground: 0 0% 98%;
+
   --sidebar-accent: 0 0% 88%;
+
   --sidebar-accent-foreground: 0 0% 12%;
+
   --sidebar-ring: 0 0% 20%;
 
   --popover: 0 0% 92%;
+
   --popover-foreground: 0 0% 14%;
+
   --popover-border: 0 0% 84%;
 
   --primary: 0 0% 8%;
+
   --primary-foreground: 0 0% 98%;
 
   --secondary: 0 0% 90%;
+
   --secondary-foreground: 0 0% 10%;
 
   --muted: 0 0% 92%;
+
   --muted-foreground: 0 0% 40%;
 
   --accent: 0 0% 95%;
+
   --accent-foreground: 0 0% 10%;
 
   --destructive: 0 72% 32%;
+
   --destructive-foreground: 0 0% 98%;
 
   --input: 0 0% 70%;
@@ -178,39 +196,57 @@ body { font-family: var(--font-ui); }
   --elevate-2: rgba(255,255,255, .09);
 
   --background: 0 0% 0%;
+
   --foreground: 0 0% 100%;
+
   --border: 0 0% 20%;
 
   --card: 0 0% 5%;
+
   --card-foreground: 0 0% 95%;
+
   --card-border: 0 0% 15%;
 
   --sidebar: 0 0% 10%;
+
   --sidebar-foreground: 0 0% 88%;
+
   --sidebar-border: 0 0% 16%;
+
   --sidebar-primary: 0 0% 18%;
+
   --sidebar-primary-foreground: 0 0% 98%;
+
   --sidebar-accent: 0 0% 14%;
+
   --sidebar-accent-foreground: 0 0% 90%;
+
   --sidebar-ring: 0 0% 80%;
 
   --popover: 0 0% 12%;
+
   --popover-foreground: 0 0% 86%;
+
   --popover-border: 0 0% 20%;
 
   --primary: 0 0% 95%;
+
   --primary-foreground: 0 0% 5%;
 
   --secondary: 0 0% 12%;
+
   --secondary-foreground: 0 0% 92%;
 
   --muted: 0 0% 10%;
+
   --muted-foreground: 0 0% 60%;
 
   --accent: 0 0% 8%;
+
   --accent-foreground: 0 0% 90%;
 
   --destructive: 0 72% 32%;
+
   --destructive-foreground: 0 0% 98%;
 
   --input: 0 0% 30%;
@@ -823,64 +859,46 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
 }
 
 /* =========================
-   WORKSPACE: purple press state
+   STUDIO (workspace): purple press state
    ========================= */
 
-/* 1) Scope + tokens (tweak if you want a different purple) */
-body[data-page="workspace"] .workspace-root,
-body[data-force-theme="workspace"] .workspace-root,
-.workspace-root {
-  --workspace-press: #7A1FF3;              /* purple (Render vibe) */
-  --workspace-press-ink: #fff;             /* text/icon on purple */
-  --workspace-press-border: color-mix(in oklch, #7A1FF3 88%, black);
-  --workspace-press-glow: 0 10px 32px #7A1FF333;
+/* Tokens */
+body[data-force-theme="studio"], .studio-root {
+  --press-purple: #7A1FF3; /* Render-ish purple */
+  --press-ink: #fff;
+  --press-border: color-mix(in oklch, #7A1FF3 88%, black);
+  --press-glow: 0 10px 32px #7A1FF333;
 }
 
-/* 2) Smooth transitions for all buttons inside workspace */
-body[data-page="workspace"] .workspace-root :where(button, .btn, [role="button"]),
-body[data-force-theme="workspace"] .workspace-root :where(button, .btn, [role="button"]),
-.workspace-root :where(button, .btn, [role="button"]) {
-  transition: background .14s ease, border-color .14s ease,
+/* Smooth transitions for interactive controls */
+body[data-force-theme="studio"] :is(button, .btn, [role="button"]),
+.studio-root :is(button, .btn, [role="button"]) {
+  transition: background-color .14s ease, border-color .14s ease,
               color .14s ease, box-shadow .14s ease, transform .06s ease;
 }
 
-/* 3) Turn purple when *pressed / active* (mouse down or toggled on) */
-body[data-page="workspace"] .workspace-root
-  :where(button, .btn, [role="button"]):active,
-body[data-page="workspace"] .workspace-root
-  :where(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
-body[data-page="workspace"] .workspace-root
-  :where([data-state="on"], [data-state="open"], [data-pressed="true"], .is-active, .active),
-body[data-force-theme="workspace"] .workspace-root
-  :where(button, .btn, [role="button"]):active,
-body[data-force-theme="workspace"] .workspace-root
-  :where(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
-body[data-force-theme="workspace"] .workspace-root
-  :where([data-state="on"], [data-state="open"], [data-pressed="true"], .is-active, .active),
-.workspace-root
-  :where(button, .btn, [role="button"]):active,
-.workspace-root
-  :where(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
-.workspace-root
-  :where([data-state="on"], [data-state="open"], [data-pressed="true"], .is-active, .active) {
-  background: var(--workspace-press) !important;
-  border-color: var(--workspace-press-border) !important;
-  color: var(--workspace-press-ink) !important;
-  box-shadow: var(--workspace-press-glow) !important;
+/* Turn purple when pressed/active/toggled/open */
+body[data-force-theme="studio"] :is(button, .btn, [role="button"]):active,
+body[data-force-theme="studio"] :is(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
+body[data-force-theme="studio"] :is([data-state="on"], [data-state="open"], [data-pressed="true"], .active, .is-active),
+.studio-root :is(button, .btn, [role="button"]):active,
+.studio-root :is(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
+.studio-root :is([data-state="on"], [data-state="open"], [data-pressed="true"], .active, .is-active) {
+  background-color: var(--press-purple) !important;
+  border-color: var(--press-border) !important;
+  color: var(--press-ink) !important;
+  box-shadow: var(--press-glow) !important;
 }
 
-/* 4) Keep focus ring on keyboard users, in the same family */
-body[data-page="workspace"] .workspace-root
-  :where(button, .btn, [role="button"]):focus-visible,
-body[data-force-theme="workspace"] .workspace-root
-  :where(button, .btn, [role="button"]):focus-visible,
-.workspace-root
-  :where(button, .btn, [role="button"]):focus-visible {
+/* Keyboard focus ring */
+body[data-force-theme="studio"] :is(button, .btn, [role="button"]):focus-visible,
+.studio-root :is(button, .btn, [role="button"]):focus-visible {
   outline: 2px solid color-mix(in oklch, #7A1FF3 86%, white 14%);
   outline-offset: 2px;
 }
 
-/* Optional: hint purple on hover */
-.workspace-root :where(button, .btn, [role="button"]):hover {
+/* Optional: hint of purple glow on hover so it feels lively */
+body[data-force-theme="studio"] :is(button, .btn, [role="button"]):hover,
+.studio-root :is(button, .btn, [role="button"]):hover {
   box-shadow: 0 6px 24px #7A1FF326;
 }
