@@ -1,236 +1,792 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/** 16px grid; the band is just a big background—nodes sit above it */
-const CELL = 16;
+/* --- Premium display fonts (wire-in, with fallbacks) --- */
+@font-face {
+  font-family: "Biospace";
+  src: url("/fonts/Biospace.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Dirty Queen";
+  src: url("/fonts/Dirty%20Queen.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
-/** Node shape for our storyboard */
-type NodeDef = {
-  id: string;
-  label: string;                // small caption on the node
-  w: number;                    // width (px)
-  h: number;                    // height (px)
-  x: number;                    // initial x (px)
-  y: number;                    // initial y (px)
-  kind: "image" | "video" | "text";
-};
+/* CSS Vars for consistent usage */
+:root {
+  --font-display: "Biospace", Cinzel, Marcellus, serif;
+  --font-tagline: "Dirty Queen", "Cormorant Garamond", serif;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans";
+}
 
-/** Tutorial storyboard nodes (prompt → plan → theme/sections/data → preview → deploy) */
-const INITIAL_NODES: NodeDef[] = [
-  { id: "prompt",  label: "PROMPT",        w: 300, h: 160, x: 140,  y: 80,  kind: "text"  },
-  { id: "plan",    label: "PLAN",          w: 360, h: 200, x: 520,  y: 60,  kind: "text"  },
-  { id: "theme",   label: "THEME",         w: 260, h: 180, x: 980,  y: 90,  kind: "image" },
-  { id: "sections",label: "SECTIONS",      w: 320, h: 220, x: 330,  y: 320, kind: "image" },
-  { id: "data",    label: "DATA",          w: 260, h: 180, x: 720,  y: 300, kind: "image" },
-  { id: "preview", label: "LIVE PREVIEW",  w: 420, h: 280, x: 1030, y: 320, kind: "video" },
-  { id: "deploy",  label: "DEPLOY",        w: 320, h: 200, x: 1460, y: 260, kind: "image" },
-];
+/* Global UI font (keeps everything else professional) */
+body { font-family: var(--font-ui); }
 
-/** Wires between node anchors (left/right/top/bottom) */
-type Anchor = "L" | "R" | "T" | "B";
-type Edge = { from: [string, Anchor]; to: [string, Anchor]; sag?: number };
+/* Utilities for hero */
+.h-display {
+  font-family: var(--font-display);
+  letter-spacing: .01em;
+}
+.h-tagline {
+  font-family: var(--font-tagline);
+  letter-spacing: .18em; /* elegant caps */
+  text-transform: uppercase;
+}
 
-const EDGES: Edge[] = [
-  { from: ["prompt", "R"],  to: ["plan", "L"],    sag: 60 },
-  { from: ["plan", "R"],    to: ["theme", "L"],   sag: 80 },
-  { from: ["plan", "B"],    to: ["sections", "T"],sag: 70 },
-  { from: ["plan", "R"],    to: ["data", "T"],    sag: 70 },
-  { from: ["sections","R"], to: ["preview","L"],  sag: 90 },
-  { from: ["data","R"],     to: ["preview","T"],  sag: 90 },
-  { from: ["preview","R"],  to: ["deploy","L"],   sag: 120 },
-];
-
-type Box = { x: number; y: number; w: number; h: number };
-
-function anchorPoint(box: Box, side: Anchor) {
-  switch (side) {
-    case "L": return { x: box.x,            y: box.y + box.h / 2 };
-    case "R": return { x: box.x + box.w,    y: box.y + box.h / 2 };
-    case "T": return { x: box.x + box.w/2,  y: box.y };
-    case "B": return { x: box.x + box.w/2,  y: box.y + box.h };
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --shimmer-animation: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root {
+    --shimmer-animation: shimmer 20s linear infinite;
   }
 }
 
-/** Smooth cubic path that feels like a “thread” with sag */
-function threadPath(ax: number, ay: number, bx: number, by: number, sag = 60) {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const mx = (ax + bx) / 2;
-  const my = (ay + by) / 2;
+/* =================
+   LIGHT THEME TOKENS
+   ================= */
+:root {
+  --button-outline: rgba(0,0,0, .10);
+  --badge-outline: rgba(0,0,0, .05);
 
-  // normal vector to (dx,dy)
-  const len = Math.max(1, Math.hypot(dx, dy));
-  const nx = -dy / len;
-  const ny = dx / len;
+  /* Automatic computation of border around primary / danger buttons */
+  --opaque-button-border-intensity: -8; /* percentage points */
 
-  const c1x = ax + dx * 0.25 + nx * sag;
-  const c1y = ay + dy * 0.25 + ny * sag;
-  const c2x = ax + dx * 0.75 + nx * sag;
-  const c2y = ay + dy * 0.75 + ny * sag;
+  /* Backgrounds applied on top of other backgrounds when hovered/active */
+  --elevate-1: rgba(0,0,0, .03);
+  --elevate-2: rgba(0,0,0, .08);
 
-  return {
-    d: `M ${ax},${ay} C ${c1x},${c1y} ${c2x},${c2y} ${bx},${by}`,
-    mid: { x: mx + nx * sag, y: my + ny * sag }, // for the “bead”
-  };
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --border: 0 0% 85%;
+  --card: 0 0% 98%;
+  --card-foreground: 0 0% 5%;
+  --card-border: 0 0% 88%;
+  --sidebar: 0 0% 94%;
+  --sidebar-foreground: 0 0% 12%;
+  --sidebar-border: 0 0% 86%;
+  --sidebar-primary: 0 0% 15%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 0 0% 88%;
+  --sidebar-accent-foreground: 0 0% 12%;
+  --sidebar-ring: 0 0% 20%;
+  --popover: 0 0% 92%;
+  --popover-foreground: 0 0% 14%;
+  --popover-border: 0 0% 84%;
+  --primary: 0 0% 8%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 0 0% 90%;
+  --secondary-foreground: 0 0% 10%;
+  --muted: 0 0% 92%;
+  --muted-foreground: 0 0% 40%;
+  --accent: 0 0% 95%;
+  --accent-foreground: 0 0% 10%;
+  --destructive: 0 72% 32%;
+  --destructive-foreground: 0 0% 98%;
+  --input: 0 0% 70%;
+  --ring: 0 0% 24%;
+
+  --chart-1: 0 0% 22%;
+  --chart-2: 0 0% 28%;
+  --chart-3: 0 0% 34%;
+  --chart-4: 0 0% 40%;
+  --chart-5: 0 0% 46%;
+
+  /* Tailwind font tokens */
+  --font-sans: var(--font-ui);
+  --font-serif: Georgia, serif;
+  --font-mono: Menlo, monospace;
+
+  --radius: .5rem; /* 8px */
+
+  /* shadows */
+  --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
+  --shadow-xs:  0px 2px 0px 0px hsl(0 0% 0% / 0.00);
+  --shadow-sm:  0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 1px 2px -1px hsl(0 0% 0% / 0.00);
+  --shadow:     0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 1px 2px -1px hsl(0 0% 0% / 0.00);
+  --shadow-md:  0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 2px 4px -1px hsl(0 0% 0% / 0.00);
+  --shadow-lg:  0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 4px 6px -1px hsl(0 0% 0% / 0.00);
+  --shadow-xl:  0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 8px 10px -1px hsl(0 0% 0% / 0.00);
+  --shadow-2xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
+
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+
+  /* Glass + Gloss defaults */
+  --glass-alpha: 0.12;
+  --glass-reflection: rgba(255,255,255,0.08);
+  --rim-strength: rgba(255,255,255,0.10);
+
+  /* Workspace Prompt Bar Layout Variables */
+  --prompt-bar-height: 180px;
+  --file-chips-height: 32px;
+  --prompt-actions-height: 48px;
+
+  /* Modal z-index for consistent layering */
+  --modal-z: 99999;
+
+  /* Auto-borders (with fallback first for older browsers) */
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
-export default function WeavyBoard() {
-  const bandRef = useRef<HTMLDivElement>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
+/* ================
+   DARK THEME TOKENS
+   ================ */
+.dark {
+  --button-outline: rgba(255,255,255, .10);
+  --badge-outline: rgba(255,255,255, .05);
 
-  // live node positions (for drag)
-  const [nodes, setNodes] = useState(() =>
-    INITIAL_NODES.map(n => ({ ...n, x: n.x, y: n.y }))
-  );
+  --opaque-button-border-intensity: 9;
 
-  // origin map for yo-yo
-  const origins = useMemo(() => {
-    const map = new Map<string, { x: number; y: number }>();
-    INITIAL_NODES.forEach(n => map.set(n.id, { x: n.x, y: n.y }));
-    return map;
-  }, []);
+  --elevate-1: rgba(255,255,255, .04);
+  --elevate-2: rgba(255,255,255, .09);
 
-  // drag state
-  const dragRef = useRef<{ id: string; ox: number; oy: number; mx: number; my: number } | null>(null);
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --border: 0 0% 20%;
+  --card: 0 0% 5%;
+  --card-foreground: 0 0% 95%;
+  --card-border: 0 0% 15%;
+  --sidebar: 0 0% 10%;
+  --sidebar-foreground: 0 0% 88%;
+  --sidebar-border: 0 0% 16%;
+  --sidebar-primary: 0 0% 18%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 0 0% 14%;
+  --sidebar-accent-foreground: 0 0% 90%;
+  --sidebar-ring: 0 0% 80%;
+  --popover: 0 0% 12%;
+  --popover-foreground: 0 0% 86%;
+  --popover-border: 0 0% 20%;
+  --primary: 0 0% 95%;
+  --primary-foreground: 0 0% 5%;
+  --secondary: 0 0% 12%;
+  --secondary-foreground: 0 0% 92%;
+  --muted: 0 0% 10%;
+  --muted-foreground: 0 0% 60%;
+  --accent: 0 0% 8%;
+  --accent-foreground: 0 0% 90%;
+  --destructive: 0 72% 32%;
+  --destructive-foreground: 0 0% 98%;
+  --input: 0 0% 30%;
+  --ring: 0 0% 76%;
 
-  // helpers
-  const nodeRect = (n: NodeDef) => ({ x: n.x, y: n.y, w: n.w, h: n.h });
+  --chart-1: 0 0% 78%;
+  --chart-2: 0 0% 72%;
+  --chart-3: 0 0% 66%;
+  --chart-4: 0 0% 60%;
+  --chart-5: 0 0% 54%;
 
-  // snap-to grid while dragging (still smooth)
-  const snap = (v: number) => Math.round(v / CELL) * CELL;
+  /* Glass tokens */
+  --glass-alpha: 0.12;
+  --glass-reflection: rgba(255,255,255,0.08);
+  --rim-strength: rgba(255,255,255,0.10);
 
-  // pointer handlers
-  const onPointerDown = (e: React.PointerEvent, id: string) => {
-    const n = nodes.find(n => n.id === id)!;
-    dragRef.current = { id, ox: n.x, oy: n.y, mx: e.clientX, my: e.clientY };
-    (e.target as Element).setPointerCapture(e.pointerId);
-  };
+  /* Auto-borders */
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragRef.current) return;
-    const { id, ox, oy, mx, my } = dragRef.current;
-    const dx = e.clientX - mx;
-    const dy = e.clientY - my;
-    setNodes(prev =>
-      prev.map(n => n.id === id ? { ...n, x: snap(ox + dx), y: snap(oy + dy) } : n)
+  --sidebar-accent-border: hsl(var(--accent));
+  --sidebar-accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+}
+
+/* ==============================
+   FORCED PAGE THEMES (Library etc.)
+   ============================== */
+body[data-force-theme="library"] .library-root,
+.library-theme {
+  --lib-bg-right: #000000;
+  --lib-bg-center: #E01010;
+  --lib-bg-left-start: #CFF2FF;
+  --lib-bg-left-end: #9BD6FF;
+  --lib-glass-alpha: 0.14;
+  --lib-rim: rgba(255,255,255,0.12);
+  --lib-text-on-dark: #FFFFFF;
+  --lib-text-on-light: #000000;
+}
+
+body[data-force-theme="library"] .library-root {
+  --r: var(--lib-bg-right);
+  --c: var(--lib-bg-center);
+  --l1: var(--lib-bg-left-start);
+  --l2: var(--lib-bg-left-end);
+  background:
+    linear-gradient(120deg,
+      var(--r) 0% 33%,
+      var(--c) 33% 66%,
+      var(--l1) 66% 100%
     );
-  };
+  background-size: cover;
+  position: relative;
+  overflow: hidden;
+}
+body[data-force-theme="library"] .library-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url('/library-glass-matcap.webp') center/cover no-repeat;
+  opacity: 0.14;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  backdrop-filter: blur(8px) saturate(120%);
+}
+.lib-text-backplate {
+  background: rgba(0,0,0,0.36);
+  padding: 6px 10px;
+  border-radius: 8px;
+}
 
-  const springTo = (id: string, target: { x: number; y: number }) => {
-    // simple critically-damped spring / ease-out
-    let vx = 0, vy = 0;
-    const k = 0.16;      // stiffness
-    const d = 0.88;      // damping
-    const tick = () => {
-      setNodes(prev => {
-        const n = prev.find(n => n.id === id)!;
-        const ax = (target.x - n.x) * k;
-        const ay = (target.y - n.y) * k;
-        vx = (vx + ax) * d;
-        vy = (vy + ay) * d;
-        const nx = n.x + vx;
-        const ny = n.y + vy;
-        const done = Math.hypot(target.x - nx, target.y - ny) < 0.6 && Math.hypot(vx, vy) < 0.6;
-        if (done) {
-          return prev.map(m => m.id === id ? { ...m, x: target.x, y: target.y } : m);
-        }
-        requestAnimationFrame(tick);
-        return prev.map(m => m.id === id ? { ...m, x: nx, y: ny } : m);
-      });
-    };
-    requestAnimationFrame(tick);
-  };
+/* Settings page theme */
+body[data-force-theme="settings"] .settings-root,
+.settings-theme {
+  --settings-bg-right: #000000;
+  --settings-bg-center: #7A1FF3;
+  --settings-bg-left-start: #CFF2FF;
+  --settings-bg-left-end: #9BD6FF;
+  --settings-glass-alpha: 0.14;
+  --settings-rim: rgba(255,255,255,0.12);
+  --settings-text-on-dark: #FFFFFF;
+  --settings-text-on-light: #000000;
+}
+body[data-force-theme="settings"] .settings-root {
+  --r: var(--settings-bg-right);
+  --c: var(--settings-bg-center);
+  --l1: var(--settings-bg-left-start);
+  --l2: var(--settings-bg-left-end);
+  background:
+    linear-gradient(120deg in oklch,
+      var(--r) 0% 40%,
+      var(--c) 40% 70%,
+      var(--l1) 70% 100%
+    );
+  background-size: cover;
+  position: relative;
+  overflow: hidden;
+}
+body[data-force-theme="settings"] .settings-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url('/settings-glass-matcap.webp') center/cover no-repeat;
+  opacity: var(--settings-glass-alpha);
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  backdrop-filter: blur(10px) saturate(130%);
+}
+body[data-force-theme="settings"] .settings-text-light { color: var(--settings-text-on-dark); }
+body[data-force-theme="settings"] .settings-text-dark { color: var(--settings-text-on-light); }
 
-  const onPointerUp = (e: React.PointerEvent) => {
-    const drag = dragRef.current;
-    if (!drag) return;
-    // always yo-yo back to original spot
-    const target = origins.get(drag.id)!;
-    springTo(drag.id, target);
-    dragRef.current = null;
-  };
+/* Studio theme */
+body[data-force-theme="studio"] .studio-root {
+  --studio-right: #0A0A0B;
+  --studio-center: #B22E7A;
+  --studio-left: #E6EEF6;
+  --studio-stop1: 38%;
+  --studio-stop2: 70%;
+  --studio-silk-op: 0.78;
+  --studio-paper-op: 0.14;
+  --mx: 50%;
+  --my: 50%;
+  --glow: radial-gradient(34rem 24rem at var(--mx) var(--my), hsl(var(--accent) / .20), transparent 60%);
+  --scroll: 0;
+  --stop1: calc(var(--studio-stop1) + 10% * var(--scroll));
+  --stop2: calc(var(--studio-stop2) + 6%  * var(--scroll));
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+  background:
+    linear-gradient(135deg,
+      var(--studio-right) 0% var(--stop1),
+      var(--studio-center) var(--stop1) var(--stop2),
+      var(--studio-left)   var(--stop2) 100%);
+}
+body[data-force-theme="studio"] .studio-root::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background-image: url("/library-glass-matcap.webp");
+  background-position: center;
+  background-repeat: repeat;
+  background-size: 220px 220px;
+  filter: saturate(0) contrast(1.05) brightness(1.03);
+  mix-blend-mode: multiply;
+  opacity: var(--studio-paper-op);
+  -webkit-mask-image: linear-gradient(135deg, transparent 0 var(--studio-stop1), #000 var(--studio-stop1) 100%);
+  mask-image: linear-gradient(135deg, transparent 0 var(--studio-stop1), #000 var(--studio-stop1) 100%);
+  mask-mode: luminance;
+}
+@keyframes auroraShift {
+  0%   { background-position: 0% 0%, 100% 0%, 0% 100%, 18% 24%, 82% 36%, 38% 78%; }
+  50%  { background-position: 100% 50%, 0% 50%, 100% 0%, 18% 24%, 82% 36%, 38% 78%; }
+  100% { background-position: 0% 0%, 100% 0%, 0% 100%, 18% 24%, 82% 36%, 38% 78%; }
+}
+body[data-force-theme="studio"] .studio-root::after {
+  content: "";
+  position: fixed; inset: 0; z-index: 2; pointer-events: none;
+  background-image:
+    var(--glow),
+    radial-gradient(60% 40% at 20% 30%, rgba(226,121,180,.28), transparent 60%),
+    radial-gradient(45% 35% at 80% 25%, rgba(255,149,210,.20), transparent 60%),
+    radial-gradient(55% 45% at 40% 80%, rgba(180,210,255,.22), transparent 60%),
+    linear-gradient(120deg, rgba(255,255,255,.16), rgba(255,255,255,.02) 28% 72%, rgba(255,255,255,.10)),
+    radial-gradient(40% 40% at 18% 24%, rgba(0,0,0,.08), transparent 45%),
+    radial-gradient(35% 35% at 82% 36%, rgba(255,255,255,.07), transparent 50%),
+    radial-gradient(35% 35% at 38% 78%, rgba(0,0,0,.06), transparent 52%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  background-blend-mode: screen, screen, screen, screen, overlay, overlay, overlay, overlay;
+  mix-blend-mode: normal;
+  animation: auroraShift 38s ease-in-out infinite;
+  opacity: var(--studio-silk-op);
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-force-theme="studio"] .studio-root::after { background-image: none; }
+}
+body[data-force-theme="studio"] {
+  --primary: 329 36% 58%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 329 64% 70%;
+  --ring: 329 64% 70%;
+}
+body[data-force-theme="studio"] .card-glass {
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(12px) saturate(135%) contrast(1.02);
+  -webkit-backdrop-filter: blur(12px) saturate(135%);
+  box-shadow: 0 28px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
+  border-radius: 16px;
+}
+body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
+  content: "";
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(120deg, rgba(255,255,255,.18), rgba(255,255,255,.04) 35%, transparent 60%);
+  mix-blend-mode: screen;
+  transform: translateY(-28%) rotate(-12deg);
+  opacity: .9;
+}
 
-  /** Band height: big, so you get plenty of grid lines */
-  useLayoutEffect(() => {
-    const el = bandRef.current;
-    if (el) {
-      // Fill a generous band (desktop ~720px; mobile ~560px)
-      const h = Math.max(560, Math.min(820, Math.round(window.innerHeight * 0.7)));
-      el.style.top = "0px";
-      el.style.height = `${h}px`;
-    }
-  }, []);
+/* make cards glossy like Settings (neutral base) */
+.card-glass {
+  position: relative;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.18);
+  backdrop-filter: blur(10px);
+}
+.gloss-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgba(255,255,255,0.18), transparent 30% 70%, rgba(255,255,255,0.08));
+  opacity: 0.6;
+  border-radius: inherit;
+}
 
-  // Build a quick map for lookups
-  const byId = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes]);
+/* =================
+   Tailwind base @layer
+   ================= */
+@layer base {
+  * { @apply border-border; }
+  body { @apply font-sans antialiased bg-background text-foreground; }
+}
 
-  // Compute edges
-  const edges = useMemo(() => {
-    return EDGES.map(({ from, to, sag }) => {
-      const [fa, fs] = from; const [ta, ts] = to;
-      const A = anchorPoint(nodeRect(byId[fa]), fs);
-      const B = anchorPoint(nodeRect(byId[ta]), ts);
-      const { d, mid } = threadPath(A.x, A.y, B.x, B.y, sag ?? 60);
-      return { id: `${fa}-${ta}`, d, a: A, b: B, mid };
-    });
-  }, [byId]);
+/* =========================
+ * Utilities & components
+ * ========================= */
+@layer utilities {
+  /* Hide ugly search cancel button in Chrome until we can style it properly */
+  input[type="search"]::-webkit-search-cancel-button { @apply hidden; }
 
-  return (
-    <section className="weavy-section">
-      {/* Full-width grid band underlay */}
-      <div ref={bandRef} className="grid-band" />
+  /* Placeholder styling for contentEditable div */
+  [contenteditable][data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+  }
 
-      {/* SVG wires above the grid, below nodes */}
-      <svg ref={svgRef} className="absolute inset-0 pointer-events-none" width="100%" height="820">
-        <defs>
-          <filter id="threadShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#000" floodOpacity="0.12" />
-          </filter>
-        </defs>
+  .no-default-hover-elevate {}
+  .no-default-active-elevate {}
 
-        {edges.map(e => (
-          <g key={e.id} className="wire-thread">
-            <path d={e.d} />
-            {/* end dots */}
-            <circle cx={e.a.x} cy={e.a.y} r="5.5" className="wire-dot" />
-            <circle cx={e.b.x} cy={e.b.y} r="5.5" className="wire-dot" />
-            {/* mid “bead” */}
-            <circle cx={e.mid.x} cy={e.mid.y} r="4" className="wire-bead" />
-          </g>
-        ))}
-      </svg>
+  .toggle-elevate::before,
+  .toggle-elevate-2::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    z-index: -1;
+  }
+  .toggle-elevate.toggle-elevated::before { background-color: var(--elevate-2); }
+  .border.toggle-elevate::before { inset: -1px; }
 
-      {/* Nodes */}
-      <div className="relative max-w-[1800px] mx-auto px-6 pt-10" style={{ height: 820 }}>
-        {nodes.map(n => (
-          <div
-            key={n.id}
-            className="node-card select-none"
-            style={{ width: n.w, height: n.h, transform: `translate3d(${n.x}px, ${n.y}px, 0)` }}
-            onPointerDown={(e) => onPointerDown(e, n.id)}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-          >
-            {/* small label */}
-            <div className="node-label">{n.label}</div>
+  .hover-elevate:not(.no-default-hover-elevate),
+  .active-elevate:not(.no-default-active-elevate),
+  .hover-elevate-2:not(.no-default-hover-elevate),
+  .active-elevate-2:not(.no-default-active-elevate) { position: relative; z-index: 0; }
 
-            {/* Media / text placeholder (leave empty for you to drop assets) */}
-            <div className="slot-media">
-              <div className="placeholder">
-                {n.kind === "text" ? "Text goes here" :
-                 n.kind === "image" ? "Image placeholder" :
-                 "Video placeholder"}
-              </div>
-            </div>
+  .hover-elevate:not(.no-default-hover-elevate)::after,
+  .active-elevate:not(.no-default-active-elevate)::after,
+  .hover-elevate-2:not(.no-default-hover-elevate)::after,
+  .active-elevate-2:not(.no-default-active-elevate)::after {
+    content: ""; pointer-events: none; position: absolute; inset: 0; border-radius: inherit; z-index: 999;
+  }
+  .hover-elevate:hover:not(.no-default-hover-elevate)::after,
+  .active-elevate:active:not(.no-default-active-elevate)::after { background-color: var(--elevate-1); }
+  .hover-elevate-2:hover:not(.no-default-hover-elevate)::after,
+  .active-elevate-2:active:not(.no-default-active-elevate)::after { background-color: var(--elevate-2); }
 
-            {/* tiny anchor nubs so wires feel “plugged in” */}
-            <div className="nub nub-l" />
-            <div className="nub nub-r" />
-            <div className="nub nub-t" />
-            <div className="nub nub-b" />
-          </div>
-        ))}
-      </div>
-    </section>
-  );
+  .border.hover-elevate:not(.no-hover-interaction-elevate)::after,
+  .border.active-elevate:not(.no-active-interaction-elevate)::after,
+  .border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
+  .border.active-elevate-2:not(.no-active-interaction-elevate)::after {
+    inset: -1px;
+  }
+
+  /* Card glass base */
+  .card-glass {
+    background: linear-gradient(180deg, rgba(255,255,255,var(--glass-alpha)), rgba(255,255,255,0.02));
+    border: 1px solid var(--rim-strength);
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .gloss-sheen::after {
+    content: "";
+    position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(120deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02) 30%, transparent 60%);
+    mix-blend-mode: screen;
+    transform: translateY(-30%) rotate(-12deg);
+    opacity: 0.9;
+  }
+
+  .metal-text {
+    background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(220,220,220,0.65));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.55);
+  }
+  .dark .metal-text {
+    background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(220,220,220,0.65));
+  }
+
+  /* ===========================
+     Diagonal Glass Stripe System
+     =========================== */
+  .glass-stripe-container {
+    position: absolute;
+    inset: -20%;
+    overflow: hidden;
+    transform: rotate(-30deg);
+  }
+  .glass-stripe {
+    position: absolute;
+    top: -50%;
+    bottom: -50%;
+    width: 8%;
+    transition: transform 0.3s ease;
+  }
+  .glass-stripe-white {
+    background: linear-gradient(90deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.15) 100%);
+    border-left: 1px solid rgba(255,255,255,0.3);
+    border-right: 1px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(8px) saturate(150%) contrast(1.2);
+    -webkit-backdrop-filter: blur(8px) saturate(150%) contrast(1.2);
+    box-shadow: inset 0 0 20px rgba(255,255,255,0.1), 0 0 30px rgba(255,255,255,0.05);
+  }
+  .glass-stripe-black {
+    background: linear-gradient(90deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.4) 100%);
+    border-left: 1px solid rgba(0,0,0,0.5);
+    border-right: 1px solid rgba(0,0,0,0.5);
+    backdrop-filter: blur(8px) saturate(120%) contrast(1.1);
+    -webkit-backdrop-filter: blur(8px) saturate(120%) contrast(1.1);
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.2), 0 0 30px rgba(0,0,0,0.15);
+  }
+  .glass-stripe-container:hover .glass-stripe { transform: translateX(2px); }
+
+  /* Reflected headline text */
+  .hero-reflection {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(2.4rem, 5vw, 4rem);
+    font-weight: bold; text-align: center;
+    color: rgba(255,255,255,0.12);
+    transform: scaleY(-1) translateY(30%) rotate(30deg);
+    filter: blur(2px);
+    mix-blend-mode: screen;
+    pointer-events: none;
+    letter-spacing: -0.02em;
+  }
+  .dark .hero-reflection { color: rgba(255,255,255,0.08); }
+
+  /* Shimmer particles along glass edges */
+  @keyframes shimmer {
+    0%, 100% { opacity: 0; transform: translateY(0); }
+    50%      { opacity: 1; transform: translateY(-10px); }
+  }
+  .glass-stripe-white::before,
+  .glass-stripe-black::before {
+    content: ''; position: absolute; top: 20%; right: -1px;
+    width: 2px; height: 3px; background: rgba(255,255,255,0.8); border-radius: 50%;
+    animation: shimmer 3s ease-in-out infinite;
+  }
+  .glass-stripe-white::after,
+  .glass-stripe-black::after {
+    content: ''; position: absolute; bottom: 30%; left: -1px;
+    width: 2px; height: 3px; background: rgba(255,255,255,0.6); border-radius: 50%;
+    animation: shimmer 4s ease-in-out infinite; animation-delay: 1s;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .glass-stripe-container:hover .glass-stripe { transform: none; }
+    .glass-stripe-white::before, .glass-stripe-black::before,
+    .glass-stripe-white::after,  .glass-stripe-black::after { animation: none; opacity: .3; }
+  }
+
+  /* Premium glass style for logo menu (workspace only) */
+  .logo-menu.workspace {
+    min-width: 260px !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    backdrop-filter: blur(10px) saturate(120%) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6) !important;
+    border-radius: 12px !important;
+    padding: 8px !important;
+    color: var(--text-main, #eaeaea) !important;
+    font-family: var(--font-display, 'Valmeria','Inter','Poppins',system-ui,sans-serif) !important;
+    z-index: 9999 !important;
+  }
+  .logo-menu.workspace [role="menuitem"] {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer;
+    transition: background .12s ease, transform .06s ease;
+  }
+  .logo-menu.workspace [role="menuitem"]:hover,
+  .logo-menu.workspace [role="menuitem"]:focus {
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    transform: translateY(-1px); outline: none;
+  }
+  .logo-menu.workspace .menu-label {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;
+  }
+  .logo-menu.workspace .menu-icon {
+    margin-left: 24px; flex: 0 0 auto; width: 20px; height: 20px; opacity: .95;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));
+  }
+  .dark .logo-menu.workspace {
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8) !important;
+  }
+  .dark .logo-menu.workspace [role="menuitem"]:hover,
+  .dark .logo-menu.workspace [role="menuitem"]:focus {
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)) !important;
+  }
+
+  /* Help submenu z-index */
+  .help-side-popup { position: fixed !important; z-index: var(--modal-z) !important; }
+}
+
+/* --- chat FAB safety pins (prevent rogue globals from flipping sides) --- */
+[data-testid="button-chat-dock"],
+[data-testid="button-chat-workspace"] {
+  position: fixed !important;
+  left: auto !important; top: auto !important; right: 1rem !important; bottom: 1rem !important;
+}
+@media (min-width: 768px) {
+  [data-testid="button-chat-dock"],
+  [data-testid="button-chat-workspace"] {
+    right: 1.5rem !important; bottom: 1.5rem !important;
+  }
+}
+
+/* ===== View Transitions (global) ===== */
+::view-transition-old(root) { animation: fadeOut .28s ease both; }
+::view-transition-new(root) { animation: fadeIn  .28s ease .06s both; }
+@keyframes fadeOut { to { opacity: .6; filter: saturate(.92) blur(.3px); } }
+@keyframes fadeIn  { from { opacity: 0; filter: saturate(1.05) blur(2px); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}
+
+/* =========================================
+   Weavy section + storyboard grid + nodes
+   ========================================= */
+
+/* Clean white weavy zone with a full-width grid band underlay */
+.weavy-section {
+  --gap: 16px; /* 1-space grid */
+  position: relative;
+  background: #fff;
+  padding-bottom: 6rem;
+}
+
+/* Full-width grid band; set top/height inline from the component */
+.grid-band {
+  position: absolute; left: 0; right: 0;
+  z-index: 0; pointer-events: none;
+  background:
+    /* soft paper */
+    linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.98)),
+    /* gentle vignette */
+    radial-gradient(900px 420px at 50% -20%, rgba(11,18,25,.06), transparent 60%),
+    /* 1-space grid */
+    repeating-linear-gradient(0deg,   rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px)),
+    repeating-linear-gradient(90deg,  rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px));
+  -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 30%, transparent 100%);
+}
+
+/* Legacy grid islands (optional reuse) */
+.grid-island {
+  position: absolute;
+  background:
+    radial-gradient(800px 400px at 30% -20%, rgba(11,18,25,0.06), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(2,6,23,0.08) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(90deg, rgba(2,6,23,0.08) 0 1px, transparent 1px 24px);
+  border-radius: 16px;
+  -webkit-mask-image: radial-gradient(150% 120% at 50% 50%, #000 30%, transparent 95%);
+  mask-image: radial-gradient(150% 120% at 50% 50%, #000 30%, transparent 95%);
+  filter: saturate(1.05);
+}
+/* .grid-island { display: none; } */
+
+/* Node container — clean panel glass (matches new WeavyBoard.tsx) */
+.node-card {
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.55));
+  border: 1px solid rgba(0,0,0,.08);
+  box-shadow: 0 18px 40px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.35);
+  cursor: grab;
+  user-select: none;
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+}
+.node-card:active { cursor: grabbing; }
+
+/* Node label (small, quiet) */
+.node-label {
+  font-size: 10px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #6B7280; /* slate-500 */
+  padding: 8px 10px 4px;
+}
+
+/* Media slot (kept “one-space” grid for internal layout) */
+.slot-media {
+  --cell: 16px;
+  margin: 6px 10px 10px;
+  height: calc(100% - 28px);
+  border-radius: 12px;
+  border: 1px dashed rgba(0,0,0,.18);
+  background:
+    linear-gradient(180deg, rgba(241,245,249,.65), rgba(248,250,252,.4)),
+    repeating-linear-gradient(0deg,  rgba(2,6,23,.06) 0 1px, transparent 1px calc(var(--cell) + 1px)),
+    repeating-linear-gradient(90deg, rgba(2,6,23,.05) 0 1px, transparent 1px calc(var(--cell) + 1px));
+  display: grid; place-items: center;
+}
+.slot-media .placeholder { font-size: 12px; color: #64748B; opacity: .9; }
+
+/* Tiny anchor nubs */
+.nub { position: absolute; width: 10px; height: 10px; background: #E5E7EB; border: 1px solid #CBD5E1; border-radius: 999px; }
+.nub-l { left: -5px; top: 50%; transform: translateY(-50%); }
+.nub-r { right: -5px; top: 50%; transform: translateY(-50%); }
+.nub-t { top: -5px; left: 50%; transform: translateX(-50%); }
+.nub-b { bottom: -5px; left: 50%; transform: translateX(-50%); }
+
+/* Thread wires (SVG) */
+.wire-thread path {
+  stroke: #CBD5E1; /* slate-300 */
+  stroke-width: 2.25;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: url(#threadShadow);
+}
+.wire-dot {
+  fill: #FFFFFF;
+  stroke: #CBD5E1;
+  stroke-width: 1;
+}
+.wire-bead {
+  fill: #E5E7EB;  /* slate-200 */
+  stroke: #D1D5DB;
+  stroke-width: .5;
+}
+
+/* =========================
+   WORKSPACE ONLY: purple press state
+   ========================= */
+body[data-page="workspace"] .workspace-root {
+  --press-purple: #7A1FF3;
+  --press-ink: #fff;
+  --press-border: color-mix(in oklch, #7A1FF3 88%, black);
+  --press-glow: 0 10px 32px #7A1FF333;
+}
+body[data-page="workspace"] .workspace-root :is(button, .btn, [role="button"]) {
+  transition: background-color .14s ease, border-color .14s ease,
+              color .14s ease, box-shadow .14s ease, transform .06s ease;
+}
+body[data-page="workspace"] .workspace-root
+:is(button, .btn, [role="button"]):active,
+body[data-page="workspace"] .workspace-root
+:is(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
+body[data-page="workspace"] .workspace-root
+:is(button[data-state="on"], .btn[data-state="on"], [role="button"][data-state="on"]) {
+  background-color: var(--press-purple) !important;
+  border-color: var(--press-border) !important;
+  color: var(--press-ink) !important;
+  box-shadow: var(--press-glow) !important;
+}
+body[data-page="workspace"] .workspace-root
+:is(button, .btn, [role="button"]):focus-visible {
+  outline: 2px solid color-mix(in oklch, #7A1FF3 86%, white 14%);
+  outline-offset: 2px;
+}
+body[data-page="workspace"] .workspace-root
+:is(button, .btn, [role="button"]):hover {
+  box-shadow: 0 6px 24px #7A1FF326;
 }
