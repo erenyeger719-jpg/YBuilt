@@ -412,9 +412,13 @@ body[data-force-theme="studio"] .studio-root {
   --studio-stop2: 70%;
   --studio-silk-op: 0.65;
 
+  /* new knobs */
+  --studio-paper-op: 0.22;         /* texture strength */
+  --studio-paper-blend: soft-light; /* premium paper blend */
+
   position: relative;
   min-height: 100vh;
-  isolation: isolate; /* NEW: make mix-blends predictable */
+  isolation: isolate; /* keep blends predictable */
 }
 
 /* base diagonal bands */
@@ -430,32 +434,50 @@ body[data-force-theme="studio"] .studio-root::before {
     );
 }
 
-/* slow aurora + silk + micro paper noise */
+/* slow aurora + silk + micro paper noise (with paper texture layer) */
 @keyframes auroraShift {
-  0%   { background-position: 0% 0%, 100% 0%, 0% 100%; }
-  50%  { background-position: 100% 50%, 0% 50%, 100% 0%; }
-  100% { background-position: 0% 0%, 100% 0%, 0% 100%; }
+  0%   { background-position: center, 0% 0%, 100% 0%, 0% 100%, 18% 24%, 82% 36%, 38% 78%; }
+  50%  { background-position: center, 100% 50%, 0% 50%, 100% 0%, 18% 24%, 82% 36%, 38% 78%; }
+  100% { background-position: center, 0% 0%, 100% 0%, 0% 100%, 18% 24%, 82% 36%, 38% 78%; }
 }
 body[data-force-theme="studio"] .studio-root::after {
   content: "";
-  position: fixed; inset: 0; z-index: 1; pointer-events: none;
-  background:
-    /* AURORA (3 wide, soft passes) */
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+
+  /* 1) PAPER TEXTURE, then aurora + silk + micro noise */
+  background-image:
+    url("/library-glass-matcap.webp"),
     radial-gradient(60% 40% at 20% 30%, rgba(226,121,180,.28), transparent 60%),
     radial-gradient(45% 35% at 80% 25%, rgba(255,149,210,.20), transparent 60%),
     radial-gradient(55% 45% at 40% 80%, rgba(180,210,255,.22), transparent 60%),
-    /* SILK highlight */
     linear-gradient(120deg, rgba(255,255,255,.16), rgba(255,255,255,.02) 28% 72%, rgba(255,255,255,.10)),
-    /* PAPER noise */
     radial-gradient(40% 40% at 18% 24%, rgba(0,0,0,.08), transparent 45%),
     radial-gradient(35% 35% at 82% 36%, rgba(255,255,255,.07), transparent 50%),
     radial-gradient(35% 35% at 38% 78%, rgba(0,0,0,.06), transparent 52%);
-  mix-blend-mode: screen; /* CHANGED: was overlay */
+
+  background-size:
+    cover,                      /* paper */
+    100% 100%, 100% 100%, 100% 100%, /* aurora */
+    100% 100%,                 /* silk */
+    100% 100%, 100% 100%, 100% 100%;  /* micro noise */
+
+  background-repeat: no-repeat;
+  background-position: center;
+
+  /* Blend layers inside the element */
+  background-blend-mode:
+    var(--studio-paper-blend),  /* paper */
+    screen, screen, screen,     /* aurora passes */
+    overlay, overlay, overlay;  /* silk + micro noise */
+
+  /* Then blend the whole element against the backdrop */
+  mix-blend-mode: normal;
+
   animation: auroraShift 38s ease-in-out infinite;
-  opacity: 0.75; /* was 0.9 */
-}
-@media (prefers-reduced-motion: reduce) {
-  body[data-force-theme="studio"] .studio-root::after { animation: none; }
+  opacity: calc(var(--studio-silk-op) + var(--studio-paper-op) * 0.35);
 }
 
 /* token nudges so UI matches the scene */
@@ -470,7 +492,7 @@ body[data-force-theme="studio"] {
 body[data-force-theme="studio"] .card-glass {
   background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
   border: 1px solid rgba(255,255,255,.14);
-  backdrop-filter: blur(12px) saturate(135%);
+  backdrop-filter: blur(12px) saturate(135%) contrast(1.02);
   -webkit-backdrop-filter: blur(12px) saturate(135%);
   box-shadow: 0 28px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
   border-radius: 16px;
