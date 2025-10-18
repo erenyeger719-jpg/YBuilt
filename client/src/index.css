@@ -412,17 +412,30 @@ body[data-force-theme="studio"] .studio-root {
   /* tweakable paper intensity */
   --studio-paper-op: 0.14;
 
+  /* pointer glow defaults */
+  --mx: 50%;
+  --my: 50%;
+  --glow: radial-gradient(
+    28rem 20rem at var(--mx) var(--my),
+    hsl(var(--accent) / .14), transparent 60%
+  );
+
+  /* filmic scroll stops (driven by JS) */
+  --scroll: 0;
+  --stop1: calc(var(--studio-stop1) + 10% * var(--scroll));
+  --stop2: calc(var(--studio-stop2) + 6%  * var(--scroll));
+
   position: relative;
   min-height: 100vh;
   isolation: isolate;
 
-  /* BASE DIAGONAL BANDS (moved from ::before) */
+  /* BASE DIAGONAL BANDS (uses dynamic stops) */
   background:
     linear-gradient(
       135deg,
-      var(--studio-right) 0% var(--studio-stop1),
-      var(--studio-center) var(--studio-stop1) var(--studio-stop2),
-      var(--studio-left)   var(--studio-stop2) 100%
+      var(--studio-right) 0% var(--stop1),
+      var(--studio-center) var(--stop1) var(--stop2),
+      var(--studio-left)   var(--stop2) 100%
     );
 }
 
@@ -453,7 +466,7 @@ body[data-force-theme="studio"] .studio-root::before {
   mask-mode: luminance;
 }
 
-/* slow aurora + silk + micro paper noise (no paper image here) */
+/* slow aurora + silk + micro paper noise + pointer glow */
 @keyframes auroraShift {
   0%   { background-position: 0% 0%, 100% 0%, 0% 100%, 18% 24%, 82% 36%, 38% 78%; }
   50%  { background-position: 100% 50%, 0% 50%, 100% 0%, 18% 24%, 82% 36%, 38% 78%; }
@@ -464,6 +477,7 @@ body[data-force-theme="studio"] .studio-root::after {
   position: fixed; inset: 0; z-index: 2; pointer-events: none;
 
   background-image:
+    var(--glow),                                /* pointer glow */
     /* AURORA (3 wide, soft passes) */
     radial-gradient(60% 40% at 20% 30%, rgba(226,121,180,.28), transparent 60%),
     radial-gradient(45% 35% at 80% 25%, rgba(255,149,210,.20), transparent 60%),
@@ -477,11 +491,18 @@ body[data-force-theme="studio"] .studio-root::after {
 
   background-repeat: no-repeat;
   background-size: 100% 100%;
-  background-blend-mode: screen, screen, screen, overlay, overlay, overlay, overlay;
+  background-blend-mode:
+    screen,                                     /* glow */
+    screen, screen, screen,                     /* aurora passes */
+    overlay, overlay, overlay, overlay;         /* silk + micro noise */
   mix-blend-mode: normal;
 
   animation: auroraShift 38s ease-in-out infinite;
   opacity: var(--studio-silk-op);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-force-theme="studio"] .studio-root::after { background-image: none; }
 }
 
 /* token nudges so UI matches the scene */
@@ -856,4 +877,95 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
     right: 1.5rem !important;
     bottom: 1.5rem !important;
   }
+}
+
+/* === Additional interaction utilities === */
+@layer utilities {
+  /* Magnetic button */
+  .btn-magnetic {
+    --tx: 0px; --ty: 0px;
+    transform: translate3d(var(--tx), var(--ty), 0) scale(1);
+    transition: transform .12s ease, box-shadow .14s ease;
+    will-change: transform;
+  }
+  .btn-magnetic:hover { transform: translate3d(var(--tx), var(--ty), 0) scale(1.02); }
+
+  /* Tilted glass card */
+  .card-tilt {
+    transform: perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));
+    transition: transform .15s ease, box-shadow .2s ease;
+    will-change: transform;
+  }
+  /* (optional depth polish) */
+  .card-tilt { box-shadow: 0 28px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06); }
+
+  /* Diagonal text reveal */
+  .reveal-diag {
+    --clip: polygon(0 0, 0 0, 0 100%, 0 100%);
+    clip-path: var(--clip);
+    transition: clip-path .7s cubic-bezier(.2,.8,.2,1);
+    will-change: clip-path;
+  }
+  .reveal-diag.in {
+    --clip: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+
+  /* Perf helper for heavy blocks */
+  .content-auto { content-visibility: auto; contain-intrinsic-size: 800px 1000px; }
+}
+
+/* =========================
+   STUDIO (workspace): purple press state
+   ========================= */
+
+/* Tokens */
+body[data-force-theme="studio"], .studio-root {
+  --press-purple: #7A1FF3; /* Render-ish purple */
+  --press-ink: #fff;
+  --press-border: color-mix(in oklch, #7A1FF3 88%, black);
+  --press-glow: 0 10px 32px #7A1FF333;
+}
+
+/* Smooth transitions for interactive controls */
+body[data-force-theme="studio"] :is(button, .btn, [role="button"]),
+.studio-root :is(button, .btn, [role="button"]) {
+  transition: background-color .14s ease, border-color .14s ease,
+              color .14s ease, box-shadow .14s ease, transform .06s ease;
+}
+
+/* Turn purple when pressed/active/toggled/open */
+body[data-force-theme="studio"] :is(button, .btn, [role="button"]):active,
+body[data-force-theme="studio"] :is(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
+body[data-force-theme="studio"] :is([data-state="on"], [data-state="open"], [data-pressed="true"], .active, .is-active),
+.studio-root :is(button, .btn, [role="button"]):active,
+.studio-root :is(button[aria-pressed="true"], .btn[aria-pressed="true"], [role="button"][aria-pressed="true"]),
+.studio-root :is([data-state="on"], [data-state="open"], [data-pressed="true"], .active, .is-active) {
+  background-color: var(--press-purple) !important;
+  border-color: var(--press-border) !important;
+  color: var(--press-ink) !important;
+  box-shadow: var(--press-glow) !important;
+}
+
+/* Keyboard focus ring */
+body[data-force-theme="studio"] :is(button, .btn, [role="button"]):focus-visible,
+.studio-root :is(button, .btn, [role="button"]):focus-visible {
+  outline: 2px solid color-mix(in oklch, #7A1FF3 86%, white 14%);
+  outline-offset: 2px;
+}
+
+/* Optional: hint of purple glow on hover so it feels lively */
+body[data-force-theme="studio"] :is(button, .btn, [role="button"]):hover,
+.studio-root :is(button, .btn, [role="button"]):hover {
+  box-shadow: 0 6px 24px #7A1FF326;
+}
+
+/* ===== View Transitions (global) ===== */
+/* Soft flash from orchid → white */
+::view-transition-old(root) { animation: fadeOut .28s ease both; }
+::view-transition-new(root) { animation: fadeIn  .28s ease .06s both; }
+@keyframes fadeOut { to { opacity: .6; filter: saturate(.92) blur(.3px); } }
+@keyframes fadeIn  { from { opacity: 0; filter: saturate(1.05) blur(2px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }

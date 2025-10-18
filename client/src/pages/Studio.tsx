@@ -1,4 +1,4 @@
-// client/src/pages/Studio.tsx
+// client/src/pages/StudioPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -18,41 +18,66 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { Sparkles, Upload, HardDrive, Palette, Server, ShieldCheck } from "lucide-react";
+import { Sparkles, Upload, Palette, Server, ShieldCheck } from "lucide-react";
 
 type Job = { id: string; status?: string; title?: string; prompt?: string };
-
 type DeployPreset = "beginner" | "pro" | "business" | "custom";
-
-type ThemeDef = { id: string; name: string; colors: [string,string,string] };
+type ThemeDef = { id: string; name: string; colors: [string, string, string] };
 
 const PRESET_THEMES: ThemeDef[] = [
-  { id: "mono", name: "Monochrome", colors: ["#000000","#7A7A7A","#FFFFFF"] },
-  { id: "sunset", name: "Sunset Glow", colors: ["#0a0a0a","#ff4da6","#ffffff"] },
-  { id: "royal", name: "Royal", colors: ["#0b0b0b","#7A1FF3","#E8DDFF"] },
-  { id: "slate", name: "Slate Sky", colors: ["#0b0b0b","#3B82F6","#DBEAFE"] },
+  { id: "mono", name: "Monochrome", colors: ["#000000", "#7A7A7A", "#FFFFFF"] },
+  { id: "sunset", name: "Sunset Glow", colors: ["#0a0a0a", "#ff4da6", "#ffffff"] },
+  { id: "royal", name: "Royal", colors: ["#0b0b0b", "#7A1FF3", "#E8DDFF"] },
+  { id: "slate", name: "Slate Sky", colors: ["#0b0b0b", "#3B82F6", "#DBEAFE"] },
 ];
 
-export default function Studio() {
-  const { jobId } = useParams<{ jobId?: string }>();
+/** Studio-only FX: pointer glow (updates --mx/--my), scroll stops (--scroll), reveal-diag intersection */
+function useStudioFX() {
+  useEffect(() => {
+    const root = document.querySelector<HTMLElement>(".studio-root");
+    if (!root) return;
 
-  // No :jobId → show your marketing Studio (unchanged)
-  if (!jobId) {
-    useForceStudioTheme(false); // be safe
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <Hero />
-        <Showcase />
-      </div>
+    // pointer position → CSS vars
+    const onMove = (e: MouseEvent) => {
+      const rect = root.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / Math.max(rect.width, 1)) * 100;
+      const y = ((e.clientY - rect.top) / Math.max(rect.height, 1)) * 100;
+      root.style.setProperty("--mx", `${x.toFixed(2)}%`);
+      root.style.setProperty("--my", `${y.toFixed(2)}%`);
+    };
+
+    // normalized scroll (0..1) → CSS var
+    const onScroll = () => {
+      const el = document.documentElement;
+      const denom = Math.max(el.scrollHeight - el.clientHeight, 1);
+      const ratio = el.scrollTop / denom;
+      root.style.setProperty("--scroll", `${Math.min(Math.max(ratio, 0), 1).toFixed(3)}`);
+    };
+
+    window.addEventListener("mousemove", onMove, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+
+    // intersection: add .in to .reveal-diag when visible
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) entry.target.classList.add("in");
+        }
+      },
+      { rootMargin: "0px 0px -10% 0px", threshold: 0.2 }
     );
-  }
+    document.querySelectorAll(".reveal-diag").forEach((el) => io.observe(el));
 
-  // :jobId present → the Finalize view
-  return <FinalizeStudio jobId={jobId} />;
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("scroll", onScroll);
+      io.disconnect();
+    };
+  }, []);
 }
 
-/** Mount/unmount: toggle the Studio forced theme */
+/** Mount/unmount: toggle the Studio forced theme on <body> */
 function useForceStudioTheme(enable: boolean) {
   useEffect(() => {
     if (enable) {
@@ -66,8 +91,48 @@ function useForceStudioTheme(enable: boolean) {
   }, [enable]);
 }
 
+export default function StudioPage() {
+  const { jobId } = useParams<{ jobId?: string }>();
+
+  // Marketing view (no :jobId)
+  if (!jobId) {
+    useForceStudioTheme(true);
+    useStudioFX();
+    return (
+      <section className="studio-root min-h-screen" data-force-theme="studio">
+        <div className="relative z-10">
+          <Header />
+        </div>
+
+        <header className="relative z-10 max-w-6xl mx-auto pt-20 px-6 text-center">
+          <p className="h-tagline reveal-diag">BUILD FASTER</p>
+          <h1 className="h-display reveal-diag mt-2" style={{ letterSpacing: "-0.02em" }}>
+            Inside a living canvas
+          </h1>
+
+          <div className="mt-8 flex justify-center gap-3">
+            <Button className="btn btn-magnetic card-glass px-6 py-3 rounded-xl">Start building</Button>
+            <Button variant="secondary" className="btn btn-magnetic px-6 py-3 rounded-xl border">Watch demo</Button>
+          </div>
+        </header>
+
+        <div className="relative z-10">
+          <Hero />
+          <div className="max-w-7xl mx-auto px-6 content-auto">
+            <Showcase />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Finalize view (with :jobId)
+  return <FinalizeStudio jobId={jobId} />;
+}
+
 function FinalizeStudio({ jobId }: { jobId: string }) {
   useForceStudioTheme(true);
+  useStudioFX();
 
   const { toast } = useToast();
 
@@ -98,9 +163,9 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
     const base = job?.prompt || lastPrompt || "New project";
     const tier =
       deployPreset === "beginner" ? "Starter stack (cheap hosting, simple CI)"
-      : deployPreset === "pro" ? "Pro stack (Git + CI, observability, CDN)"
-      : deployPreset === "business" ? "Business-ready (teams, SSO, tracing)"
-      : "Custom deployment";
+        : deployPreset === "pro" ? "Pro stack (Git + CI, observability, CDN)"
+          : deployPreset === "business" ? "Business-ready (teams, SSO, tracing)"
+            : "Custom deployment";
     return {
       name: (base || "Project").slice(0, 60),
       summary: `Plan based on your idea: “${base}”.`,
@@ -116,7 +181,9 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         const r = await fetch(`/api/jobs/${jobId}`, { credentials: "include" });
         const data = r.ok ? await r.json() : null;
         if (alive) setJob(data || null);
-      } catch {/* ignore */} finally {
+      } catch {
+        // ignore
+      } finally {
         if (alive) setLoading(false);
       }
     })();
@@ -167,7 +234,6 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
   async function openWorkspace() {
     try {
-      // Try to notify backend (ok if it 404/405s)
       await fetch(`/api/jobs/${jobId}/select`, {
         method: "POST",
         credentials: "include",
@@ -187,7 +253,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
   if (loading) {
     return (
-      <div className="studio-root min-h-screen grid place-items-center">
+      <div className="studio-root min-h-screen grid place-items-center" data-force-theme="studio">
         <div className="relative z-10 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Preparing studio…</p>
@@ -197,7 +263,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   }
 
   return (
-    <div className="studio-root min-h-screen">
+    <div className="studio-root min-h-screen" data-force-theme="studio">
       {/* Keep your header on top of the glass */}
       <div className="relative z-10">
         <Header />
@@ -207,7 +273,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         {/* 3-column premium layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT — inputs & choices */}
-          <Card className="lg:col-span-4 p-6 card-glass">
+          <Card className="lg:col-span-4 p-6 card-glass card-tilt">
             <div className="gloss-sheen" />
             <div className="relative z-10 space-y-6">
               <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
@@ -275,7 +341,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                         </div>
                         <div>
                           <Label>Host (notes)</Label>
-                          <Input className="mt-1.5" value={customHost} onChange={(e)=>setCustomHost(e.target.value)} />
+                          <Input className="mt-1.5" value={customHost} onChange={(e) => setCustomHost(e.target.value)} />
                         </div>
                       </div>
                     )}
@@ -325,11 +391,11 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                     </SheetHeader>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                      {PRESET_THEMES.map(t => (
+                      {PRESET_THEMES.map((t) => (
                         <button
                           key={t.id}
                           onClick={() => { setSelectedTheme(t); }}
-                          className={`p-3 rounded-lg border text-left hover-elevate ${selectedTheme.id===t.id ? "ring-2 ring-primary" : ""}`}
+                          className={`p-3 rounded-lg border text-left hover-elevate ${selectedTheme.id === t.id ? "ring-2 ring-primary" : ""}`}
                         >
                           <div className="font-medium mb-2">{t.name}</div>
                           <ThemeBar colors={t.colors} />
@@ -340,9 +406,9 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                     <div className="mt-6 border-t pt-4 space-y-3">
                       <div className="font-medium">Add your own</div>
                       <div className="grid grid-cols-3 gap-3">
-                        <input type="color" value={customA} onChange={(e)=>setCustomA(e.target.value)} className="h-10 w-full rounded" />
-                        <input type="color" value={customB} onChange={(e)=>setCustomB(e.target.value)} className="h-10 w-full rounded" />
-                        <input type="color" value={customC} onChange={(e)=>setCustomC(e.target.value)} className="h-10 w-full rounded" />
+                        <input type="color" value={customA} onChange={(e) => setCustomA(e.target.value)} className="h-10 w-full rounded" />
+                        <input type="color" value={customB} onChange={(e) => setCustomB(e.target.value)} className="h-10 w-full rounded" />
+                        <input type="color" value={customC} onChange={(e) => setCustomC(e.target.value)} className="h-10 w-full rounded" />
                       </div>
                       <div className="flex items-center justify-between">
                         <ThemeBar colors={[customA, customB, customC]} />
@@ -359,7 +425,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                     </div>
 
                     <SheetFooter className="mt-4">
-                      <Button variant="outline" onClick={()=>setThemeSheetOpen(false)}>Close</Button>
+                      <Button variant="outline" onClick={() => setThemeSheetOpen(false)}>Close</Button>
                     </SheetFooter>
                   </SheetContent>
                 </Sheet>
@@ -371,7 +437,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           </Card>
 
           {/* MIDDLE — plan + prompt */}
-          <Card className="lg:col-span-5 p-6 card-glass">
+          <Card className="lg:col-span-5 p-6 card-glass card-tilt">
             <div className="gloss-sheen" />
             <div className="relative z-10 space-y-5">
               <div className="flex items-center gap-2">
@@ -381,14 +447,14 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
               <div className="space-y-3">
                 <div className="text-sm text-muted-foreground">Project name</div>
-                <div className="text-2xl font-semibold metal-text">{plan.name || "Your project"}</div>
+                <div className="text-2xl font-semibold metal-text reveal-diag">{plan.name || "Your project"}</div>
 
-                <div className="mt-4 text-sm">
+                <div className="mt-4 text-sm reveal-diag">
                   <div className="text-muted-foreground mb-1">Summary</div>
                   <p>{plan.summary}</p>
                 </div>
 
-                <div className="mt-4 text-sm">
+                <div className="mt-4 text-sm reveal-diag">
                   <div className="text-muted-foreground mb-1">Stack</div>
                   <p>{plan.stack}</p>
                 </div>
@@ -410,14 +476,14 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           </Card>
 
           {/* RIGHT — actions */}
-          <Card className="lg:col-span-3 p-6 card-glass">
+          <Card className="lg:col-span-3 p-6 card-glass card-tilt">
             <div className="gloss-sheen" />
             <div className="relative z-10 space-y-4">
               <h2 className="text-xl font-semibold">Actions</h2>
-              <Button onClick={openWorkspace} className="w-full">
+              <Button onClick={openWorkspace} className="w-full btn btn-magnetic">
                 Finalize & Open Workspace
               </Button>
-              <Button onClick={saveToLibrary} variant="secondary" className="w-full">
+              <Button onClick={saveToLibrary} variant="secondary" className="w-full btn btn-magnetic">
                 Save to Library
               </Button>
 
@@ -432,14 +498,17 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   );
 }
 
-function ThemeBar({ colors, className="" }: { colors: [string,string,string] | string[]; className?: string }) {
-  const [c1,c2,c3] = colors as string[];
+function ThemeBar({ colors, className = "" }: { colors: [string, string, string] | string[]; className?: string }) {
+  const [c1, c2, c3] = colors as string[];
   return (
-    <div className={`rounded-md overflow-hidden border ${className}`} style={{ background: `linear-gradient(90deg, ${c1} 0 33%, ${c2} 33% 66%, ${c3} 66% 100%)`, height: 28 }} />
+    <div
+      className={`rounded-md overflow-hidden border ${className}`}
+      style={{ background: `linear-gradient(90deg, ${c1} 0 33%, ${c2} 33% 66%, ${c3} 66% 100%)`, height: 28 }}
+    />
   );
 }
 
-function PresetCard({ title, desc, active, onClick }:{ title:string; desc:string; active?:boolean; onClick:()=>void }) {
+function PresetCard({ title, desc, active, onClick }: { title: string; desc: string; active?: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
