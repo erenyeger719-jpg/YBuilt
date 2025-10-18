@@ -969,3 +969,68 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
 .nub-r { right: -5px; top: 50%; transform: translateY(-50%); }
 .nub-t { top: -5px; left: 50%; transform: translateX(-50%); }
 .nub-b { bottom: -5px; left: 50%; transform: translateX(-50%); }
+
+/* ---------------- Tiny CSS additions (thread styling) ------------------ */
+/* Weavy thread wires */
+.wire-thread path {
+  stroke: #CBD5E1;              /* slate-300 */
+  stroke-width: 2.25;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: url(#threadShadow);
+}
+
+.wire-dot {
+  fill: #FFFFFF;
+  stroke: #CBD5E1;
+  stroke-width: 1;
+}
+
+.wire-bead {
+  fill: #E5E7EB;                /* slate-200 */
+  stroke: #D1D5DB;
+  stroke-width: .5;
+}
+
+/* Node label (small, quiet) */
+.node-label {
+  font-size: 10px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #6B7280;               /* slate-500 */
+  padding: 8px 10px 4px;
+}
+
+/* Override node container back to clean panel glass */
+.node-card {
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.55));
+  border: 1px solid rgba(0,0,0,.08);
+  box-shadow: 0 18px 40px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.35);
+  backdrop-filter: blur(6px) saturate(120%);
+  cursor: grab;
+  user-select: none;
+}
+.node-card:active { cursor: grabbing; }
+
+/* media placeholder (tightened spacing + one-space grid) */
+.slot-media {
+  margin: 6px 10px 10px;
+  height: calc(100% - 28px);
+  border-radius: 12px;
+  border: 1px dashed rgba(0,0,0,.18);
+  background:
+    linear-gradient(180deg, rgba(241,245,249,.65), rgba(248,250,252,.4)),
+    repeating-linear-gradient(0deg, rgba(2,6,23,.06) 0 1px, transparent 1px 17px),
+    repeating-linear-gradient(90deg, rgba(2,6,23,.05) 0 1px, transparent 1px 17px);
+  display: grid; place-items: center;
+}
+.slot-media .placeholder { font-size: 12px; color: #64748B; opacity: .9; }
+
+/* Nubs (kept) */
+.nub { position: absolute; width: 10px; height: 10px; background: #E5E7EB; border: 1px solid #CBD5E1; border-radius: 999px; }
+.nub-l { left: -5px; top: 50%; transform: translateY(-50%); }
+.nub-r { right: -5px; top: 50%; transform: translateY(-50%); }
+.nub-t { top: -5px; left: 50%; transform: translateX(-50%); }
+.nub-b { bottom: -5px; left: 50%; transform: translateX(-50%); }
