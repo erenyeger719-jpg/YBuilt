@@ -43,6 +43,10 @@ export default function PromptInput(_: PromptInputProps) {
       data?.data?.id;
 
     if (!id) throw new Error("No jobId in response");
+
+    // carry the prompt over to Studio
+    localStorage.setItem("lastPrompt", p);
+
     const target = `/studio/${id}`;
     console.log("[prompt] redirect →", target);
 

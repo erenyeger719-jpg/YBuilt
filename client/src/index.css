@@ -399,6 +399,60 @@ body[data-force-theme="settings"] .settings-text-dark {
   color: var(--settings-text-on-light);
 }
 
+/* -------- Studio diagonal textured theme -------- */
+body[data-force-theme="studio"] .studio-root {
+  position: relative;
+  min-height: 100vh;
+}
+
+body[data-force-theme="studio"] .studio-root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  /* diagonal stripes: black → sunset pink/purple → white */
+  background:
+    linear-gradient(135deg,
+      #0a0a0a 0%,
+      #0a0a0a 34%,
+      #ff4da6 34%,
+      #ff4da6 66%,
+      #ffffff 66%,
+      #ffffff 100%);
+  opacity: 0.95;
+}
+
+/* subtle crumpled-paper texture overlay (safe fallback if you don't have a texture asset) */
+body[data-force-theme="studio"] .studio-root::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255,255,255,0.05), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(0,0,0,0.08), transparent 45%),
+    radial-gradient(circle at 40% 80%, rgba(0,0,0,0.06), transparent 45%);
+  mix-blend-mode: overlay;
+}
+
+/* make cards glossy like Settings */
+.card-glass {
+  position: relative;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.18);
+  backdrop-filter: blur(10px);
+}
+
+.gloss-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgba(255,255,255,0.18), transparent 30% 70%, rgba(255,255,255,0.08));
+  opacity: 0.6;
+  border-radius: inherit;
+}
+
 @layer base {
   * {
     @apply border-border;
