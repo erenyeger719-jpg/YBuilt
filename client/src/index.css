@@ -407,7 +407,8 @@ body[data-force-theme="studio"] .studio-root {
   --studio-accent: #E379B4;   /* subtle ring/buttons */
   --studio-silk-op: 0.75;     /* silk sheen strength */
   --studio-noise-op: 0.06;    /* paper noise strength */
-  --studio-stops: 40%, 72%;   /* diagonal breakpoints */
+  --studio-stop1: 40%;        /* diagonal breakpoint #1  */
+  --studio-stop2: 72%;        /* diagonal breakpoint #2  */
   position: relative;
   min-height: 100vh;
 }
@@ -421,9 +422,9 @@ body[data-force-theme="studio"] .studio-root::before {
   background:
     linear-gradient(
       135deg,
-      var(--studio-right) 0% var(--studio-stops, 40%),
-      var(--studio-center) var(--studio-stops, 40%) 72%,
-      var(--studio-left) 72% 100%
+      var(--studio-right) 0% var(--studio-stop1),
+      var(--studio-center) var(--studio-stop1) var(--studio-stop2),
+      var(--studio-left) var(--studio-stop2) 100%
     );
 }
 
@@ -446,23 +447,34 @@ body[data-force-theme="studio"] .studio-root::after {
   opacity: var(--studio-silk-op);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  body[data-force-theme="studio"] .studio-root::after {
-    opacity: calc(var(--studio-silk-op) * 0.7);
-  }
-}
-
-/* Nudge component tokens so glass feels cohesive */
+/* Component tokens so glass matches palette */
 body[data-force-theme="studio"] {
-  --primary: 329 36% 58%;   /* from orchid wine */
+  --primary: 329 36% 58%;
   --primary-foreground: 0 0% 100%;
-  --accent: 329 64% 70%;    /* brighter for hovers */
+  --accent: 329 64% 70%;
   --ring: 329 64% 70%;
 }
 
-/* OPTIONAL: a touch more depth on cards in this palette */
+/* A touch more depth on cards in this palette */
 body[data-force-theme="studio"] .card-glass {
   box-shadow: 0 28px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* make cards glossy like Settings */
+.card-glass {
+  position: relative;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.18);
+  backdrop-filter: blur(10px);
+}
+
+.gloss-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgba(255,255,255,0.18), transparent 30% 70%, rgba(255,255,255,0.08));
+  opacity: 0.6;
+  border-radius: inherit;
 }
 
 @layer base {
