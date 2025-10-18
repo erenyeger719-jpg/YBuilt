@@ -407,7 +407,7 @@ body[data-force-theme="studio"] .studio-root {
   --studio-left: #E6EEF6; /* a touch softer than DDE7F2 */
   --studio-stop1: 38%;
   --studio-stop2: 70%;
-  --studio-silk-op: 0.65;
+  --studio-silk-op: 0.78; /* was 0.65 */
 
   /* tweakable paper intensity */
   --studio-paper-op: 0.14;
@@ -416,8 +416,9 @@ body[data-force-theme="studio"] .studio-root {
   --mx: 50%;
   --my: 50%;
   --glow: radial-gradient(
-    28rem 20rem at var(--mx) var(--my),
-    hsl(var(--accent) / .14), transparent 60%
+    34rem 24rem at var(--mx) var(--my),   /* bigger */
+    hsl(var(--accent) / .20),             /* stronger */
+    transparent 60%
   );
 
   /* filmic scroll stops (driven by JS) */

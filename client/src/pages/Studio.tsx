@@ -31,15 +31,15 @@ const PRESET_THEMES: ThemeDef[] = [
   { id: "slate", name: "Slate Sky", colors: ["#0b0b0b", "#3B82F6", "#DBEAFE"] },
 ];
 
-/** Studio-only FX: pointer glow, scroll stops, magnetic buttons, card tilt, diagonal reveals */
+/** Studio-only FX with event delegation: pointer glow, scroll stops, magnetic, tilt, reveal */
 function useStudioFX() {
   useEffect(() => {
     const root = document.querySelector<HTMLElement>(".studio-root");
     if (!root) return;
 
-    /* 1) Pointer glow (rAF-throttled) */
+    // --- 1) Pointer glow (rAF-throttled)
     let glowRAF = 0;
-    const onPointerMove = (e: PointerEvent) => {
+    const onPointerMoveRoot = (e: PointerEvent) => {
       if (glowRAF) return;
       glowRAF = requestAnimationFrame(() => {
         glowRAF = 0;
@@ -50,9 +50,9 @@ function useStudioFX() {
         root.style.setProperty("--my", y.toFixed(2) + "%");
       });
     };
-    root.addEventListener("pointermove", onPointerMove, { passive: true });
+    root.addEventListener("pointermove", onPointerMoveRoot, { passive: true });
 
-    /* 2) Scroll-scrub stops (rAF-throttled) */
+    // --- 2) Scroll-scrub stops (rAF-throttled)
     let scrollRAF = 0;
     const onScroll = () => {
       if (scrollRAF) return;
@@ -66,54 +66,61 @@ function useStudioFX() {
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll(); // init
 
-    /* 3) Magnetic buttons (scoped) */
-    const mags = Array.from(root.querySelectorAll<HTMLElement>(".btn-magnetic"));
-    const magOffs = mags.map((btn) => {
-      const R = 24;
-      const move = (e: PointerEvent) => {
-        const b = btn.getBoundingClientRect();
+    // --- 3) Event-delegated magnetic buttons & tilt cards
+    let lastMag: HTMLElement | null = null;
+    let lastTilt: HTMLElement | null = null;
+
+    const onPointerMoveDelegated = (e: PointerEvent) => {
+      // Magnetic button under cursor?
+      const mag = (e.target as HTMLElement)?.closest<HTMLElement>(".btn-magnetic");
+      if (mag) {
+        lastMag = mag;
+        const b = mag.getBoundingClientRect();
         const x = e.clientX - (b.left + b.width / 2);
         const y = e.clientY - (b.top + b.height / 2);
-        const clamp = (v: number) => Math.max(-R, Math.min(R, v));
-        btn.style.setProperty("--tx", clamp(x * 0.15) + "px");
-        btn.style.setProperty("--ty", clamp(y * 0.15) + "px");
-      };
-      const leave = () => {
-        btn.style.setProperty("--tx", "0px");
-        btn.style.setProperty("--ty", "0px");
-      };
-      btn.addEventListener("pointermove", move);
-      btn.addEventListener("pointerleave", leave);
-      return () => {
-        btn.removeEventListener("pointermove", move);
-        btn.removeEventListener("pointerleave", leave);
-      };
-    });
+        const clamp = (v: number) => Math.max(-24, Math.min(24, v));
+        mag.style.setProperty("--tx", clamp(x * 0.15) + "px");
+        mag.style.setProperty("--ty", clamp(y * 0.15) + "px");
+      } else if (lastMag) {
+        // leave
+        lastMag.style.setProperty("--tx", "0px");
+        lastMag.style.setProperty("--ty", "0px");
+        lastMag = null;
+      }
 
-    /* 4) Tilted cards (scoped) */
-    const cards = Array.from(root.querySelectorAll<HTMLElement>(".card-tilt"));
-    const tiltOffs = cards.map((card) => {
-      const max = 7;
-      const move = (e: PointerEvent) => {
-        const r = card.getBoundingClientRect();
-        const px = (e.clientX - r.left) / r.width - 0.5;
-        const py = (e.clientY - r.top) / r.height - 0.5;
-        card.style.setProperty("--ry", (px * max) + "deg");
-        card.style.setProperty("--rx", (-py * max) + "deg");
-      };
-      const leave = () => {
-        card.style.removeProperty("--rx");
-        card.style.removeProperty("--ry");
-      };
-      card.addEventListener("pointermove", move);
-      card.addEventListener("pointerleave", leave);
-      return () => {
-        card.removeEventListener("pointermove", move);
-        card.removeEventListener("pointerleave", leave);
-      };
-    });
+      // Tilt card under cursor?
+      const tilt = (e.target as HTMLElement)?.closest<HTMLElement>(".card-tilt");
+      if (tilt) {
+        lastTilt = tilt;
+        const r = tilt.getBoundingClientRect();
+        const px = (e.clientX - r.left) / Math.max(1, r.width) - 0.5;
+        const py = (e.clientY - r.top) / Math.max(1, r.height) - 0.5;
+        tilt.style.setProperty("--ry", (px * 7) + "deg");
+        tilt.style.setProperty("--rx", (-py * 7) + "deg");
+      } else if (lastTilt) {
+        lastTilt.style.removeProperty("--rx");
+        lastTilt.style.removeProperty("--ry");
+        lastTilt = null;
+      }
+    };
 
-    /* 5) Diagonal text reveal (more forgiving threshold) */
+    const onPointerLeaveRoot = () => {
+      if (lastMag) {
+        lastMag.style.setProperty("--tx", "0px");
+        lastMag.style.setProperty("--ty", "0px");
+        lastMag = null;
+      }
+      if (lastTilt) {
+        lastTilt.style.removeProperty("--rx");
+        lastTilt.style.removeProperty("--ry");
+        lastTilt = null;
+      }
+    };
+
+    root.addEventListener("pointermove", onPointerMoveDelegated, { passive: true });
+    root.addEventListener("pointerleave", onPointerLeaveRoot, { passive: true });
+
+    // --- 4) Diagonal text reveal (fire early so things don’t look “missing”)
     const io = new IntersectionObserver(
       (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add("in")),
       { threshold: 0.01 }
@@ -121,15 +128,14 @@ function useStudioFX() {
     const reveals = Array.from(root.querySelectorAll<HTMLElement>(".reveal-diag"));
     reveals.forEach((n) => io.observe(n));
 
-    /* Cleanup */
     return () => {
-      root.removeEventListener("pointermove", onPointerMove);
+      root.removeEventListener("pointermove", onPointerMoveRoot);
       window.removeEventListener("scroll", onScroll);
+      root.removeEventListener("pointermove", onPointerMoveDelegated);
+      root.removeEventListener("pointerleave", onPointerLeaveRoot);
+      io.disconnect();
       cancelAnimationFrame(glowRAF);
       cancelAnimationFrame(scrollRAF);
-      magOffs.forEach((off) => off());
-      tiltOffs.forEach((off) => off());
-      io.disconnect();
     };
   }, []);
 }
@@ -218,7 +224,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   const lastPrompt = useMemo(() => localStorage.getItem("lastPrompt") || "", []);
   const plan = useMemo(() => {
     const base = job?.prompt || lastPrompt || "New project";
-    const tier =
+    the const tier =
       deployPreset === "beginner" ? "Starter stack (cheap hosting, simple CI)"
         : deployPreset === "pro" ? "Pro stack (Git + CI, observability, CDN)"
           : deployPreset === "business" ? "Business-ready (teams, SSO, tracing)"
