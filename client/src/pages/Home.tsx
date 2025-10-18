@@ -1,119 +1,14 @@
 // client/src/pages/Home.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Header from "@/components/Header";
+import Hero from "@/components/Hero";
 import ChatPanel from "@/components/ChatPanel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Sparkles, Rocket, Wand2, MonitorSmartphone } from "lucide-react";
+import { MessageCircle, X, ArrowRight } from "lucide-react";
 
-/** Home-only scene FX (keeps your global theme; no data-force-theme) */
-function useHomeFX() {
-  useEffect(() => {
-    const root = document.querySelector<HTMLElement>(".home-root");
-    if (!root) return;
-
-    // pointer glow (scoped)
-    let raf = 0;
-    const onMove = (e: PointerEvent) => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const r = root.getBoundingClientRect();
-        const x = ((e.clientX - r.left) / Math.max(1, r.width)) * 100;
-        const y = ((e.clientY - r.top) / Math.max(1, r.height)) * 100;
-        root.style.setProperty("--mx", x.toFixed(2) + "%");
-        root.style.setProperty("--my", y.toFixed(2) + "%");
-      });
-    };
-    root.addEventListener("pointermove", onMove, { passive: true });
-
-    // scroll-scrub stops (for diagonal background nudges if you add them)
-    let sraf = 0;
-    const onScroll = () => {
-      if (sraf) return;
-      sraf = requestAnimationFrame(() => {
-        sraf = 0;
-        const max = document.documentElement.scrollHeight - innerHeight || 1;
-        const p = Math.min(1, Math.max(0, scrollY / max));
-        root.style.setProperty("--scroll", p.toFixed(3));
-      });
-    };
-    addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-
-    // delegated magnetic + tilt + diagonal reveal
-    let lastMag: HTMLElement | null = null;
-    let lastTilt: HTMLElement | null = null;
-
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add("in")),
-      { threshold: 0.06 }
-    );
-    root.querySelectorAll<HTMLElement>(".reveal-diag").forEach((n) => io.observe(n));
-
-    const onDelegated = (e: PointerEvent) => {
-      const t = e.target as HTMLElement;
-
-      // magnetic
-      const mag = t?.closest<HTMLElement>(".btn-magnetic");
-      if (mag) {
-        lastMag = mag;
-        const b = mag.getBoundingClientRect();
-        const x = e.clientX - (b.left + b.width / 2);
-        const y = e.clientY - (b.top + b.height / 2);
-        const clamp = (v: number) => Math.max(-24, Math.min(24, v));
-        mag.style.setProperty("--tx", clamp(x * 0.15) + "px");
-        mag.style.setProperty("--ty", clamp(y * 0.15) + "px");
-      } else if (lastMag) {
-        lastMag.style.setProperty("--tx", "0px");
-        lastMag.style.setProperty("--ty", "0px");
-        lastMag = null;
-      }
-
-      // tilt
-      const tilt = t?.closest<HTMLElement>(".card-tilt");
-      if (tilt) {
-        lastTilt = tilt;
-        const r = tilt.getBoundingClientRect();
-        const px = (e.clientX - r.left) / Math.max(1, r.width) - 0.5;
-        const py = (e.clientY - r.top) / Math.max(1, r.height) - 0.5;
-        tilt.style.setProperty("--ry", (px * 7) + "deg");
-        tilt.style.setProperty("--rx", (-py * 7) + "deg");
-      } else if (lastTilt) {
-        lastTilt.style.removeProperty("--rx");
-        lastTilt.style.removeProperty("--ry");
-        lastTilt = null;
-      }
-    };
-    const onLeave = () => {
-      if (lastMag) {
-        lastMag.style.setProperty("--tx", "0px");
-        lastMag.style.setProperty("--ty", "0px");
-        lastMag = null;
-      }
-      if (lastTilt) {
-        lastTilt.style.removeProperty("--rx");
-        lastTilt.style.removeProperty("--ry");
-        lastTilt = null;
-      }
-    };
-    root.addEventListener("pointermove", onDelegated, { passive: true });
-    root.addEventListener("pointerleave", onLeave, { passive: true });
-
-    return () => {
-      root.removeEventListener("pointermove", onMove);
-      removeEventListener("scroll", onScroll);
-      root.removeEventListener("pointermove", onDelegated);
-      root.removeEventListener("pointerleave", onLeave);
-      io.disconnect();
-      cancelAnimationFrame(raf);
-      cancelAnimationFrame(sraf);
-    };
-  }, []);
-}
-
-/** Floating Chat (kept from your old Home) */
+/** --- Floating chat (unchanged) --- */
 function FloatingChat({
   isChatOpen,
   setIsChatOpen,
@@ -131,13 +26,7 @@ function FloatingChat({
         data-testid="button-toggle-chat"
         aria-label="Toggle chat"
       >
-        {isChatOpen ? (
-          <span className="sr-only">Close chat</span>
-        ) : (
-          <span className="sr-only">Open chat</span>
-        )}
-        {/* simple glyph change via border ring */}
-        <div className="absolute inset-0 rounded-full ring-1 ring-border" />
+        {isChatOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
       </Button>
 
       {isChatOpen && (
@@ -154,138 +43,267 @@ function FloatingChat({
   );
 }
 
-/** Sticky live preview + scroll scenes (Heavy-style narrative) */
-function PinnedBuilder() {
+/** --- Seam between dark hero and white body (soft diagonal) --- */
+function HeroToWhiteSeam() {
   return (
-    <section className="relative max-w-7xl mx-auto px-6 mt-20 grid lg:grid-cols-2 gap-8">
-      {/* Left: sticky preview that looks alive but respects theme */}
-      <Card className="card-glass card-tilt p-6 sticky top-24 self-start">
-        <div className="gloss-sheen" />
-        <div className="relative z-10">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Sparkles className="h-5 w-5" /> Live preview
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            A tiny simulation of your canvas while you scroll specs on the right.
-          </p>
+    <div
+      aria-hidden
+      className="relative h-24"
+      style={{
+        // fade from transparent (over your dark hero) to white
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 40%, #ffffff 100%)",
+      }}
+    >
+      <div
+        className="absolute inset-0"
+        style={{
+          // gentle diagonal wipe like Heavy
+          maskImage:
+            "linear-gradient(160deg, rgba(0,0,0,1) 45%, rgba(0,0,0,.4) 60%, rgba(0,0,0,0) 75%)",
+          WebkitMaskImage:
+            "linear-gradient(160deg, rgba(0,0,0,1) 45%, rgba(0,0,0,.4) 60%, rgba(0,0,0,0) 75%)",
+          background: "white",
+        }}
+      />
+    </div>
+  );
+}
 
-          {/* faux preview: inner .studio-root to show the glow without changing site theme */}
-          <div className="mt-4 rounded-xl overflow-hidden border">
-            <div className="aspect-[16/10] studio-root" />
+/** --- Wired node map (templates) --- */
+type NodeDef = {
+  id: string;
+  label: string;
+  x: number; // in a 1000x600 virtual plane
+  y: number;
+  href: string;
+};
+const NODES: NodeDef[] = [
+  { id: "portfolio", label: "Portfolio", x: 150, y: 120, href: "/studio" },
+  { id: "blog", label: "Blog / Magazine", x: 330, y: 80, href: "/studio" },
+  { id: "shop", label: "Shop", x: 520, y: 120, href: "/studio" },
+  { id: "saas", label: "SaaS Landing", x: 700, y: 90, href: "/studio" },
+  { id: "dashboard", label: "Dashboard", x: 240, y: 260, href: "/studio" },
+  { id: "docs", label: "Docs", x: 460, y: 240, href: "/studio" },
+  { id: "mobile", label: "Mobile Shell", x: 720, y: 240, href: "/studio" },
+  { id: "booking", label: "Booking", x: 170, y: 420, href: "/studio" },
+  { id: "education", label: "Education", x: 380, y: 410, href: "/studio" },
+  { id: "community", label: "Community", x: 600, y: 420, href: "/studio" },
+  { id: "ai", label: "AI App", x: 820, y: 380, href: "/studio" },
+];
+
+const EDGES: [string, string][] = [
+  ["portfolio", "blog"],
+  ["blog", "shop"],
+  ["shop", "saas"],
+  ["blog", "docs"],
+  ["docs", "dashboard"],
+  ["dashboard", "booking"],
+  ["docs", "education"],
+  ["shop", "community"],
+  ["community", "ai"],
+  ["saas", "mobile"],
+  ["mobile", "ai"],
+];
+
+function NodeGraph() {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  // subtle whole-graph parallax
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let raf = 0;
+    const onMove = (e: PointerEvent) => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const r = el.getBoundingClientRect();
+        const px = (e.clientX - r.left) / Math.max(1, r.width) - 0.5;
+        const py = (e.clientY - r.top) / Math.max(1, r.height) - 0.5;
+        el.style.setProperty("--dx", String(px * 18)); // max ~18px
+        el.style.setProperty("--dy", String(py * 18));
+      });
+    };
+    el.addEventListener("pointermove", onMove, { passive: true });
+    el.addEventListener("pointerleave", () => {
+      el.style.setProperty("--dx", "0");
+      el.style.setProperty("--dy", "0");
+    });
+    return () => {
+      el.removeEventListener("pointermove", onMove);
+    };
+  }, []);
+
+  return (
+    <div ref={ref} className="relative w-full max-w-6xl mx-auto" style={{ height: 520 }}>
+      {/* lines (SVG underlay, moves with the group) */}
+      <svg
+        className="absolute inset-0"
+        viewBox="0 0 1000 600"
+        preserveAspectRatio="none"
+        style={{
+          transform: "translate3d(calc(var(--dx,0px)*1px), calc(var(--dy,0px)*1px), 0)",
+          transition: "transform .12s ease-out",
+        }}
+      >
+        {EDGES.map(([a, b]) => {
+          const A = NODES.find((n) => n.id === a)!;
+          const B = NODES.find((n) => n.id === b)!;
+          return (
+            <line
+              key={`${a}-${b}`}
+              x1={A.x}
+              y1={A.y}
+              x2={B.x}
+              y2={B.y}
+              stroke="rgba(0,0,0,.12)"
+              strokeWidth="2"
+            />
+          );
+        })}
+      </svg>
+
+      {/* nodes (absolute buttons) */}
+      {NODES.map((n) => (
+        <a
+          key={n.id}
+          href={n.href}
+          className="group absolute -translate-x-1/2 -translate-y-1/2"
+          style={{
+            left: `${(n.x / 1000) * 100}%`,
+            top: `${(n.y / 600) * 100}%`,
+            transform:
+              "translate3d(calc(-50% + var(--dx,0px)*1px), calc(-50% + var(--dy,0px)*1px), 0)",
+            transition: "transform .12s ease-out",
+          }}
+        >
+          <div className="rounded-full border bg-white/90 backdrop-blur px-4 py-2 shadow-sm hover:shadow-md">
+            <span className="text-sm font-medium text-neutral-900">{n.label}</span>
+            <ArrowRight className="inline-block ml-2 h-4 w-4 opacity-60 group-hover:translate-x-0.5 transition-transform" />
           </div>
+        </a>
+      ))}
+    </div>
+  );
+}
 
-          <div className="mt-4 flex gap-2">
-            <Button className="btn btn-magnetic">Open Studio</Button>
-            <Button variant="secondary" className="btn btn-magnetic border">See templates</Button>
+/** --- White “Heavy” section stack (placeholders left for you) --- */
+function HeavySections() {
+  return (
+    <div className="bg-white text-neutral-900">
+      {/* 1) Node map intro */}
+      <section className="max-w-6xl mx-auto px-6 py-12">
+        <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+          Pick what you want to build
+        </h2>
+        <p className="text-neutral-600 mt-2">
+          Start from a template node, then shape it in the Studio.
+        </p>
+      </section>
+
+      {/* 2) Wired node graph */}
+      <section className="px-2 sm:px-6 pb-8">
+        <NodeGraph />
+      </section>
+
+      {/* 3) Feature slab with VIDEO placeholder */}
+      <section className="border-t">
+        <div className="max-w-6xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <h3 className="text-2xl sm:text-3xl font-semibold">Design that reacts to you</h3>
+            <p className="mt-3 text-neutral-600">
+              Micro-interactions, glossy glass, and a living canvas. All performance-budgeted.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <Button className="btn btn-magnetic">Open Studio</Button>
+              <Button variant="secondary" className="btn btn-magnetic border">
+                Explore templates
+              </Button>
+            </div>
+          </div>
+          <div className="aspect-video rounded-xl border bg-neutral-100 grid place-items-center">
+            <span className="text-neutral-500 text-sm">VIDEO_PLACEHOLDER</span>
           </div>
         </div>
-      </Card>
+      </section>
 
-      {/* Right: narrative steps — reveal on scroll */}
-      <ul className="space-y-6">
-        {[
-          ["Sketch", "Describe your idea. The AI drafts the plan & stack."],
-          ["Shape", "Pick a theme and tweak sections—the canvas responds."],
-          ["Wire", "Add data, auth, and routes. Zero config boilerplate."],
-          ["Ship", "Choose a deploy preset or custom; we handle the rest."],
-        ].map(([t, d], i) => (
-          <li key={t} className="reveal-diag">
-            <Card className="card-glass p-5">
-              <div className="gloss-sheen" />
-              <div className="relative z-10">
-                <div className="text-sm text-muted-foreground">Step {i + 1}</div>
-                <div className="text-lg font-semibold mt-1">{t}</div>
-                <p className="text-sm mt-1 text-muted-foreground">{d}</p>
-              </div>
-            </Card>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
+      {/* 4) Image gallery strip (placeholders) */}
+      <section className="border-t">
+        <div className="max-w-6xl mx-auto px-6 py-16">
+          <h3 className="text-2xl sm:text-3xl font-semibold">Real patterns, ready to ship</h3>
+          <p className="mt-3 text-neutral-600">Swap sections live. Bring your assets when ready.</p>
 
-/** Feature strip (compact, premium) */
-function FeatureStrip() {
-  return (
-    <section className="relative max-w-7xl mx-auto px-6 mt-16 grid sm:grid-cols-2 lg:grid-cols-3 gap-6 content-auto">
-      <Feature
-        icon={<Wand2 className="h-5 w-5" />}
-        title="Design that breathes"
-        text="Aurora canvas, glossy cards, and motion that reacts to you—not at you."
-      />
-      <Feature
-        icon={<MonitorSmartphone className="h-5 w-5" />}
-        title="Web + App ready"
-        text="Prebuilt patterns for marketing sites, dashboards, and mobile shells."
-      />
-      <Feature
-        icon={<Rocket className="h-5 w-5" />}
-        title="Deploy in one click"
-        text="Beginner → Pro → Business presets. Switch at any time."
-      />
-    </section>
-  );
-}
+          <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i} className="p-0 overflow-hidden border">
+                <div className="aspect-[4/3] bg-neutral-100 grid place-items-center">
+                  <span className="text-neutral-500 text-xs">IMAGE_PLACEHOLDER #{i + 1}</span>
+                </div>
+                <div className="p-4">
+                  <div className="text-sm font-medium">Template slot {i + 1}</div>
+                  <div className="text-xs text-neutral-600">Short description goes here.</div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
 
-function Feature({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
-  return (
-    <Card className="card-glass card-tilt p-6">
-      <div className="gloss-sheen" />
-      <div className="relative z-10">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">{icon} <span>{title}</span></div>
-        <p className="mt-2 text-sm">{text}</p>
-      </div>
-    </Card>
+      {/* 5) Deploy slab */}
+      <section className="border-t">
+        <div className="max-w-6xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-10 items-center">
+          <div className="aspect-video rounded-xl border bg-neutral-100 grid place-items-center order-last lg:order-first">
+            <span className="text-neutral-500 text-sm">VIDEO_PLACEHOLDER (deploy)</span>
+          </div>
+          <div>
+            <h3 className="text-2xl sm:text-3xl font-semibold">From draft to live</h3>
+            <p className="mt-3 text-neutral-600">
+              Beginner → Pro → Business presets. Switch later; we migrate the config.
+            </p>
+            <div className="mt-6">
+              <Button className="btn btn-magnetic">Start free</Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6) Final CTA on white */}
+      <section className="border-t">
+        <div className="max-w-3xl mx-auto px-6 py-20 text-center">
+          <h3 className="text-3xl sm:text-4xl font-semibold tracking-tight">Ready when you are.</h3>
+          <p className="text-neutral-600 mt-3">
+            Keep your hero look. Gain Weavy/Heavy-level mechanics below.
+          </p>
+          <div className="mt-6 flex justify-center gap-3">
+            <Button className="btn btn-magnetic">Create a project</Button>
+            <Button variant="secondary" className="btn btn-magnetic border">
+              Watch demo
+            </Button>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
 export default function Home() {
-  useHomeFX();
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
-    <main className="home-root min-h-screen bg-background">
-      {/* Header stays above everything */}
-      <div className="relative z-10">
-        <Header />
-      </div>
+    <div className="min-h-screen bg-background">
+      {/* TOP — keep exactly as your screenshot: Header + Hero */}
+      <Header />
+      <Hero />
 
-      {/* HERO (Heavy-style rhythm, but keeps your theme) */}
-      <section className="relative z-10 max-w-6xl mx-auto pt-20 px-6 text-center">
-        <p className="h-tagline reveal-diag">BUILD FASTER</p>
-        <h1 className="h-display reveal-diag mt-2" style={{ letterSpacing: "-0.02em" }}>
-          Inside a living canvas
-        </h1>
-        <p className="mt-4 text-muted-foreground reveal-diag">
-          Design a site or app, wire it to a real stack, and deploy—all in one flow.
-        </p>
+      {/* Seam into white Heavy-style body */}
+      <HeroToWhiteSeam />
 
-        <div className="mt-8 flex justify-center gap-3">
-          <Button className="btn btn-magnetic card-glass px-6 py-3 rounded-xl">
-            Start a project
-          </Button>
-          <Button variant="secondary" className="btn btn-magnetic px-6 py-3 rounded-xl border">
-            Watch demo
-          </Button>
-        </div>
-      </section>
+      {/* Heavy/Weavy-style lower half on white */}
+      <HeavySections />
 
-      <FeatureStrip />
-      <PinnedBuilder />
-
-      {/* FINAL CTA */}
-      <section className="relative z-10 max-w-4xl mx-auto px-6 mt-20 mb-24 text-center">
-        <h2 className="h-display" style={{ letterSpacing: "-0.01em" }}>Ready to build?</h2>
-        <p className="text-muted-foreground mt-2">Keep your theme. Gain the mechanisms.</p>
-        <div className="mt-6 flex justify-center gap-3">
-          <Button className="btn btn-magnetic card-glass px-6 py-3 rounded-xl">Start free</Button>
-          <Button variant="secondary" className="btn btn-magnetic px-6 py-3 rounded-xl border">Talk to us</Button>
-        </div>
-      </section>
-
-      {/* Floating chat preserved */}
+      {/* Chat stays */}
       <FloatingChat isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} />
-    </main>
+    </div>
   );
 }
