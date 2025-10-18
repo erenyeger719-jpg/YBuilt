@@ -1,194 +1,184 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+'use client';
 
-type NodeId = "prompt" | "design" | "sections" | "data" | "auth" | "deploy" | "preview";
-type AnchorSide = "l" | "r" | "t" | "b";
-type Pos = { x: number; y: number };
+import React, { useLayoutEffect, useRef, useState } from "react";
 
-type NodeDef = {
-  id: NodeId;
+type NodeT = {
+  id: string;
   label: string;
-  title: string;
   w: number;
   h: number;
   x: number;
   y: number;
-  media?: "image" | "video" | "text";
+  originX: number;
+  originY: number;
 };
 
-type Edge = { from: [NodeId, AnchorSide]; to: [NodeId, AnchorSide] };
-
-const NODES: NodeDef[] = [
-  { id: "prompt",   label: "INPUT",        title: "Type your idea →",  w: 280, h: 92,  x: 140,  y: 40,  media: "text"  },
-  { id: "design",   label: "DESIGN SYSTEM",title: "Theme & Tokens",    w: 360, h: 240, x: 320,  y: 140, media: "image" },
-  { id: "sections", label: "SECTIONS",     title: "Hero • Pricing …",  w: 380, h: 260, x: 720,  y: 110, media: "video" },
-  { id: "data",     label: "DATA",         title: "CMS / DB",          w: 260, h: 190, x: 540,  y: 420, media: "image" },
-  { id: "auth",     label: "AUTH",         title: "Accounts",          w: 220, h: 160, x: 860,  y: 420, media: "image" },
-  { id: "deploy",   label: "DEPLOY",       title: "One-click ship",    w: 320, h: 210, x: 1120, y: 280, media: "video" },
-  { id: "preview",  label: "LIVE PREVIEW", title: "Canvas output",     w: 420, h: 300, x: 40,   y: 360, media: "image" },
-];
-
-const EDGES: Edge[] = [
-  { from: ["prompt","r"],   to: ["design","l"] },
-  { from: ["design","r"],   to: ["sections","l"] },
-  { from: ["sections","b"], to: ["data","t"] },
-  { from: ["sections","b"], to: ["auth","t"] },
-  { from: ["data","r"],     to: ["deploy","l"] },
-  { from: ["auth","r"],     to: ["deploy","l"] },
-  { from: ["sections","t"], to: ["preview","r"] },
-  { from: ["design","t"],   to: ["preview","t"] },
-];
-
-const SPRING_MS = 520;
-const clamp = (v:number, a:number, b:number)=> Math.min(b, Math.max(a, v));
-
-const bezier = (s:Pos, e:Pos) => {
-  const dx = Math.abs(e.x - s.x);
-  const c1 = { x: s.x + dx * 0.38, y: s.y };
-  const c2 = { x: e.x - dx * 0.38, y: e.y };
-  return `M ${s.x} ${s.y} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${e.x} ${e.y}`;
-};
+const BAND_TOP = 120;         // grid band offset from top
+const BAND_HEIGHT = 520;      // grid band height
+const CANVAS_BOTTOM = 220;    // extra space under band
 
 export default function WeavyBoard() {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const nodeRefs = useRef<Record<NodeId, HTMLDivElement | null>>({} as any);
 
-  const [pos, setPos] = useState<Record<NodeId, Pos>>(
-    Object.fromEntries(NODES.map(n => [n.id, { x: n.x, y: n.y }])) as Record<NodeId, Pos>
-  );
-  const origins = useRef<Record<NodeId, Pos>>(
-    Object.fromEntries(NODES.map(n => [n.id, { x: n.x, y: n.y }])) as Record<NodeId, Pos>
-  );
+  const [nodes, setNodes] = useState<NodeT[]>([
+    { id: "prompt",  label: "Prompt",  w: 220, h: 160, x: 0, y: 0, originX: 0, originY: 0 },
+    { id: "weaver",  label: "Weaver",  w: 240, h: 180, x: 0, y: 0, originX: 0, originY: 0 },
+    { id: "preview", label: "Preview", w: 260, h: 180, x: 0, y: 0, originX: 0, originY: 0 },
+    { id: "launch",  label: "Launch",  w: 220, h: 160, x: 0, y: 0, originX: 0, originY: 0 },
+  ]);
 
-  const dragging = useRef<{ id: NodeId; start: Pos; nodeStart: Pos } | null>(null);
-  const [, setTick] = useState(0);
+  // Center nodes on mount + resize
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
 
-  useEffect(() => {
-    const on = () => setTick(t => t + 1);
-    const ro = new ResizeObserver(on);
-    if (wrapRef.current) ro.observe(wrapRef.current);
-    window.addEventListener("scroll", on, { passive: true });
-    window.addEventListener("resize", on, { passive: true });
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("scroll", on);
-      window.removeEventListener("resize", on);
+    const layout = () => {
+      const rect = el.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = BAND_TOP + BAND_HEIGHT / 2;
+
+      // Offsets around the center (tweak freely)
+      const offsets = [
+        { x: -300, y: 0   }, // prompt
+        { x:    0, y: 0   }, // weaver
+        { x:  300, y: 0   }, // preview
+        { x:    0, y: 210 }, // launch
+      ];
+
+      setNodes(ns =>
+        ns.map((n, i) => {
+          const x = Math.round(cx + offsets[i].x - n.w / 2);
+          const y = Math.round(cy + offsets[i].y - n.h / 2);
+          return { ...n, x, y, originX: x, originY: y };
+        })
+      );
     };
+
+    layout();
+    const ro = new ResizeObserver(layout);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
-  const onDown = (id: NodeId) => (e: React.PointerEvent) => {
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragging.current = { id, start: { x: e.clientX, y: e.clientY }, nodeStart: { ...pos[id] } };
-  };
-  const onMove = (e: React.PointerEvent) => {
-    if (!dragging.current || !wrapRef.current) return;
-    const wrap = wrapRef.current.getBoundingClientRect();
-    const { id, start, nodeStart } = dragging.current;
-    const nx = clamp(nodeStart.x + (e.clientX - start.x), 8, wrap.width - 40);
-    const ny = clamp(nodeStart.y + (e.clientY - start.y), 8, wrap.height - 40);
-    setPos(p => ({ ...p, [id]: { x: nx, y: ny } }));
-  };
-  const onUp = () => {
-    if (!dragging.current) return;
-    const { id } = dragging.current;
-    dragging.current = null;
+  // Drag state
+  const [drag, setDrag] = useState<{ id: string; ox: number; oy: number } | null>(null);
 
-    const from = pos[id];
-    const to = origins.current[id];
-    const start = performance.now();
-    const ease = (t:number) => {
-      const k = 7.5, z = 0.85;
-      return 1 - Math.exp(-k*t) * Math.cos((k*Math.sqrt(1 - z*z))*t);
+  const onPointerDown = (e: React.PointerEvent, id: string) => {
+    const n = nodes.find(n => n.id === id)!;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setDrag({ id, ox: e.clientX - n.x, oy: e.clientY - n.y });
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!drag) return;
+    setNodes(ns =>
+      ns.map(n =>
+        n.id !== drag.id ? n : { ...n, x: e.clientX - drag.ox, y: e.clientY - drag.oy }
+      )
+    );
+  };
+
+  const onPointerUp = () => {
+    if (!drag) return;
+    const id = drag.id;
+    setDrag(null);
+
+    // Yo-yo (spring back to origin)
+    const start = nodes.find(n => n.id === id)!;
+    const ix = start.x, iy = start.y, ox = start.originX, oy = start.originY;
+    const t0 = performance.now();
+    const duration = 350;
+
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / duration);
+      // easeOutBack
+      const s = 1.70158;
+      const q = (-p) * p * ((s + 1) * p + s) + 1;
+
+      setNodes(ns =>
+        ns.map(n =>
+          n.id !== id
+            ? n
+            : { ...n, x: Math.round(ix + (ox - ix) * q), y: Math.round(iy + (oy - iy) * q) }
+        )
+      );
+      if (q < 1) requestAnimationFrame(tick);
     };
-    const raf = (now:number) => {
-      const t = Math.min(1, (now - start) / SPRING_MS);
-      const m = ease(t);
-      setPos(p => ({ ...p, [id]: { x: from.x + (to.x - from.x) * m, y: from.y + (to.y - from.y) * m } }));
-      if (t < 1) requestAnimationFrame(raf);
-    };
-    requestAnimationFrame(raf);
+    requestAnimationFrame(tick);
   };
 
-  const anchor = (id: NodeId, side: AnchorSide): Pos => {
-    const wrap = wrapRef.current?.getBoundingClientRect();
-    const el = nodeRefs.current[id];
-    if (!wrap || !el) return { x: 0, y: 0 };
-    const r = el.getBoundingClientRect();
-    const cx = side === "l" ? r.left : side === "r" ? r.right : r.left + r.width/2;
-    const cy = side === "t" ? r.top : side === "b" ? r.bottom : r.top + r.height/2;
-    return { x: cx - wrap.left, y: cy - wrap.top };
+  // Wire helpers
+  const anchor = (n: NodeT, side: "l" | "r" | "t" | "b") => {
+    if (side === "l") return { x: n.x, y: n.y + n.h / 2 };
+    if (side === "r") return { x: n.x + n.w, y: n.y + n.h / 2 };
+    if (side === "t") return { x: n.x + n.w / 2, y: n.y };
+    return { x: n.x + n.w / 2, y: n.y + n.h };
+  };
+  const curve = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    const dx = Math.abs(b.x - a.x);
+    const c = Math.max(40, dx * 0.35);
+    return `M ${a.x},${a.y} C ${a.x + c},${a.y} ${b.x - c},${b.y} ${b.x},${b.y}`;
   };
 
-  const wires = useMemo(() => {
-    return EDGES.map((e, i) => {
-      const s = anchor(...e.from);
-      const t = anchor(...e.to);
-      const d = bezier(s, t);
-      const mid = { x: (s.x + t.x)/2, y: (s.y + t.y)/2 };
-      return { key: i, d, s, t, mid };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pos]);
+  const map = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const canvasH = BAND_TOP + BAND_HEIGHT + CANVAS_BOTTOM;
 
   return (
-    <section className="weavy-section">
-      <div className="max-w-6xl mx-auto px-6 pt-14">
-        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">How it turns a prompt into a product</h2>
-        <p className="text-sm text-muted-foreground mt-1">Move the nodes. They snap back. Media slots are blank for your assets.</p>
-      </div>
-
-      <div className="grid-band" style={{ top: 96, height: 560 }} />
-
+    <section className="weavy-section" style={{ overflow: "hidden", background: "#fff" }}>
       <div
         ref={wrapRef}
-        className="relative max-w-[1200px] mx-auto mt-6 mb-24 rounded-2xl"
-        style={{ height: 700 }}
-        onPointerMove={onMove}
-        onPointerUp={onUp}
-        onPointerCancel={onUp}
-        onPointerLeave={onUp}
+        className="relative mx-auto weavy-canvas"
+        style={{ width: "100%", maxWidth: "1200px", height: `${canvasH}px` }}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
       >
-        <svg className="absolute inset-0 z-0" width="100%" height="100%" role="presentation">
+        {/* SINGLE grid band (deletes the “below layer” duplicates) */}
+        <div
+          className="grid-band"
+          style={{ top: `${BAND_TOP}px`, height: `${BAND_HEIGHT}px` }}
+        />
+
+        {/* Wires */}
+        <svg
+          className="absolute inset-0 wire-thread"
+          width="100%"
+          height="100%"
+          viewBox={`0 0 1200 ${canvasH}`}
+          preserveAspectRatio="none"
+        >
           <defs>
             <filter id="threadShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="1" stdDeviation="1.2" floodOpacity="0.25" />
+              <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#0b0f14" floodOpacity="0.18" />
             </filter>
           </defs>
-          {wires.map(w => (
-            <g className="wire-thread" key={w.key}>
-              <path d={w.d} />
-              <circle className="wire-dot" r={4} cx={w.s.x} cy={w.s.y} />
-              <circle className="wire-dot" r={4} cx={w.t.x} cy={w.t.y} />
-              <circle className="wire-bead" r={3.5} cx={w.mid.x} cy={w.mid.y} />
-            </g>
-          ))}
+
+          {/* prompt -> weaver */}
+          <path d={curve(anchor(map.prompt, "r"), anchor(map.weaver, "l"))} />
+          {/* weaver -> preview */}
+          <path d={curve(anchor(map.weaver, "r"), anchor(map.preview, "l"))} />
+          {/* weaver -> launch */}
+          <path d={curve(anchor(map.weaver, "b"), anchor(map.launch, "t"))} />
         </svg>
 
-        {NODES.map(n => {
-          const p = pos[n.id];
-          return (
-            <div
-              key={n.id}
-              ref={(el) => (nodeRefs.current[n.id] = el)}
-              className="node-card shadow-sm"
-              style={{ position:"absolute", width:n.w, height:n.h, transform:`translate(${p.x}px, ${p.y}px)` }}
-              onPointerDown={onDown(n.id)}
-            >
-              <span className="nub nub-l" /><span className="nub nub-r" />
-              <span className="nub nub-t" /><span className="nub nub-b" />
-
-              <div className="node-label">{n.label}</div>
-              <div className="px-3 pb-2 text-sm font-medium">{n.title}</div>
-
-              <div className="slot-media">
-                <div className="placeholder">
-                  {n.media === "image" && "Image placeholder"}
-                  {n.media === "video" && "Video placeholder"}
-                  {n.media === "text"  && "Text prompt example"}
-                </div>
-              </div>
+        {/* Nodes */}
+        {nodes.map(n => (
+          <div
+            key={n.id}
+            className="node-card select-none"
+            style={{ left: n.x, top: n.y, width: n.w, height: n.h }}
+            onPointerDown={e => onPointerDown(e, n.id)}
+          >
+            <div className="node-label">{n.label}</div>
+            <div className="slot-media">
+              <div className="placeholder">drop image / video</div>
             </div>
-          );
-        })}
+            <div className="nub nub-l" />
+            <div className="nub nub-r" />
+            <div className="nub nub-t" />
+            <div className="nub nub-b" />
+          </div>
+        ))}
       </div>
     </section>
   );

@@ -898,7 +898,11 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
   position: relative;
   background: #fff;
   padding-bottom: 6rem;
+  overflow-x: hidden; /* nudge: prevent horizontal scroll */
 }
+
+/* Optional canvas wrapper for board */
+.weavy-canvas { position: relative; }
 
 /* Full-width grid band; set top/height inline in the component */
 .grid-band {
@@ -1045,3 +1049,8 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
     repeating-linear-gradient(0deg,  rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px)),
     repeating-linear-gradient(90deg, rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px));
 }
+
+/* ===== Safety nudges (prevent horizontal scroll) ===== */
+.weavy-section { overflow-x: hidden; }
+.weavy-canvas { position: relative; }
+.grid-band { left: 0; right: 0; }
