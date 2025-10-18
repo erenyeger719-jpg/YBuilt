@@ -6,9 +6,16 @@ import Hero from "@/components/Hero";
 import ChatPanel from "@/components/ChatPanel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { MessageCircle, X, ArrowRight } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { MessageCircle, X, ArrowRight, Check } from "lucide-react";
 
-/** --- Floating chat (unchanged) --- */
+/* ---------------- Floating chat (unchanged) ---------------- */
 function FloatingChat({
   isChatOpen,
   setIsChatOpen,
@@ -43,14 +50,13 @@ function FloatingChat({
   );
 }
 
-/** --- Seam between dark hero and white body (soft diagonal) --- */
+/* ---------------- Seam from dark hero into white ---------------- */
 function HeroToWhiteSeam() {
   return (
     <div
       aria-hidden
       className="relative h-24"
       style={{
-        // fade from transparent (over your dark hero) to white
         background:
           "linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 40%, #ffffff 100%)",
       }}
@@ -58,7 +64,6 @@ function HeroToWhiteSeam() {
       <div
         className="absolute inset-0"
         style={{
-          // gentle diagonal wipe like Heavy
           maskImage:
             "linear-gradient(160deg, rgba(0,0,0,1) 45%, rgba(0,0,0,.4) 60%, rgba(0,0,0,0) 75%)",
           WebkitMaskImage:
@@ -70,26 +75,27 @@ function HeroToWhiteSeam() {
   );
 }
 
-/** --- Wired node map (templates) --- */
+/* ---------------- Node Graph + Spec Sheets ---------------- */
 type NodeDef = {
   id: string;
   label: string;
-  x: number; // in a 1000x600 virtual plane
+  x: number; // 1000x600 virtual plane
   y: number;
-  href: string;
+  href: string; // where “Use template” goes
 };
+
 const NODES: NodeDef[] = [
-  { id: "portfolio", label: "Portfolio", x: 150, y: 120, href: "/studio" },
-  { id: "blog", label: "Blog / Magazine", x: 330, y: 80, href: "/studio" },
-  { id: "shop", label: "Shop", x: 520, y: 120, href: "/studio" },
-  { id: "saas", label: "SaaS Landing", x: 700, y: 90, href: "/studio" },
-  { id: "dashboard", label: "Dashboard", x: 240, y: 260, href: "/studio" },
-  { id: "docs", label: "Docs", x: 460, y: 240, href: "/studio" },
-  { id: "mobile", label: "Mobile Shell", x: 720, y: 240, href: "/studio" },
-  { id: "booking", label: "Booking", x: 170, y: 420, href: "/studio" },
-  { id: "education", label: "Education", x: 380, y: 410, href: "/studio" },
-  { id: "community", label: "Community", x: 600, y: 420, href: "/studio" },
-  { id: "ai", label: "AI App", x: 820, y: 380, href: "/studio" },
+  { id: "portfolio", label: "Portfolio", x: 150, y: 120, href: "/studio?template=portfolio" },
+  { id: "blog", label: "Blog / Magazine", x: 330, y: 80, href: "/studio?template=blog" },
+  { id: "shop", label: "Shop", x: 520, y: 120, href: "/studio?template=shop" },
+  { id: "saas", label: "SaaS Landing", x: 700, y: 90, href: "/studio?template=saas" },
+  { id: "dashboard", label: "Dashboard", x: 240, y: 260, href: "/studio?template=dashboard" },
+  { id: "docs", label: "Docs", x: 460, y: 240, href: "/studio?template=docs" },
+  { id: "mobile", label: "Mobile Shell", x: 720, y: 240, href: "/studio?template=mobile" },
+  { id: "booking", label: "Booking", x: 170, y: 420, href: "/studio?template=booking" },
+  { id: "education", label: "Education", x: 380, y: 410, href: "/studio?template=education" },
+  { id: "community", label: "Community", x: 600, y: 420, href: "/studio?template=community" },
+  { id: "ai", label: "AI App", x: 820, y: 380, href: "/studio?template=ai" },
 ];
 
 const EDGES: [string, string][] = [
@@ -106,8 +112,106 @@ const EDGES: [string, string][] = [
   ["mobile", "ai"],
 ];
 
-function NodeGraph() {
+type NodeDetail = {
+  headline: string;
+  blurb: string;
+  bullets: string[];
+};
+
+const DETAILS: Record<string, NodeDetail> = {
+  portfolio: {
+    headline: "Show your work beautifully",
+    blurb: "Hero + case grid + contact form. Dark/Light ready out of the box.",
+    bullets: ["Image/video galleries", "CMS-friendly structure", "SEO blocks"],
+  },
+  blog: {
+    headline: "Write long, publish fast",
+    blurb: "Magazine layout with tags, TOC, and code blocks.",
+    bullets: ["MDX-ready", "Search & filters", "Reading progress"],
+  },
+  shop: {
+    headline: "Sell in style",
+    blurb: "Product cards, cart drawer, checkout handoff hooks.",
+    bullets: ["Variant options", "Promo sections", "Analytics events"],
+  },
+  saas: {
+    headline: "Convert with confidence",
+    blurb: "Landing sections that snap: hero, features, social proof.",
+    bullets: ["Hero A/B slots", "Pricing tables", "Signup CTA wiring"],
+  },
+  dashboard: {
+    headline: "Your data, your way",
+    blurb: "Sidebar, cards, charts, and auth shell.",
+    bullets: ["Role-based layout", "Empty states", "Skeleton loading"],
+  },
+  docs: {
+    headline: "Teach with clarity",
+    blurb: "Left nav, right content, sticky headings, and search.",
+    bullets: ["MDX/Markdown", "Versioning stubs", "Copy-to-clipboard"],
+  },
+  mobile: {
+    headline: "One code, many screens",
+    blurb: "PWA shell with tab bar and responsive panes.",
+    bullets: ["Installable", "Offline scaffold", "Touch interactions"],
+  },
+  booking: {
+    headline: "Schedule anything",
+    blurb: "Calendar slots, confirmations, and reminders.",
+    bullets: ["Timezone aware", "Embeds", "Webhook exits"],
+  },
+  education: {
+    headline: "Teach & track",
+    blurb: "Course pages, lessons, progress, and quizzes.",
+    bullets: ["Lesson player", "Notes", "Completion badges"],
+  },
+  community: {
+    headline: "Gather your people",
+    blurb: "Feed, profiles, and threads with reactions.",
+    bullets: ["Moderation stubs", "Mentions", "Notifications"],
+  },
+  ai: {
+    headline: "Ship an AI tool",
+    blurb: "Prompt UI, history, and streaming responses.",
+    bullets: ["File inputs", "Rate limits", "Observability hooks"],
+  },
+};
+
+/** View-transition helper (safe no-op if unsupported) */
+function withViewTransition(update: () => void) {
+  const anyDoc = document as any;
+  if (anyDoc.startViewTransition) {
+    anyDoc.startViewTransition(update);
+  } else {
+    update();
+  }
+}
+
+/** Mini hover preview card (simple, no deps) */
+function HoverCardMini({ node }: { node: NodeDef }) {
+  const d = DETAILS[node.id];
+  return (
+    <div
+      className="pointer-events-none absolute -translate-x-1/2 -translate-y-full -mt-4"
+      style={{
+        left: `${(node.x / 1000) * 100}%`,
+        top: `${(node.y / 600) * 100}%`,
+      }}
+    >
+      <div className="rounded-lg border bg-white/95 shadow-md backdrop-blur px-3 py-2 w-[220px]">
+        <div className="text-xs font-medium">{node.label}</div>
+        <div className="text-[11px] text-neutral-600 line-clamp-2">{d?.blurb}</div>
+      </div>
+    </div>
+  );
+}
+
+function NodeGraph({
+  onOpen,
+}: {
+  onOpen: (node: NodeDef) => void;
+}) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   // subtle whole-graph parallax
   useEffect(() => {
@@ -121,7 +225,7 @@ function NodeGraph() {
         const r = el.getBoundingClientRect();
         const px = (e.clientX - r.left) / Math.max(1, r.width) - 0.5;
         const py = (e.clientY - r.top) / Math.max(1, r.height) - 0.5;
-        el.style.setProperty("--dx", String(px * 18)); // max ~18px
+        el.style.setProperty("--dx", String(px * 18));
         el.style.setProperty("--dy", String(py * 18));
       });
     };
@@ -135,9 +239,11 @@ function NodeGraph() {
     };
   }, []);
 
+  const hoverNode = hoverId ? NODES.find((n) => n.id === hoverId) || null : null;
+
   return (
     <div ref={ref} className="relative w-full max-w-6xl mx-auto" style={{ height: 520 }}>
-      {/* lines (SVG underlay, moves with the group) */}
+      {/* lines */}
       <svg
         className="absolute inset-0"
         viewBox="0 0 1000 600"
@@ -164,7 +270,7 @@ function NodeGraph() {
         })}
       </svg>
 
-      {/* nodes (absolute buttons) */}
+      {/* nodes */}
       {NODES.map((n) => (
         <a
           key={n.id}
@@ -177,6 +283,13 @@ function NodeGraph() {
               "translate3d(calc(-50% + var(--dx,0px)*1px), calc(-50% + var(--dy,0px)*1px), 0)",
             transition: "transform .12s ease-out",
           }}
+          onMouseEnter={() => setHoverId(n.id)}
+          onMouseLeave={() => setHoverId((id) => (id === n.id ? null : id))}
+          onClick={(e) => {
+            // open spec sheet instead of navigating directly
+            e.preventDefault();
+            withViewTransition(() => onOpen(n));
+          }}
         >
           <div className="rounded-full border bg-white/90 backdrop-blur px-4 py-2 shadow-sm hover:shadow-md">
             <span className="text-sm font-medium text-neutral-900">{n.label}</span>
@@ -184,15 +297,78 @@ function NodeGraph() {
           </div>
         </a>
       ))}
+
+      {/* hover mini */}
+      {hoverNode && <HoverCardMini node={hoverNode} />}
     </div>
   );
 }
 
-/** --- White “Heavy” section stack (placeholders left for you) --- */
+/* ---------------- Spec Sheet Dialog ---------------- */
+function SpecSheet({
+  node,
+  onClose,
+}: {
+  node: NodeDef | null;
+  onClose: () => void;
+}) {
+  const open = Boolean(node);
+  const d = node ? DETAILS[node.id] : null;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="text-xl">
+            {node?.label}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Preview placeholder (drop your video/image later) */}
+          <div className="aspect-video rounded-xl border bg-neutral-100 grid place-items-center">
+            <span className="text-neutral-500 text-sm">
+              PREVIEW_PLACEHOLDER — {node?.id}
+            </span>
+          </div>
+
+          {/* Copy */}
+          <div>
+            <div className="text-lg font-semibold">{d?.headline}</div>
+            <p className="text-sm text-neutral-600 mt-2">{d?.blurb}</p>
+
+            <ul className="mt-4 space-y-2">
+              {d?.bullets.map((b) => (
+                <li key={b} className="text-sm text-neutral-800 flex items-start gap-2">
+                  <Check className="h-4 w-4 mt-0.5 opacity-70" />
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          {/* Primary goes to Studio with template param */}
+          <a href={node?.href} className="w-full sm:w-auto">
+            <Button className="btn btn-magnetic w-full">Use this template</Button>
+          </a>
+          <Button variant="secondary" className="btn btn-magnetic border w-full sm:w-auto" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ---------------- Heavy-style white sections ---------------- */
 function HeavySections() {
+  const [activeNode, setActiveNode] = useState<NodeDef | null>(null);
+
   return (
     <div className="bg-white text-neutral-900">
-      {/* 1) Node map intro */}
+      {/* Intro */}
       <section className="max-w-6xl mx-auto px-6 py-12">
         <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight">
           Pick what you want to build
@@ -202,12 +378,12 @@ function HeavySections() {
         </p>
       </section>
 
-      {/* 2) Wired node graph */}
+      {/* Graph */}
       <section className="px-2 sm:px-6 pb-8">
-        <NodeGraph />
+        <NodeGraph onOpen={setActiveNode} />
       </section>
 
-      {/* 3) Feature slab with VIDEO placeholder */}
+      {/* Feature Slab */}
       <section className="border-t">
         <div className="max-w-6xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-10 items-center">
           <div>
@@ -216,10 +392,8 @@ function HeavySections() {
               Micro-interactions, glossy glass, and a living canvas. All performance-budgeted.
             </p>
             <div className="mt-6 flex gap-3">
-              <Button className="btn btn-magnetic">Open Studio</Button>
-              <Button variant="secondary" className="btn btn-magnetic border">
-                Explore templates
-              </Button>
+              <a href="/studio"><Button className="btn btn-magnetic">Open Studio</Button></a>
+              <a href="/library"><Button variant="secondary" className="btn btn-magnetic border">Explore templates</Button></a>
             </div>
           </div>
           <div className="aspect-video rounded-xl border bg-neutral-100 grid place-items-center">
@@ -228,7 +402,7 @@ function HeavySections() {
         </div>
       </section>
 
-      {/* 4) Image gallery strip (placeholders) */}
+      {/* Gallery placeholders */}
       <section className="border-t">
         <div className="max-w-6xl mx-auto px-6 py-16">
           <h3 className="text-2xl sm:text-3xl font-semibold">Real patterns, ready to ship</h3>
@@ -250,7 +424,7 @@ function HeavySections() {
         </div>
       </section>
 
-      {/* 5) Deploy slab */}
+      {/* Deploy slab */}
       <section className="border-t">
         <div className="max-w-6xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-10 items-center">
           <div className="aspect-video rounded-xl border bg-neutral-100 grid place-items-center order-last lg:order-first">
@@ -262,47 +436,45 @@ function HeavySections() {
               Beginner → Pro → Business presets. Switch later; we migrate the config.
             </p>
             <div className="mt-6">
-              <Button className="btn btn-magnetic">Start free</Button>
+              <a href="/studio"><Button className="btn btn-magnetic">Start free</Button></a>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 6) Final CTA on white */}
+      {/* Final CTA */}
       <section className="border-t">
         <div className="max-w-3xl mx-auto px-6 py-20 text-center">
           <h3 className="text-3xl sm:text-4xl font-semibold tracking-tight">Ready when you are.</h3>
-          <p className="text-neutral-600 mt-3">
-            Keep your hero look. Gain Weavy/Heavy-level mechanics below.
-          </p>
+          <p className="text-neutral-600 mt-3">Keep your hero look. Gain Weavy/Heavy-level mechanics below.</p>
           <div className="mt-6 flex justify-center gap-3">
-            <Button className="btn btn-magnetic">Create a project</Button>
-            <Button variant="secondary" className="btn btn-magnetic border">
-              Watch demo
-            </Button>
+            <a href="/studio"><Button className="btn btn-magnetic">Create a project</Button></a>
+            <a href="/library"><Button variant="secondary" className="btn btn-magnetic border">Watch demo</Button></a>
           </div>
         </div>
       </section>
+
+      {/* Spec sheet dialog (mounted once) */}
+      <SpecSheet node={activeNode} onClose={() => withViewTransition(() => setActiveNode(null))} />
     </div>
   );
 }
 
+/* ---------------- Page ---------------- */
 export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* TOP — keep exactly as your screenshot: Header + Hero */}
+      {/* Your original top hero stays */}
       <Header />
       <Hero />
 
-      {/* Seam into white Heavy-style body */}
+      {/* Transition to white Heavy-like body */}
       <HeroToWhiteSeam />
-
-      {/* Heavy/Weavy-style lower half on white */}
       <HeavySections />
 
-      {/* Chat stays */}
+      {/* Floating chat */}
       <FloatingChat isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} />
     </div>
   );
