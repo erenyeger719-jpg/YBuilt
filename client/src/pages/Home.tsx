@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { MessageCircle, X, ArrowRight, Check } from "lucide-react";
 
-/* ---------------- Floating chat (unchanged) ---------------- */
+/* ========= Floating chat (unchanged) ========= */
 function FloatingChat({
   isChatOpen,
   setIsChatOpen,
@@ -50,7 +50,7 @@ function FloatingChat({
   );
 }
 
-/* ---------------- Seam from dark hero into white ---------------- */
+/* ========= Seam: dark hero → white world ========= */
 function HeroToWhiteSeam() {
   return (
     <div
@@ -58,290 +58,291 @@ function HeroToWhiteSeam() {
       className="relative h-24"
       style={{
         background:
-          "linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 40%, #ffffff 100%)",
+          "linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.55) 40%, #ffffff 100%)",
       }}
-    >
-      <div
-        className="absolute inset-0"
-        style={{
-          maskImage:
-            "linear-gradient(160deg, rgba(0,0,0,1) 45%, rgba(0,0,0,.4) 60%, rgba(0,0,0,0) 75%)",
-          WebkitMaskImage:
-            "linear-gradient(160deg, rgba(0,0,0,1) 45%, rgba(0,0,0,.4) 60%, rgba(0,0,0,0) 75%)",
-          background: "white",
-        }}
-      />
-    </div>
+    />
   );
 }
 
-/* ---------------- Node Graph + Spec Sheets ---------------- */
-type NodeDef = {
-  id: string;
-  label: string;
-  x: number; // 1000x600 virtual plane
-  y: number;
-  href: string; // where “Use template” goes
-};
+/* ========= Helpers ========= */
+type NodeDef = { id: string; label: string; x: number; y: number; href: string };
+type NodeDetail = { headline: string; blurb: string; bullets: string[] };
 
-const NODES: NodeDef[] = [
-  { id: "portfolio", label: "Portfolio", x: 150, y: 120, href: "/studio?template=portfolio" },
-  { id: "blog", label: "Blog / Magazine", x: 330, y: 80, href: "/studio?template=blog" },
-  { id: "shop", label: "Shop", x: 520, y: 120, href: "/studio?template=shop" },
-  { id: "saas", label: "SaaS Landing", x: 700, y: 90, href: "/studio?template=saas" },
+const START_NODES: NodeDef[] = [
+  { id: "portfolio", label: "Portfolio", x: 140, y: 120, href: "/studio?template=portfolio" },
+  { id: "blog",      label: "Blog / Magazine", x: 330, y: 90,  href: "/studio?template=blog" },
+  { id: "shop",      label: "Shop",     x: 530, y: 120, href: "/studio?template=shop" },
+  { id: "saas",      label: "SaaS Landing", x: 740, y: 90,  href: "/studio?template=saas" },
   { id: "dashboard", label: "Dashboard", x: 240, y: 260, href: "/studio?template=dashboard" },
-  { id: "docs", label: "Docs", x: 460, y: 240, href: "/studio?template=docs" },
-  { id: "mobile", label: "Mobile Shell", x: 720, y: 240, href: "/studio?template=mobile" },
-  { id: "booking", label: "Booking", x: 170, y: 420, href: "/studio?template=booking" },
-  { id: "education", label: "Education", x: 380, y: 410, href: "/studio?template=education" },
-  { id: "community", label: "Community", x: 600, y: 420, href: "/studio?template=community" },
-  { id: "ai", label: "AI App", x: 820, y: 380, href: "/studio?template=ai" },
+  { id: "docs",      label: "Docs",     x: 470, y: 240, href: "/studio?template=docs" },
+  { id: "mobile",    label: "Mobile Shell", x: 760, y: 240, href: "/studio?template=mobile" },
+  { id: "booking",   label: "Booking",  x: 170, y: 420, href: "/studio?template=booking" },
+  { id: "education", label: "Education",x: 380, y: 410, href: "/studio?template=education" },
+  { id: "community", label: "Community",x: 600, y: 420, href: "/studio?template=community" },
+  { id: "ai",        label: "AI App",   x: 840, y: 380, href: "/studio?template=ai" },
 ];
 
 const EDGES: [string, string][] = [
-  ["portfolio", "blog"],
-  ["blog", "shop"],
-  ["shop", "saas"],
-  ["blog", "docs"],
-  ["docs", "dashboard"],
-  ["dashboard", "booking"],
-  ["docs", "education"],
-  ["shop", "community"],
-  ["community", "ai"],
-  ["saas", "mobile"],
-  ["mobile", "ai"],
+  ["portfolio","blog"],["blog","shop"],["shop","saas"],
+  ["blog","docs"],["docs","dashboard"],["docs","education"],
+  ["dashboard","booking"],["shop","community"],["community","ai"],
+  ["saas","mobile"],["mobile","ai"],
 ];
 
-type NodeDetail = {
-  headline: string;
-  blurb: string;
-  bullets: string[];
-};
-
 const DETAILS: Record<string, NodeDetail> = {
-  portfolio: {
-    headline: "Show your work beautifully",
-    blurb: "Hero + case grid + contact form. Dark/Light ready out of the box.",
-    bullets: ["Image/video galleries", "CMS-friendly structure", "SEO blocks"],
-  },
-  blog: {
-    headline: "Write long, publish fast",
-    blurb: "Magazine layout with tags, TOC, and code blocks.",
-    bullets: ["MDX-ready", "Search & filters", "Reading progress"],
-  },
-  shop: {
-    headline: "Sell in style",
-    blurb: "Product cards, cart drawer, checkout handoff hooks.",
-    bullets: ["Variant options", "Promo sections", "Analytics events"],
-  },
-  saas: {
-    headline: "Convert with confidence",
-    blurb: "Landing sections that snap: hero, features, social proof.",
-    bullets: ["Hero A/B slots", "Pricing tables", "Signup CTA wiring"],
-  },
-  dashboard: {
-    headline: "Your data, your way",
-    blurb: "Sidebar, cards, charts, and auth shell.",
-    bullets: ["Role-based layout", "Empty states", "Skeleton loading"],
-  },
-  docs: {
-    headline: "Teach with clarity",
-    blurb: "Left nav, right content, sticky headings, and search.",
-    bullets: ["MDX/Markdown", "Versioning stubs", "Copy-to-clipboard"],
-  },
-  mobile: {
-    headline: "One code, many screens",
-    blurb: "PWA shell with tab bar and responsive panes.",
-    bullets: ["Installable", "Offline scaffold", "Touch interactions"],
-  },
-  booking: {
-    headline: "Schedule anything",
-    blurb: "Calendar slots, confirmations, and reminders.",
-    bullets: ["Timezone aware", "Embeds", "Webhook exits"],
-  },
-  education: {
-    headline: "Teach & track",
-    blurb: "Course pages, lessons, progress, and quizzes.",
-    bullets: ["Lesson player", "Notes", "Completion badges"],
-  },
-  community: {
-    headline: "Gather your people",
-    blurb: "Feed, profiles, and threads with reactions.",
-    bullets: ["Moderation stubs", "Mentions", "Notifications"],
-  },
-  ai: {
-    headline: "Ship an AI tool",
-    blurb: "Prompt UI, history, and streaming responses.",
-    bullets: ["File inputs", "Rate limits", "Observability hooks"],
-  },
+  portfolio: { headline:"Show your work beautifully", blurb:"Hero + case grid + contact form.", bullets:["Galleries","CMS-ready","SEO blocks"] },
+  blog:      { headline:"Write long, publish fast",   blurb:"Magazine layout with tags & TOC.", bullets:["MDX","Search & filters","Reading progress"] },
+  shop:      { headline:"Sell in style",              blurb:"Cards, cart drawer, checkout hooks.", bullets:["Variants","Promos","Analytics events"] },
+  saas:      { headline:"Convert with confidence",    blurb:"Hero, features, social proof.", bullets:["A/B slots","Pricing tables","Signup CTA"] },
+  dashboard: { headline:"Your data, your way",        blurb:"Sidebar shell + charts.", bullets:["RBAC layout","Empty states","Skeletons"] },
+  docs:      { headline:"Teach with clarity",         blurb:"Left nav, sticky headings, search.", bullets:["MDX/MD","Versioning stubs","Copy buttons"] },
+  mobile:    { headline:"One code, many screens",     blurb:"PWA shell with tabs.", bullets:["Installable","Offline scaffold","Touch UX"] },
+  booking:   { headline:"Schedule anything",          blurb:"Slots, confirmations, reminders.", bullets:["TZ aware","Embeds","Webhooks"] },
+  education: { headline:"Teach & track",              blurb:"Courses, lessons, progress.", bullets:["Lesson player","Notes","Badges"] },
+  community: { headline:"Gather your people",         blurb:"Feed, profiles, threads.", bullets:["Moderation","Mentions","Notifications"] },
+  ai:        { headline:"Ship an AI tool",            blurb:"Prompt UI + streaming.", bullets:["File inputs","Rate limits","Observability"] },
 };
 
-/** View-transition helper (safe no-op if unsupported) */
+/* Small view-transition wrapper (safe if unsupported) */
 function withViewTransition(update: () => void) {
   const anyDoc = document as any;
-  if (anyDoc.startViewTransition) {
-    anyDoc.startViewTransition(update);
-  } else {
-    update();
-  }
+  if (anyDoc.startViewTransition) anyDoc.startViewTransition(update);
+  else update();
 }
 
-/** Mini hover preview card (simple, no deps) */
-function HoverCardMini({ node }: { node: NodeDef }) {
-  const d = DETAILS[node.id];
-  return (
-    <div
-      className="pointer-events-none absolute -translate-x-1/2 -translate-y-full -mt-4"
-      style={{
-        left: `${(node.x / 1000) * 100}%`,
-        top: `${(node.y / 600) * 100}%`,
-      }}
-    >
-      <div className="rounded-lg border bg-white/95 shadow-md backdrop-blur px-3 py-2 w-[220px]">
-        <div className="text-xs font-medium">{node.label}</div>
-        <div className="text-[11px] text-neutral-600 line-clamp-2">{d?.blurb}</div>
-      </div>
-    </div>
-  );
+/* ========= Magnetic buttons (only in white section) ========= */
+function useLocalMagnet(root: HTMLElement | null) {
+  useEffect(() => {
+    if (!root) return;
+    let last: HTMLElement | null = null;
+    const onMove = (e: PointerEvent) => {
+      const t = (e.target as HTMLElement)?.closest<HTMLElement>(".btn-magnetic");
+      if (t) {
+        last = t;
+        const b = t.getBoundingClientRect();
+        const x = e.clientX - (b.left + b.width / 2);
+        const y = e.clientY - (b.top + b.height / 2);
+        const clamp = (v: number) => Math.max(-24, Math.min(24, v));
+        t.style.setProperty("--tx", clamp(x * 0.15) + "px");
+        t.style.setProperty("--ty", clamp(y * 0.15) + "px");
+      } else if (last) {
+        last.style.setProperty("--tx", "0px");
+        last.style.setProperty("--ty", "0px");
+        last = null;
+      }
+    };
+    const onLeave = () => {
+      if (last) {
+        last.style.setProperty("--tx", "0px");
+        last.style.setProperty("--ty", "0px");
+        last = null;
+      }
+    };
+    root.addEventListener("pointermove", onMove, { passive: true });
+    root.addEventListener("pointerleave", onLeave, { passive: true });
+    return () => {
+      root.removeEventListener("pointermove", onMove);
+      root.removeEventListener("pointerleave", onLeave);
+    };
+  }, [root]);
 }
 
-function NodeGraph({
+/* ========= NodeSpace: draggable graph with tasteful grid patches ========= */
+function NodeSpace({
   onOpen,
 }: {
-  onOpen: (node: NodeDef) => void;
+  onOpen: (n: NodeDef) => void;
 }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [hoverId, setHoverId] = useState<string | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [nodes, setNodes] = useState(() => START_NODES.map(n => ({...n})));
+  const [dragId, setDragId] = useState<string | null>(null);
+  const velRef = useRef<Record<string, {vx: number; vy: number}>>({});
+  const lastRef = useRef<{t: number; x: number; y: number} | null>(null);
 
-  // subtle whole-graph parallax
+  // magnetic only inside this white section
+  useLocalMagnet(wrapRef.current);
+
+  // inertia loop
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
     let raf = 0;
-    const onMove = (e: PointerEvent) => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const r = el.getBoundingClientRect();
-        const px = (e.clientX - r.left) / Math.max(1, r.width) - 0.5;
-        const py = (e.clientY - r.top) / Math.max(1, r.height) - 0.5;
-        el.style.setProperty("--dx", String(px * 18));
-        el.style.setProperty("--dy", String(py * 18));
-      });
-    };
-    el.addEventListener("pointermove", onMove, { passive: true });
-    el.addEventListener("pointerleave", () => {
-      el.style.setProperty("--dx", "0");
-      el.style.setProperty("--dy", "0");
-    });
-    return () => {
-      el.removeEventListener("pointermove", onMove);
-    };
-  }, []);
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (dragId) return; // pause inertia while dragging
+      const vels = velRef.current;
+      let moving = false;
 
-  const hoverNode = hoverId ? NODES.find((n) => n.id === hoverId) || null : null;
+      setNodes(prev => prev.map(n => {
+        const v = vels[n.id];
+        if (!v) return n;
+        // friction
+        v.vx *= 0.94;
+        v.vy *= 0.94;
+        if (Math.abs(v.vx) < 0.02 && Math.abs(v.vy) < 0.02) {
+          delete vels[n.id];
+          return n;
+        }
+        moving = true;
+        // bounds
+        const W = 1000, H = 600, pad = 60;
+        let nx = n.x + v.vx;
+        let ny = n.y + v.vy;
+        if (nx < pad || nx > W - pad) { v.vx *= -0.6; nx = Math.min(W - pad, Math.max(pad, nx)); }
+        if (ny < pad || ny > H - pad) { v.vy *= -0.6; ny = Math.min(H - pad, Math.max(pad, ny)); }
+        return {...n, x: nx, y: ny};
+      }));
+
+      if (!moving) cancelAnimationFrame(raf);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [dragId]);
+
+  function startDrag(e: React.PointerEvent, id: string) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setDragId(id);
+    lastRef.current = { t: performance.now(), x: e.clientX, y: e.clientY };
+  }
+  function onDrag(e: React.PointerEvent, id: string) {
+    if (dragId !== id) return;
+    const now = performance.now();
+    const L = lastRef.current!;
+    const dt = Math.max(16, now - L.t);
+    const dx = e.clientX - L.x;
+    const dy = e.clientY - L.y;
+    lastRef.current = { t: now, x: e.clientX, y: e.clientY };
+
+    setNodes(prev => prev.map(n => {
+      if (n.id !== id) return n;
+      const W = 1000, H = 600, pad = 60;
+      let nx = n.x + (dx / 1.0); // scale pixels→plane
+      let ny = n.y + (dy / 1.0);
+      nx = Math.min(W - pad, Math.max(pad, nx));
+      ny = Math.min(H - pad, Math.max(pad, ny));
+      // velocity for inertia
+      velRef.current[id] = { vx: (dx / (dt/16)), vy: (dy / (dt/16)) };
+      return { ...n, x: nx, y: ny };
+    }));
+  }
+  function endDrag(e: React.PointerEvent, id: string) {
+    if (dragId !== id) return;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    setDragId(null);
+  }
+
+  const hoverRef = useRef<string | null>(null);
+  const setHover = (id: string | null) => { hoverRef.current = id; };
 
   return (
-    <div ref={ref} className="relative w-full max-w-6xl mx-auto" style={{ height: 520 }}>
-      {/* lines */}
-      <svg
+    <div ref={wrapRef} className="relative w-full max-w-6xl mx-auto" style={{ height: 520 }}>
+      {/* flowing “weavy” background */}
+      <div
         className="absolute inset-0"
-        viewBox="0 0 1000 600"
-        preserveAspectRatio="none"
         style={{
-          transform: "translate3d(calc(var(--dx,0px)*1px), calc(var(--dy,0px)*1px), 0)",
-          transition: "transform .12s ease-out",
+          backgroundImage:
+            // soft waves + light blobs
+            `radial-gradient(60% 40% at 15% 20%, rgba(0,0,0,0.04), transparent 60%),
+             radial-gradient(55% 45% at 85% 25%, rgba(0,0,0,0.035), transparent 60%),
+             radial-gradient(50% 45% at 45% 80%, rgba(0,0,0,0.03), transparent 60%),
+             conic-gradient(from 200deg at 50% 50%, rgba(0,0,0,0.02), rgba(0,0,0,0.06), rgba(0,0,0,0.02))`,
+          maskImage:
+            "radial-gradient(120% 120% at 50% 50%, black 60%, transparent 100%)",
         }}
-      >
-        {EDGES.map(([a, b]) => {
-          const A = NODES.find((n) => n.id === a)!;
-          const B = NODES.find((n) => n.id === b)!;
+      />
+
+      {/* selective grid patches (big cells) */}
+      <GridPatch left="6%"  top="8%"  width="28%" height="38%" />
+      <GridPatch left="64%" top="10%" width="28%" height="30%" />
+      <GridPatch left="22%" top="58%" width="36%" height="28%" />
+
+      {/* edges */}
+      <svg className="absolute inset-0" viewBox="0 0 1000 600" preserveAspectRatio="none">
+        {EDGES.map(([a,b]) => {
+          const A = nodes.find(n=>n.id===a)!; const B = nodes.find(n=>n.id===b)!;
           return (
-            <line
-              key={`${a}-${b}`}
-              x1={A.x}
-              y1={A.y}
-              x2={B.x}
-              y2={B.y}
-              stroke="rgba(0,0,0,.12)"
-              strokeWidth="2"
-            />
+            <line key={`${a}-${b}`} x1={A.x} y1={A.y} x2={B.x} y2={B.y}
+              stroke="rgba(0,0,0,.12)" strokeWidth="2" />
           );
         })}
       </svg>
 
-      {/* nodes */}
-      {NODES.map((n) => (
-        <a
+      {/* nodes (draggable + clickable) */}
+      {nodes.map((n) => (
+        <div
           key={n.id}
-          href={n.href}
-          className="group absolute -translate-x-1/2 -translate-y-1/2"
-          style={{
-            left: `${(n.x / 1000) * 100}%`,
-            top: `${(n.y / 600) * 100}%`,
-            transform:
-              "translate3d(calc(-50% + var(--dx,0px)*1px), calc(-50% + var(--dy,0px)*1px), 0)",
-            transition: "transform .12s ease-out",
-          }}
-          onMouseEnter={() => setHoverId(n.id)}
-          onMouseLeave={() => setHoverId((id) => (id === n.id ? null : id))}
-          onClick={(e) => {
-            // open spec sheet instead of navigating directly
-            e.preventDefault();
-            withViewTransition(() => onOpen(n));
-          }}
+          className="absolute -translate-x-1/2 -translate-y-1/2"
+          style={{ left: `${(n.x/1000)*100}%`, top: `${(n.y/600)*100}%` }}
         >
-          <div className="rounded-full border bg-white/90 backdrop-blur px-4 py-2 shadow-sm hover:shadow-md">
+          <button
+            className="group rounded-full border bg-white/90 backdrop-blur px-4 py-2 shadow-sm hover:shadow-md active:scale-[.98] transition
+                       relative"
+            onPointerDown={(e)=>startDrag(e,n.id)}
+            onPointerMove={(e)=>onDrag(e,n.id)}
+            onPointerUp={(e)=>endDrag(e,n.id)}
+            onPointerCancel={(e)=>endDrag(e,n.id)}
+            onMouseEnter={()=>setHover(n.id)}
+            onMouseLeave={()=>setHover(null)}
+            onClick={(e)=>{ e.preventDefault(); withViewTransition(()=>onOpen(n)); }}
+          >
             <span className="text-sm font-medium text-neutral-900">{n.label}</span>
             <ArrowRight className="inline-block ml-2 h-4 w-4 opacity-60 group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </a>
-      ))}
+          </button>
 
-      {/* hover mini */}
-      {hoverNode && <HoverCardMini node={hoverNode} />}
+          {/* hover mini */}
+          {hoverRef.current === n.id && (
+            <div className="absolute left-1/2 -translate-x-1/2 -translate-y-full -mt-3">
+              <div className="rounded-md border bg-white/95 shadow p-2 w-[220px]">
+                <div className="text-xs font-medium">{n.label}</div>
+                <div className="text-[11px] text-neutral-600 line-clamp-2">{DETAILS[n.id]?.blurb}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
 
-/* ---------------- Spec Sheet Dialog ---------------- */
-function SpecSheet({
-  node,
-  onClose,
-}: {
-  node: NodeDef | null;
-  onClose: () => void;
+/* a single big-cell grid patch */
+function GridPatch({ left, top, width, height }:{
+  left:string; top:string; width:string; height:string;
 }) {
-  const open = Boolean(node);
-  const d = node ? DETAILS[node.id] : null;
-
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <div
+      className="absolute pointer-events-none opacity-50"
+      style={{
+        left, top, width, height,
+        backgroundImage:
+          `repeating-linear-gradient(0deg, rgba(0,0,0,.06) 0 1px, transparent 1px 32px),
+           repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 1px, transparent 1px 32px)`,
+        border: "1px solid rgba(0,0,0,.08)",
+        borderRadius: 12,
+        backdropFilter: "blur(2px)",
+      }}
+    />
+  );
+}
+
+/* ========= Spec sheet dialog ========= */
+function SpecSheet({ node, onClose }: { node: NodeDef | null; onClose: () => void }) {
+  const d = node ? DETAILS[node.id] : null;
+  return (
+    <Dialog open={!!node} onOpenChange={(v)=>!v && onClose()}>
       <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl">
-            {node?.label}
-          </DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>{node?.label}</DialogTitle></DialogHeader>
 
         <div className="grid lg:grid-cols-2 gap-6">
-          {/* Preview placeholder (drop your video/image later) */}
+          {/* Drop your media later */}
           <div className="aspect-video rounded-xl border bg-neutral-100 grid place-items-center">
-            <span className="text-neutral-500 text-sm">
-              PREVIEW_PLACEHOLDER — {node?.id}
-            </span>
+            <span className="text-neutral-500 text-sm">PREVIEW_PLACEHOLDER — {node?.id}</span>
           </div>
-
-          {/* Copy */}
           <div>
             <div className="text-lg font-semibold">{d?.headline}</div>
             <p className="text-sm text-neutral-600 mt-2">{d?.blurb}</p>
-
             <ul className="mt-4 space-y-2">
-              {d?.bullets.map((b) => (
+              {d?.bullets.map((b)=>(
                 <li key={b} className="text-sm text-neutral-800 flex items-start gap-2">
-                  <Check className="h-4 w-4 mt-0.5 opacity-70" />
-                  <span>{b}</span>
+                  <Check className="h-4 w-4 mt-0.5 opacity-70"/><span>{b}</span>
                 </li>
               ))}
             </ul>
@@ -349,11 +350,10 @@ function SpecSheet({
         </div>
 
         <DialogFooter className="gap-2">
-          {/* Primary goes to Studio with template param */}
           <a href={node?.href} className="w-full sm:w-auto">
-            <Button className="btn btn-magnetic w-full">Use this template</Button>
+            <Button className="btn-magnetic w-full">Use this template</Button>
           </a>
-          <Button variant="secondary" className="btn btn-magnetic border w-full sm:w-auto" onClick={onClose}>
+          <Button variant="secondary" className="btn-magnetic border w-full sm:w-auto" onClick={onClose}>
             Close
           </Button>
         </DialogFooter>
@@ -362,38 +362,50 @@ function SpecSheet({
   );
 }
 
-/* ---------------- Heavy-style white sections ---------------- */
-function HeavySections() {
-  const [activeNode, setActiveNode] = useState<NodeDef | null>(null);
+/* ========= Heavy-like white sections with art direction ========= */
+function WhiteWorld() {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [active, setActive] = useState<NodeDef | null>(null);
+
+  // local magnetic for CTAs in this section only
+  useLocalMagnet(rootRef.current);
 
   return (
-    <div className="bg-white text-neutral-900">
+    <div ref={rootRef} className="bg-white text-neutral-900 relative overflow-hidden">
+      {/* soft ribbons across the section */}
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            `linear-gradient(115deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.0) 32% 68%, rgba(0,0,0,0.04) 100%),
+             radial-gradient(80% 60% at 50% 120%, rgba(0,0,0,0.06), transparent 60%)`,
+          mixBlendMode: "multiply",
+        }}
+      />
+
       {/* Intro */}
-      <section className="max-w-6xl mx-auto px-6 py-12">
-        <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-          Pick what you want to build
-        </h2>
-        <p className="text-neutral-600 mt-2">
-          Start from a template node, then shape it in the Studio.
-        </p>
+      <section className="relative max-w-6xl mx-auto px-6 pt-10">
+        <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight">Pick what you want to build</h2>
+        <p className="text-neutral-600 mt-2">Move the nodes. Click one to open its spec sheet.</p>
       </section>
 
-      {/* Graph */}
-      <section className="px-2 sm:px-6 pb-8">
-        <NodeGraph onOpen={setActiveNode} />
+      {/* Draggable node map with tasteful grid patches */}
+      <section className="relative px-2 sm:px-6 pb-8">
+        <NodeSpace onOpen={setActive} />
       </section>
 
-      {/* Feature Slab */}
-      <section className="border-t">
+      {/* Feature slab with magnetic CTAs (only here) */}
+      <section className="relative border-t">
         <div className="max-w-6xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-10 items-center">
           <div>
             <h3 className="text-2xl sm:text-3xl font-semibold">Design that reacts to you</h3>
             <p className="mt-3 text-neutral-600">
-              Micro-interactions, glossy glass, and a living canvas. All performance-budgeted.
+              Weavy ambience, Heavy mechanics. Fast, deliberate, and art-directed.
             </p>
             <div className="mt-6 flex gap-3">
-              <a href="/studio"><Button className="btn btn-magnetic">Open Studio</Button></a>
-              <a href="/library"><Button variant="secondary" className="btn btn-magnetic border">Explore templates</Button></a>
+              <a href="/studio"><Button className="btn-magnetic">Open Studio</Button></a>
+              <a href="/library"><Button variant="secondary" className="btn-magnetic border">Explore templates</Button></a>
             </div>
           </div>
           <div className="aspect-video rounded-xl border bg-neutral-100 grid place-items-center">
@@ -402,11 +414,19 @@ function HeavySections() {
         </div>
       </section>
 
-      {/* Gallery placeholders */}
-      <section className="border-t">
-        <div className="max-w-6xl mx-auto px-6 py-16">
+      {/* Gallery with big-cell grid background behind only some cards */}
+      <section className="relative border-t">
+        <div className="absolute right-[6%] top-10 w-[38%] h-[60%] opacity-45 pointer-events-none"
+          style={{
+            backgroundImage:
+              `repeating-linear-gradient(0deg, rgba(0,0,0,.06) 0 1px, transparent 1px 40px),
+               repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 1px, transparent 1px 40px)`,
+            borderRadius: 12,
+          }}
+        />
+        <div className="relative max-w-6xl mx-auto px-6 py-16">
           <h3 className="text-2xl sm:text-3xl font-semibold">Real patterns, ready to ship</h3>
-          <p className="mt-3 text-neutral-600">Swap sections live. Bring your assets when ready.</p>
+          <p className="mt-3 text-neutral-600">Placeholders now—drop your images/videos later.</p>
 
           <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -425,54 +445,52 @@ function HeavySections() {
       </section>
 
       {/* Deploy slab */}
-      <section className="border-t">
+      <section className="relative border-t">
         <div className="max-w-6xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-10 items-center">
           <div className="aspect-video rounded-xl border bg-neutral-100 grid place-items-center order-last lg:order-first">
             <span className="text-neutral-500 text-sm">VIDEO_PLACEHOLDER (deploy)</span>
           </div>
           <div>
             <h3 className="text-2xl sm:text-3xl font-semibold">From draft to live</h3>
-            <p className="mt-3 text-neutral-600">
-              Beginner → Pro → Business presets. Switch later; we migrate the config.
-            </p>
+            <p className="mt-3 text-neutral-600">Beginner → Pro → Business. Switch anytime.</p>
             <div className="mt-6">
-              <a href="/studio"><Button className="btn btn-magnetic">Start free</Button></a>
+              <a href="/studio"><Button className="btn-magnetic">Start free</Button></a>
             </div>
           </div>
         </div>
       </section>
 
       {/* Final CTA */}
-      <section className="border-t">
+      <section className="relative border-t">
         <div className="max-w-3xl mx-auto px-6 py-20 text-center">
           <h3 className="text-3xl sm:text-4xl font-semibold tracking-tight">Ready when you are.</h3>
-          <p className="text-neutral-600 mt-3">Keep your hero look. Gain Weavy/Heavy-level mechanics below.</p>
+          <p className="text-neutral-600 mt-3">Keep your hero look. Gain the art-directed build flow below.</p>
           <div className="mt-6 flex justify-center gap-3">
-            <a href="/studio"><Button className="btn btn-magnetic">Create a project</Button></a>
-            <a href="/library"><Button variant="secondary" className="btn btn-magnetic border">Watch demo</Button></a>
+            <a href="/studio"><Button className="btn-magnetic">Create a project</Button></a>
+            <a href="/library"><Button variant="secondary" className="btn-magnetic border">Watch demo</Button></a>
           </div>
         </div>
       </section>
 
-      {/* Spec sheet dialog (mounted once) */}
-      <SpecSheet node={activeNode} onClose={() => withViewTransition(() => setActiveNode(null))} />
+      {/* Node spec sheet */}
+      <SpecSheet node={active} onClose={()=>withViewTransition(()=>setActive(null))} />
     </div>
   );
 }
 
-/* ---------------- Page ---------------- */
+/* ========= Page ========= */
 export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Your original top hero stays */}
+      {/* Your original top hero stays exactly the same */}
       <Header />
       <Hero />
 
-      {/* Transition to white Heavy-like body */}
+      {/* Transition into the Weavy/Heavy world */}
       <HeroToWhiteSeam />
-      <HeavySections />
+      <WhiteWorld />
 
       {/* Floating chat */}
       <FloatingChat isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} />
