@@ -3,7 +3,6 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
-import WeavySection from "@/components/WeavySection";
 import WeavyBoard from "@/components/WeavyBoard";
 import ExploreWheel from "@/components/ExploreWheel";
 import WorkflowToApp from "@/components/WorkflowToApp";
@@ -55,16 +54,14 @@ export default function Home() {
       <Header />
       <Hero />
 
-      {/* Spill bridge over the grid, then nodes */}
-      <WeavySection
-        bandHeightRem={16}      // spill height
-        gridDepthRem={38}       // push grid deeper (toward the red line)
-        gridFadeStart="96%"     // fade only near the very end
-        // optional: echo the hero palette
-        // colors={['#0a0a0b','#17191d','#22262c','#343a40']}
-      >
-        <WeavyBoard />
-      </WeavySection>
+      {/* Home — Weavy band directly under the pixel tiles */}
+      <section className="weavy-section home-weavy home-weavy--prism">
+        {/* Grid starts just below the tiles — tweak top/height to taste */}
+        <div className="grid-band" style={{ top: 56, height: 360 }} />
+        <div className="weavy-canvas">
+          <WeavyBoard />
+        </div>
+      </section>
 
       {/* New artistic sections */}
       <ExploreWheel />
