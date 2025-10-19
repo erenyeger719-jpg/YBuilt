@@ -1,114 +1,139 @@
+// client/src/components/PixelSpill.tsx
 'use client';
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 type Props = {
-  top: number;          // px from top of weavy-canvas
-  height: number;       // px height of spill strip
-  cell?: number;        // px grid cell (default 17 = 16 gap + 1 line)
-  fadeRows?: number;    // rows to fade before nodes begin
-  density?: number;     // 0..1
-  colors?: string[];    // palette
-  seed?: number;        // deterministic scatter
+  top?: number;       // px from the top of the band
+  height: number;     // px height of the spill zone
+  cell?: number;      // px grid step (default 9 => half of the old look)
+  fadeRows?: number;  // how many rows fade to 0 near the bottom
+  solidRows?: number; // first N rows fully filled
+  density?: number;   // 0..1 baseline “fullness”
+  color?: string;     // tile + stroke color
+  seed?: number;      // deterministic random
+  className?: string;
 };
 
-function lcg(seed: number) {
-  let s = seed >>> 0;
-  return () => (s = (1664525 * s + 1013904223) >>> 0) / 0xffffffff;
+// tiny deterministic RNG
+function rng(seed: number) {
+  let t = seed + 0x6D2B79F5;
+  return () => ((t = Math.imul(t ^ (t >>> 15), 1 | t)) >>> 0) / 4294967296;
 }
 
 export default function PixelSpill({
-  top,
+  top = 0,
   height,
-  cell = 17,
-  fadeRows = 6,
-  density = 0.95,
-  colors = ['#0b0c10', '#14161a', '#1f2329', '#2b3037', '#363c44', '#4a515a'],
+  cell = 9,              // half-size tiles
+  fadeRows = 9,          // longer fade
+  solidRows = 2,         // two full black rows
+  density = 1.0,         // fuller crown
+  color = '#000',        // pure black
   seed = 20251019,
+  className,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [w, setW] = useState(1200);
+  const [w, setW] = useState(0);
 
-  // measure available width (full bleed)
+  // measure width so the SVG grid matches the container
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setW(Math.ceil(el.clientWidth)));
+    const measure = () => setW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setW(Math.ceil(el.clientWidth));
     return () => ro.disconnect();
   }, []);
 
-  // precompute rects
-  const rects = React.useMemo(() => {
-    const rnd = lcg(seed);
-    const cols = Math.ceil(w / cell) + 2;
-    const usableH = height - fadeRows * cell; // bottom part will be faded anyway
+  const grid = useMemo(() => {
+    if (!w) return null;
 
-    const nodes: Array<JSX.Element> = [];
-    for (let i = 0; i < cols; i++) {
-      const x = i * cell;
+    const cols = Math.ceil(w / cell);
+    const rows = Math.ceil(height / cell);
+    const rand = rng(seed);
 
-      // crown “depth” varies per column
-      const base = 0.38 * usableH;
-      const varRange = 0.28 * usableH;
-      const crownDepth = Math.max(cell, Math.min(usableH, base + varRange * (rnd() * 2 - 1)));
+    // base & extra depth (in rows) per column
+    const base = Math.floor(rows * 0.35);             // enough to read as a band
+    const extraMax = Math.floor(rows * 0.55);         // spill depth
+    const tendrilChance = 0.24;
 
-      const rows = Math.floor(crownDepth / cell);
+    const depth: number[] = new Array(cols).fill(0).map(() =>
+      base + Math.floor(extraMax * (rand() ** 0.8) * density)
+    );
 
-      for (let r = 0; r < rows; r++) {
-        // denser near the top, sparser as it falls
-        const falloff = 1 - r / (rows + 1);
-        const chance = density * (0.60 + 0.40 * falloff);
-
-        if (rnd() < chance) {
-          const y = r * cell;
-          const color = colors[Math.floor(rnd() * colors.length)] ?? colors[0];
-
-          // leave 1px gutters so the spill sits “on” the grid
-          const g = 1;
-          nodes.push(
-            <rect
-              key={`${i}:${r}`}
-              x={x + g}
-              y={y + g}
-              width={cell - g}
-              height={cell - g}
-              fill={color}
-            />
-          );
+    // grow occasional tendrils for that “drippy” silhouette
+    for (let c = 0; c < cols; c++) {
+      if (rand() < tendrilChance) {
+        const len = 2 + Math.floor(6 * rand());
+        for (let i = 0; i < len; i++) {
+          const k = c + i;
+          if (k < cols) depth[k] = Math.max(depth[k], base + Math.floor(extraMax * rand()));
         }
       }
     }
-    return nodes;
-  }, [w, cell, height, fadeRows, density, colors, seed]);
 
-  const fadePx = Math.max(0, fadeRows * cell);
+    // build boolean cells (filled or not)
+    const cells: boolean[][] = Array.from({ length: rows }, () => new Array(cols).fill(false));
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (r < solidRows) { cells[r][c] = true; continue; }
+        if (r < depth[c]) {
+          // a few micro-holes so it doesn’t look like a hard bar
+          const hole = rand() < (0.04 + 0.06 * (r / rows));
+          cells[r][c] = !hole;
+        }
+      }
+    }
+
+    return { cols, rows, cells };
+  }, [w, cell, height, solidRows, density, seed]);
+
+  if (!grid) {
+    return (
+      <div
+        ref={wrapRef}
+        className={className}
+        style={{ position: 'absolute', top, left: 0, right: 0, height }}
+      />
+    );
+  }
+
+  const { cols, rows, cells } = grid;
+  const svgW = cols * cell;
+  const svgH = rows * cell;
+
+  // alpha by row => slow fade toward the nodes
+  const fadeStart = Math.max(0, rows - fadeRows);
+  const alpha = (r: number) => (r < fadeStart ? 1 : 1 - (r - fadeStart + 1) / (fadeRows + 1));
 
   return (
     <div
       ref={wrapRef}
-      className="pixel-spill"
-      style={{
-        top,
-        height,
-        // fade out before nodes start
-        WebkitMaskImage: `linear-gradient(to bottom, #000 ${height - fadePx}px, transparent 100%)`,
-        maskImage: `linear-gradient(to bottom, #000 ${height - fadePx}px, transparent 100%)`,
-        zIndex: 1,
-      }}
-      aria-hidden
+      className={className}
+      style={{ position: 'absolute', top, left: 0, right: 0, height }}
     >
-      <svg
-        width="100%"
-        height={height}
-        viewBox={`0 0 ${w} ${height}`}
-        preserveAspectRatio="none"
-        shapeRendering="crispEdges"
-        role="presentation"
-        style={{ display: 'block' }}
-      >
-        {rects}
+      <svg width="100%" height="100%" viewBox={`0 0 ${svgW} ${svgH}`} preserveAspectRatio="none">
+        {cells.map((row, ri) => {
+          const a = alpha(ri);
+          if (a <= 0) return null;
+          return row.map((on, ci) =>
+            on ? (
+              <rect
+                key={`${ri}-${ci}`}
+                x={ci * cell + 0.5}
+                y={ri * cell + 0.5}
+                width={cell - 1}
+                height={cell - 1}
+                fill={color}
+                fillOpacity={a}
+                stroke={color}          // black “grid” lines
+                strokeOpacity={a}
+                strokeWidth={1}
+              />
+            ) : null
+          );
+        })}
       </svg>
     </div>
   );
