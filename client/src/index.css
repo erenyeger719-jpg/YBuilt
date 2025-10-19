@@ -428,6 +428,11 @@ body[data-force-theme="studio"] .studio-root::before {
   backdrop-filter: saturate(120%) contrast(102%);
 }
 
+/* Backdrop-filter fallback */
+@supports not (backdrop-filter: blur(1px)) {
+  body[data-force-theme="studio"] .studio-root::before { opacity: .25; }
+}
+
 /* editorial “ribbons” — slow, subtle color fields (no cursor tracking) */
 @keyframes studioSweep {
   0%   { background-position:   0%  0%, 100% 100%; }
@@ -477,14 +482,6 @@ body[data-force-theme="studio"] .card-glass {
   border-radius: 16px;
 }
 
-/* make cards glossy like Settings */
-.card-glass {
-  position: relative;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.18);
-  backdrop-filter: blur(10px);
-}
-
 .gloss-sheen {
   position: absolute;
   inset: 0;
@@ -519,6 +516,42 @@ body[data-force-theme="studio"] .card-glass {
     content: attr(data-placeholder);
     color: hsl(var(--muted-foreground));
     pointer-events: none;
+  }
+
+  /* Magnetic buttons */
+  .btn-magnetic {
+    transform: translate(var(--tx, 0px), var(--ty, 0px));
+    transition: transform 120ms ease;
+    will-change: transform;
+  }
+
+  /* Tilt cards */
+  .card-tilt {
+    transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transform-style: preserve-3d;
+    transition: transform 150ms ease;
+    will-change: transform;
+  }
+
+  /* Diagonal reveal */
+  .reveal-diag {
+    opacity: 0;
+    transform: translate3d(-8px, 8px, 0) rotate(-0.6deg);
+    filter: blur(1px);
+    transition: opacity .4s ease, transform .5s ease, filter .5s ease;
+  }
+  .reveal-diag.in {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .btn-magnetic, .card-tilt {
+      transition: none;
+      transform: none !important;
+    }
   }
 
   .no-default-hover-elevate {}
@@ -1006,6 +1039,74 @@ body[data-force-theme="studio"] .card-glass {
 .weavy-section { overflow-x: hidden; }
 .weavy-canvas { position: relative; }
 .grid-band { left: 0; right: 0; }
+
+/* ===== Home — Weavy band under pixel tiles (premium/porcelain) ===== */
+.home-weavy {
+  /* palette tuned for print-ish whites */
+  --weavy-top: oklch(0.99 0 0);       /* pure white (matches tiles) */
+  --weavy-mid: oklch(0.98 0.01 95);   /* porcelain */
+  --weavy-bottom: oklch(0.96 0.02 95);/* warm paper */
+  --weavy-spot: rgba(0,0,0,.06);      /* gentle top vignette */
+
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(1200px 340px at 50% -120px, var(--weavy-spot), transparent 62%),
+    linear-gradient(180deg, var(--weavy-top) 0%, var(--weavy-mid) 28%, var(--weavy-bottom) 100%);
+}
+
+/* light paper grain so big white doesn’t feel empty */
+.home-weavy::before {
+  content: "";
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(0deg,  rgba(0,0,0,.012) 0 1px, transparent 1px 2px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.010) 0 1px, transparent 1px 2px);
+  opacity: .45;
+}
+
+/* grid band feels sharper & fades earlier for elegance */
+.home-weavy .grid-band {
+  --grid-line: rgba(0,0,0,.28);
+  --grid-fade-start: 60%;
+}
+
+/* node cards look “framed” rather than pills */
+.home-weavy .node-card {
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.80), rgba(255,255,255,.58));
+  border: 1px solid rgba(0,0,0,.08);
+  box-shadow: 0 18px 40px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.40);
+  backdrop-filter: blur(6px) saturate(118%);
+}
+
+/* tiny polish on dashed media slots (less “utility”, more editorial) */
+.home-weavy .slot-media {
+  background:
+    linear-gradient(180deg, rgba(245,247,250,.75), rgba(250,252,255,.55)),
+    repeating-linear-gradient(0deg, rgba(2,6,23,.06) 0 1px, transparent 1px 17px),
+    repeating-linear-gradient(90deg, rgba(2,6,23,.05) 0 1px, transparent 1px 17px);
+  border-color: rgba(0,0,0,.16);
+}
+
+/* Optional: thin “gallery frame” for all cards in this band */
+.home-weavy .card-glass,
+.home-weavy .frame-card {
+  background: linear-gradient(180deg, #ffffff, #fcfbf8);
+  border: 1px solid rgba(0,0,0,.08);
+  box-shadow: 0 26px 60px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.60);
+  border-radius: 16px;
+}
+
+/* reduced-motion: keep it still and premium */
+@media (prefers-reduced-motion: reduce) {
+  .home-weavy::before { opacity: .30; }
+}
+
+/* Fallback: if backdrop-filter unsupported, keep things lighter */
+@supports not (backdrop-filter: blur(1px)) {
+  .home-weavy .node-card { background: #ffffff; }
+}
 
 /* ===== Nocturne Eden — dark neutrals + natural accent ===== */
 .nocturne-band {
