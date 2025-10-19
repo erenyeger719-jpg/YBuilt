@@ -18,7 +18,7 @@ const ITEMS: T[] = [
 ];
 
 /** Tunables */
-const DRIFT_PX_PER_S = 16;     // idle glide (left)
+const DRIFT_PX_PER_S = 24;     // idle glide (left) — 1.5× faster
 const HOLD_PX_PER_S  = 220;    // press-and-hold add/sub speed
 const SAFE_MIN = 0.4;          // recenter window (as fraction of loop width)
 const SAFE_MAX = 1.6;
