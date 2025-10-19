@@ -1100,3 +1100,62 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
   50%  { background-position: 100% 50%,   0% 50%, 100%   0%; }
   100% { background-position:   0%  0%, 100%  0%,   0% 100%; }
 }
+
+/* ===== Cinematic Prism — graphite base + moving spectral flare ===== */
+.prism-band {
+  position: relative;
+  isolation: isolate;
+  color: white;
+
+  /* graphite → matches hero */
+  background:
+    radial-gradient(1400px 420px at 50% -160px, oklch(0.92 0 0 / .07), transparent 60%),
+    linear-gradient(180deg, oklch(0.15 0 0) 0%, oklch(0.12 0 0) 62%, oklch(0.13 0 0) 100%);
+
+  /* UI token accents inside the band */
+  --accent: 330 0.45 0.70;   /* punchy orchid (magenta) */
+  --accent-2: 230 0.28 0.67; /* sky/cyan */
+  --accent-3: 70  0.20 0.78; /* amber/peach */
+  --ring: var(--accent);
+  --primary: 150 0.20 0.62;  /* emerald lift */
+}
+
+/* moving prism sweep (magenta ↔ cyan ↔ amber) */
+.prism-band::before {
+  content: "";
+  position: absolute; inset: -12% -6% -16%;
+  background:
+    /* wide aurora plates */
+    radial-gradient(60% 42% at 18% 18%, oklch(0.78 .21 330 / .25), transparent 60%), /* magenta */
+    radial-gradient(52% 36% at 82% 24%, oklch(0.82 .18 230 / .22), transparent 60%), /* cyan   */
+    radial-gradient(70% 56% at 48% 108%, oklch(0.86 .16 70 / .18),  transparent 60%);/* amber  */
+  mix-blend-mode: screen;
+  animation: prismSweep 42s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* fine vignette + micrograin for “cinema” depth */
+.prism-band::after {
+  content: "";
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(1200px 280px at 50% -120px, rgba(255,255,255,.15), transparent 62%),
+    radial-gradient(1200px 340px at 50% 106%, rgba(0,0,0,.40), transparent 55%),
+    /* ultra-light film grain (cheap, CSS-only) */
+    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 2px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.018) 0 1px, transparent 1px 2px);
+  background-blend-mode: normal, normal, overlay, overlay;
+  opacity: .70;
+  pointer-events: none;
+}
+
+@keyframes prismSweep {
+  0%   { transform: translate3d(0,0,0);   filter: saturate(110%); }
+  50%  { transform: translate3d(-4%,2%,0); filter: saturate(120%); }
+  100% { transform: translate3d(0,0,0);   filter: saturate(110%); }
+}
+
+/* Prefer-reduced-motion respect */
+@media (prefers-reduced-motion: reduce) {
+  .prism-band::before { animation: none; }
+}

@@ -34,10 +34,6 @@ export default function WorkflowToApp() {
 
   // wire path between cards (morph as p changes)
   const pathD = (() => {
-    // base positions that roughly match the card boxes below
-    const W = 1200;
-    const H = 700;
-
     // Workflow card center right edge
     const ax = 420 + 300; // cardX + cardWidth
     const ay = 260;
@@ -57,7 +53,7 @@ export default function WorkflowToApp() {
   return (
     <section
       ref={secRef}
-      className="relative nocturne-band py-24"
+      className="relative prism-band py-24"
       style={{ height: '210vh' }}
     >
       <div className="sticky top-0 h-[100vh] overflow-hidden">
