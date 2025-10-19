@@ -68,7 +68,11 @@ export default function Home() {
 
       {/* New artistic sections */}
       <ExploreWheel />
-      <WorkflowToApp />
+
+      {/* Gallery-wall treatment for this block */}
+      <section className="gallery-wall">
+        <WorkflowToApp />
+      </section>
 
       <FloatingChat isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} />
     </div>

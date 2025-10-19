@@ -3,6 +3,7 @@
 
 import React, { PropsWithChildren, useMemo } from 'react';
 import PixelSpill from '@/components/PixelSpill';
+import GeometryBackdrop from '@/components/GeometryBackdrop';
 
 type Props = PropsWithChildren<{
   /** Height of the spill/crown band in rems (controls PixelSpill & node offset) */
@@ -59,6 +60,9 @@ export default function WeavySection({
           color="#000"
           seed={20251019}
         />
+
+        {/* NEW: geometric paper backdrop under nodes */}
+        <GeometryBackdrop topOffset={bandPx} heightRem={30} />
 
         {/* node content starts after the spill height */}
         <div style={{ position: 'relative', zIndex: 2, paddingTop: bandPx }}>
