@@ -1,8 +1,9 @@
 // client/src/pages/Home.tsx
-import { useState, useEffect } from "react";           // add useEffect
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
+import WeavySection from "@/components/WeavySection";
 import WeavyBoard from "@/components/WeavyBoard";
 import ExploreWheel from "@/components/ExploreWheel";
 import WorkflowToApp from "@/components/WorkflowToApp";
@@ -18,11 +19,6 @@ function FloatingChat({
   isChatOpen: boolean;
   setIsChatOpen: (v: boolean) => void;
 }) {
-  // Avoid SSR crash: only render portal on the client
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted || typeof document === "undefined") return null;
-
   return createPortal(
     <>
       <Button
@@ -59,18 +55,16 @@ export default function Home() {
       <Header />
       <Hero />
 
-      {/* Home — Weavy band directly under the pixel tiles */}
-      <section className="weavy-section home-weavy home-weavy--prism" style={{ position: "relative", isolation: "isolate" }}>
-        {/* Grid starts just below the tiles — put it BEHIND, no clicks */}
-        <div
-          className="grid-band"
-          style={{ top: 56, height: 360, zIndex: -1, pointerEvents: "none" }}   // ⬅ behind for sure
-        />
-        {/* Board sits ABOVE */}
-        <div className="weavy-canvas" style={{ position: "relative", zIndex: 20 }}>  {/* ⬅ above for sure */}
-          <WeavyBoard />
-        </div>
-      </section>
+      {/* Spill bridge over the grid, then nodes */}
+      <WeavySection
+        bandHeightRem={16}      // spill height
+        gridDepthRem={38}       // push grid deeper (toward the red line)
+        gridFadeStart="96%"     // fade only near the very end
+        // optional: echo the hero palette
+        // colors={['#0a0a0b','#17191d','#22262c','#343a40']}
+      >
+        <WeavyBoard />
+      </WeavySection>
 
       {/* New artistic sections */}
       <ExploreWheel />
