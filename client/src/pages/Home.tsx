@@ -3,7 +3,9 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
-import Showcase from "@/components/Showcase";
+import WeavyBoard from "@/components/WeavyBoard";
+import ExploreWheel from "@/components/ExploreWheel";
+import WorkflowToApp from "@/components/WorkflowToApp";
 import ChatPanel from "@/components/ChatPanel";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, X } from "lucide-react";
@@ -51,8 +53,14 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       <Header />
       <Hero />
-      {/* Showcase already mounts <WeavyBoard /> internally */}
-      <Showcase />
+
+      {/* Builder field */}
+      <WeavyBoard />
+
+      {/* New artistic sections */}
+      <ExploreWheel />
+      <WorkflowToApp />
+
       <FloatingChat isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} />
     </div>
   );
