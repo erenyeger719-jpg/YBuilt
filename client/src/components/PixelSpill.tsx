@@ -1,24 +1,20 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 type Props = {
-  top: number;          // px from section top
-  height: number;       // px tall (match the grid band)
-  cell?: number;        // grid cell size (gap + 1px line). default 17
-  fadeRows?: number;    // how many rows fade to 0 at the bottom
-  density?: number;     // 0..1: how filled the crown looks
-  seed?: number;        // deterministic layout
-  colors?: string[];    // optional palette; defaults to graphite steps
+  top: number;          // px from top of weavy-canvas
+  height: number;       // px height of spill strip
+  cell?: number;        // px grid cell (default 17 = 16 gap + 1 line)
+  fadeRows?: number;    // rows to fade before nodes begin
+  density?: number;     // 0..1
+  colors?: string[];    // palette
+  seed?: number;        // deterministic scatter
 };
 
-function mulberry32(a: number) {
-  return () => {
-    let t = (a += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+function lcg(seed: number) {
+  let s = seed >>> 0;
+  return () => (s = (1664525 * s + 1013904223) >>> 0) / 0xffffffff;
 }
 
 export default function PixelSpill({
@@ -27,15 +23,15 @@ export default function PixelSpill({
   cell = 17,
   fadeRows = 6,
   density = 0.95,
+  colors = ['#0b0c10', '#14161a', '#1f2329', '#2b3037', '#363c44', '#4a515a'],
   seed = 20251019,
-  colors,
 }: Props) {
-  const hostRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(1200);
 
-  // measure width so we know column count
-  useEffect(() => {
-    const el = hostRef.current;
+  // measure available width (full bleed)
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => setW(Math.ceil(el.clientWidth)));
     ro.observe(el);
@@ -43,88 +39,76 @@ export default function PixelSpill({
     return () => ro.disconnect();
   }, []);
 
-  const palette =
-    colors && colors.length
-      ? colors
-      : ['#0a0a0b', '#13161a', '#1c2126', '#262c33']; // graphite steps from hero
+  // precompute rects
+  const rects = React.useMemo(() => {
+    const rnd = lcg(seed);
+    const cols = Math.ceil(w / cell) + 2;
+    const usableH = height - fadeRows * cell; // bottom part will be faded anyway
 
-  const { cols, rows, rects } = useMemo(() => {
-    const cols = Math.ceil(w / cell);
-    const rows = Math.floor(height / cell);
-    const rand = mulberry32(seed);
+    const nodes: Array<JSX.Element> = [];
+    for (let i = 0; i < cols; i++) {
+      const x = i * cell;
 
-    // generate a wiggly skyline via constrained random walk
-    let h = Math.floor(rows * 0.25 + rand() * rows * 0.2); // start modest
-    const rects: { x: number; y: number; fill: string; a: number }[] = [];
+      // crown “depth” varies per column
+      const base = 0.38 * usableH;
+      const varRange = 0.28 * usableH;
+      const crownDepth = Math.max(cell, Math.min(usableH, base + varRange * (rnd() * 2 - 1)));
 
-    for (let c = 0; c < cols; c++) {
-      // nudge height −2..+2 with bias upward early, then cool off
-      const bias = c < cols * 0.55 ? 0.6 : 0.45;
-      const step =
-        (rand() < bias ? 1 : -1) * (rand() < 0.45 ? 2 : 1); // small chunky moves
-      h = Math.max(1, Math.min(rows - fadeRows - 1, h + step));
+      const rows = Math.floor(crownDepth / cell);
 
-      // carve the column: from top (row 0) down to h
-      for (let r = 0; r < h; r++) {
-        if (rand() > density) continue; // holes
+      for (let r = 0; r < rows; r++) {
+        // denser near the top, sparser as it falls
+        const falloff = 1 - r / (rows + 1);
+        const chance = density * (0.60 + 0.40 * falloff);
 
-        // fade near the bottom edge so it dies before nodes
-        const fadeStart = Math.max(0, h - fadeRows);
-        const fadeT = r <= fadeStart ? 0 : (r - fadeStart) / Math.max(1, fadeRows);
-        const alpha = 1 - fadeT; // 1 -> 0
+        if (rnd() < chance) {
+          const y = r * cell;
+          const color = colors[Math.floor(rnd() * colors.length)] ?? colors[0];
 
-        // slight palette jitter (darker near the top)
-        const shadeIndex = Math.min(
-          palette.length - 1,
-          Math.floor((r / Math.max(1, rows)) * (palette.length + 0.5))
-        );
-
-        rects.push({
-          x: c * cell,
-          y: r * cell,
-          fill: palette[shadeIndex],
-          a: alpha,
-        });
+          // leave 1px gutters so the spill sits “on” the grid
+          const g = 1;
+          nodes.push(
+            <rect
+              key={`${i}:${r}`}
+              x={x + g}
+              y={y + g}
+              width={cell - g}
+              height={cell - g}
+              fill={color}
+            />
+          );
+        }
       }
     }
+    return nodes;
+  }, [w, cell, height, fadeRows, density, colors, seed]);
 
-    return { cols, rows, rects };
-  }, [w, height, cell, fadeRows, density, seed, palette]);
+  const fadePx = Math.max(0, fadeRows * cell);
 
   return (
     <div
-      ref={hostRef}
+      ref={wrapRef}
       className="pixel-spill"
-      style={{ top, height, /* left/right handled by .pixel-spill */ }}
+      style={{
+        top,
+        height,
+        // fade out before nodes start
+        WebkitMaskImage: `linear-gradient(to bottom, #000 ${height - fadePx}px, transparent 100%)`,
+        maskImage: `linear-gradient(to bottom, #000 ${height - fadePx}px, transparent 100%)`,
+        zIndex: 1,
+      }}
       aria-hidden
     >
-      <svg width="100%" height="100%" viewBox={`0 0 ${cols * cell} ${rows * cell}`} preserveAspectRatio="none">
-        {/* top mask: slightly heavier at the very top for a “crown” */}
-        <defs>
-          <linearGradient id="ps-fade" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="white" stopOpacity="0.98" />
-            <stop offset="0.2" stopColor="white" stopOpacity="0.98" />
-            <stop offset="1" stopColor="white" stopOpacity="0" />
-          </linearGradient>
-          <mask id="ps-mask">
-            <rect width="100%" height="100%" fill="url(#ps-fade)" />
-          </mask>
-        </defs>
-
-        <g mask="url(#ps-mask)">
-          {rects.map((r, i) => (
-            <rect
-              key={i}
-              x={r.x}
-              y={r.y}
-              width={cell - 1}      // respect the 1px grid line
-              height={cell - 1}
-              fill={r.fill}
-              opacity={r.a}
-              shapeRendering="crispEdges"
-            />
-          ))}
-        </g>
+      <svg
+        width="100%"
+        height={height}
+        viewBox={`0 0 ${w} ${height}`}
+        preserveAspectRatio="none"
+        shapeRendering="crispEdges"
+        role="presentation"
+        style={{ display: 'block' }}
+      >
+        {rects}
       </svg>
     </div>
   );
