@@ -1,6 +1,7 @@
+// client/src/components/WorkflowToApp.tsx
 'use client';
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 
 function clamp(n: number, a = 0, b = 1) { return Math.max(a, Math.min(b, n)); }
 
@@ -56,12 +57,8 @@ export default function WorkflowToApp() {
   return (
     <section
       ref={secRef}
-      className="relative"
-      style={{
-        height: '210vh',
-        background:
-          'radial-gradient(80rem 40rem at 50% -10%, rgba(255,255,255,.06), transparent 60%), linear-gradient(180deg, #0b0c10, #0b0c10)',
-      }}
+      className="relative nocturne-band py-24"
+      style={{ height: '210vh' }}
     >
       <div className="sticky top-0 h-[100vh] overflow-hidden">
         <div className="mx-auto max-w-6xl h-full relative px-6">

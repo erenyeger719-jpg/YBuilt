@@ -113,7 +113,7 @@ export default function ExploreWheel() {
   }, []);
 
   return (
-    <section className="relative overflow-hidden bg-[oklch(0.07_0_0)] text-white py-24">
+    <section className="relative overflow-hidden nocturne-band py-24">
       <div className="container mx-auto px-4 relative">
         <p className="tracking-[0.28em] uppercase text-sm/6 text-white/50">Explore our templates</p>
         <h2 className="mt-2 text-5xl md:text-6xl font-semibold">
@@ -155,21 +155,6 @@ export default function ExploreWheel() {
 
       {/* Hide webkit scrollbar for this scroller only */}
       <style>{`.wheel::-webkit-scrollbar{display:none;}`}</style>
-
-      {/* subtle sheen/vignette */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          maskImage:
-            'linear-gradient(to right, transparent 0, black 6%, black 94%, transparent 100%)',
-          WebkitMaskImage:
-            'linear-gradient(to right, transparent 0, black 6%, black 94%, transparent 100%)',
-          background:
-            'radial-gradient(1200px 240px at 50% -80px, rgba(255,255,255,.12), transparent 60%)',
-          opacity: 0.7,
-        }}
-      />
     </section>
   );
 }
