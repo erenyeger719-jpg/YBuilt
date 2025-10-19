@@ -910,11 +910,14 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
   z-index: 0; pointer-events: none;
   /* where the grid starts fading (percentage of its own height) */
   --grid-fade-start: 70%;
+  --grid-line: rgba(0,0,0,.35); /* strong enough to read on white */
   background:
-    linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.98)),
-    radial-gradient(900px 420px at 50% -20%, rgba(11,18,25,.06), transparent 60%),
-    repeating-linear-gradient(0deg, rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px)),
-    repeating-linear-gradient(90deg, rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px));
+    /* white “paper” base so the grid shows on white */
+    linear-gradient(180deg, #fff, #fff),
+    radial-gradient(900px 420px at 50% -20%, rgba(0,0,0,.06), transparent 60%),
+    /* black grid lines */
+    repeating-linear-gradient(0deg,  var(--grid-line) 0 1px, transparent 1px calc(var(--gap) + 1px)),
+    repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px calc(var(--gap) + 1px));
   -webkit-mask-image: linear-gradient(180deg, #000 var(--grid-fade-start), transparent 100%);
   mask-image: linear-gradient(180deg, #000 var(--grid-fade-start), transparent 100%);
 }

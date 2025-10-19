@@ -28,12 +28,12 @@ export default function WeavySection({
   density = 1.0,        // fuller crown / more spill
   fadeRows = 9,         // slower fade before nodes
   cellPx = 9,           // half-size tiles for tighter grain
-  gridDepthRem = 30,    // extend grid further than the spill
-  gridFadeStart = '84%' // begin fade near the end, not immediately
+  gridDepthRem = 34,    // extend grid further than the spill (updated default)
+  gridFadeStart = '92%' // begin fade near the end (updated default)
 }: Props) {
   // lock measurements to physical pixels for crisp alignment
   const bandPx = useMemo(() => Math.round(bandHeightRem * 16), [bandHeightRem]);
-  const gridPx = useMemo(() => Math.round(gridDepthRem * 16), [gridDepthRem]); // in case you need px later
+  const gridPx = useMemo(() => Math.round(gridDepthRem * 16), [gridDepthRem]); // reserved if needed later
 
   return (
     <section className="weavy-section">
