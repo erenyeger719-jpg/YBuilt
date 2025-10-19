@@ -1,5 +1,5 @@
 // client/src/pages/Home.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";           // add useEffect
 import { createPortal } from "react-dom";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
@@ -18,6 +18,11 @@ function FloatingChat({
   isChatOpen: boolean;
   setIsChatOpen: (v: boolean) => void;
 }) {
+  // Avoid SSR crash: only render portal on the client
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted || typeof document === "undefined") return null;
+
   return createPortal(
     <>
       <Button
@@ -55,10 +60,14 @@ export default function Home() {
       <Hero />
 
       {/* Home — Weavy band directly under the pixel tiles */}
-      <section className="weavy-section home-weavy home-weavy--prism">
-        {/* Grid starts just below the tiles — tweak top/height to taste */}
-        <div className="grid-band" style={{ top: 56, height: 360 }} />
-        <div className="weavy-canvas">
+      <section className="weavy-section home-weavy home-weavy--prism" style={{ position: "relative", isolation: "isolate" }}>
+        {/* Grid starts just below the tiles — put it BEHIND, no clicks */}
+        <div
+          className="grid-band"
+          style={{ top: 56, height: 360, zIndex: -1, pointerEvents: "none" }}   // ⬅ behind for sure
+        />
+        {/* Board sits ABOVE */}
+        <div className="weavy-canvas" style={{ position: "relative", zIndex: 20 }}>  {/* ⬅ above for sure */}
           <WeavyBoard />
         </div>
       </section>
