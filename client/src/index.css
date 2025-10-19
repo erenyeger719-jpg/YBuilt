@@ -798,18 +798,20 @@ body[data-force-theme="studio"] .card-glass {
 /* Optional canvas wrapper for board */
 .weavy-canvas { position: relative; }
 
-/* Full-width grid band; set top/height inline in the component */
+/* Full-width grid band; sits BEHIND content */
 .grid-band {
-  position: absolute; left: 0; right: 0;
-  z-index: 0; pointer-events: none;
+  position: absolute;
+  left: 0; right: 0;
+  z-index: -1;                  /* behind nodes & overlays */
+  pointer-events: none;
+
   /* where the grid starts fading (percentage of its own height) */
   --grid-fade-start: 70%;
-  --grid-line: rgba(0,0,0,.35); /* strong enough to read on white */
+  --grid-line: rgba(0,0,0,.35); /* strong enough to read */
+
+  /* removed the solid white base; keep vignette + lines only */
   background:
-    /* white “paper” base so the grid shows on white */
-    linear-gradient(180deg, #fff, #fff),
     radial-gradient(900px 420px at 50% -20%, rgba(0,0,0,.06), transparent 60%),
-    /* black grid lines */
     repeating-linear-gradient(0deg,  var(--grid-line) 0 1px, transparent 1px calc(var(--gap) + 1px)),
     repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px calc(var(--gap) + 1px));
   -webkit-mask-image: linear-gradient(180deg, #000 var(--grid-fade-start), transparent 100%);
@@ -984,7 +986,6 @@ body[data-force-theme="studio"] .card-glass {
 /* Layer order so nothing hides your nodes */
 .home-weavy::before { z-index: 0; }      /* grain */
 .home-weavy::after  { z-index: 0; }      /* optional prism overlay */
-.home-weavy .grid-band   { z-index: 1; } /* grid above grain/aurora */
 .home-weavy .weavy-canvas { position: relative; z-index: 2; } /* nodes on top */
 
 /* light paper grain so big white doesn’t feel empty */
