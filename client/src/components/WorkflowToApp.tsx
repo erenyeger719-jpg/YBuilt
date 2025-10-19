@@ -53,16 +53,33 @@ export default function WorkflowToApp() {
   return (
     <section
       ref={secRef}
-      className="relative prism-band py-24"
+      className="relative atelier-band py-24"
       style={{ height: '210vh' }}
     >
+      {/* decor */}
+      <div
+        aria-hidden
+        className="paper-block paper-citron block-torn-2"
+        style={{ left: '-10vw', top: '6rem', width: '34vw', height: '12rem', transform: 'rotate(-4deg)' }}
+      />
+      <div
+        aria-hidden
+        className="paper-block paper-fuch block-torn-1"
+        style={{ right: '-12vw', top: '18rem', width: '38vw', height: '16rem', transform: 'rotate(3deg)' }}
+      />
+      <div
+        aria-hidden
+        className="paper-block paper-cobalt block-torn-3"
+        style={{ left: '14vw', bottom: '-6rem', width: '28vw', height: '10rem', transform: 'rotate(-8deg)' }}
+      />
+
       <div className="sticky top-0 h-[100vh] overflow-hidden">
         <div className="mx-auto max-w-6xl h-full relative px-6">
           {/* Headline */}
           <div className="pt-16 pb-6">
-            <p className="text-xs tracking-[0.28em] uppercase text-white/60">From Workflow</p>
-            <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-white">
-              to <span className="text-rose-300/90">App Mode</span>
+            <p className="text-xs tracking-[0.28em] uppercase text-white/70">From Workflow</p>
+            <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-white riso-register">
+              to <span className="text-white">App Mode</span>
             </h2>
           </div>
 
@@ -111,7 +128,7 @@ export default function WorkflowToApp() {
                   {[1, 2, 3].map((s) => (
                     <div key={s} className="rounded-lg border border-white/12 bg-white/[0.04] p-3">
                       <div className="text-xs text-white/80 mb-2">Step {s}</div>
-                      <div className="rounded-md border-2 border-dashed border-white/15 bg-white/5 h-16 grid place-items-center text-[11px] text-white/60">
+                      <div className="rounded-md border-2 border-dashed border-white/15 bg-white/5 h-16 grid place-items-center text-[11px] text-white/60 sketch-hatch">
                         drop image / video
                       </div>
                     </div>
@@ -151,7 +168,7 @@ export default function WorkflowToApp() {
                     {[1, 2, 3, 4, 5, 6].map((i) => (
                       <div
                         key={i}
-                        className="rounded-md border-2 border-dashed border-white/15 bg-white/5 aspect-[1/1] grid place-items-center text-[11px] text-white/60"
+                        className="rounded-md border-2 border-dashed border-white/15 bg-white/5 aspect-[1/1] grid place-items-center text-[11px] text-white/60 sketch-hatch"
                       >
                         slot
                       </div>

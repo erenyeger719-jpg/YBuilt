@@ -1159,3 +1159,96 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
 @media (prefers-reduced-motion: reduce) {
   .prism-band::before { animation: none; }
 }
+
+/* ===== Atelier Paper (Riso) — cut-paper, no gradients ===== */
+.atelier-band {
+  position: relative;
+  isolation: isolate;
+  color: white;
+
+  /* graphite base to match hero */
+  background: #0d0f13;
+  /* micro paper grain — very light, not a gradient feel */
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.015) 0 1px, transparent 1px 2px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.02) 0 1px, transparent 1px 2px);
+}
+
+/* ink palette (high-contrast, proven risograph hues) */
+.atelier-band {
+  --ink-ivory:  #f6f2e8; /* paper */
+  --ink-carbon: #0d0f13; /* base */
+  --ink-cobalt: #3760ff; /* electric blue */
+  --ink-verm:   #ff4d2e; /* vermilion */
+  --ink-fuch:   #ff47a3; /* fuchsia */
+  --ink-citron: #b7f35b; /* citron / natural pop */
+  --ink-ink:    #0b0c10; /* strokes */
+
+  --ring: 330 0.65 0.72;      /* for focus rings / UI */
+  --accent: 330 0.48 0.72;    /* headlines */
+  --accent-2: 230 0.30 0.67;  /* cool secondary */
+}
+
+/* flat “paper blocks” (cut shapes). Each block is a positioned element. */
+.paper-block {
+  position: absolute;
+  pointer-events: none;
+  filter: drop-shadow(0 20px 50px rgba(0,0,0,.45));
+  /* deckled paper edge */
+  background-image:
+    repeating-linear-gradient(0deg, rgba(0,0,0,.03) 0 2px, transparent 2px 4px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0 2px, transparent 2px 4px);
+}
+
+/* colors */
+.paper-cobalt  { background-color: var(--ink-cobalt); }
+.paper-verm    { background-color: var(--ink-verm); }
+.paper-fuch    { background-color: var(--ink-fuch); }
+.paper-citron  { background-color: var(--ink-citron); }
+.paper-ivory   { background-color: var(--ink-ivory); }
+
+/* torn / cut edges via clip-path polygons (feel free to tweak points) */
+.block-torn-1 { clip-path: polygon(0% 8%, 92% 0%, 100% 70%, 8% 100%); }
+.block-torn-2 { clip-path: polygon(6% 0%, 100% 12%, 94% 100%, 0% 86%); }
+.block-torn-3 { clip-path: polygon(0% 0%, 100% 6%, 94% 94%, 8% 100%); }
+
+/* subtle “pen hatch” layer for art vibe (apply to elements needing texture) */
+.sketch-hatch {
+  background-image:
+    repeating-linear-gradient(45deg, rgba(0,0,0,.06) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.03) 0 1px, transparent 1px 7px);
+  background-blend-mode: multiply;
+}
+
+/* sketchy outline for cards (keeps your glass but adds hand-drawn feel) */
+.sketch-edge {
+  position: relative;
+}
+.sketch-edge::after {
+  content: "";
+  position: absolute; inset: -2px;
+  border: 2px solid rgba(255,255,255,.55);
+  border-radius: inherit;
+  /* jittered outline illusion */
+  clip-path: polygon(
+    0% 3%, 10% 0%, 20% 1%, 30% 0%, 40% 2%, 50% 0%,
+    60% 2%, 70% 0%, 80% 1%, 90% 0%, 100% 3%,
+    100% 97%, 90% 100%, 80% 99%, 70% 100%, 60% 98%,
+    50% 100%, 40% 98%, 30% 100%, 20% 99%, 10% 100%, 0% 97%
+  );
+  opacity: .28;
+  pointer-events: none;
+}
+
+/* risograph “registration offset” for headings (no extra markup) */
+.riso-register {
+  text-shadow:
+    2px 1px 0 var(--ink-fuch),
+   -2px -1px 0 var(--ink-cobalt);
+  letter-spacing: .01em;
+}
+
+/* focus rings on glass in this band */
+.atelier-band .card-glass:focus-within {
+  box-shadow: 0 0 0 2px hsl(var(--ring) / .45), 0 24px 60px rgba(0,0,0,.55);
+}

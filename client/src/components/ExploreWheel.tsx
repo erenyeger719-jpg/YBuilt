@@ -113,11 +113,28 @@ export default function ExploreWheel() {
   }, []);
 
   return (
-    <section className="relative overflow-hidden prism-band py-24">
+    <section className="relative overflow-hidden atelier-band py-24">
+      {/* cut-paper layers (decor) */}
+      <div
+        aria-hidden
+        className="paper-block paper-ivory block-torn-1"
+        style={{ left: '-6vw', top: '4rem', width: '44vw', height: '18rem', transform: 'rotate(-3deg)' }}
+      />
+      <div
+        aria-hidden
+        className="paper-block paper-cobalt block-torn-2"
+        style={{ right: '-8vw', top: '10rem', width: '36vw', height: '14rem', transform: 'rotate(5deg)' }}
+      />
+      <div
+        aria-hidden
+        className="paper-block paper-verm block-torn-3"
+        style={{ left: '12vw', bottom: '-5rem', width: '28vw', height: '12rem', transform: 'rotate(-6deg)' }}
+      />
+
       <div className="container mx-auto px-4 relative">
-        <p className="tracking-[0.28em] uppercase text-sm/6 text-white/50">Explore our templates</p>
-        <h2 className="mt-2 text-5xl md:text-6xl font-semibold">
-          Pick a starting point — <span className="text-[hsl(var(--accent))]/85">wheel it.</span>
+        <p className="tracking-[0.28em] uppercase text-sm/6 text-white/70">Explore our templates</p>
+        <h2 className="mt-2 text-5xl md:text-6xl font-semibold riso-register">
+          Pick a starting point — <span className="text-white">wheel it.</span>
         </h2>
 
         {/* Premium hold buttons — top-right */}
@@ -164,11 +181,11 @@ export default function ExploreWheel() {
 function Card({ title }: { title: string }) {
   return (
     <article
-      className="group relative rounded-2xl border border-white/10 bg-white/[.03] shadow-[0_10px_40px_rgba(0,0,0,.45)] backdrop-blur-md min-w-[clamp(320px,36vw,760px)] hover:shadow-[0_14px_50px_rgba(0,0,0,.55)] transition-shadow"
+      className="group relative sketch-edge rounded-2xl border border-white/10 bg-white/[.03] shadow-[0_10px_40px_rgba(0,0,0,.45)] backdrop-blur-md min-w-[clamp(320px,36vw,760px)] hover:shadow-[0_14px_50px_rgba(0,0,0,.55)] transition-shadow"
       style={{ aspectRatio: '21 / 9' }}
       aria-label={title}
     >
-      <div className="absolute inset-5 rounded-xl border border-dashed border-white/20 grid place-items-center text-white/60 text-lg">
+      <div className="absolute inset-5 rounded-xl border border-dashed border-white/20 grid place-items-center text-white/60 text-lg sketch-hatch">
         drop image / video
       </div>
       <div className="absolute left-5 right-5 bottom-4 flex items-center justify-between">
