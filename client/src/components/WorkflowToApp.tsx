@@ -1,175 +1,186 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-type Step = { id: string; title: string; body: string };
-
-const STEPS: Step[] = [
-  { id: 's1', title: 'Design the Flow', body: 'Sketch your workflow with nodes, wires, and guardrails.' },
-  { id: 's2', title: 'Bind Real Data', body: 'Connect actions to data and turn mocks into living parts.' },
-  { id: 's3', title: 'Refine Interactions', body: 'Micro-transitions, edge cases, and safe fallbacks.' },
-  { id: 's4', title: 'Ship App Mode', body: 'One click: the flow compiles into a production UI.' },
-];
+function clamp(n: number, a = 0, b = 1) { return Math.max(a, Math.min(b, n)); }
 
 export default function WorkflowToApp() {
-  const [active, setActive] = useState(0);
-  const leftRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  const secRef = useRef<HTMLDivElement>(null);
+  const [p, setP] = useState(0); // 0 → 1 progress
 
-  // watch which step is in view
-  useEffect(() => {
-    const root = listRef.current;
-    if (!root) return;
-    const items = Array.from(root.querySelectorAll<HTMLElement>('[data-step]'));
-    const io = new IntersectionObserver(
-      (entries) => {
-        // pick the most visible
-        const vis = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => (b.intersectionRatio || 0) - (a.intersectionRatio || 0))[0];
-        if (!vis) return;
-        const idx = items.findIndex((el) => el === vis.target);
-        if (idx >= 0) setActive(idx);
-      },
-      { rootMargin: '-20% 0px -50% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] }
-    );
-    items.forEach((el) => io.observe(el));
-    return () => io.disconnect();
+  useLayoutEffect(() => {
+    const el = secRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      // start anim a bit after section top enters; finish before leaving
+      const start = vh * 0.15;
+      const end = vh * 1.4;
+      const raw = (start - r.top) / end;
+      setP(clamp(raw));
+    };
+
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
   }, []);
 
-  const mode = active >= 2 ? 'app' : 'workflow';
+  // wire path between cards (morph as p changes)
+  const pathD = (() => {
+    // base positions that roughly match the card boxes below
+    const W = 1200;
+    const H = 700;
+
+    // Workflow card center right edge
+    const ax = 420 + 300; // cardX + cardWidth
+    const ay = 260;
+
+    // App card center left edge (slides in from right as p grows)
+    const appX0 = 760;   // fully visible x
+    const appHiddenOffset = 140;
+    const bx = appX0 + (1 - p) * appHiddenOffset;
+    const by = 290;
+
+    const dx = Math.abs(bx - ax);
+    const c = Math.max(100, dx * (0.35 + 0.25 * (1 - p)));
+
+    return `M ${ax},${ay} C ${ax + c},${ay - 20} ${bx - c},${by + 20} ${bx},${by}`;
+  })();
 
   return (
-    <section className="relative bg-white">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-24 md:py-32 grid grid-cols-1 md:grid-cols-2 gap-10">
-        {/* left: sticky morphing canvas */}
-        <div className="relative" style={{ height: '1200px' }}>
-          <div className="sticky top-24">
+    <section
+      ref={secRef}
+      className="relative"
+      style={{
+        height: '210vh',
+        background:
+          'radial-gradient(80rem 40rem at 50% -10%, rgba(255,255,255,.06), transparent 60%), linear-gradient(180deg, #0b0c10, #0b0c10)',
+      }}
+    >
+      <div className="sticky top-0 h-[100vh] overflow-hidden">
+        <div className="mx-auto max-w-6xl h-full relative px-6">
+          {/* Headline */}
+          <div className="pt-16 pb-6">
+            <p className="text-xs tracking-[0.28em] uppercase text-white/60">From Workflow</p>
+            <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-white">
+              to <span className="text-rose-300/90">App Mode</span>
+            </h2>
+          </div>
+
+          {/* Canvas */}
+          <div className="relative rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md h-[70vh] shadow-[0_30px_80px_rgba(0,0,0,.65)] overflow-hidden">
+            {/* Wire */}
+            <svg
+              className="absolute inset-0"
+              viewBox="0 0 1200 700"
+              preserveAspectRatio="none"
+              style={{ pointerEvents: 'none' }}
+            >
+              <defs>
+                <filter id="wfShadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#000" floodOpacity="0.28" />
+                </filter>
+              </defs>
+              <path
+                d={pathD}
+                stroke="#cbd5e1"
+                strokeWidth={2.5}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ filter: 'url(#wfShadow)' }}
+              />
+            </svg>
+
+            {/* Workflow card (left) */}
             <div
-              ref={leftRef}
-              className="relative rounded-2xl card-glass gloss-sheen overflow-hidden"
+              className="absolute"
               style={{
-                height: 520,
-                backdropFilter: 'blur(14px) saturate(140%)',
-                boxShadow: '0 30px 80px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.06)',
-                transition: 'border-radius 400ms ease, transform 400ms ease, background 400ms ease',
-                borderRadius: mode === 'app' ? 24 : 16,
-                transform: mode === 'app' ? 'translateY(-6px) scale(1.02)' : 'translateY(0) scale(1)',
-                background:
-                  mode === 'app'
-                    ? 'linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02))'
-                    : 'linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04))',
+                left: 120 - p * 40,
+                top: 140 - p * 12,
+                width: 300 - p * 10,
+                height: 240 - p * 6,
+                transform: `scale(${1 - p * 0.06})`,
+                transition: 'transform 0.06s linear',
               }}
             >
-              {/* ambient glow */}
-              <div
-                className="absolute -inset-20 pointer-events-none"
-                style={{
-                  background:
-                    'radial-gradient(40rem 24rem at 50% 30%, hsl(var(--accent)/.20), transparent 60%)',
-                  mixBlendMode: 'screen',
-                }}
-              />
+              <div className="rounded-xl border border-white/12 bg-white/[0.06] backdrop-blur-md h-full shadow-[0_20px_60px_rgba(0,0,0,.45)] p-4">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-white/70 mb-3">Workflow</div>
 
-              {mode === 'workflow' ? <WorkflowMock /> : <AppMock />}
+                {/* Steps */}
+                <div className="grid gap-3">
+                  {[1, 2, 3].map((s) => (
+                    <div key={s} className="rounded-lg border border-white/12 bg-white/[0.04] p-3">
+                      <div className="text-xs text-white/80 mb-2">Step {s}</div>
+                      <div className="rounded-md border-2 border-dashed border-white/15 bg-white/5 h-16 grid place-items-center text-[11px] text-white/60">
+                        drop image / video
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="mt-6 text-sm text-slate-500">
-              From <span className="font-medium">Workflow</span> to <span className="font-medium">App Mode</span>
+
+            {/* App Mode (right) */}
+            <div
+              className="absolute"
+              style={{
+                left: 760 + (1 - p) * 140,
+                top: 120 + (1 - p) * 20,
+                width: 360 + p * 40,
+                height: 300 + p * 40,
+                opacity: 0.2 + p * 0.8,
+                transform: `scale(${0.92 + p * 0.12})`,
+                transition: 'transform 0.06s linear, opacity 0.06s linear',
+              }}
+            >
+              <div className="relative rounded-xl border border-white/12 bg-white/[0.07] backdrop-blur-md h-full shadow-[0_30px_80px_rgba(0,0,0,.55)]">
+                {/* subtle glow */}
+                <div
+                  className="absolute -inset-12"
+                  style={{
+                    background: 'radial-gradient(26rem 18rem at 50% 40%, rgba(236,72,153,.12), transparent 60%)',
+                    filter: 'blur(8px)',
+                    opacity: 0.6 * p,
+                    pointerEvents: 'none',
+                  }}
+                />
+                <div className="relative p-4 h-full">
+                  <div className="text-[10px] uppercase tracking-[0.22em] text-white/70 mb-3">App Mode</div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div
+                        key={i}
+                        className="rounded-md border-2 border-dashed border-white/15 bg-white/5 aspect-[1/1] grid place-items-center text-[11px] text-white/60"
+                      >
+                        slot
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Bottom strip */}
+                  <div className="absolute left-0 right-0 bottom-0 p-4">
+                    <div className="h-10 rounded-lg border border-white/12 bg-white/[0.05]" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Caption */}
+            <div className="absolute left-0 right-0 bottom-4 flex items-center justify-center gap-2 text-white/70 text-xs">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400/80" />
+              <span>Scroll to morph workflow into a shippable app canvas</span>
             </div>
           </div>
         </div>
-
-        {/* right: steps list */}
-        <div ref={listRef} className="flex flex-col gap-12">
-          <header>
-            <div className="text-xs tracking-[0.28em] uppercase text-slate-500">How it compiles</div>
-            <h2 className="h-display text-4xl md:text-5xl metal-text">From Workflow to App Mode</h2>
-          </header>
-
-          {STEPS.map((s, i) => (
-            <article
-              key={s.id}
-              data-step
-              className={`rounded-xl border p-5 md:p-6 hover-elevate transition-all ${
-                i === active ? 'bg-[hsl(var(--accent)/.06)] border-[hsl(var(--accent))]' : 'bg-white'
-              }`}
-            >
-              <div className="text-[11px] tracking-[.22em] uppercase text-slate-500">Step {i + 1}</div>
-              <h3 className="text-xl font-semibold mt-1">{s.title}</h3>
-              <p className="text-slate-600 mt-2">{s.body}</p>
-            </article>
-          ))}
-        </div>
       </div>
     </section>
-  );
-}
-
-function WorkflowMock() {
-  // simplified: 3 big nodes + wires, matching the vibe under the board
-  return (
-    <div className="absolute inset-0">
-      <svg className="absolute inset-0" width="100%" height="100%" viewBox="0 0 1000 520" preserveAspectRatio="none">
-        <defs>
-          <filter id="wfShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#0b0f14" floodOpacity="0.18" />
-          </filter>
-        </defs>
-        <path d="M200 240 C 320 240 380 260 480 260" stroke="#CBD5E1" strokeWidth="2.5" fill="none" filter="url(#wfShadow)" />
-        <path d="M520 260 C 650 260 700 280 800 300" stroke="#CBD5E1" strokeWidth="2.5" fill="none" filter="url(#wfShadow)" />
-        <path d="M520 260 C 520 320 520 360 520 420" stroke="#CBD5E1" strokeWidth="2.5" fill="none" filter="url(#wfShadow)" />
-      </svg>
-
-      <div className="absolute left-16 top-160 node-card" style={{ width: 220, height: 140 }}>
-        <div className="node-label">Prompt</div>
-        <div className="slot-media"><div className="placeholder">drop</div></div>
-      </div>
-      <div className="absolute left-[420px] top-[180px] node-card" style={{ width: 240, height: 160 }}>
-        <div className="node-label">Weaver</div>
-        <div className="slot-media"><div className="placeholder">drop</div></div>
-      </div>
-      <div className="absolute right-10 top-[220px] node-card" style={{ width: 260, height: 160 }}>
-        <div className="node-label">Preview</div>
-        <div className="slot-media"><div className="placeholder">drop</div></div>
-      </div>
-      <div className="absolute left-[460px] bottom-6 node-card" style={{ width: 220, height: 140 }}>
-        <div className="node-label">Launch</div>
-        <div className="slot-media"><div className="placeholder">drop</div></div>
-      </div>
-    </div>
-  );
-}
-
-function AppMock() {
-  // a lightweight “compiled app”: top bar + sidebar + cards
-  return (
-    <div className="absolute inset-0 bg-[rgba(255,255,255,.04)]">
-      <div className="h-12 border-b flex items-center gap-3 px-4">
-        <div className="h-5 w-5 rounded-md bg-[hsl(var(--accent)/.35)]" />
-        <div className="text-sm text-slate-300">Ybuilt App</div>
-      </div>
-      <div className="h-full grid grid-cols-[200px_1fr]">
-        <aside className="border-r p-4 space-y-2">
-          {['Dashboard', 'Content', 'Orders', 'Analytics'].map((t, i) => (
-            <div
-              key={t}
-              className={`px-3 py-2 rounded-md text-sm ${
-                i === 0 ? 'bg-[hsl(var(--accent)/.18)] text-white' : 'hover-elevate text-slate-300'
-              }`}
-            >
-              {t}
-            </div>
-          ))}
-        </aside>
-        <main className="p-6 grid grid-cols-2 gap-6">
-          {[1, 2, 3, 4].map((n) => (
-            <div key={n} className="card-glass gloss-sheen rounded-xl p-5">
-              <div className="text-sm text-slate-300">Widget {n}</div>
-              <div className="mt-3 h-28 rounded-md bg-white/5 border" />
-            </div>
-          ))}
-        </main>
-      </div>
-    </div>
   );
 }

@@ -1,154 +1,283 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-type Item = { id: string; title: string; tag?: string; img?: string };
+type Item = {
+  id: string;
+  title: string;
+  subtitle?: string;
+};
 
-const SAMPLE_ITEMS: Item[] = [
-  { id: 't1', title: 'Modern Portfolio', tag: 'Portfolio' },
-  { id: 't2', title: 'Shop Starter', tag: 'Commerce' },
-  { id: 't3', title: 'Course Hub', tag: 'Education' },
-  { id: 't4', title: 'Restaurant Kit', tag: 'Food' },
-  { id: 't5', title: 'Agency Site', tag: 'Service' },
-  { id: 't6', title: 'Podcast Home', tag: 'Media' },
-  { id: 't7', title: 'Events Page', tag: 'Events' },
-  { id: 't8', title: 'SaaS Landing', tag: 'SaaS' },
-  { id: 't9', title: 'Personal Blog', tag: 'Writing' },
+const ITEMS: Item[] = [
+  { id: 't1', title: 'Template Slot 1' },
+  { id: 't2', title: 'Template Slot 2' },
+  { id: 't3', title: 'Template Slot 3' },
+  { id: 't4', title: 'Template Slot 4' },
+  { id: 't5', title: 'Template Slot 5' },
+  { id: 't6', title: 'Template Slot 6' },
+  { id: 't7', title: 'Template Slot 7' },
+  { id: 't8', title: 'Template Slot 8' },
 ];
 
-export default function ExploreWheel({ items = SAMPLE_ITEMS }: { items?: Item[] }) {
+export default function ExploreWheel() {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const [itemW, setItemW] = useState(360); // rough; updated on mount
+  const trackRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [activeId, setActiveId] = useState(ITEMS[0]?.id);
 
-  // center-on-resize math
+  // vertical wheel -> horizontal scroll; also keyboard
   useEffect(() => {
-    const wrap = wrapRef.current;
-    const s = scrollerRef.current;
-    if (!wrap || !s) return;
+    const el = trackRef.current;
+    if (!el) return;
 
-    const ro = new ResizeObserver(() => {
-      const w = Math.min(420, Math.max(300, Math.floor(wrap.clientWidth * 0.42)));
-      setItemW(w);
-      // keep current item centered after resize
-      requestAnimationFrame(() => {
-        // Nothing fancy; the transform visuals follow scrollLeft anyway
+    const onWheel = (e: WheelEvent) => {
+      // Use vertical wheel to scroll X, prevent accidental page scroll
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY * 1.05;
+      }
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (!wrapRef.current) return;
+      const isInside =
+        document.activeElement === document.body ||
+        wrapRef.current.contains(document.activeElement);
+      if (!isInside) return;
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const idx = ITEMS.findIndex(i => i.id === activeId);
+        const next =
+          e.key === 'ArrowRight'
+            ? Math.min(idx + 1, ITEMS.length - 1)
+            : Math.max(idx - 1, 0);
+        const ref = cardRefs.current.get(ITEMS[next].id);
+        ref?.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('keydown', onKey);
+    return () => {
+      el.removeEventListener('wheel', onWheel as any);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [activeId]);
+
+  // drag-to-scroll with gentle snap
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+
+    let dragging = false;
+    let startX = 0;
+    let startLeft = 0;
+    let v = 0; // velocity
+    let lastX = 0;
+    let raf: number | null = null;
+
+    const onPointerDown = (e: PointerEvent) => {
+      dragging = true;
+      startX = e.clientX;
+      startLeft = el.scrollLeft;
+      lastX = e.clientX;
+      (el as HTMLElement).setPointerCapture(e.pointerId);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      el.scrollLeft = startLeft - dx;
+      v = e.clientX - lastX;
+      lastX = e.clientX;
+      scheduleSync();
+    };
+    const onPointerUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      // inertial flick
+      const target = el.scrollLeft - v * 4;
+      smoothTo(el, target, 260, () => snapToNearest());
+    };
+
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('pointerup', onPointerUp);
+    el.addEventListener('pointercancel', onPointerUp);
+
+    const snapToNearest = () => {
+      const cards = [...cardRefs.current.values()];
+      const cx = el.clientWidth / 2;
+      let best: HTMLElement | null = null;
+      let bestDist = Infinity;
+      for (const c of cards) {
+        const r = c.getBoundingClientRect();
+        const mid = r.left - el.getBoundingClientRect().left + r.width / 2;
+        const d = Math.abs(mid - cx);
+        if (d < bestDist) {
+          bestDist = d;
+          best = c;
+        }
+      }
+      best?.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+    };
+
+    return () => {
+      el.removeEventListener('pointerdown', onPointerDown);
+      el.removeEventListener('pointermove', onPointerMove);
+      el.removeEventListener('pointerup', onPointerUp);
+      el.removeEventListener('pointercancel', onPointerUp);
+      if (raf) cancelAnimationFrame(raf);
+    };
+
+    function smoothTo(el: HTMLElement, x: number, ms: number, end?: () => void) {
+      const start = el.scrollLeft;
+      const t0 = performance.now();
+      const ease = (p: number) => 1 - Math.pow(1 - p, 3);
+
+      const tick = (t: number) => {
+        const p = Math.min(1, (t - t0) / ms);
+        el.scrollLeft = start + (x - start) * ease(p);
+        scheduleSync();
+        if (p < 1) raf = requestAnimationFrame(tick);
+        else end?.();
+      };
+      raf = requestAnimationFrame(tick);
+    }
+
+    function scheduleSync() {
+      if (raf) return; // tick will sync
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        syncTransforms();
       });
-    });
-    ro.observe(wrap);
-    return () => ro.disconnect();
+    }
   }, []);
 
-  // transform each card based on distance to center
-  useEffect(() => {
-    const s = scrollerRef.current;
-    if (!s) return;
+  // transform cards based on distance to center (arc + scale + subtle tilt)
+  useLayoutEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
 
-    let raf = 0;
-    const tick = () => {
-      const center = s.scrollLeft + s.clientWidth / 2;
-      const cards = Array.from(s.querySelectorAll<HTMLElement>('[data-card]'));
-      for (const el of cards) {
-        const rect = el.getBoundingClientRect();
-        const mid = rect.left + rect.width / 2;
-        const distPx = mid - (s.getBoundingClientRect().left + s.clientWidth / 2);
-        const d = distPx / itemW; // -1..1-ish near center
-        const curve = Math.max(0, 1 - Math.min(1, Math.abs(d))); // 1 at center → 0 outward
-        const rise = Math.round(curve * 90);      // vertical lift
-        const scale = 0.86 + curve * 0.18;        // 0.86 → 1.04
-        const rot = d * -8;                       // gentle tilt
-        const z = 100 + Math.round(curve * 100);  // bring center forward
-        el.style.transform = `translateY(${-rise}px) rotate(${rot}deg) scale(${scale})`;
-        el.style.zIndex = `${z}`;
-        el.style.opacity = `${0.65 + curve * 0.35}`;
-        el.style.filter = `drop-shadow(0 18px 30px rgba(0,0,0,${0.14 + curve * 0.18}))`;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
+    const onScroll = () => syncTransforms();
+    const onResize = () => syncTransforms();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize);
 
-    const onScroll = () => {
-      // no-op; continuous RAF handles transforms
-    };
-    s.addEventListener('scroll', onScroll, { passive: true });
+    syncTransforms();
     return () => {
-      cancelAnimationFrame(raf);
-      s.removeEventListener('scroll', onScroll);
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
     };
-  }, [itemW]);
+  }, []);
 
-  const next = (dir: 1 | -1) => {
-    const s = scrollerRef.current;
-    if (!s) return;
-    const delta = (itemW + 24) * dir;
-    s.scrollTo({ left: s.scrollLeft + delta, behavior: 'smooth' });
+  const syncTransforms = () => {
+    const el = trackRef.current;
+    if (!el) return;
+    const cx = el.clientWidth / 2;
+
+    let bestId = activeId;
+    let bestDist = Infinity;
+
+    for (const item of ITEMS) {
+      const card = cardRefs.current.get(item.id);
+      if (!card) continue;
+      const rect = card.getBoundingClientRect();
+      const mid = rect.left - el.getBoundingClientRect().left + rect.width / 2;
+      const raw = Math.abs(mid - cx); // px distance from center
+      const w = el.clientWidth / 2;    // half viewport
+      const d = Math.min(1, raw / w);  // 0 (center) → 1 (edge)
+
+      // scale and vertical arc lift
+      const scale = 1 + (1 - d) * 0.28;
+      const lift = (1 - Math.pow(d, 2)) * 48; // center lifts up more
+      const tilt = (1 - d) * 8;               // subtle tilt near center
+
+      card.style.transform = `translateY(${-lift}px) scale(${scale}) rotateX(${tilt}deg)`;
+      card.style.opacity = String(0.55 + (1 - d) * 0.45);
+      (card.firstElementChild as HTMLElement).style.filter = `saturate(${0.9 + (1 - d) * 0.4})`;
+
+      if (raw < bestDist) {
+        bestDist = raw;
+        bestId = item.id;
+      }
+    }
+    if (bestId !== activeId) setActiveId(bestId);
   };
 
-  const cardBase =
-    'relative card-glass gloss-sheen rounded-2xl overflow-hidden transition-transform duration-200 will-change-transform';
-
   return (
-    <section className="relative bg-white py-20">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6" ref={wrapRef}>
-        <div className="mb-10 flex items-end justify-between">
+    <section
+      ref={wrapRef}
+      className="relative py-24 md:py-32"
+      style={{
+        background:
+          'radial-gradient(60rem 32rem at 20% -10%, hsla(329,64%,70%,.15), transparent 60%), radial-gradient(50rem 30rem at 110% 10%, hsla(210,60%,60%,.12), transparent 60%), linear-gradient(180deg, #070709, #0b0c10)',
+        color: 'white',
+      }}
+    >
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="flex items-end justify-between gap-6 mb-10 md:mb-14">
           <div>
-            <div className="text-xs tracking-[0.28em] uppercase text-slate-500">Explore</div>
-            <h2 className="h-display text-4xl md:text-5xl metal-text">Our Templates</h2>
+            <p className="text-xs tracking-[0.28em] uppercase/relaxed text-white/60">Explore our templates</p>
+            <h2 className="text-3xl md:text-5xl font-semibold tracking-tight mt-2">
+              Pick a starting point<span className="text-white/50"> — wheel it.</span>
+            </h2>
           </div>
-          <div className="flex gap-3">
-            <button
-              className="rounded-full border px-4 py-2 hover-elevate active-elevate text-sm"
-              onClick={() => next(-1)}
-              aria-label="Previous"
-            >
-              ◀
-            </button>
-            <button
-              className="rounded-full border px-4 py-2 hover-elevate active-elevate text-sm"
-              onClick={() => next(1)}
-              aria-label="Next"
-            >
-              ▶
-            </button>
+          <div className="hidden md:flex items-center gap-2 text-sm text-white/70">
+            <span className="inline-block h-2 w-2 rounded-full bg-rose-400/80" />
+            <span>{ITEMS.findIndex(i => i.id === activeId) + 1} / {ITEMS.length}</span>
           </div>
         </div>
+      </div>
 
+      {/* Edge fades */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#0b0c10] to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-[#0b0c10] to-transparent" />
+
+      <div className="mx-auto max-w-7xl px-2 md:px-6">
         <div
-          ref={scrollerRef}
-          className="relative flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory"
-          style={{ scrollPadding: '15%', WebkitOverflowScrolling: 'touch' }}
+          ref={trackRef}
+          className="relative flex gap-10 md:gap-14 overflow-x-auto scroll-smooth snap-x snap-mandatory px-6 md:px-10 py-2"
+          style={{
+            perspective: '1200px',
+            WebkitOverflowScrolling: 'touch',
+          }}
         >
-          {/* center guide (invisible) */}
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent" />
-
-          {items.map((it, i) => (
-            <article
-              key={it.id}
-              data-card
-              className={`${cardBase} snap-center shrink-0`}
-              style={{ width: itemW, height: Math.round(itemW * 0.66) }}
+          {ITEMS.map((item) => (
+            <div
+              key={item.id}
+              ref={(el) => el && cardRefs.current.set(item.id, el)}
+              className="snap-center shrink-0 will-change-transform transition-[opacity,filter] duration-150"
+              style={{ width: 340, maxWidth: '70vw' }}
             >
-              {/* backdrop / placeholder image */}
-              <div className="absolute inset-0">
-                {/* swap to <img src={it.img} .../> later */}
-                <div
-                  className="h-full w-full"
-                  style={{
-                    background:
-                      'radial-gradient(120% 90% at 50% 0%, hsl(var(--accent)/.26), transparent 55%), linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02))',
-                  }}
-                />
-              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md shadow-[0_20px_60px_rgba(0,0,0,.5)]">
+                {/* Top bar */}
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="text-[10px] uppercase tracking-[0.22em] text-white/70">{item.title}</div>
+                  <div className="flex gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/40" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/40" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/40" />
+                  </div>
+                </div>
 
-              {/* label */}
-              <div className="absolute left-4 right-4 bottom-4">
-                <div className="text-[11px] tracking-[.22em] uppercase text-slate-400">{it.tag}</div>
-                <div className="text-lg md:text-xl text-slate-50 drop-shadow">{it.title}</div>
-              </div>
+                {/* Media well (leave blank for assets later) */}
+                <div className="mx-4 mb-4 rounded-xl border-2 border-dashed border-white/15 bg-white/5 aspect-[16/10] grid place-items-center text-white/60 text-xs">
+                  drop image / video
+                </div>
 
-              {/* rim light */}
-              <div className="absolute inset-0 rounded-2xl" style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.12)' }} />
-            </article>
+                {/* Meta */}
+                <div className="px-4 pb-4 flex items-center justify-between text-white/70 text-xs">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-rose-400/80" />
+                    ready to customize
+                  </span>
+                  <button className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15 border border-white/15">
+                    Use
+                  </button>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </div>
