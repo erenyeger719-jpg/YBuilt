@@ -57,7 +57,9 @@ export default function Home() {
 
       {/* Spill bridge over the grid, then nodes */}
       <WeavySection
-        bandHeightRem={14}
+        bandHeightRem={16}      // spill height
+        gridDepthRem={38}       // push grid deeper (toward the red line)
+        gridFadeStart="96%"     // fade only near the very end
         // optional: echo the hero palette
         // colors={['#0a0a0b','#17191d','#22262c','#343a40']}
       >
