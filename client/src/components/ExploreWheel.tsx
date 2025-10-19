@@ -4,9 +4,9 @@
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-type Template = { id: string; title: string };
+type T = { id: string; title: string };
 
-const ITEMS: Template[] = [
+const ITEMS: T[] = [
   { id: 't1', title: 'Template 1' },
   { id: 't2', title: 'Template 2' },
   { id: 't3', title: 'Template 3' },
@@ -18,30 +18,28 @@ const ITEMS: Template[] = [
 ];
 
 /** Tunables */
-const DRIFT_PX_PER_S = 18;   // idle glide, leftwards
-const HOLD_PX_PER_S  = 240;  // press-and-hold speed
+const DRIFT_PX_PER_S = 16;     // idle glide (left)
+const HOLD_PX_PER_S  = 220;    // press-and-hold add/sub speed
+const SAFE_MIN = 0.4;          // recenter window (as fraction of loop width)
+const SAFE_MAX = 1.6;
 
 export default function ExploreWheel() {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const loopWidth = useRef(0);
-  const recentering = useRef(false);
-  /** +1 => move content LEFT (increase scrollLeft), -1 => move RIGHT */
-  const holdDir = useRef<0 | -1 | 1>(0);
+  const loopW = useRef(0);
+  const holdDir = useRef<-1 | 0 | 1>(0);  // +1 = move left, -1 = right
+  const residual = useRef(0);             // fractional px accumulator
 
   const tripled = [...ITEMS, ...ITEMS, ...ITEMS];
 
-  // Measure on mount & on resize; start centered in the middle copy
+  // Measure & center to middle band
   useLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
 
     const measure = () => {
-      // total scrollable width of the whole tripled strip
       const total = el.scrollWidth;
-      const w = total / 3;
-      loopWidth.current = w;
-      // sit in the middle band to give headroom both sides
-      el.scrollLeft = w;
+      loopW.current = total / 3;
+      el.scrollLeft = loopW.current; // start in the middle copy
     };
 
     measure();
@@ -50,37 +48,25 @@ export default function ExploreWheel() {
     return () => ro.disconnect();
   }, []);
 
-  // Recenter only when leaving the safe middle third
+  // Keep scroll within middle third (no jitter)
   const recenterIfNeeded = () => {
     const el = scrollerRef.current;
-    const w = loopWidth.current;
-    if (!el || !w || recentering.current) return;
+    const w = loopW.current;
+    if (!el || !w) return;
 
-    const left = el.scrollLeft;
-    // stay inside [0.5w, 1.5w] to avoid frequent snaps
-    if (left < 0.5 * w || left > 1.5 * w) {
-      recentering.current = true;
-      el.scrollLeft = left < 0.5 * w ? left + w : left - w;
-      // unlock next frame
-      requestAnimationFrame(() => (recentering.current = false));
-    }
+    const x = el.scrollLeft;
+    if (x < SAFE_MIN * w) el.scrollLeft = x + w;
+    else if (x > SAFE_MAX * w) el.scrollLeft = x - w;
   };
 
-  /** Block wheel/trackpad/touch scroll inside the wheel (buttons control it) */
+  // Block mouse-wheel/trackpad/touch inside the wheel
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
 
-    const prevent = (e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    // Non-passive so preventDefault actually works.
+    const prevent = (e: Event) => { e.preventDefault(); e.stopPropagation(); };
     el.addEventListener('wheel', prevent, { passive: false });
     el.addEventListener('touchmove', prevent, { passive: false });
-
-    // Keep page scroll from “grabbing” when at edges
     (el.style as any).overscrollBehaviorX = 'contain';
 
     return () => {
@@ -89,7 +75,7 @@ export default function ExploreWheel() {
     };
   }, []);
 
-  /** Idle drift + press-and-hold controls (requestAnimationFrame loop) */
+  // Idle drift + hold buttons (rAF). Uses fractional accumulation so tiny speeds still move.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -102,29 +88,34 @@ export default function ExploreWheel() {
       const dt = (now - tPrev) / 1000;
       tPrev = now;
 
-      const vx =
-        holdDir.current !== 0
-          ? HOLD_PX_PER_S * holdDir.current
-          : DRIFT_PX_PER_S; // idle drift is positive → content goes left
+      // base left drift, add/sub with hold
+      const v = DRIFT_PX_PER_S + holdDir.current * HOLD_PX_PER_S; // px/s (positive -> move content left)
+      const delta = v * dt + residual.current;
 
-      // programmatic scroll (no smooth behavior to keep it crisp)
-      el.scrollLeft += vx * dt;
-      recenterIfNeeded();
+      // scrollLeft is effectively integer on some browsers; carry the fraction
+      const step = (delta > 0) ? Math.floor(delta) : Math.ceil(delta);
+      residual.current = delta - step;
+
+      if (step !== 0) {
+        el.scrollLeft += step;
+        recenterIfNeeded();
+      }
 
       raf = requestAnimationFrame(tick);
     };
 
+    // pause when tab hidden
+    const onVis = () => { tPrev = performance.now(); };
+    document.addEventListener('visibilitychange', onVis);
+
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', onVis); };
   }, []);
 
   return (
     <section className="relative overflow-hidden bg-[oklch(0.07_0_0)] text-white py-24">
-      {/* Heading */}
       <div className="container mx-auto px-4 relative">
-        <p className="tracking-[0.28em] uppercase text-sm/6 text-white/50">
-          Explore our templates
-        </p>
+        <p className="tracking-[0.28em] uppercase text-sm/6 text-white/50">Explore our templates</p>
         <h2 className="mt-2 text-5xl md:text-6xl font-semibold">
           Pick a starting point — <span className="text-white/70">wheel it.</span>
         </h2>
@@ -133,14 +124,14 @@ export default function ExploreWheel() {
         <div className="absolute right-4 top-0 mt-4 md:right-8 md:mt-6 flex gap-3">
           <HoldButton
             ariaLabel="Hold to move left"
-            onDown={() => (holdDir.current = +1)} // left button => move left
+            onDown={() => (holdDir.current = +1)}   // left btn => move content left
             onUp={() => (holdDir.current = 0)}
           >
             <ChevronLeft className="h-4 w-4" />
           </HoldButton>
           <HoldButton
             ariaLabel="Hold to move right"
-            onDown={() => (holdDir.current = -1)} // right button => move right
+            onDown={() => (holdDir.current = -1)}   // right btn => move content right
             onUp={() => (holdDir.current = 0)}
           >
             <ChevronRight className="h-4 w-4" />
@@ -148,34 +139,24 @@ export default function ExploreWheel() {
         </div>
       </div>
 
-      {/* Wheel */}
+      {/* Wheel strip */}
       <div className="relative mt-12">
         <div
           ref={scrollerRef}
-          className="
-            wheel flex gap-8 px-[8vw]
-            overflow-x-auto overflow-y-hidden select-none
-            cursor-default
-          "
-          // Fallback block for React synthetic wheel (in case the native listener misses)
-          onWheel={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
+          className="wheel flex gap-8 px-[8vw] overflow-x-auto overflow-y-hidden select-none cursor-default"
+          onWheel={(e) => { e.preventDefault(); e.stopPropagation(); }}
           onScroll={recenterIfNeeded}
-          onMouseDown={(e) => e.preventDefault()}  // avoid text selections while holding
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          onMouseDown={(e) => e.preventDefault()}
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollBehavior: 'auto' }}
         >
-          {tripled.map((t, i) => (
-            <Card key={`${t.id}-${i}`} title={t.title} />
-          ))}
+          {tripled.map((t, i) => (<Card key={`${t.id}-${i}`} title={t.title} />))}
         </div>
       </div>
 
-      {/* Hide webkit scrollbar just for this scroller */}
+      {/* Hide webkit scrollbar for this scroller only */}
       <style>{`.wheel::-webkit-scrollbar{display:none;}`}</style>
 
-      {/* subtle shine/vignette */}
+      {/* subtle sheen/vignette */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -193,24 +174,18 @@ export default function ExploreWheel() {
   );
 }
 
-/* ========== bits ========== */
+/* ——— bits ——— */
 
 function Card({ title }: { title: string }) {
   return (
     <article
-      className="
-        group relative rounded-2xl border border-white/10
-        bg-white/[.03] shadow-[0_10px_40px_rgba(0,0,0,.45)]
-        backdrop-blur-md min-w-[clamp(320px,36vw,760px)]
-        hover:shadow-[0_14px_50px_rgba(0,0,0,.55)] transition-shadow
-      "
+      className="group relative rounded-2xl border border-white/10 bg-white/[.03] shadow-[0_10px_40px_rgba(0,0,0,.45)] backdrop-blur-md min-w-[clamp(320px,36vw,760px)] hover:shadow-[0_14px_50px_rgba(0,0,0,.55)] transition-shadow"
       style={{ aspectRatio: '21 / 9' }}
       aria-label={title}
     >
       <div className="absolute inset-5 rounded-xl border border-dashed border-white/20 grid place-items-center text-white/60 text-lg">
         drop image / video
       </div>
-
       <div className="absolute left-5 right-5 bottom-4 flex items-center justify-between">
         <div className="flex items-center gap-2 text-white/70">
           <span className="inline-block h-2 w-2 rounded-full bg-rose-400" />
@@ -223,39 +198,19 @@ function Card({ title }: { title: string }) {
           Use
         </button>
       </div>
-
       <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-white/10" />
     </article>
   );
 }
 
 function HoldButton({
-  ariaLabel,
-  onDown,
-  onUp,
-  children,
-}: {
-  ariaLabel: string;
-  onDown: () => void;
-  onUp: () => void;
-  children: React.ReactNode;
-}) {
+  ariaLabel, onDown, onUp, children,
+}: { ariaLabel: string; onDown: () => void; onUp: () => void; children: React.ReactNode }) {
   return (
     <button
       aria-label={ariaLabel}
-      className="
-        relative h-9 w-9 rounded-full
-        bg-gradient-to-b from-white/12 to-white/[.06]
-        ring-1 ring-white/18 hover:ring-white/28
-        shadow-[0_8px_24px_rgba(0,0,0,.45),inset_0_1px_0_rgba(255,255,255,.22)]
-        text-white/90 grid place-items-center
-        backdrop-blur-md transition
-        active:scale-[0.97]
-      "
-      onPointerDown={(e) => {
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        onDown();
-      }}
+      className="relative h-9 w-9 rounded-full bg-gradient-to-b from-white/12 to-white/[.06] ring-1 ring-white/18 hover:ring-white/28 shadow-[0_8px_24px_rgba(0,0,0,.45),inset_0_1px_0_rgba(255,255,255,.22)] text-white/90 grid place-items-center backdrop-blur-md transition active:scale-[0.97]"
+      onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); onDown(); }}
       onPointerUp={onUp}
       onPointerCancel={onUp}
       onPointerLeave={onUp}
@@ -266,8 +221,7 @@ function HoldButton({
         aria-hidden
         className="pointer-events-none absolute inset-0 rounded-full"
         style={{
-          background:
-            'linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 45%)',
+          background: 'linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 45%)',
           mixBlendMode: 'screen',
           opacity: 0.9,
         }}
