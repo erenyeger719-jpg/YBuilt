@@ -275,7 +275,6 @@ body { font-family: var(--font-ui); }
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
-  --sidebar-accent-border: hsl(var(--accent));
   --sidebar-accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
   --primary-border: hsl(var(--primary));

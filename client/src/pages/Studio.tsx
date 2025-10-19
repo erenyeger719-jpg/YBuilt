@@ -31,28 +31,13 @@ const PRESET_THEMES: ThemeDef[] = [
   { id: "slate", name: "Slate Sky", colors: ["#0b0b0b", "#3B82F6", "#DBEAFE"] },
 ];
 
-/** Studio-only FX with event delegation: pointer glow, scroll stops, magnetic, tilt, reveal */
+/** Studio-only FX with event delegation: scroll stops, magnetic, tilt, reveal */
 function useStudioFX() {
   useEffect(() => {
     const root = document.querySelector<HTMLElement>(".studio-root");
     if (!root) return;
 
-    // --- 1) Pointer glow (rAF-throttled)
-    let glowRAF = 0;
-    const onPointerMoveRoot = (e: PointerEvent) => {
-      if (glowRAF) return;
-      glowRAF = requestAnimationFrame(() => {
-        glowRAF = 0;
-        const r = root.getBoundingClientRect();
-        const x = ((e.clientX - r.left) / Math.max(1, r.width)) * 100;
-        const y = ((e.clientY - r.top) / Math.max(1, r.height)) * 100;
-        root.style.setProperty("--mx", x.toFixed(2) + "%");
-        root.style.setProperty("--my", y.toFixed(2) + "%");
-      });
-    };
-    root.addEventListener("pointermove", onPointerMoveRoot, { passive: true });
-
-    // --- 2) Scroll-scrub stops (rAF-throttled)
+    // --- Scroll-scrub stops (rAF-throttled)
     let scrollRAF = 0;
     const onScroll = () => {
       if (scrollRAF) return;
@@ -66,7 +51,7 @@ function useStudioFX() {
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll(); // init
 
-    // --- 3) Event-delegated magnetic buttons & tilt cards
+    // --- Event-delegated magnetic buttons & tilt cards
     let lastMag: HTMLElement | null = null;
     let lastTilt: HTMLElement | null = null;
 
@@ -120,7 +105,7 @@ function useStudioFX() {
     root.addEventListener("pointermove", onPointerMoveDelegated, { passive: true });
     root.addEventListener("pointerleave", onPointerLeaveRoot, { passive: true });
 
-    // --- 4) Diagonal text reveal (fire early so things don’t look “missing”)
+    // --- Diagonal text reveal (fire early so things don’t look “missing”)
     const io = new IntersectionObserver(
       (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add("in")),
       { threshold: 0.01 }
@@ -129,12 +114,10 @@ function useStudioFX() {
     reveals.forEach((n) => io.observe(n));
 
     return () => {
-      root.removeEventListener("pointermove", onPointerMoveRoot);
       window.removeEventListener("scroll", onScroll);
       root.removeEventListener("pointermove", onPointerMoveDelegated);
       root.removeEventListener("pointerleave", onPointerLeaveRoot);
       io.disconnect();
-      cancelAnimationFrame(glowRAF);
       cancelAnimationFrame(scrollRAF);
     };
   }, []);
@@ -162,7 +145,7 @@ export default function StudioPage() {
     useForceStudioTheme(true);
     useStudioFX();
     return (
-      <section className="studio-root min-h-screen" data-force-theme="studio">
+      <section className="studio-root min-h-screen">
         <div className="relative z-10">
           <Header />
         </div>
@@ -317,7 +300,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
   if (loading) {
     return (
-      <div className="studio-root min-h-screen grid place-items-center" data-force-theme="studio">
+      <div className="studio-root min-h-screen grid place-items-center">
         <div className="relative z-10 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Preparing studio…</p>
@@ -327,7 +310,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   }
 
   return (
-    <div className="studio-root min-h-screen" data-force-theme="studio">
+    <div className="studio-root min-h-screen">
       {/* Keep your header on top of the glass */}
       <div className="relative z-10">
         <Header />
