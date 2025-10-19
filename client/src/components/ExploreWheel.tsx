@@ -17,68 +17,98 @@ const ITEMS: Template[] = [
   { id: 't8', title: 'Template 8' },
 ];
 
-// Motion
-const DRIFT_PX_PER_S = 14;   // gentle idle glide (always left when not holding)
-const HOLD_PX_PER_S  = 230;  // press-and-hold speed (medium)
+/** Tunables */
+const DRIFT_PX_PER_S = 18;   // idle glide, leftwards
+const HOLD_PX_PER_S  = 240;  // press-and-hold speed
 
 export default function ExploreWheel() {
-  const trackRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const loopWidth = useRef(0);
   const recentering = useRef(false);
-  const holdDir = useRef<0 | -1 | 1>(0); // +1 = move content LEFT (visually), -1 = RIGHT
+  /** +1 => move content LEFT (increase scrollLeft), -1 => move RIGHT */
+  const holdDir = useRef<0 | -1 | 1>(0);
 
   const tripled = [...ITEMS, ...ITEMS, ...ITEMS];
 
-  // Measure and start centered on the middle copy
+  // Measure on mount & on resize; start centered in the middle copy
   useLayoutEffect(() => {
-    const el = trackRef.current;
+    const el = scrollerRef.current;
     if (!el) return;
-    const setInitial = () => {
-      const w = el.scrollWidth / 3;
+
+    const measure = () => {
+      // total scrollable width of the whole tripled strip
+      const total = el.scrollWidth;
+      const w = total / 3;
       loopWidth.current = w;
+      // sit in the middle band to give headroom both sides
       el.scrollLeft = w;
     };
-    setInitial();
-    const ro = new ResizeObserver(setInitial);
+
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  // Keep scroll pinned inside middle third for the infinite loop
+  // Recenter only when leaving the safe middle third
   const recenterIfNeeded = () => {
-    const el = trackRef.current;
+    const el = scrollerRef.current;
     const w = loopWidth.current;
     if (!el || !w || recentering.current) return;
+
     const left = el.scrollLeft;
-    const min = 0.5 * w;
-    const max = 1.5 * w;
-    if (left < min || left > max) {
+    // stay inside [0.5w, 1.5w] to avoid frequent snaps
+    if (left < 0.5 * w || left > 1.5 * w) {
       recentering.current = true;
-      el.scrollLeft = left < min ? left + w : left - w;
+      el.scrollLeft = left < 0.5 * w ? left + w : left - w;
+      // unlock next frame
       requestAnimationFrame(() => (recentering.current = false));
     }
   };
 
-  // Disable mouse-wheel scrolling inside the wheel (buttons only)
-  const blockWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  // Idle drift + hold-to-scroll
+  /** Block wheel/trackpad/touch scroll inside the wheel (buttons control it) */
   useEffect(() => {
-    const el = trackRef.current;
+    const el = scrollerRef.current;
     if (!el) return;
-    let prev = performance.now();
-    let raf: number;
+
+    const prevent = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    // Non-passive so preventDefault actually works.
+    el.addEventListener('wheel', prevent, { passive: false });
+    el.addEventListener('touchmove', prevent, { passive: false });
+
+    // Keep page scroll from “grabbing” when at edges
+    (el.style as any).overscrollBehaviorX = 'contain';
+
+    return () => {
+      el.removeEventListener('wheel', prevent as any);
+      el.removeEventListener('touchmove', prevent as any);
+    };
+  }, []);
+
+  /** Idle drift + press-and-hold controls (requestAnimationFrame loop) */
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+
+    let tPrev = performance.now();
+    let raf = 0;
 
     const tick = () => {
       const now = performance.now();
-      const dt = (now - prev) / 1000;
-      prev = now;
+      const dt = (now - tPrev) / 1000;
+      tPrev = now;
 
-      const speed = holdDir.current !== 0 ? HOLD_PX_PER_S * holdDir.current : DRIFT_PX_PER_S;
-      el.scrollLeft += speed * dt; // positive scrollLeft => content moves LEFT
+      const vx =
+        holdDir.current !== 0
+          ? HOLD_PX_PER_S * holdDir.current
+          : DRIFT_PX_PER_S; // idle drift is positive → content goes left
+
+      // programmatic scroll (no smooth behavior to keep it crisp)
+      el.scrollLeft += vx * dt;
       recenterIfNeeded();
 
       raf = requestAnimationFrame(tick);
@@ -90,7 +120,7 @@ export default function ExploreWheel() {
 
   return (
     <section className="relative overflow-hidden bg-[oklch(0.07_0_0)] text-white py-24">
-      {/* header */}
+      {/* Heading */}
       <div className="container mx-auto px-4 relative">
         <p className="tracking-[0.28em] uppercase text-sm/6 text-white/50">
           Explore our templates
@@ -99,20 +129,18 @@ export default function ExploreWheel() {
           Pick a starting point — <span className="text-white/70">wheel it.</span>
         </h2>
 
-        {/* premium hold buttons (top-right) */}
+        {/* Premium hold buttons — top-right */}
         <div className="absolute right-4 top-0 mt-4 md:right-8 md:mt-6 flex gap-3">
           <HoldButton
             ariaLabel="Hold to move left"
-            // LEFT button should move templates LEFT => positive scrollLeft => dir = +1
-            onDown={() => (holdDir.current = +1)}
+            onDown={() => (holdDir.current = +1)} // left button => move left
             onUp={() => (holdDir.current = 0)}
           >
             <ChevronLeft className="h-4 w-4" />
           </HoldButton>
           <HoldButton
             ariaLabel="Hold to move right"
-            // RIGHT button should move templates RIGHT => negative scrollLeft => dir = -1
-            onDown={() => (holdDir.current = -1)}
+            onDown={() => (holdDir.current = -1)} // right button => move right
             onUp={() => (holdDir.current = 0)}
           >
             <ChevronRight className="h-4 w-4" />
@@ -120,16 +148,22 @@ export default function ExploreWheel() {
         </div>
       </div>
 
-      {/* wheel */}
+      {/* Wheel */}
       <div className="relative mt-12">
         <div
-          ref={trackRef}
+          ref={scrollerRef}
           className="
             wheel flex gap-8 px-[8vw]
-            overflow-x-auto overflow-y-hidden
-            select-none
+            overflow-x-auto overflow-y-hidden select-none
+            cursor-default
           "
-          onWheel={blockWheel}
+          // Fallback block for React synthetic wheel (in case the native listener misses)
+          onWheel={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onScroll={recenterIfNeeded}
+          onMouseDown={(e) => e.preventDefault()}  // avoid text selections while holding
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {tripled.map((t, i) => (
@@ -138,10 +172,10 @@ export default function ExploreWheel() {
         </div>
       </div>
 
-      {/* hide webkit scrollbar just for this track */}
+      {/* Hide webkit scrollbar just for this scroller */}
       <style>{`.wheel::-webkit-scrollbar{display:none;}`}</style>
 
-      {/* soft vignette/shine */}
+      {/* subtle shine/vignette */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -159,7 +193,7 @@ export default function ExploreWheel() {
   );
 }
 
-/* ----- bits ----- */
+/* ========== bits ========== */
 
 function Card({ title }: { title: string }) {
   return (
@@ -228,7 +262,6 @@ function HoldButton({
       onContextMenu={(e) => e.preventDefault()}
     >
       <span className="pointer-events-none">{children}</span>
-      {/* subtle inner gloss */}
       <span
         aria-hidden
         className="pointer-events-none absolute inset-0 rounded-full"
