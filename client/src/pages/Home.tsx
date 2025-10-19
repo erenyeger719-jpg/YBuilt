@@ -3,6 +3,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
+import WeavySection from "@/components/WeavySection";
 import WeavyBoard from "@/components/WeavyBoard";
 import ExploreWheel from "@/components/ExploreWheel";
 import WorkflowToApp from "@/components/WorkflowToApp";
@@ -54,8 +55,14 @@ export default function Home() {
       <Header />
       <Hero />
 
-      {/* Builder field */}
-      <WeavyBoard />
+      {/* Spill bridge over the grid, then nodes */}
+      <WeavySection
+        bandHeightRem={14}
+        // optional: echo the hero palette
+        // colors={['#0a0a0b','#17191d','#22262c','#343a40']}
+      >
+        <WeavyBoard />
+      </WeavySection>
 
       {/* New artistic sections */}
       <ExploreWheel />
