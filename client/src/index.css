@@ -1054,8 +1054,15 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
 .nub-b { bottom: -5px; left: 50%; transform: translateX(-50%); }
 
 /* ---------------- dd/adjust styles (threads, grid band, node polish) --- */
-/* Denser grid spacing; keep the black-line background from the base .grid-band */
-.weavy-section .grid-band { --gap: 14px; }
+/* Denser grid just for the band */
+.weavy-section .grid-band {
+  --gap: 14px; /* denser than 16; tweak as needed */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.98)),
+    radial-gradient(900px 420px at 50% -20%, rgba(15,23,42,.06), transparent 60%),
+    repeating-linear-gradient(0deg,  rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px)),
+    repeating-linear-gradient(90deg, rgba(2,6,23,.08) 0 1px, transparent 1px calc(var(--gap) + 1px));
+}
 
 /* ===== Safety nudges (prevent horizontal scroll) ===== */
 .weavy-section { overflow-x: hidden; }
