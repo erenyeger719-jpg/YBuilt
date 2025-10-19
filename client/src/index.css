@@ -916,6 +916,14 @@ body[data-force-theme="studio"] .card-glass .gloss-sheen::after {
   mask-image: linear-gradient(180deg, #000 30%, transparent 100%);
 }
 
+/* Pixel spill layer (sits over the grid band, under content) */
+.pixel-spill {
+  position: absolute;
+  left: 0; right: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
 /* Legacy sparse grid islands (kept for reuse; currently unused) */
 .grid-island {
   position: absolute;
