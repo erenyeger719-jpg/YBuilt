@@ -10,7 +10,7 @@ type Props = {
 export default function ScrollGallery({
   images,
   topOffset = 88,
-  stepVh = 120,
+  stepVh = 220,
 }: Props) {
   const pinRef = useRef<HTMLDivElement | null>(null);
   const [idx, setIdx] = useState(0);
