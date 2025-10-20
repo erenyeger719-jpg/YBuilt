@@ -3,48 +3,57 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
   images: string[];
-  /** Space for your fixed header; tweak if needed */
-  topOffset?: number; // px
-  /** Scroll distance per image, in viewport heights */
-  stepVh?: number;
+  topOffset?: number;  // px from top (keeps it tucked under the Wheel)
+  stepVh?: number;     // scroll distance per slide
 };
 
-/**
- * Hard-cut scroll gallery (no fades, no crossfades).
- * Renders a single <img> at a time and swaps on index change.
- */
 export default function ScrollGallery({
   images,
   topOffset = 88,
-  stepVh = 120, // ~1.2 screens per image
+  stepVh = 120,
 }: Props) {
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const [index, setIndex] = useState(0);
+  const pinRef = useRef<HTMLDivElement | null>(null);
+  const [idx, setIdx] = useState(0);
 
-  // Total height of the scroll "track"
-  const tallVh = useMemo(() => Math.max(1, images.length) * stepVh, [images.length, stepVh]);
-
+  // Preload every slide once so swaps are instant
   useEffect(() => {
-    const el = sectionRef.current;
-    if (!el) return;
+    let cancelled = false;
+    const loaders = images.map((src) => {
+      return new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve(); // don’t block on errors
+        img.src = src;
+      });
+    });
+    Promise.all(loaders).then(() => {
+      if (!cancelled) {
+        // tiny nudge: if we were showing black on first scroll, force a repaint
+        setIdx((v) => Math.min(v, images.length - 1));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [images]);
 
+  // Sticky progress → slide index (hard cut)
+  useEffect(() => {
     const onScroll = () => {
-      if (!sectionRef.current) return;
+      if (!pinRef.current) return;
+      const rectTop = pinRef.current.getBoundingClientRect().top;
+      const vh = window.innerHeight;
+      const start = topOffset;
+      const end = vh - topOffset;
+      const denom = Math.max(1, end - start);
 
-      const rect = sectionRef.current.getBoundingClientRect();
-      const viewH = window.innerHeight || 800;
+      // progress in [0..1]
+      const t = Math.min(1, Math.max(0, (vh - rectTop - start) / denom));
 
-      // Distance during which the sticky frame is "playing"
-      const scrollable = Math.max(1, sectionRef.current.offsetHeight - viewH);
-
-      // Progress 0 → 1 across the whole tall section
-      const progress = Math.min(1, Math.max(0, (-rect.top) / scrollable));
-
-      // Map progress to image index (hard cut)
-      const rawIdx = Math.floor(progress * images.length);
-      const clamped = Math.min(Math.max(rawIdx, 0), Math.max(0, images.length - 1));
-
-      setIndex(clamped);
+      // map to index; subtract an epsilon so 1.0 never spills to length
+      const raw = Math.floor(t * images.length - 1e-6);
+      const next = Math.min(images.length - 1, Math.max(0, raw));
+      if (next !== idx) setIdx(next);
     };
 
     onScroll();
@@ -54,45 +63,36 @@ export default function ScrollGallery({
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
-  }, [images.length]);
+  }, [images.length, topOffset, idx]);
 
-  if (!images || images.length === 0) {
-    return null;
-  }
-
-  const current = images[index] ?? images[images.length - 1];
+  const spacerHeight = useMemo(
+    () => `${images.length * stepVh}vh`,
+    [images.length, stepVh]
+  );
 
   return (
-    <section className="window-band py-20 sm:py-24">
-      <div
-        ref={sectionRef}
-        className="relative window-layer"
-        style={{ height: `${tallVh}vh` }}
-        aria-label="YBuilt museum slides"
-      >
-        {/* Pinned stage */}
-        <div className="gallery-sticky" style={{ top: topOffset }}>
-          <div className="gallery-frame">
-            <img
-              key={current} // force a hard swap; prevents any sneaky transitions
-              src={current}
-              alt=""
-              className="block w-full h-full object-cover select-none pointer-events-none"
-              style={{ transition: "none" }}
-              draggable={false}
-              loading="eager"
-              decoding="async"
-            />
-            {/* Optional hint */}
-            <div
-              style={{ position: "absolute", right: 14, bottom: 12 }}
-              className="text-white/70 text-[11px] tracking-wide px-2 py-1 rounded bg-black/30"
-            >
-              scroll to advance
-            </div>
+    <section className="window-band">
+      <div ref={pinRef} className="gallery-sticky" style={{ top: topOffset }}>
+        <div className="gallery-frame window-layer">
+          <img
+            /* IMPORTANT: no `key` here—keeps the element mounted */
+            src={images[idx]}
+            alt=""
+            className="block w-full h-full object-cover select-none pointer-events-none"
+            decoding="sync"
+            fetchPriority="high"
+            loading="eager"
+            draggable={false}
+          />
+          <div
+            style={{ position: "absolute", right: 14, bottom: 12 }}
+            className="text-white/70 text-[11px] tracking-wide px-2 py-1 rounded bg-black/30"
+          >
+            scroll to advance
           </div>
         </div>
       </div>
+      <div style={{ height: spacerHeight }} />
     </section>
   );
 }
