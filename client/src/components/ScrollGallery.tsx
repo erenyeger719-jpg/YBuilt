@@ -1,113 +1,98 @@
-import { useEffect, useRef, useState } from "react";
+// client/src/components/ScrollGallery.tsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import clsx from "clsx";
 
-type ScrollGalleryProps = {
-  images: string[];            // e.g. ["/demo/ybuilt-01.jpg", ...]
-  className?: string;          // optional extra classes
-  fadeMs?: number;             // default 500ms
+type Props = {
+  images: string[];
+  /** "contain" preserves artwork; "cover" goes edge-to-edge */
+  fit?: "contain" | "cover";
+  /** Optional aria-label for the section */
+  label?: string;
 };
 
-export default function ScrollGallery({
-  images,
-  className = "",
-  fadeMs = 500,
-}: ScrollGalleryProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [start, setStart] = useState(0);
-  const [scrollLen, setScrollLen] = useState(1);
-  const [progress, setProgress] = useState(0);
+export default function ScrollGallery({ images, fit = "contain", label = "YBuilt demo gallery" }: Props) {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [active, setActive] = useState(0);
 
-  // measure section
+  // Height rule: N slides => N * 100vh scroll distance
+  const totalVh = useMemo(() => Math.max(1, images.length) * 100, [images.length]);
+
   useEffect(() => {
-    const el = ref.current;
+    const el = sectionRef.current;
     if (!el) return;
 
-    const measure = () => {
-      const rect = el.getBoundingClientRect();
-      const pageY = window.scrollY || window.pageYOffset;
-      const sectionTop = rect.top + pageY;
-      // Scroll length is total spacer height minus one viewport (pinned time)
-      const length = Math.max(1, el.offsetHeight - window.innerHeight);
-      setStart(sectionTop);
-      setScrollLen(length);
-    };
-
-    measure();
-    window.addEventListener("resize", measure);
-    // small timeout helps Safari after address bar collapse
-    const t = setTimeout(measure, 100);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener("resize", measure);
-    };
-  }, [images.length]);
-
-  // scroll → progress (0..1)
-  useEffect(() => {
     let raf = 0;
     const onScroll = () => {
+      // schedule to avoid layout thrash
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        const y = window.scrollY || 0;
-        const raw = (y - start) / scrollLen;
-        const clamped = Math.min(1, Math.max(0, raw));
-        setProgress(clamped);
+        const rect = el.getBoundingClientRect();
+        const total = el.offsetHeight - window.innerHeight;
+        const scrolled = Math.min(Math.max(-rect.top, 0), Math.max(total, 1));
+        const progress = total > 0 ? scrolled / total : 0;
+        // which slide are we on?
+        const idx = Math.min(images.length - 1, Math.floor(progress * images.length));
+        setActive(idx);
       });
     };
+
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
     };
-  }, [start, scrollLen]);
-
-  if (!images || images.length === 0) return null;
-
-  // segment math for crossfade
-  const segments = Math.max(1, images.length - 1);
-  const seg = 1 / segments;
-  const idx = Math.min(
-    images.length - 1,
-    Math.max(0, Math.floor(progress / seg))
-  );
-  const localT =
-    segments === 1 ? progress : (progress - idx * seg) / seg;
+  }, [images.length]);
 
   return (
     <section
-      className={`window-band ${className}`}
-      // give enough scroll to show all frames: 100vh per image
+      ref={sectionRef as any}
+      aria-label={label}
+      // IMPORTANT: red paper band background + paper grain
+      className={clsx(
+        "window-band relative",
+        "z-[30]",               // above stray geometries
+        "w-full",
+      )}
+      style={{ height: `${totalVh}vh` }}
     >
-      <div
-        ref={ref}
-        className="relative"
-        style={{ height: `${images.length * 100}vh` }}
-      >
-        <div className="sticky top-0 h-[100svh] window-layer">
-          {/* Stack all slides and crossfade only the two relevant frames */}
-          <div className="relative w-full h-full">
-            {images.map((src, i) => {
-              // opacity: active and next frame crossfade, others hidden
-              let opacity = 0;
-              if (i === idx) opacity = 1 - localT;
-              if (i === idx + 1) opacity = localT;
-              if (segments === 1 && i === 0) opacity = 1 - localT;
-              if (segments === 1 && i === 1) opacity = localT;
+      {/* Sticky viewport */}
+      <div className="window-layer sticky top-0 h-screen w-full overflow-hidden">
+        {/* Safe padding so artwork breathes; tweak to taste */}
+        <div className="relative mx-auto h-full w-full max-w-[1400px] px-4 md:px-8">
+          {/* Stack all slides and fade the active one in */}
+          {images.map((src, i) => (
+            <img
+              key={src}
+              src={src}
+              alt="" // decorative
+              loading={i === 0 ? "eager" : "lazy"}
+              fetchPriority={i === 0 ? "high" : "auto"}
+              decoding="async"
+              className={clsx(
+                "absolute inset-0 m-auto h-full w-full select-none",
+                fit === "cover" ? "object-cover" : "object-contain",
+                "transition-opacity duration-500 ease-out will-change-opacity",
+                i === active ? "opacity-100" : "opacity-0"
+              )}
+              style={{ zIndex: i === active ? 2 : 1 }}
+            />
+          ))}
 
-              return (
-                <img
-                  key={src + i}
-                  src={src}
-                  alt={`YBuilt slide ${i + 1}`}
-                  className="absolute inset-0 w-full h-full object-contain [image-rendering:auto] will-change-opacity"
-                  style={{
-                    opacity,
-                    transition: `opacity ${fadeMs}ms linear`,
-                  }}
-                  draggable={false}
-                />
-              );
-            })}
+          {/* Optional tiny affordance */}
+          <div
+            className="pointer-events-none absolute bottom-4 right-4 rounded-full px-3 py-1 text-[11px] tracking-wide"
+            style={{
+              background: "rgba(255,255,255,0.16)",
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.22)",
+            }}
+          >
+            scroll to advance
           </div>
         </div>
       </div>

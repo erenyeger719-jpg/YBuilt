@@ -280,7 +280,6 @@ body { font-family: var(--font-ui); }
   --primary-border: hsl(var(--primary));
   --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
-  --secondary-border: hsl(var(--secondary));
   --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
   --muted-border: hsl(var(--muted));
@@ -1412,3 +1411,41 @@ body[data-force-theme="studio"] .card-glass {
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.05);
   pointer-events: none;
 }
+
+/* ===== Vintage Window band (paper red, high contrast, right side deeper) ===== */
+.window-band {
+  position: relative;
+  isolation: isolate;
+  /* top vignette to blend from previous section */
+  background:
+    radial-gradient(1200px 360px at 50% -120px, rgba(0,0,0,.10), transparent 65%),
+    /* left→right red: normal → saturated/deeper */
+    linear-gradient(90deg, #E21B1B 0%, #D31313 55%, #B50F0F 100%);
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+
+/* subtle paper texture */
+.window-band::before {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, rgba(0,0,0,0) 1px 2px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.03) 0 1px, rgba(0,0,0,0) 1px 2px);
+  opacity: .55;
+  mix-blend-mode: overlay;
+}
+
+/* light right-side falloff/shadow for more depth */
+.window-band::after {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(80% 120% at 110% 50%, rgba(0,0,0,.30), transparent 40%);
+  mix-blend-mode: multiply;
+}
+
+/* keep geometries, but BELOW the window & heading */
+.window-band .geom { z-index: 1; }
+.window-layer { position: relative; z-index: 3; }
