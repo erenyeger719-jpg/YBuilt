@@ -288,7 +288,6 @@ body { font-family: var(--font-ui); }
   --accent-border: hsl(var(--accent));
   --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
-  --destructive-border: hsl(var(--destructive));
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
@@ -1448,4 +1447,40 @@ body[data-force-theme="studio"] .card-glass {
 
 /* keep geometries, but BELOW the window & heading */
 .window-band .geom { z-index: 1; }
+.window-layer { position: relative; z-index: 3; }
+
+/* ===== Gallery Sticky/Gallery Frame (appended) ===== */
+/* pinned stage sits above the band textures & geometries */
+.gallery-sticky {
+  position: sticky;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  pointer-events: none; /* the frame receives events, not the wrapper */
+}
+
+/* ~0.75x size: narrower than full-width, keeps 16:9 */
+.gallery-frame {
+  position: relative;
+  width: min(75vw, 1100px);
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 30px 60px rgba(0,0,0,.28);
+  background: #0f1115; /* fallback while first image loads */
+  pointer-events: auto;
+}
+
+/* stacked slides that crossfade */
+.gallery-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity .6s ease;
+  will-change: opacity;
+}
+
+/* make sure our stage is above band decorations */
 .window-layer { position: relative; z-index: 3; }

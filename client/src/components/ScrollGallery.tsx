@@ -1,101 +1,106 @@
-// client/src/components/ScrollGallery.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import clsx from "clsx";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   images: string[];
-  /** "contain" preserves artwork; "cover" goes edge-to-edge */
-  fit?: "contain" | "cover";
-  /** Optional aria-label for the section */
-  label?: string;
+  /** space for your fixed header; tweak if needed */
+  topOffset?: number; // px
 };
 
-export default function ScrollGallery({ images, fit = "contain", label = "YBuilt demo gallery" }: Props) {
-  const sectionRef = useRef<HTMLElement | null>(null);
-  const [active, setActive] = useState(0);
-
-  // Height rule: N slides => N * 100vh scroll distance
-  const totalVh = useMemo(() => Math.max(1, images.length) * 100, [images.length]);
+export default function ScrollGallery({ images, topOffset = 88 }: Props) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [vh, setVh] = useState(0);
 
   useEffect(() => {
-    const el = sectionRef.current;
+    const onResize = () => setVh(window.innerHeight || 800);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // make the section tall enough so the sticky frame can “play” all fades
+  const tall = Math.max(1, images.length) * vh;
+
+  return (
+    <section className="window-band py-20 sm:py-24">
+      <div
+        ref={wrapRef}
+        className="relative window-layer"
+        style={{ height: tall }}
+        aria-label="YBuilt museum slides"
+      >
+        {/* pinned stage */}
+        <div className="gallery-sticky" style={{ top: topOffset }}>
+          <div className="gallery-frame">
+            {images.map((src, i) => (
+              <FadeSlide
+                key={src}
+                index={i}
+                total={images.length}
+                src={src}
+                wrapRef={wrapRef}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FadeSlide({
+  index,
+  total,
+  src,
+  wrapRef,
+}: {
+  index: number;
+  total: number;
+  src: string;
+  wrapRef: React.RefObject<HTMLDivElement>;
+}) {
+  const [opacity, setOpacity] = useState(index === 0 ? 1 : 0);
+
+  useEffect(() => {
+    const el = wrapRef.current;
     if (!el) return;
 
-    let raf = 0;
     const onScroll = () => {
-      // schedule to avoid layout thrash
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const rect = el.getBoundingClientRect();
-        const total = el.offsetHeight - window.innerHeight;
-        const scrolled = Math.min(Math.max(-rect.top, 0), Math.max(total, 1));
-        const progress = total > 0 ? scrolled / total : 0;
-        // which slide are we on?
-        const idx = Math.min(images.length - 1, Math.floor(progress * images.length));
-        setActive(idx);
-      });
+      const rect = el.getBoundingClientRect();
+      const viewH = window.innerHeight || 800;
+      const scrollable = el.offsetHeight - viewH;
+
+      // progress 0→1 across the whole tall section
+      const progress = Math.min(1, Math.max(0, (-rect.top) / Math.max(1, scrollable)));
+
+      // only two slides visible at a time: current & next
+      const seg = progress * (total - 1);
+      const cur = Math.floor(seg);
+      const frac = seg - cur;
+
+      let o = 0;
+      if (index === cur) o = 1 - frac;
+      else if (index === cur + 1) o = frac;
+
+      setOpacity(o);
     };
 
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
     return () => {
-      cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
-  }, [images.length]);
+  }, [index, total, wrapRef]);
 
   return (
-    <section
-      ref={sectionRef as any}
-      aria-label={label}
-      // IMPORTANT: red paper band background + paper grain
-      className={clsx(
-        "window-band relative",
-        "z-[30]",               // above stray geometries
-        "w-full",
-      )}
-      style={{ height: `${totalVh}vh` }}
-    >
-      {/* Sticky viewport */}
-      <div className="window-layer sticky top-0 h-screen w-full overflow-hidden">
-        {/* Safe padding so artwork breathes; tweak to taste */}
-        <div className="relative mx-auto h-full w-full max-w-[1400px] px-4 md:px-8">
-          {/* Stack all slides and fade the active one in */}
-          {images.map((src, i) => (
-            <img
-              key={src}
-              src={src}
-              alt="" // decorative
-              loading={i === 0 ? "eager" : "lazy"}
-              fetchPriority={i === 0 ? "high" : "auto"}
-              decoding="async"
-              className={clsx(
-                "absolute inset-0 m-auto h-full w-full select-none",
-                fit === "cover" ? "object-cover" : "object-contain",
-                "transition-opacity duration-500 ease-out will-change-opacity",
-                i === active ? "opacity-100" : "opacity-0"
-              )}
-              style={{ zIndex: i === active ? 2 : 1 }}
-            />
-          ))}
-
-          {/* Optional tiny affordance */}
-          <div
-            className="pointer-events-none absolute bottom-4 right-4 rounded-full px-3 py-1 text-[11px] tracking-wide"
-            style={{
-              background: "rgba(255,255,255,0.16)",
-              backdropFilter: "blur(6px)",
-              WebkitBackdropFilter: "blur(6px)",
-              color: "#fff",
-              border: "1px solid rgba(255,255,255,0.22)",
-            }}
-          >
-            scroll to advance
-          </div>
-        </div>
-      </div>
-    </section>
+    <img
+      src={src}
+      alt=""
+      className="gallery-slide"
+      style={{ opacity }}
+      loading={index < 2 ? "eager" : "lazy"}
+      decoding="async"
+    />
   );
 }
