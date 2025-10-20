@@ -1,87 +1,50 @@
-import { useEffect, useRef, useState } from "react";
+// client/src/components/ScrollGallery.tsx
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
   images: string[];
-  /** space for your fixed header; tweak if needed */
+  /** Space for your fixed header; tweak if needed */
   topOffset?: number; // px
+  /** Scroll distance per image, in viewport heights */
+  stepVh?: number;
 };
 
-export default function ScrollGallery({ images, topOffset = 88 }: Props) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [vh, setVh] = useState(0);
+/**
+ * Hard-cut scroll gallery (no fades, no crossfades).
+ * Renders a single <img> at a time and swaps on index change.
+ */
+export default function ScrollGallery({
+  images,
+  topOffset = 88,
+  stepVh = 120, // ~1.2 screens per image
+}: Props) {
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+
+  // Total height of the scroll "track"
+  const tallVh = useMemo(() => Math.max(1, images.length) * stepVh, [images.length, stepVh]);
 
   useEffect(() => {
-    const onResize = () => setVh(window.innerHeight || 800);
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  // make the section tall enough so the sticky frame can “play” all fades
-  const tall = Math.max(1, images.length) * vh;
-
-  return (
-    <section className="window-band py-20 sm:py-24">
-      <div
-        ref={wrapRef}
-        className="relative window-layer"
-        style={{ height: tall }}
-        aria-label="YBuilt museum slides"
-      >
-        {/* pinned stage */}
-        <div className="gallery-sticky" style={{ top: topOffset }}>
-          <div className="gallery-frame">
-            {images.map((src, i) => (
-              <FadeSlide
-                key={src}
-                index={i}
-                total={images.length}
-                src={src}
-                wrapRef={wrapRef}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function FadeSlide({
-  index,
-  total,
-  src,
-  wrapRef,
-}: {
-  index: number;
-  total: number;
-  src: string;
-  wrapRef: React.RefObject<HTMLDivElement>;
-}) {
-  const [opacity, setOpacity] = useState(index === 0 ? 1 : 0);
-
-  useEffect(() => {
-    const el = wrapRef.current;
+    const el = sectionRef.current;
     if (!el) return;
 
     const onScroll = () => {
-      const rect = el.getBoundingClientRect();
+      if (!sectionRef.current) return;
+
+      const rect = sectionRef.current.getBoundingClientRect();
       const viewH = window.innerHeight || 800;
-      const scrollable = el.offsetHeight - viewH;
 
-      // progress 0→1 across the whole tall section
-      const progress = Math.min(1, Math.max(0, (-rect.top) / Math.max(1, scrollable)));
+      // Distance during which the sticky frame is "playing"
+      const scrollable = Math.max(1, sectionRef.current.offsetHeight - viewH);
 
-      // only two slides visible at a time: current & next
-      const seg = progress * (total - 1);
-      const cur = Math.floor(seg);
-      const frac = seg - cur;
+      // Progress 0 → 1 across the whole tall section
+      const progress = Math.min(1, Math.max(0, (-rect.top) / scrollable));
 
-      let o = 0;
-      if (index === cur) o = 1 - frac;
-      else if (index === cur + 1) o = frac;
+      // Map progress to image index (hard cut)
+      const rawIdx = Math.floor(progress * images.length);
+      const clamped = Math.min(Math.max(rawIdx, 0), Math.max(0, images.length - 1));
 
-      setOpacity(o);
+      setIndex(clamped);
     };
 
     onScroll();
@@ -91,16 +54,45 @@ function FadeSlide({
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
-  }, [index, total, wrapRef]);
+  }, [images.length]);
+
+  if (!images || images.length === 0) {
+    return null;
+  }
+
+  const current = images[index] ?? images[images.length - 1];
 
   return (
-    <img
-      src={src}
-      alt=""
-      className="gallery-slide"
-      style={{ opacity }}
-      loading={index < 2 ? "eager" : "lazy"}
-      decoding="async"
-    />
+    <section className="window-band py-20 sm:py-24">
+      <div
+        ref={sectionRef}
+        className="relative window-layer"
+        style={{ height: `${tallVh}vh` }}
+        aria-label="YBuilt museum slides"
+      >
+        {/* Pinned stage */}
+        <div className="gallery-sticky" style={{ top: topOffset }}>
+          <div className="gallery-frame">
+            <img
+              key={current} // force a hard swap; prevents any sneaky transitions
+              src={current}
+              alt=""
+              className="block w-full h-full object-cover select-none pointer-events-none"
+              style={{ transition: "none" }}
+              draggable={false}
+              loading="eager"
+              decoding="async"
+            />
+            {/* Optional hint */}
+            <div
+              style={{ position: "absolute", right: 14, bottom: 12 }}
+              className="text-white/70 text-[11px] tracking-wide px-2 py-1 rounded bg-black/30"
+            >
+              scroll to advance
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

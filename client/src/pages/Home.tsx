@@ -66,6 +66,8 @@ export default function Home() {
       <ExploreWheel />
 
       {/* REPLACEMENT for “From Workflow → App Mode” */}
+     // client/src/pages/Home.tsx
+// ...
       <ScrollGallery
         images={[
           "/demo/ybuilt-01.jpg",
@@ -75,8 +77,11 @@ export default function Home() {
           "/demo/ybuilt-05.jpg",
           "/demo/ybuilt-06.jpg",
           "/demo/ybuilt-07.jpg",
+          "/demo/ybuilt-08.jpg", // NEW
         ]}
       />
+
+      
 
       {/* remove <WorkflowToApp /> */}
       {/* <WorkflowToApp /> */}

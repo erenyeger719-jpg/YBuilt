@@ -1484,3 +1484,8 @@ body[data-force-theme="studio"] .card-glass {
 
 /* make sure our stage is above band decorations */
 .window-layer { position: relative; z-index: 3; }
+
+/* --- Hard cut slides: disable fade animation --- */
+.gallery-slide {
+  transition: none !important;
+}
