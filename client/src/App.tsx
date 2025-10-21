@@ -1,6 +1,7 @@
 // client/src/App.tsx
 import React from "react";
 import { Route, Switch } from "wouter";
+import "@/lib/clientLogBridge";
 
 // Pages
 import Home from "@/pages/Home";             // marketing
@@ -8,6 +9,7 @@ import StudioPage from "@/pages/Studio";     // marketing at /studio, finalize w
 import Workspace from "@/pages/Workspace";   // editor
 import Library from "@/pages/Library";       // your library page
 import Previews from "@/pages/Previews";     // previews index
+import DevLogs from "@/pages/DevLogs";       // live dev logs
 
 // Weavy wrapper + board (bridge band)
 import WeavySection from "@/components/WeavySection";
@@ -60,6 +62,9 @@ export default function App() {
 
       {/* Weavy bridge band + board (new route) */}
       <Route path="/weavy">{() => <WeavyBridge />}</Route>
+
+      {/* Dev logs (live) */}
+      <Route path="/dev/logs" component={DevLogs} />
 
       {/* Fallback (must be last, no path) */}
       <Route>

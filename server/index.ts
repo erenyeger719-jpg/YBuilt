@@ -11,6 +11,7 @@ import { rateLimiter } from './middleware/rateLimiter.js';
 import { requestIdMiddleware, logger } from './middleware/logging.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { initializeSocket } from './socket.js';
+import { wireRequestLogs, wireLogsNamespace } from './logs.js';
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -205,6 +206,12 @@ if (reqMw) app.use(reqMw);
   const io = initializeSocket(server) as any;
   if (io) app.set('io', io); // expose io to routers that need it
   logger.info('[SOCKET.IO] Real-time server initialized');
+
+  // Live logs (namespace + request bus)
+  if (io) {
+    wireLogsNamespace(io);
+    wireRequestLogs(app, io);
+  }
 
   // Static vs Vite dev (AFTER API)
   if (process.env.NODE_ENV === 'production') {
