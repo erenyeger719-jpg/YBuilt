@@ -1,154 +1,210 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { exportZip, deployNetlify } from "@/lib/previewsActions";
 
-type Command = {
+type Cmd = {
   id: string;
-  label: string;
-  params?: { key: string; placeholder?: string }[];
+  title: string;
+  keywords?: string;
+  run: () => Promise<void> | void;
 };
 
 export default function CommandPalette() {
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [commands, setCommands] = useState<Command[]>([]);
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Command | null>(null);
-  const [params, setParams] = useState<Record<string, string>>({});
-  const [commit, setCommit] = useState(true);
+  const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [sel, setSel] = useState(0);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Hotkey
+  // Helpers
+  const promptText = async (label: string, def = "") => {
+    const v = window.prompt(label, def);
+    return v?.trim() || "";
+  };
+  const copy = async (text: string) => {
+    try { await navigator.clipboard.writeText(text); } catch {}
+  };
+  const lastPreview = () => {
+    try {
+      const items = JSON.parse(localStorage.getItem("ybuilt.previews") || "[]");
+      return items[0] || null;
+    } catch { return null; }
+  };
+
+  // Commands
+  const commands: Cmd[] = useMemo(() => [
+    {
+      id: "scaffold-api",
+      title: "New API Endpoint…",
+      keywords: "scaffold route endpoint server",
+      run: async () => {
+        const name = await promptText("Endpoint name (kebab or letters/numbers)", "ping");
+        if (!name) return;
+
+        setBusy(true);
+        try {
+          const r = await fetch("/api/scaffold/api", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+          const data = await r.json();
+          if (!r.ok || !data?.ok) throw new Error(data?.error || "Failed");
+
+          const importLine = data.mount?.importLine || "";
+          const useLine    = data.mount?.useLine || "";
+          const lines = `${importLine}\n${useLine}`;
+          await copy(lines);
+
+          toast({
+            title: "Route created",
+            description: `server/routes/${name}.js\n(Mount lines copied to clipboard)`,
+          });
+        } catch (e:any) {
+          toast({ title: "Scaffold failed", description: e?.message || "Error", variant: "destructive" });
+        } finally {
+          setBusy(false);
+        }
+      }
+    },
+    {
+      id: "scaffold-client",
+      title: "New Client API Hook…",
+      keywords: "client fetch hook api",
+      run: async () => {
+        const name = await promptText("Hook name (same as endpoint)", "ping");
+        if (!name) return;
+
+        setBusy(true);
+        try {
+          const r = await fetch("/api/scaffold/client", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+          const data = await r.json();
+          if (!r.ok || !data?.ok) throw new Error(data?.error || "Failed");
+          toast({
+            title: "Client hook created",
+            description: data.file || `client/src/lib/api/${name}.ts`,
+          });
+        } catch (e:any) {
+          toast({ title: "Scaffold failed", description: e?.message || "Error", variant: "destructive" });
+        } finally {
+          setBusy(false);
+        }
+      }
+    },
+    {
+      id: "open-dev-logs",
+      title: "Open Dev Logs",
+      keywords: "logs request console",
+      run: () => { window.location.href = "/dev/logs"; }
+    },
+    {
+      id: "fork-landing",
+      title: "Fork: Polished Landing Page",
+      keywords: "template demo fork",
+      run: () => { window.location.href = "/templates?fork=demo-landing"; }
+    },
+    {
+      id: "export-last",
+      title: "Export last preview (ZIP)",
+      keywords: "export zip",
+      run: async () => {
+        const last = lastPreview();
+        if (!last) return toast({ title: "No previews", description: "Fork a template first." });
+        try { await exportZip(last.previewPath); }
+        catch(e:any) { toast({ title: "Export failed", description: e?.message || "Error", variant: "destructive" }); }
+      }
+    },
+    {
+      id: "deploy-netlify",
+      title: "Deploy last preview → Netlify",
+      keywords: "deploy netlify",
+      run: async () => {
+        const last = lastPreview();
+        if (!last) return toast({ title: "No previews", description: "Fork a template first." });
+        setBusy(true);
+        try {
+          const siteName = `ybuilt-${(last.name || "site").toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"")}`;
+          const r = await deployNetlify(last.previewPath, siteName);
+          toast({ title: "Netlify", description: r?.url || r?.admin_url || "Deployed" });
+        } catch(e:any) {
+          toast({ title: "Deploy failed", description: e?.message || "Error", variant: "destructive" });
+        } finally { setBusy(false); }
+      }
+    },
+  ], [toast]);
+
+  // Filter + selection
+  const filtered = commands.filter(c =>
+    !q ? true :
+    (c.title.toLowerCase().includes(q.toLowerCase()) ||
+     (c.keywords || "").toLowerCase().includes(q.toLowerCase()))
+  );
+
+  // Hotkeys: ⌘K / Ctrl+K to toggle
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const mod = navigator.platform.includes("Mac") ? e.metaKey : e.ctrlKey;
-      if (mod && e.key.toLowerCase() === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setOpen((o) => !o);
+        setOpen(v => !v);
       }
-      if (e.key === "Escape") {
-        setOpen(false);
-        setSelected(null);
+      if (!open) return;
+      if (e.key === "Escape") setOpen(false);
+      if (e.key === "ArrowDown") { e.preventDefault(); setSel(s => Math.min(s+1, filtered.length-1)); }
+      if (e.key === "ArrowUp")   { e.preventDefault(); setSel(s => Math.max(s-1, 0)); }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        filtered[sel]?.run()?.finally(()=> setOpen(false));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [open, filtered, sel]);
 
-  // Load server commands once
   useEffect(() => {
-    fetch("/api/tasks/list").then(r => r.json()).then(d => {
-      if (d?.ok) setCommands(d.commands || []);
-    }).catch(() => {});
-  }, []);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return commands;
-    return commands.filter(c => c.label.toLowerCase().includes(q) || c.id.includes(q));
-  }, [commands, query]);
-
-  async function runSelected() {
-    if (!selected) return;
-    setBusy(true);
-    try {
-      const res = await fetch("/api/tasks/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ cmd: selected.id, params, commit }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-
-      const created = data.result?.created?.length ? `Created ${data.result.created.length} file(s)` : "";
-      const modified = data.result?.modified?.length ? `Modified ${data.result.modified.length} file(s)` : "";
-      const sha = data.git?.committed ? ` • commit ${data.git.sha}` : "";
-      setToast(`${selected.label} ✓ ${[created, modified].filter(Boolean).join(" • ")}${sha}`);
-      setSelected(null);
-      setParams({});
-      setOpen(false);
-    } catch (e: any) {
-      setToast(`Failed: ${e?.message || e}`);
-    } finally {
-      setBusy(false);
-      setTimeout(() => setToast(null), 3500);
-    }
-  }
+    if (open) setTimeout(() => inputRef.current?.focus(), 0);
+    else { setQ(""); setSel(0); }
+  }, [open]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-[1000]">
+      {/* backdrop */}
       <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-      <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[600px] max-w-[90vw] rounded-2xl border bg-white dark:bg-zinc-900 shadow-xl">
+      {/* dialog */}
+      <div className="absolute left-1/2 top-24 -translate-x-1/2 w-[min(680px,90vw)] rounded-2xl border bg-white dark:bg-zinc-900 shadow-2xl">
         <div className="p-3 border-b">
-          {!selected ? (
-            <input
-              autoFocus
-              className="w-full bg-transparent outline-none text-sm px-2 py-1"
-              placeholder="Type a command… (Create Page, Create Component, Add Route to App, …)"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className="font-medium">{selected.label}</div>
-              <div className="ml-auto flex items-center gap-2 text-xs">
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={commit} onChange={(e)=>setCommit(e.target.checked)} />
-                  Auto-commit
-                </label>
-              </div>
-            </div>
+          <input
+            ref={inputRef}
+            className="w-full bg-transparent outline-none text-sm px-2 py-2"
+            placeholder={busy ? "Working…" : "Type a command…  (Cmd/Ctrl + K)"}
+            value={q}
+            onChange={e => { setQ(e.target.value); setSel(0); }}
+            disabled={busy}
+          />
+        </div>
+        <ul className="max-h-[50vh] overflow-auto py-2">
+          {filtered.length === 0 && (
+            <li className="px-3 py-2 text-sm text-zinc-500">No matches.</li>
           )}
-        </div>
-
-        {!selected ? (
-          <ul className="max-h-72 overflow-auto">
-            {filtered.map((c) => (
-              <li
-                key={c.id}
-                className="px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer"
-                onClick={() => setSelected(c)}
-              >
-                <div className="text-sm">{c.label}</div>
-                <div className="text-[11px] text-zinc-500">{c.id}</div>
-              </li>
-            ))}
-            {filtered.length === 0 && (
-              <li className="px-3 py-6 text-sm text-zinc-500">No commands matched.</li>
-            )}
-          </ul>
-        ) : (
-          <div className="p-3 space-y-3">
-            {(selected.params || []).map((p) => (
-              <div key={p.key} className="flex items-center gap-3">
-                <div className="w-28 text-xs text-zinc-500">{p.key}</div>
-                <input
-                  className="flex-1 border rounded px-2 py-1 text-sm"
-                  placeholder={p.placeholder || p.key}
-                  value={params[p.key] || ""}
-                  onChange={(e) => setParams({ ...params, [p.key]: e.target.value })}
-                />
-              </div>
-            ))}
-            <div className="flex items-center justify-end gap-2">
-              <button className="text-xs px-3 py-1 border rounded" onClick={() => setSelected(null)}>Back</button>
-              <button
-                className="text-xs px-3 py-1 border rounded bg-black text-white dark:bg-white dark:text-black"
-                onClick={runSelected}
-                disabled={busy}
-              >
-                {busy ? "Running…" : "Run"}
-              </button>
-            </div>
-          </div>
-        )}
+          {filtered.map((c, i) => (
+            <li
+              key={c.id}
+              onClick={() => { c.run(); setOpen(false); }}
+              className={`px-3 py-2 text-sm cursor-pointer ${
+                i === sel ? "bg-zinc-100 dark:bg-zinc-800" : ""
+              }`}
+            >
+              {c.title}
+            </li>
+          ))}
+        </ul>
       </div>
-
-      {toast && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-3 py-2 rounded bg-black text-white text-xs shadow">
-          {toast}
-        </div>
-      )}
     </div>
   );
 }
