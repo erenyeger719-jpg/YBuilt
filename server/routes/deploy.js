@@ -1,3 +1,4 @@
+// server/routes/deploy.js
 import fetch from "node-fetch";
 import express from "express";
 import path from "path";
@@ -7,6 +8,7 @@ import { createWriteStream, createReadStream } from "fs";
 import Archiver from "archiver";
 
 const router = express.Router();
+
 const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || "previews");
 const NETLIFY_TOKEN = process.env.NETLIFY_TOKEN || "";
 const VERCEL_TOKEN  = process.env.VERCEL_TOKEN  || "";
@@ -54,7 +56,7 @@ router.post("/netlify", async (req, res) => {
       const resp = await fetch("https://api.netlify.com/api/v1/sites", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${NETLIFY_TOKEN}`,
+          Authorization: `Bearer ${NETLIFY_TOKEN}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(siteName ? { name: siteName } : {}),
@@ -72,12 +74,12 @@ router.post("/netlify", async (req, res) => {
     const up = await fetch(`https://api.netlify.com/api/v1/sites/${siteId}/deploys`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${NETLIFY_TOKEN}`,
+        Authorization: `Bearer ${NETLIFY_TOKEN}`,
         "Content-Type": "application/zip",
       },
       body: createReadStream(zipPath),
     });
-    await fs.promises.unlink(zipPath).catch(()=>{});
+    await fs.promises.unlink(zipPath).catch(() => {});
     if (!up.ok) {
       const txt = await up.text();
       return res.status(502).json({ error: "netlify deploy failed", detail: txt });
@@ -88,8 +90,8 @@ router.post("/netlify", async (req, res) => {
       provider: "netlify",
       site_id: data.site_id,
       deploy_id: data.id,
-      url: data.deploy_ssl_url || data.deploy_url,   // live URL
-      admin_url: data.admin_url,                      // dashboard
+      url: data.deploy_ssl_url || data.deploy_url || null, // live URL
+      admin_url: data.admin_url || null,                   // dashboard
       logs_url: data.logs_url || null,
     });
   } catch (e) {
@@ -113,11 +115,11 @@ router.post("/vercel", async (req, res) => {
 
     // walk dir → files array (small sites only; fine for previews)
     const files = [];
-    async function walk(dir, prefix="") {
+    async function walk(dir, prefix = "") {
       const entries = await fs.promises.readdir(dir, { withFileTypes: true });
       for (const e of entries) {
         const full = path.join(dir, e.name);
-        const rel  = path.posix.join(prefix, e.name);
+        const rel = path.posix.join(prefix, e.name);
         if (e.isDirectory()) {
           await walk(full, rel);
         } else {
@@ -140,7 +142,7 @@ router.post("/vercel", async (req, res) => {
     const resp = await fetch(url.toString(), {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${VERCEL_TOKEN}`,
+        Authorization: `Bearer ${VERCEL_TOKEN}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -151,12 +153,15 @@ router.post("/vercel", async (req, res) => {
       return res.status(502).json({ error: "vercel deploy failed", detail: txt });
     }
     const data = await resp.json();
+    const previewUrl = data?.url ? `https://${data.url}` : null;
+
     return res.json({
       ok: true,
       provider: "vercel",
       id: data.id,
-      url: data.url ? `https://${data.url}` : null,     // preview URL
-      inspectorUrl: data.inspectorUrl || null,
+      url: previewUrl,                              // preview URL (normalized)
+      inspectorUrl: data.inspectorUrl || null,      // keep original key
+      inspectUrl: data.inspectorUrl || null,        // alias for convenience
       readyState: data.readyState,
     });
   } catch (e) {

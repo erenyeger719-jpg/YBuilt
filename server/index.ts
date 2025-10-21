@@ -211,6 +211,12 @@ if (reqMw) app.use(reqMw);
   const { default: scaffoldRouter } = await import('./routes/scaffold.js').catch(() => ({
     default: undefined as any,
   }));
+  const { default: importRouter } = await import('./routes/import.js').catch(() => ({
+    default: undefined as any,
+  }));
+  const { default: previewsManage } = await import('./routes/previews.manage.js').catch(() => ({
+    default: undefined as any,
+  }));
 
   if (authRoutes) app.use('/api/auth', authRoutes);
   if (projectsRoutes) app.use('/api/projects', projectsRoutes);
@@ -221,6 +227,8 @@ if (reqMw) app.use(reqMw);
   if (deployRouter) app.use('/api/deploy', express.json({ limit: '5mb' }), deployRouter);
   if (tasksRouter) app.use('/api/tasks', express.json(), tasksRouter);
   if (scaffoldRouter) app.use('/api/scaffold', express.json(), scaffoldRouter);
+  if (importRouter) app.use('/api/import', express.json({ limit: '2mb' }), importRouter);
+  if (previewsManage) app.use('/api/previews', express.json(), previewsManage);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);

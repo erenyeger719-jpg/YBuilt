@@ -13,7 +13,13 @@ type StoredPreview = {
 };
 
 const STORE_KEY = "ybuilt.previews";
-const load = (): StoredPreview[] => { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); } catch { return []; } };
+const load = (): StoredPreview[] => {
+  try {
+    return JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+  } catch {
+    return [];
+  }
+};
 const save = (items: StoredPreview[]) => localStorage.setItem(STORE_KEY, JSON.stringify(items));
 const slugify = (s: string) => s.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
@@ -36,8 +42,8 @@ export default function PreviewsList() {
   }, []);
 
   function updatePreview(previewPath: string, mut: (p: StoredPreview) => void) {
-    setItems(prev => {
-      const next = prev.map(p => {
+    setItems((prev) => {
+      const next = prev.map((p) => {
         if (p.previewPath === previewPath) {
           const clone = { ...p, deploys: p.deploys ? [...p.deploys] : [] };
           mut(clone);
@@ -54,7 +60,8 @@ export default function PreviewsList() {
     setDrawerProvider("netlify");
     setDrawerState("starting");
     setDrawerMsg("Uploading site to Netlify…");
-    setDrawerUrl(undefined); setDrawerAdminUrl(undefined);
+    setDrawerUrl(undefined);
+    setDrawerAdminUrl(undefined);
     setDrawerOpen(true);
 
     try {
@@ -64,12 +71,13 @@ export default function PreviewsList() {
       const admin = r?.admin_url || r?.dashboard_url || undefined;
 
       if (url) {
-        updatePreview(it.previewPath, p => {
+        updatePreview(it.previewPath, (p) => {
           p.deploys!.unshift({ provider: "netlify", url, adminUrl: admin, createdAt: Date.now() });
         });
         setDrawerState("success");
         setDrawerMsg("Deployed on Netlify.");
-        setDrawerUrl(url); setDrawerAdminUrl(admin);
+        setDrawerUrl(url);
+        setDrawerAdminUrl(admin);
         toast({ title: "Netlify", description: url });
       } else {
         setDrawerState("error");
@@ -85,7 +93,8 @@ export default function PreviewsList() {
     setDrawerProvider("vercel");
     setDrawerState("starting");
     setDrawerMsg("Creating deployment on Vercel…");
-    setDrawerUrl(undefined); setDrawerAdminUrl(undefined);
+    setDrawerUrl(undefined);
+    setDrawerAdminUrl(undefined);
     setDrawerOpen(true);
 
     try {
@@ -94,12 +103,13 @@ export default function PreviewsList() {
       const url = r?.url || r?.inspectUrl || undefined;
 
       if (url) {
-        updatePreview(it.previewPath, p => {
+        updatePreview(it.previewPath, (p) => {
           p.deploys!.unshift({ provider: "vercel", url, adminUrl: undefined, createdAt: Date.now() });
         });
         setDrawerState("success");
         setDrawerMsg("Deployment created on Vercel.");
-        setDrawerUrl(url); setDrawerAdminUrl(undefined);
+        setDrawerUrl(url);
+        setDrawerAdminUrl(undefined);
         toast({ title: "Vercel", description: url });
       } else {
         setDrawerState("error");
@@ -133,27 +143,75 @@ export default function PreviewsList() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {/* Copy Link */}
               <button
                 className="text-xs px-2 py-1 border rounded"
-                onClick={() => exportZip(it.previewPath).catch(e =>
-                  toast({ title: "Export", description: String(e?.message || e), variant: "destructive" })
-                )}
+                onClick={() => {
+                  navigator.clipboard
+                    .writeText(it.previewPath)
+                    .then(() => toast({ title: "Copied", description: it.previewPath }))
+                    .catch((e) =>
+                      toast({
+                        title: "Copy failed",
+                        description: String(e?.message || e),
+                        variant: "destructive",
+                      })
+                    );
+                }}
+              >
+                Copy Link
+              </button>
+
+              {/* Export ZIP */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={() =>
+                  exportZip(it.previewPath).catch((e) =>
+                    toast({ title: "Export", description: String(e?.message || e), variant: "destructive" })
+                  )
+                }
               >
                 Export ZIP
               </button>
 
-              <button
-                className="text-xs px-2 py-1 border rounded"
-                onClick={() => handleDeployNetlify(it)}
-              >
+              {/* Deploy → Netlify */}
+              <button className="text-xs px-2 py-1 border rounded" onClick={() => handleDeployNetlify(it)}>
                 Deploy → Netlify
               </button>
 
+              {/* Deploy → Vercel */}
+              <button className="text-xs px-2 py-1 border rounded" onClick={() => handleDeployVercel(it)}>
+                Deploy → Vercel
+              </button>
+
+              {/* Delete */}
               <button
                 className="text-xs px-2 py-1 border rounded"
-                onClick={() => handleDeployVercel(it)}
+                onClick={async () => {
+                  try {
+                    const r = await fetch("/api/previews/delete", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ path: it.previewPath }),
+                    });
+                    if (!r.ok) throw new Error(await r.text());
+                    // remove locally
+                    setItems((prev) => {
+                      const next = prev.filter((x) => x.previewPath !== it.previewPath);
+                      localStorage.setItem(STORE_KEY, JSON.stringify(next));
+                      return next;
+                    });
+                    toast({ title: "Deleted", description: it.name });
+                  } catch (e: any) {
+                    toast({
+                      title: "Delete failed",
+                      description: e?.message || "Error",
+                      variant: "destructive",
+                    });
+                  }
+                }}
               >
-                Deploy → Vercel
+                Delete
               </button>
             </div>
           </div>

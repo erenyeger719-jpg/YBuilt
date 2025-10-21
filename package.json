@@ -70,6 +70,7 @@
     "@typescript-eslint/eslint-plugin": "^8.46.0",
     "@typescript-eslint/parser": "^8.46.0",
     "@vitest/ui": "^3.2.4",
+    "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
