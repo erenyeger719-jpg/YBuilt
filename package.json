@@ -68,7 +68,7 @@
     "@types/supertest": "^6.0.3",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.46.0",
-    "@typescript-eslint/parser": "^8.46.0",
+    "@typescript-eslint/parser": "^8.46.2",
     "@vitest/ui": "^3.2.4",
     "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
