@@ -15,6 +15,9 @@ import DevLogs from "@/pages/DevLogs";       // live dev logs
 import WeavySection from "@/components/WeavySection";
 import WeavyBoard from "@/components/WeavyBoard";
 
+// Global command palette
+import CommandPalette from "@/components/commands/CommandPalette";
+
 function NotFound() {
   return (
     <div className="min-h-screen grid place-items-center px-6">
@@ -31,11 +34,7 @@ function WeavyBridge() {
   return (
     <main>
       {/* Bridge band: grid + pixel spill; nodes appear after the fade */}
-      <WeavySection
-        bandHeightRem={14}
-        // optional: echo the hero palette in the spill
-        // colors={['#0a0a0b','#17191d','#22262c','#343a40']}
-      >
+      <WeavySection bandHeightRem={14}>
         <WeavyBoard />
       </WeavySection>
     </main>
@@ -44,32 +43,35 @@ function WeavyBridge() {
 
 export default function App() {
   return (
-    <Switch>
-      {/* Home (marketing) */}
-      <Route path="/" component={Home} />
+    <>
+      <CommandPalette />
+      <Switch>
+        {/* Home (marketing) */}
+        <Route path="/" component={Home} />
 
-      {/* Studio: marketing at /studio, finalize at /studio/:jobId (optional param) */}
-      <Route path="/studio/:jobId?">{() => <StudioPage />}</Route>
+        {/* Studio: marketing at /studio, finalize at /studio/:jobId (optional param) */}
+        <Route path="/studio/:jobId?">{() => <StudioPage />}</Route>
 
-      {/* Library */}
-      <Route path="/library" component={Library} />
+        {/* Library */}
+        <Route path="/library" component={Library} />
 
-      {/* Previews index */}
-      <Route path="/previews" component={Previews} />
+        {/* Previews index */}
+        <Route path="/previews" component={Previews} />
 
-      {/* Workspace */}
-      <Route path="/workspace/:jobId" component={Workspace} />
+        {/* Workspace */}
+        <Route path="/workspace/:jobId" component={Workspace} />
 
-      {/* Weavy bridge band + board (new route) */}
-      <Route path="/weavy">{() => <WeavyBridge />}</Route>
+        {/* Weavy bridge band + board (new route) */}
+        <Route path="/weavy">{() => <WeavyBridge />}</Route>
 
-      {/* Dev logs (live) */}
-      <Route path="/dev/logs" component={DevLogs} />
+        {/* Dev logs (live) */}
+        <Route path="/dev/logs" component={DevLogs} />
 
-      {/* Fallback (must be last, no path) */}
-      <Route>
-        <NotFound />
-      </Route>
-    </Switch>
+        {/* Fallback (must be last, no path) */}
+        <Route>
+          <NotFound />
+        </Route>
+      </Switch>
+    </>
   );
 }
