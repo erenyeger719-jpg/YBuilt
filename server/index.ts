@@ -103,6 +103,12 @@ if (reqMw) app.use(reqMw);
 
   // Observability + rate limiting
   app.use(requestIdMiddleware);
+  // Echo request id back to client
+  app.use((req: any, res, next) => {
+    const id = (req as any).id || (req as any).requestId;
+    if (id) res.setHeader('X-Request-ID', String(id));
+    next();
+  });
   app.use(rateLimiter);
 
   // Health checks (early)

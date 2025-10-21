@@ -8,24 +8,37 @@ function durationMs(startNs) {
   return Math.round(Number(diff) / 1e6);
 }
 
+function pickRequestId(req, res) {
+  // Try several common places middleware may stash a request id
+  const fromHeader =
+    (typeof res.getHeader === "function" && (res.getHeader("x-request-id") || res.getHeader("X-Request-ID"))) ||
+    req.headers?.["x-request-id"];
+  return (
+    (req.id && String(req.id)) ||
+    (req.requestId && String(req.requestId)) ||
+    (fromHeader && String(fromHeader)) ||
+    ""
+  );
+}
+
 export function wireRequestLogs(app, io) {
   // Emits one event per HTTP request when it finishes
   app.use((req, res, next) => {
     const start = process.hrtime.bigint();
 
     res.on("finish", () => {
-      // be generous pulling a request id (your middleware likely sets one)
-      const reqId =
-        (req.id && String(req.id)) ||
-        String(res.getHeader?.("x-request-id") || req.headers["x-request-id"] || "");
+      const rid = pickRequestId(req, res);
 
       const payload = {
         ts: Date.now(),
-        kind: "request",
+        kind: "request",            // legacy field
+        type: "request",            // alias for consumers expecting `type`
         level:
           res.statusCode >= 500 ? "error" :
           res.statusCode >= 400 ? "warn"  : "info",
-        reqId,
+        // include both `rid` (new) and `reqId` (back-compat)
+        rid,
+        reqId: rid,
         method: req.method,
         path: req.originalUrl || req.url,
         status: res.statusCode,
@@ -34,10 +47,26 @@ export function wireRequestLogs(app, io) {
         ua: req.headers["user-agent"] || "",
       };
 
+      // Internal event bus
       logsBus.emit("log", payload);
-      try { io?.of("/logs").emit("log:server", payload); } catch {}
-      if (reqId) {
-        try { io?.of("/logs").to(`req:${reqId}`).emit("log:server", payload); } catch {}
+
+      // Socket.IO broadcasts (namespace: /logs)
+      try {
+        const ns = io?.of("/logs");
+        if (ns) {
+          // Keep existing event name for back-compat
+          ns.emit("log:server", payload);
+          // Also emit the new event expected by some consumers
+          ns.emit("server:req", payload);
+
+          // If we have a request id, also target a room for that request
+          if (rid) {
+            ns.to(`req:${rid}`).emit("log:server", payload);
+            ns.to(`req:${rid}`).emit("server:req", payload);
+          }
+        }
+      } catch {
+        // swallow — logging should never crash the app
       }
     });
 
@@ -47,26 +76,39 @@ export function wireRequestLogs(app, io) {
 
 export function wireLogsNamespace(io) {
   const ns = io.of("/logs");
+
   ns.on("connection", (socket) => {
     // optional: follow a specific request id
     socket.on("join-req", (reqId) => {
       if (reqId) socket.join(`req:${reqId}`);
     });
+    // alias for clarity if clients prefer `join-rid`
+    socket.on("join-rid", (rid) => {
+      if (rid) socket.join(`req:${rid}`);
+    });
 
     // client → server browser log bridge (optional but handy)
-    socket.on("client:log", (p) => {
+    socket.on("client:log", (p = {}) => {
+      const rid = p?.rid || p?.reqId || "";
       const payload = {
         ts: Date.now(),
         kind: "client",
-        level: p?.level || "error",
-        message: p?.message || "",
-        stack: p?.stack || "",
-        path: p?.path || "",
-        reqId: p?.reqId || "",
+        type: "client",
+        level: p.level || "error",
+        message: p.message || "",
+        stack: p.stack || "",
+        path: p.path || "",
+        // include both for symmetry with server payloads
+        rid,
+        reqId: rid,
       };
+
+      // Emit on process bus
       logsBus.emit("log", payload);
+
+      // Broadcast to all listeners and, if present, the per-request room
       ns.emit("log:client", payload);
-      if (payload.reqId) ns.to(`req:${payload.reqId}`).emit("log:client", payload);
+      if (rid) ns.to(`req:${rid}`).emit("log:client", payload);
     });
   });
 }

@@ -4,6 +4,7 @@ import { TEMPLATES, type Template } from "../../data/templates";
 import { Input } from "../ui/input";
 import { useToast } from "../../hooks/use-toast";
 import { io } from "socket.io-client";
+import { useSearch } from "wouter";
 
 const STORE_KEY = "ybuilt.previews";
 
@@ -159,6 +160,17 @@ export default function TemplatesPanel() {
     const el = document.getElementById("template-search") as HTMLInputElement | null;
     el?.focus();
   }, []);
+
+  // one-click fork via URL ?fork=<id>
+  const search = useSearch();
+  useEffect(() => {
+    const p = new URLSearchParams(search);
+    const forkId = p.get("fork");
+    if (!forkId) return;
+    const t = TEMPLATES.find((x) => x.id === forkId);
+    if (t) handleFork(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   return (
     <div className="space-y-6">
