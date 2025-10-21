@@ -60,17 +60,17 @@ if (reqMw) app.use(reqMw);
   // Security headers (CSP allows Sentry beacons; fonts optional; Razorpay only in live)
   if (process.env.NODE_ENV === 'production') {
     const directives: Record<string, string[]> = {
-      "script-src": ["'self'"],
-      "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
-      "connect-src": ["'self'", "https://*.sentry.io"],
-      "img-src": ["'self'", "https:", "data:"],
+      'script-src': ["'self'"],
+      'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      'font-src': ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      'connect-src': ["'self'", 'https://*.sentry.io'],
+      'img-src': ["'self'", 'https:', 'data:'],
     };
 
     if (RAZORPAY_MODE === 'live') {
       // When you flip to live payments, allow Razorpay endpoints
-      directives["script-src"].push("https://checkout.razorpay.com");
-      directives["connect-src"].push("https://api.razorpay.com");
+      directives['script-src'].push('https://checkout.razorpay.com');
+      directives['connect-src'].push('https://api.razorpay.com');
     }
     // While in mock mode, Razorpay stays blocked (no additions)
 
@@ -95,9 +95,10 @@ if (reqMw) app.use(reqMw);
   // Previews directory (ensure and reuse same path everywhere)
   const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || 'previews');
   if (!fs.existsSync(PREVIEWS_DIR)) fs.mkdirSync(PREVIEWS_DIR, { recursive: true });
+  logger.info(`[PREVIEWS] Serving static previews from ${PREVIEWS_DIR}`);
 
-  // Static previews (use the resolved dir)
-  app.use('/previews', express.static(PREVIEWS_DIR));
+  // Serve /previews as static (so /previews/forks/<id>/index.html resolves)
+  app.use('/previews', express.static(PREVIEWS_DIR, { extensions: ['html'] }));
 
   // Observability + rate limiting
   app.use(requestIdMiddleware);
@@ -164,7 +165,9 @@ if (reqMw) app.use(reqMw);
 
   // TEMP test route for Sentry server (gated)
   if (process.env.ENABLE_TEST_ROUTES === 'true') {
-    app.get('/api/boom', () => { throw new Error('boom'); });
+    app.get('/api/boom', () => {
+      throw new Error('boom');
+    });
   }
 
   // API routers
@@ -174,11 +177,15 @@ if (reqMw) app.use(reqMw);
   const { default: projectsRoutes } = await import('./routes/projects.js').catch(() => ({ default: undefined as any }));
   const { default: chatRoutes } = await import('./routes/chat.js').catch(() => ({ default: undefined as any }));
   const { default: executeRoutes } = await import('./routes/execute.js').catch(() => ({ default: undefined as any }));
+  const { default: previewsRouter } = await import('./routes/previews.js').catch(() => ({
+    default: undefined as any,
+  }));
 
-  if (authRoutes)     app.use('/api/auth', authRoutes);
+  if (authRoutes) app.use('/api/auth', authRoutes);
   if (projectsRoutes) app.use('/api/projects', projectsRoutes);
-  if (chatRoutes)     app.use('/api/chat', chatRoutes);
-  if (executeRoutes)  app.use('/api/execute', executeRoutes);
+  if (chatRoutes) app.use('/api/chat', chatRoutes);
+  if (executeRoutes) app.use('/api/execute', executeRoutes);
+  if (previewsRouter) app.use('/api/previews', express.json(), previewsRouter);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
@@ -187,7 +194,8 @@ if (reqMw) app.use(reqMw);
   const server = createServer(app);
 
   // Realtime
-  initializeSocket(server);
+  const io = initializeSocket(server) as any;
+  if (io) app.set('io', io); // expose io to routers that need it
   logger.info('[SOCKET.IO] Real-time server initialized');
 
   // Static vs Vite dev (AFTER API)
@@ -202,8 +210,7 @@ if (reqMw) app.use(reqMw);
 
   // ---- Sentry error middleware (v7/v8/v10 safe) ----
   const errMw =
-    (Sentry as any).expressErrorHandler?.() ||
-    (Sentry as any).Handlers?.errorHandler?.();
+    (Sentry as any).expressErrorHandler?.() || (Sentry as any).Handlers?.errorHandler?.();
   if (errMw) app.use(errMw);
 
   // Your centralized error handler (must be last)

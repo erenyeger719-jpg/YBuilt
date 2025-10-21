@@ -16,17 +16,17 @@ export const TEMPLATES: Template[] = [
     previewPath: "/previews/demo-landing/",
   },
   {
-    id: "saas-dashboard",
-    name: "SaaS Dashboard (coming soon)",
-    description: "Auth, billing stubs, analytics widgets.",
-    tags: ["saas", "react", "charts"],
-    previewPath: "/previews/saas-dashboard/", // placeholder
+    id: "hello-world",
+    name: "Hello World",
+    description: "Ultra-minimal starter—one page wired with Vite + Tailwind.",
+    tags: ["starter", "vite", "minimal"],
+    previewPath: "/previews/hello-world/",
   },
   {
-    id: "blog-starter",
-    name: "MDX Blog (coming soon)",
-    description: "Blog with MDX posts and tags.",
-    tags: ["blog", "mdx"],
-    previewPath: "/previews/blog-starter/", // placeholder
+    id: "blank-starter",
+    name: "Blank Starter",
+    description: "Empty shell with sensible defaults and a clean folder structure.",
+    tags: ["starter", "blank", "scaffold"],
+    previewPath: "/previews/blank-starter/",
   },
 ];
