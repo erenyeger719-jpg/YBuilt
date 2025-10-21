@@ -7,6 +7,7 @@ import Home from "@/pages/Home";             // marketing
 import StudioPage from "@/pages/Studio";     // marketing at /studio, finalize when :jobId present
 import Workspace from "@/pages/Workspace";   // editor
 import Library from "@/pages/Library";       // your library page
+import Previews from "@/pages/Previews";     // previews index
 
 // Weavy wrapper + board (bridge band)
 import WeavySection from "@/components/WeavySection";
@@ -50,6 +51,9 @@ export default function App() {
 
       {/* Library */}
       <Route path="/library" component={Library} />
+
+      {/* Previews index */}
+      <Route path="/previews" component={Previews} />
 
       {/* Workspace */}
       <Route path="/workspace/:jobId" component={Workspace} />
