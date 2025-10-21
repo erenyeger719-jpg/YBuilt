@@ -1,0 +1,31 @@
+{
+  "allow": [
+    "attacks",
+    "color",
+    "dead",
+    "execute",
+    "executed",
+    "executes",
+    "execution",
+    "executions",
+    "failed",
+    "failure",
+    "failures",
+    "fire",
+    "fires",
+    "hook",
+    "hooks",
+    "host-hostess",
+    "invalid",
+    "remains",
+    "special",
+    "white",
+    "deno",
+    "digitalocean",
+    "flightcontrol",
+    "fly.io",
+    "github",
+    "railway",
+    "sst"
+  ]
+}

@@ -10,6 +10,7 @@ import Workspace from "@/pages/Workspace";   // editor
 import Library from "@/pages/Library";       // your library page
 import Previews from "@/pages/Previews";     // previews index
 import DevLogs from "@/pages/DevLogs";       // live dev logs
+import Templates from "@/pages/Templates";   // templates index
 
 // Weavy wrapper + board (bridge band)
 import WeavySection from "@/components/WeavySection";
@@ -57,6 +58,9 @@ export default function App() {
 
         {/* Previews index */}
         <Route path="/previews" component={Previews} />
+
+        {/* Templates index */}
+        <Route path="/templates" component={Templates} />
 
         {/* Workspace */}
         <Route path="/workspace/:jobId" component={Workspace} />

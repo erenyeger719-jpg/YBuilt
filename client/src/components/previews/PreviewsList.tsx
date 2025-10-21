@@ -122,7 +122,11 @@ export default function PreviewsList() {
   }
 
   if (items.length === 0) {
-    return <p className="text-sm text-zinc-500">No previews yet. Fork a template first.</p>;
+    return (
+      <p className="text-sm text-zinc-500">
+        No previews yet. <a className="underline" href="/templates">Fork a template</a> first.
+      </p>
+    );
   }
 
   return (
