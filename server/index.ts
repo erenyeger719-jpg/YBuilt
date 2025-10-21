@@ -180,12 +180,20 @@ if (reqMw) app.use(reqMw);
   const { default: previewsRouter } = await import('./routes/previews.js').catch(() => ({
     default: undefined as any,
   }));
+  const { default: exportRouter } = await import('./routes/export.js').catch(() => ({
+    default: undefined as any,
+  }));
+  const { default: deployRouter } = await import('./routes/deploy.js').catch(() => ({
+    default: undefined as any,
+  }));
 
   if (authRoutes) app.use('/api/auth', authRoutes);
   if (projectsRoutes) app.use('/api/projects', projectsRoutes);
   if (chatRoutes) app.use('/api/chat', chatRoutes);
   if (executeRoutes) app.use('/api/execute', executeRoutes);
   if (previewsRouter) app.use('/api/previews', express.json(), previewsRouter);
+  if (exportRouter) app.use('/api/previews', express.json(), exportRouter);
+  if (deployRouter) app.use('/api/deploy', express.json({ limit: '5mb' }), deployRouter);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
