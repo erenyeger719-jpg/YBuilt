@@ -31,8 +31,8 @@ export function wireRequestLogs(app, io) {
 
       const payload = {
         ts: Date.now(),
-        kind: "request",            // legacy field
-        type: "request",            // alias for consumers expecting `type`
+        kind: "request", // legacy field
+        type: "request", // alias for consumers expecting `type`
         level:
           res.statusCode >= 500 ? "error" :
           res.statusCode >= 400 ? "warn"  : "info",
@@ -87,7 +87,48 @@ export function wireLogsNamespace(io) {
       if (rid) socket.join(`req:${rid}`);
     });
 
+    // 1) Client request rows (from client fetch bridge)
+    socket.on("client:req", (p = {}) => {
+      const rid = p.rid || "";
+      const row = {
+        ts: Date.now(),
+        kind: "client",
+        type: "client-request",
+        level: "info",
+        rid,
+        reqId: rid,
+        method: p.method,
+        path: p.path,
+        status: p.status,
+        ms: p.ms,
+        message: p.error ? String(p.error) : undefined,
+      };
+      logsBus.emit("log", row);
+      ns.emit("log:client", row);
+      if (rid) ns.to(`req:${rid}`).emit("log:client", row);
+    });
+
+    // 2) Client error rows (uncaught + unhandledrejection)
+    socket.on("client:error", (p = {}) => {
+      const rid = p.rid || p.reqId || "";
+      const row = {
+        ts: Date.now(),
+        kind: "client",
+        type: p.type || "client-error",
+        level: "error",
+        rid,
+        reqId: rid,
+        message: p.message || "",
+        stack: p.stack || "",
+        path: p.path || "",
+      };
+      logsBus.emit("log", row);
+      ns.emit("log:client", row);
+      if (rid) ns.to(`req:${rid}`).emit("log:client", row);
+    });
+
     // client → server browser log bridge (optional but handy)
+    // (Kept for back-compat)
     socket.on("client:log", (p = {}) => {
       const rid = p?.rid || p?.reqId || "";
       const payload = {

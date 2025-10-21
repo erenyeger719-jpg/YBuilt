@@ -103,13 +103,25 @@ if (reqMw) app.use(reqMw);
 
   // Observability + rate limiting
   app.use(requestIdMiddleware);
+
   // Echo request id back to client
   app.use((req: any, res, next) => {
     const id = (req as any).id || (req as any).requestId;
-    if (id) res.setHeader('X-Request-ID', String(id));
+    if (typeof id !== 'undefined' && id !== null) res.setHeader('X-Request-ID', String(id));
     next();
   });
+
   app.use(rateLimiter);
+
+  // ---- Create server + Socket early (before routers) ----
+  const server = createServer(app);
+  const io = initializeSocket(server) as any;
+  if (io) {
+    app.set('io', io);
+    wireLogsNamespace(io);
+    wireRequestLogs(app, io); // attaches BEFORE routers for full coverage
+    logger.info('[SOCKET.IO] Real-time server initialized');
+  }
 
   // Health checks (early)
   app.get('/api/status', (_req: Request, res: Response) => {
@@ -204,20 +216,6 @@ if (reqMw) app.use(reqMw);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
-
-  // HTTP server (Socket.IO + Vite dev)
-  const server = createServer(app);
-
-  // Realtime
-  const io = initializeSocket(server) as any;
-  if (io) app.set('io', io); // expose io to routers that need it
-  logger.info('[SOCKET.IO] Real-time server initialized');
-
-  // Live logs (namespace + request bus)
-  if (io) {
-    wireLogsNamespace(io);
-    wireRequestLogs(app, io);
-  }
 
   // Static vs Vite dev (AFTER API)
   if (process.env.NODE_ENV === 'production') {
