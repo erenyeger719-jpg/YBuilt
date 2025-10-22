@@ -90,6 +90,14 @@ export default function PreviewsList() {
         setDrawerUrl(url);
         setDrawerAdminUrl(admin);
         toast({ title: "Netlify", description: url });
+
+        // Auto-copy live URL
+        try {
+          await navigator.clipboard.writeText(url);
+          toast({ title: "Copied live URL", description: url });
+        } catch {
+          prompt("Copy live URL:", url);
+        }
       } else {
         setDrawerState("error");
         setDrawerMsg("Netlify didn’t return a URL. Check token / server logs.");
@@ -122,6 +130,14 @@ export default function PreviewsList() {
         setDrawerUrl(url);
         setDrawerAdminUrl(undefined);
         toast({ title: "Vercel", description: url });
+
+        // Auto-copy live URL
+        try {
+          await navigator.clipboard.writeText(url);
+          toast({ title: "Copied live URL", description: url });
+        } catch {
+          prompt("Copy live URL:", url);
+        }
       } else {
         setDrawerState("error");
         setDrawerMsg("Vercel didn’t return a URL. Check token / server logs.");
@@ -395,7 +411,7 @@ export default function PreviewsList() {
                 Open
               </button>
 
-              {/* Copy link (next to Open) */}
+              {/* Share (copy link) */}
               <button
                 className="text-xs px-2 py-1 border rounded"
                 onClick={async () => {
@@ -403,12 +419,11 @@ export default function PreviewsList() {
                     await navigator.clipboard.writeText(it.previewPath);
                     toast({ title: "Link copied", description: it.previewPath });
                   } catch {
-                    // fallback prompt if clipboard API not available/allowed
                     prompt("Copy link:", it.previewPath);
                   }
                 }}
               >
-                Copy link
+                Share
               </button>
 
               {/* Duplicate */}
