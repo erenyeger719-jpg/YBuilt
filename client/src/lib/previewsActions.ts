@@ -47,6 +47,33 @@ export async function deployVercel(previewPath: string, name?: string) {
   return r.json();
 }
 
+/** Queue-based deploys */
+export async function enqueueDeploy(
+  provider: "netlify" | "vercel",
+  previewPath: string,
+  siteName?: string
+) {
+  const r = await fetch("/api/deploy/enqueue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, previewPath, siteName }),
+  });
+  const data = await r.json();
+  if (!r.ok || !data?.ok) throw new Error(data?.error || "enqueue failed");
+  return data.id as string;
+}
+
+export async function getDeployJob(id: string) {
+  const r = await fetch(`/api/deploy/job/${encodeURIComponent(id)}`);
+  const data = await r.json();
+  if (!r.ok || !data?.ok) throw new Error(data?.error || "job lookup failed");
+  return data;
+}
+
 async function safeText(r: Response) {
-  try { return await r.text(); } catch { return ""; }
+  try {
+    return await r.text();
+  } catch {
+    return "";
+  }
 }

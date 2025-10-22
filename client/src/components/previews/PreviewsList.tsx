@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { exportZip, deployNetlify, deployVercel } from "@/lib/previewsActions";
+import { exportZip } from "@/lib/previewsActions";
 import { useToast } from "@/hooks/use-toast";
 import DeployDrawer from "./DeployDrawer";
 import QuickEditDialog from "./QuickEditDialog";
@@ -71,10 +71,45 @@ export default function PreviewsList() {
     });
   }
 
+  // --- Deploy queue helpers ---
+  async function enqueueDeploy(
+    provider: "netlify" | "vercel",
+    previewPath: string,
+    name?: string,
+  ): Promise<string> {
+    const r = await fetch("/api/deploy/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, previewPath, name }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data?.ok || !data?.jobId) {
+      throw new Error(data?.error || "failed to enqueue deploy");
+    }
+    return String(data.jobId);
+  }
+
+  type DeployJob =
+    | {
+        status: "queued" | "running" | "success" | "error";
+        result?: any;
+        error?: string;
+      }
+    | any;
+
+  async function getDeployJob(jobId: string): Promise<DeployJob> {
+    const r = await fetch(`/api/deploy/jobs/${encodeURIComponent(jobId)}`);
+    const data = await r.json();
+    if (!r.ok || (!data?.ok && !data?.status)) {
+      throw new Error(data?.error || "failed to fetch job");
+    }
+    return (data.job || data) as DeployJob;
+  }
+
   async function handleDeployNetlify(it: StoredPreview) {
     setDrawerProvider("netlify");
     setDrawerState("starting");
-    setDrawerMsg("Uploading site to Netlify…");
+    setDrawerMsg("Queuing…");
     setDrawerUrl(undefined);
     setDrawerAdminUrl(undefined);
     setDrawerOpen(true);
@@ -83,30 +118,43 @@ export default function PreviewsList() {
       const suggested = `ybuilt-${slugify(it.name)}`;
       const siteName = window.prompt("Netlify site name (optional)", suggested)?.trim() || suggested;
 
-      const r = await deployNetlify(it.previewPath, siteName);
-      const url = r?.url || r?.deploy_url || undefined;
-      const admin = r?.admin_url || r?.dashboard_url || undefined;
+      // enqueue job
+      const jobId = await enqueueDeploy("netlify", it.previewPath, siteName);
 
-      if (url) {
-        updatePreview(it.previewPath, (p) => {
-          p.deploys!.unshift({ provider: "netlify", url, adminUrl: admin, createdAt: Date.now() });
-        });
-        setDrawerState("success");
-        setDrawerMsg("Deployed on Netlify.");
-        setDrawerUrl(url);
-        setDrawerAdminUrl(admin);
-        toast({ title: "Netlify", description: url });
+      // poll
+      let done = false;
+      while (!done) {
+        await new Promise((r) => setTimeout(r, 1200));
+        const j = await getDeployJob(jobId);
 
-        // Auto-copy live URL
-        try {
-          await navigator.clipboard.writeText(url);
-          toast({ title: "Copied live URL", description: url });
-        } catch {
-          prompt("Copy live URL:", url);
+        if (j.status === "queued") setDrawerMsg("Queued…");
+        if (j.status === "running") setDrawerMsg("Deploying…");
+
+        if (j.status === "success") {
+          done = true;
+          const url = j.result?.url || j.result?.deploy_url;
+          const admin = j.result?.admin_url || j.result?.dashboard_url;
+
+          updatePreview(it.previewPath, (p) => {
+            p.deploys!.unshift({ provider: "netlify", url, adminUrl: admin, createdAt: Date.now() });
+          });
+
+          setDrawerState("success");
+          setDrawerMsg("Deployed.");
+          setDrawerUrl(url);
+          setDrawerAdminUrl(admin);
+
+          try {
+            await navigator.clipboard.writeText(url);
+          } catch {}
+          toast({ title: "Netlify", description: url });
         }
-      } else {
-        setDrawerState("error");
-        setDrawerMsg("Netlify didn’t return a URL. Check token / server logs.");
+
+        if (j.status === "error") {
+          done = true;
+          setDrawerState("error");
+          setDrawerMsg(j.error || "Deploy failed.");
+        }
       }
     } catch (e: any) {
       setDrawerState("error");
@@ -117,36 +165,47 @@ export default function PreviewsList() {
   async function handleDeployVercel(it: StoredPreview) {
     setDrawerProvider("vercel");
     setDrawerState("starting");
-    setDrawerMsg("Creating deployment on Vercel…");
+    setDrawerMsg("Queuing…");
     setDrawerUrl(undefined);
     setDrawerAdminUrl(undefined);
     setDrawerOpen(true);
 
     try {
       const name = `ybuilt-${slugify(it.name)}`;
-      const r = await deployVercel(it.previewPath, name);
-      const url = r?.url || r?.inspectUrl || undefined;
+      const jobId = await enqueueDeploy("vercel", it.previewPath, name);
 
-      if (url) {
-        updatePreview(it.previewPath, (p) => {
-          p.deploys!.unshift({ provider: "vercel", url, adminUrl: undefined, createdAt: Date.now() });
-        });
-        setDrawerState("success");
-        setDrawerMsg("Deployment created on Vercel.");
-        setDrawerUrl(url);
-        setDrawerAdminUrl(undefined);
-        toast({ title: "Vercel", description: url });
+      let done = false;
+      while (!done) {
+        await new Promise((r) => setTimeout(r, 1200));
+        const j = await getDeployJob(jobId);
 
-        // Auto-copy live URL
-        try {
-          await navigator.clipboard.writeText(url);
-          toast({ title: "Copied live URL", description: url });
-        } catch {
-          prompt("Copy live URL:", url);
+        if (j.status === "queued") setDrawerMsg("Queued…");
+        if (j.status === "running") setDrawerMsg("Deploying…");
+
+        if (j.status === "success") {
+          done = true;
+          const url = j.result?.url || j.result?.inspectUrl;
+
+          updatePreview(it.previewPath, (p) => {
+            p.deploys!.unshift({ provider: "vercel", url, adminUrl: undefined, createdAt: Date.now() });
+          });
+
+          setDrawerState("success");
+          setDrawerMsg("Deployment created.");
+          setDrawerUrl(url);
+          setDrawerAdminUrl(undefined);
+
+          try {
+            await navigator.clipboard.writeText(url);
+          } catch {}
+          toast({ title: "Vercel", description: url });
         }
-      } else {
-        setDrawerState("error");
-        setDrawerMsg("Vercel didn’t return a URL. Check token / server logs.");
+
+        if (j.status === "error") {
+          done = true;
+          setDrawerState("error");
+          setDrawerMsg(j.error || "Deploy failed.");
+        }
       }
     } catch (e: any) {
       setDrawerState("error");
@@ -446,6 +505,7 @@ export default function PreviewsList() {
                     await navigator.clipboard.writeText(it.previewPath);
                     toast({ title: "Link copied", description: it.previewPath });
                   } catch {
+                    // eslint-disable-next-line no-alert
                     prompt("Copy link:", it.previewPath);
                   }
                 }}
@@ -478,6 +538,7 @@ export default function PreviewsList() {
                     try {
                       await navigator.clipboard.writeText(newPath);
                     } catch {
+                      // eslint-disable-next-line no-alert
                       prompt("Copy link:", newPath);
                     }
 
