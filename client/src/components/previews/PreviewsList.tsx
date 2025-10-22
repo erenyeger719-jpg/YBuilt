@@ -194,16 +194,10 @@ export default function PreviewsList() {
       if (kind === "css") {
         // insert before </head> or at top
         if (/<\/head>/i.test(html)) {
-          html = html.replace(
-            /<\/head>/i,
-            `  <link rel="stylesheet" href="${picked}" />\n</head>`
-          );
+          html = html.replace(/<\/head>/i, ` <link rel="stylesheet" href="${picked}" />\n</head>`);
         } else {
           html = html
-            .replace(
-              /<head[^>]*>/i,
-              (match) => `${match}\n  <link rel="stylesheet" href="${picked}" />`
-            )
+            .replace(/<head[^>]*>/i, (match) => `${match}\n <link rel="stylesheet" href="${picked}" />`)
             .replace(/<\/title>/i, (m) => `${m}\n<link rel="stylesheet" href="${picked}" />`);
           if (!/<head/i.test(html)) {
             html = `<!doctype html><head><meta charset="utf-8"/><link rel="stylesheet" href="${picked}" /></head>${html}`;
@@ -212,7 +206,7 @@ export default function PreviewsList() {
       } else {
         // JS: insert before </body> or at bottom
         if (/<\/body>/i.test(html)) {
-          html = html.replace(/<\/body>/i, `  <script src="${picked}"></script>\n</body>`);
+          html = html.replace(/<\/body>/i, ` <script src="${picked}"></script>\n</body>`);
         } else {
           html = html + `\n<script src="${picked}"></script>\n`;
         }
@@ -387,6 +381,22 @@ export default function PreviewsList() {
                 onClick={() => window.open(it.previewPath, "_blank", "noopener,noreferrer")}
               >
                 Open
+              </button>
+
+              {/* Copy link (next to Open) */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(it.previewPath);
+                    toast({ title: "Link copied", description: it.previewPath });
+                  } catch {
+                    // fallback prompt if clipboard API not available/allowed
+                    prompt("Copy link:", it.previewPath);
+                  }
+                }}
+              >
+                Copy link
               </button>
 
               {/* Export ZIP */}

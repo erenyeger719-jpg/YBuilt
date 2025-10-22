@@ -115,6 +115,23 @@ export default function QuickEditDialog({
     }
   };
 
+  // Hotkey: Cmd/Ctrl+S to save while dialog is open
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (!saving) {
+          (async () => {
+            await doSave();
+          })();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, saving]);
+
   if (!open) return null;
 
   return (
