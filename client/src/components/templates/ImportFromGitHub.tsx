@@ -35,6 +35,14 @@ export default function ImportFromGitHub() {
       };
       localStorage.setItem(STORE_KEY, JSON.stringify([item, ...existing]));
 
+      // Copy the preview link for convenience
+      try {
+        await navigator.clipboard.writeText(data.path);
+      } catch {
+        // fallback prompt if clipboard API not available/allowed
+        prompt("Copy link:", data.path);
+      }
+
       // Open it
       const win = window.open(data.path, "_blank", "noopener,noreferrer");
       if (!win) window.location.href = data.path;

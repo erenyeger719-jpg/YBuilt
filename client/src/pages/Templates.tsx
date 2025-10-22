@@ -1,6 +1,21 @@
 import TemplatesPanel from "@/components/templates/TemplatesPanel";
 import ImportFromGitHub from "@/components/templates/ImportFromGitHub";
 
+// Tiny clipboard helper (silent fallback to prompt if Clipboard API is blocked)
+async function copySafe(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      // fallback prompt so the user can manually copy
+      // eslint-disable-next-line no-alert
+      prompt("Copy link:", text);
+    } catch {}
+    return false;
+  }
+}
+
 async function forkTemplate(sourceId: string, name: string) {
   const r = await fetch("/api/previews/fork", {
     method: "POST",
@@ -20,6 +35,9 @@ async function forkTemplate(sourceId: string, name: string) {
       ...existing,
     ])
   );
+
+  // Share: copy link immediately
+  await copySafe(data.path);
 
   // Open the server-created path with popup-blocker fallback
   const win = window.open(data.path, "_blank", "noopener,noreferrer");

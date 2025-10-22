@@ -431,6 +431,14 @@ export default function PreviewsList() {
                       return next;
                     });
                     toast({ title: "Duplicated", description: newPath });
+
+                    // copy new link before opening
+                    try {
+                      await navigator.clipboard.writeText(newPath);
+                    } catch {
+                      prompt("Copy link:", newPath);
+                    }
+
                     window.open(newPath, "_blank", "noopener,noreferrer");
                   } catch (e: any) {
                     toast({
