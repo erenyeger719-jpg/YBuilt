@@ -128,6 +128,24 @@ export default function CommandPalette() {
           window.location.href = "/templates?fork=demo-landing";
         },
       },
+      // --- NEW: quick navigation commands ---
+      {
+        id: "open-previews",
+        title: "Open Previews",
+        keywords: "previews list",
+        run: () => (window.location.href = "/previews"),
+      },
+      {
+        id: "open-last-preview",
+        title: "Open Last Preview",
+        keywords: "preview last open",
+        run: () => {
+          const items = JSON.parse(localStorage.getItem("ybuilt.previews") || "[]");
+          if (items[0]?.previewPath)
+            window.open(items[0].previewPath, "_blank", "noopener,noreferrer");
+          else alert("No previews yet. Fork a template first.");
+        },
+      },
       {
         id: "export-last",
         title: "Export last preview (ZIP)",

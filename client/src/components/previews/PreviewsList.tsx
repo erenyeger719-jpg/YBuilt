@@ -22,6 +22,9 @@ const load = (): StoredPreview[] => {
 };
 const save = (items: StoredPreview[]) => localStorage.setItem(STORE_KEY, JSON.stringify(items));
 const slugify = (s: string) => s.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+function rename(items: StoredPreview[], previewPath: string, newName: string) {
+  return items.map((p) => (p.previewPath === previewPath ? { ...p, name: newName } : p));
+}
 
 export default function PreviewsList() {
   const { toast } = useToast();
@@ -65,8 +68,10 @@ export default function PreviewsList() {
     setDrawerOpen(true);
 
     try {
-      const name = `ybuilt-${slugify(it.name)}`;
-      const r = await deployNetlify(it.previewPath, name);
+      const suggested = `ybuilt-${slugify(it.name)}`;
+      const siteName = window.prompt("Netlify site name (optional)", suggested)?.trim() || suggested;
+
+      const r = await deployNetlify(it.previewPath, siteName);
       const url = r?.url || r?.deploy_url || undefined;
       const admin = r?.admin_url || r?.dashboard_url || undefined;
 
@@ -131,6 +136,36 @@ export default function PreviewsList() {
 
   return (
     <>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm text-zinc-500">
+          {items.length} preview{items.length === 1 ? "" : "s"}
+        </div>
+        <button
+          className="text-xs px-2 py-1 border rounded"
+          onClick={async () => {
+            if (!confirm("Delete ALL previews from disk and clear the list?")) return;
+            try {
+              // delete on server
+              await Promise.all(
+                items.map((it) =>
+                  fetch("/api/previews/delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path: it.previewPath }),
+                  })
+                )
+              );
+            } catch (_) {}
+            // clear locally
+            setItems([]);
+            localStorage.setItem(STORE_KEY, JSON.stringify([]));
+            toast({ title: "Cleared", description: "All previews removed." });
+          }}
+        >
+          Clear all
+        </button>
+      </div>
+
       <div className="space-y-4">
         {items.map((it, idx) => (
           <div key={idx} className="flex items-center justify-between border rounded p-3">
@@ -147,23 +182,12 @@ export default function PreviewsList() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {/* Copy Link */}
+              {/* Open */}
               <button
                 className="text-xs px-2 py-1 border rounded"
-                onClick={() => {
-                  navigator.clipboard
-                    .writeText(it.previewPath)
-                    .then(() => toast({ title: "Copied", description: it.previewPath }))
-                    .catch((e) =>
-                      toast({
-                        title: "Copy failed",
-                        description: String(e?.message || e),
-                        variant: "destructive",
-                      })
-                    );
-                }}
+                onClick={() => window.open(it.previewPath, "_blank", "noopener,noreferrer")}
               >
-                Copy Link
+                Open
               </button>
 
               {/* Export ZIP */}
@@ -186,6 +210,23 @@ export default function PreviewsList() {
               {/* Deploy → Vercel */}
               <button className="text-xs px-2 py-1 border rounded" onClick={() => handleDeployVercel(it)}>
                 Deploy → Vercel
+              </button>
+
+              {/* Rename */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={() => {
+                  const newName = window.prompt("New name", it.name || "Untitled")?.trim();
+                  if (!newName) return;
+                  setItems((prev) => {
+                    const next = rename(prev, it.previewPath, newName);
+                    save(next);
+                    return next;
+                  });
+                  toast({ title: "Renamed", description: newName });
+                }}
+              >
+                Rename
               </button>
 
               {/* Delete */}

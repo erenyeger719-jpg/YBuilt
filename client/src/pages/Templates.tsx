@@ -14,17 +14,23 @@ async function forkTemplate(sourceId: string, name: string) {
   const existing = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
   localStorage.setItem(
     STORE_KEY,
-    JSON.stringify([{ id: `fork-${Date.now()}`, name, previewPath: data.path, createdAt: Date.now() }, ...existing])
+    JSON.stringify([
+      { id: `fork-${Date.now()}`, name, previewPath: data.path, createdAt: Date.now() },
+      ...existing,
+    ])
   );
 
-  // Open the server-created path
-  window.open(data.path, "_blank", "noopener,noreferrer");
+  // Open the server-created path with popup-blocker fallback
+  const win = window.open(data.path, "_blank", "noopener,noreferrer");
+  if (!win) window.location.href = data.path; // fallback if blocked
 }
 
 export default function Templates() {
   return (
     <div className="container mx-auto px-4 py-8">
-      <TemplatesPanel />
+      <TemplatesPanel
+        onFork={(sourceId: string, name: string) => forkTemplate(sourceId, name)}
+      />
     </div>
   );
 }
