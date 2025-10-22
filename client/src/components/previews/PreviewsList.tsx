@@ -126,11 +126,52 @@ export default function PreviewsList() {
     }
   }
 
+  // Updated empty state
   if (items.length === 0) {
     return (
-      <p className="text-sm text-zinc-500">
-        No previews yet. <a className="underline" href="/templates">Fork a template</a> first.
-      </p>
+      <div className="grid place-items-center py-16 text-center">
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">No previews yet</h2>
+          <p className="text-sm text-zinc-500">Fork a template to see it here.</p>
+          <div className="flex items-center justify-center gap-2">
+            <a className="text-xs px-3 py-1.5 border rounded" href="/templates">
+              Browse templates
+            </a>
+            <button
+              className="text-xs px-3 py-1.5 border rounded"
+              onClick={async () => {
+                try {
+                  const r = await fetch("/api/previews/fork", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sourceId: "hello-world" }),
+                  });
+                  const data = await r.json();
+                  if (!r.ok || !data?.path) throw new Error(data?.error || "fork failed");
+
+                  // store so /previews lists it
+                  const existing = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+                  const item = {
+                    id: `fork-${Date.now()}`,
+                    name: "Hello World",
+                    previewPath: data.path,
+                    createdAt: Date.now(),
+                  };
+                  localStorage.setItem(STORE_KEY, JSON.stringify([item, ...existing]));
+
+                  // open it (with popup fallback)
+                  const win = window.open(data.path, "_blank", "noopener,noreferrer");
+                  if (!win) window.location.href = data.path;
+                } catch (e: any) {
+                  alert(e?.message || "Couldn’t fork Hello World");
+                }
+              }}
+            >
+              Quick start: Hello World
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
