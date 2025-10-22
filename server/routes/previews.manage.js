@@ -82,7 +82,10 @@ router.post("/write", express.json({ limit: "2mb" }), async (req, res) => {
     const absFile = path.resolve(absDir, file);
     if (!absFile.startsWith(absDir)) return res.status(400).json({ error: "path escape" });
 
+    // Ensure parent folders exist (e.g., css/styles.css)
+    await fs.promises.mkdir(path.dirname(absFile), { recursive: true });
     await fs.promises.writeFile(absFile, content, "utf8");
+
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: "write failed" });
@@ -130,6 +133,9 @@ router.post("/remove-file", express.json(), async (req, res) => {
     const href = req.body?.path;
     const file = String(req.body?.file || "");
     if (!href || !allowedFile(file)) return res.status(400).json({ error: "bad args" });
+
+    // Optional guard: avoid breaking the preview
+    if (file === "index.html") return res.status(400).json({ error: "cannot delete index.html" });
 
     const absDir = safeJoinPreviews(href);
     const absFile = path.resolve(absDir, file);
