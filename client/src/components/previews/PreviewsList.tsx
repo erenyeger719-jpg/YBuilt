@@ -42,6 +42,7 @@ export default function PreviewsList() {
   // quick edit state
   const [editOpen, setEditOpen] = useState(false);
   const [editPath, setEditPath] = useState<string | null>(null);
+  const [editInitialFile, setEditInitialFile] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const onStorage = () => setItems(load());
@@ -131,6 +132,97 @@ export default function PreviewsList() {
     }
   }
 
+  // helpers —— server file ops + asset ensure
+  async function readFile(previewPath: string, file: string) {
+    const r = await fetch(
+      `/api/previews/read?path=${encodeURIComponent(previewPath)}&file=${encodeURIComponent(file)}`
+    );
+    const data = await r.json();
+    if (!r.ok || !data?.ok) throw new Error(data?.error || "read failed");
+    return String(data.content ?? "");
+  }
+
+  async function writeFile(previewPath: string, file: string, content: string) {
+    const r = await fetch("/api/previews/write", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: previewPath, file, content }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data?.ok) throw new Error(data?.error || "write failed");
+  }
+
+  async function listFiles(previewPath: string): Promise<string[]> {
+    const r = await fetch(`/api/previews/list?path=${encodeURIComponent(previewPath)}`);
+    const data = await r.json();
+    if (!r.ok || !data?.ok) throw new Error(data?.error || "list failed");
+    return data.files || [];
+  }
+
+  async function ensureAsset(previewPath: string, kind: "css" | "js") {
+    const files = await listFiles(previewPath);
+
+    // choose filename (prefer existing)
+    const candidates =
+      kind === "css" ? ["styles.css", "css.css", "main.css"] : ["app.js", "main.js", "script.js"];
+    let picked = files.find((f) => f.toLowerCase().endsWith(`.${kind}`)) || candidates[0];
+
+    // create starter if missing
+    if (!files.includes(picked)) {
+      const starter =
+        kind === "css"
+          ? `/* ${picked} */\n:root{color-scheme:light dark}\nbody{font-family:system-ui,sans-serif}\n`
+          : `// ${picked}\nconsole.log("Hello from ${picked}")\n`;
+      await writeFile(previewPath, picked, starter);
+    }
+
+    // make sure index.html exists
+    let html: string;
+    try {
+      html = await readFile(previewPath, "index.html");
+    } catch {
+      html = `<!doctype html><meta charset="utf-8"/><title>Preview</title><body><h1>Hello</h1></body>`;
+    }
+
+    // inject tag if missing
+    const hasTag =
+      kind === "css"
+        ? new RegExp(`<link[^>]+href=["']${picked}["']`, "i").test(html)
+        : new RegExp(`<script[^>]+src=["']${picked}["']`, "i").test(html);
+
+    if (!hasTag) {
+      if (kind === "css") {
+        // insert before </head> or at top
+        if (/<\/head>/i.test(html)) {
+          html = html.replace(
+            /<\/head>/i,
+            `  <link rel="stylesheet" href="${picked}" />\n</head>`
+          );
+        } else {
+          html = html
+            .replace(
+              /<head[^>]*>/i,
+              (match) => `${match}\n  <link rel="stylesheet" href="${picked}" />`
+            )
+            .replace(/<\/title>/i, (m) => `${m}\n<link rel="stylesheet" href="${picked}" />`);
+          if (!/<head/i.test(html)) {
+            html = `<!doctype html><head><meta charset="utf-8"/><link rel="stylesheet" href="${picked}" /></head>${html}`;
+          }
+        }
+      } else {
+        // JS: insert before </body> or at bottom
+        if (/<\/body>/i.test(html)) {
+          html = html.replace(/<\/body>/i, `  <script src="${picked}"></script>\n</body>`);
+        } else {
+          html = html + `\n<script src="${picked}"></script>\n`;
+        }
+      }
+      await writeFile(previewPath, "index.html", html);
+    }
+
+    return picked;
+  }
+
   // Updated empty state
   if (items.length === 0) {
     return (
@@ -217,7 +309,12 @@ export default function PreviewsList() {
           <div key={idx} className="flex items-center justify-between border rounded p-3">
             <div className="min-w-0">
               <div className="font-medium truncate">{it.name}</div>
-              <a className="text-xs text-blue-600 underline" href={it.previewPath} target="_blank" rel="noreferrer">
+              <a
+                className="text-xs text-blue-600 underline"
+                href={it.previewPath}
+                target="_blank"
+                rel="noreferrer"
+              >
                 {it.previewPath}
               </a>
               {!!it.deploys?.length && (
@@ -233,10 +330,55 @@ export default function PreviewsList() {
                 className="text-xs px-2 py-1 border rounded"
                 onClick={() => {
                   setEditPath(it.previewPath);
+                  setEditInitialFile("index.html");
                   setEditOpen(true);
                 }}
               >
                 Edit HTML
+              </button>
+
+              {/* Edit CSS */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={async () => {
+                  try {
+                    const f = await ensureAsset(it.previewPath, "css");
+                    setEditPath(it.previewPath);
+                    setEditInitialFile(f);
+                    setEditOpen(true);
+                    toast({ title: "CSS ready", description: f });
+                  } catch (e: any) {
+                    toast({
+                      title: "CSS setup failed",
+                      description: e?.message || "Error",
+                      variant: "destructive",
+                    });
+                  }
+                }}
+              >
+                Edit CSS
+              </button>
+
+              {/* Edit JS */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={async () => {
+                  try {
+                    const f = await ensureAsset(it.previewPath, "js");
+                    setEditPath(it.previewPath);
+                    setEditInitialFile(f);
+                    setEditOpen(true);
+                    toast({ title: "JS ready", description: f });
+                  } catch (e: any) {
+                    toast({
+                      title: "JS setup failed",
+                      description: e?.message || "Error",
+                      variant: "destructive",
+                    });
+                  }
+                }}
+              >
+                Edit JS
               </button>
 
               {/* Open */}
@@ -334,9 +476,9 @@ export default function PreviewsList() {
         open={editOpen}
         onClose={() => setEditOpen(false)}
         previewPath={editPath || "/previews/"}
-        file="index.html"
+        initialFile={editInitialFile}
         onSaved={() => {
-          /* no-op; we also open a new tab after save */
+          /* no-op */
         }}
       />
     </>
