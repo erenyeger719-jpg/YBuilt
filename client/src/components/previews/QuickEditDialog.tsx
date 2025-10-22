@@ -99,8 +99,9 @@ export default function QuickEditDialog({
       toast({ title: "Saved", description: sel });
       onSaved?.();
 
-      const bust = `${previewPath}${sel}`.replace(/\/+$/, "");
-      const url = `${bust}?t=${Date.now()}`;
+      // open the PAGE when saving non-HTML files
+      const target = /\.html?$/i.test(sel) ? `${previewPath}${sel}` : `${previewPath}index.html`;
+      const url = `${target.replace(/\/+$/, "")}?t=${Date.now()}`;
       const w = window.open(url, "_blank", "noopener,noreferrer");
       if (!w) window.location.href = url;
     } catch (e: any) {
@@ -198,7 +199,7 @@ export default function QuickEditDialog({
             disabled={!canSave}
             onClick={doSave}
           >
-            {saving ? "Saving…" : "Save & open"}
+            {saving ? "Saving…" : /\.html?$/i.test(sel) ? "Save & open" : "Save & open page"}
           </button>
         </div>
 
