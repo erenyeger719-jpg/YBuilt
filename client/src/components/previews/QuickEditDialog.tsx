@@ -1,97 +1,136 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+
+type Props = {
+  open: boolean;
+  onClose: () => void;
+  previewPath: string;       // e.g. "/previews/forks/slug/"
+  file?: string;             // kept for back-compat
+  initialFile?: string;      // new: preferred default
+  onSaved?: () => void;
+};
 
 export default function QuickEditDialog({
   open,
   onClose,
   previewPath,
-  file = "index.html",
+  file,
+  initialFile,
   onSaved,
-}: {
-  open: boolean;
-  onClose: () => void;
-  previewPath: string;
-  file?: string;
-  onSaved?: () => void;
-}) {
-  const [value, setValue] = useState("");
+}: Props) {
+  const { toast } = useToast();
+  const [files, setFiles] = useState<string[]>([]);
+  const [sel, setSel] = useState<string>("index.html");
+  const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
 
+  // load file list when opened / path changes
   useEffect(() => {
     if (!open) return;
     (async () => {
-      setLoading(true);
-      setErr(null);
       try {
-        const q = new URLSearchParams({ path: previewPath, file }).toString();
-        const r = await fetch(`/api/previews/read?${q}`);
+        const r = await fetch(`/api/previews/list?path=${encodeURIComponent(previewPath)}`);
         const data = await r.json();
-        if (!r.ok) throw new Error(data?.error || "read failed");
-        setValue(data.content || "");
+        if (!r.ok || !data?.ok) throw new Error(data?.error || "list failed");
+        setFiles(data.files || []);
+        // choose default
+        const preferred = initialFile || file || "index.html";
+        setSel(data.files.includes(preferred) ? preferred : (data.files[0] || "index.html"));
       } catch (e: any) {
-        setErr(e?.message || "Failed to load");
+        setFiles([]);
+        setSel("index.html");
+        toast({ title: "Couldn’t list files", description: e?.message || "Error", variant: "destructive" });
+      }
+    })();
+  }, [open, previewPath, initialFile, file, toast]);
+
+  // load selected file content
+  useEffect(() => {
+    if (!open || !sel) return;
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(
+          `/api/previews/read?path=${encodeURIComponent(previewPath)}&file=${encodeURIComponent(sel)}`
+        );
+        const data = await r.json();
+        if (!r.ok || !data?.ok) throw new Error(data?.error || "read failed");
+        setText(data.content ?? "");
+      } catch (e: any) {
+        setText("");
+        toast({ title: "Read failed", description: e?.message || "Error", variant: "destructive" });
       } finally {
         setLoading(false);
       }
     })();
-  }, [open, previewPath, file]);
+  }, [open, sel, previewPath, toast]);
+
+  const canSave = useMemo(() => !saving && sel, [saving, sel]);
+
+  const doSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      const r = await fetch("/api/previews/write", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: previewPath, file: sel, content: text }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data?.ok) throw new Error(data?.error || "write failed");
+
+      toast({ title: "Saved", description: sel });
+      onSaved?.();
+
+      const bust = `${previewPath}${sel}`.replace(/\/+$/, "");
+      const url = `${bust}?t=${Date.now()}`;
+      const w = window.open(url, "_blank", "noopener,noreferrer");
+      if (!w) window.location.href = url;
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e?.message || "Error", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[1000]">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute left-1/2 top-16 -translate-x-1/2 w-[min(900px,92vw)] rounded-2xl border bg-white dark:bg-zinc-900 shadow-2xl">
-        <div className="p-3 border-b flex items-center justify-between">
-          <div className="font-medium text-sm">Quick edit • {file}</div>
+      <div className="absolute left-1/2 top-16 -translate-x-1/2 w-[min(900px,95vw)] rounded-2xl border bg-white dark:bg-zinc-900 shadow-2xl">
+        <div className="flex items-center gap-2 p-3 border-b">
+          <div className="font-medium">Quick edit</div>
+          <select
+            className="ml-auto text-xs border rounded px-2 py-1 bg-transparent"
+            value={sel}
+            onChange={(e) => setSel(e.target.value)}
+          >
+            {files.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
           <button className="text-xs px-2 py-1 border rounded" onClick={onClose}>Close</button>
+          <button
+            className="text-xs px-2 py-1 border rounded"
+            disabled={!canSave}
+            onClick={doSave}
+          >
+            {saving ? "Saving…" : "Save & open"}
+          </button>
         </div>
-
         <div className="p-3">
           {loading ? (
             <div className="text-sm text-zinc-500">Loading…</div>
-          ) : err ? (
-            <div className="text-sm text-red-600">{err}</div>
           ) : (
             <textarea
-              className="w-full h-[60vh] text-sm font-mono p-3 rounded border bg-white/50 dark:bg-zinc-900/50"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
+              className="w-full h-[60vh] text-sm font-mono border rounded p-3 bg-transparent"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              spellCheck={false}
             />
           )}
-        </div>
-
-        <div className="p-3 border-t flex items-center justify-end gap-2">
-          <button className="text-xs px-3 py-1.5 border rounded" onClick={onClose}>Cancel</button>
-          <button
-            className="text-xs px-3 py-1.5 border rounded"
-            disabled={saving || loading}
-            onClick={async () => {
-              setSaving(true);
-              setErr(null);
-              try {
-                const r = await fetch("/api/previews/write", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ path: previewPath, file, content: value }),
-                });
-                const data = await r.json();
-                if (!r.ok || !data?.ok) throw new Error(data?.error || "save failed");
-                onSaved?.();
-                // open or refresh the preview with a cache buster
-                const bust = previewPath.endsWith("/") ? previewPath : previewPath + "/";
-                window.open(`${bust}?t=${Date.now()}`, "_blank", "noopener,noreferrer");
-                onClose();
-              } catch (e: any) {
-                setErr(e?.message || "Failed to save");
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            {saving ? "Saving…" : "Save & Open"}
-          </button>
         </div>
       </div>
     </div>

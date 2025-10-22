@@ -89,4 +89,38 @@ router.post("/write", express.json({ limit: "2mb" }), async (req, res) => {
   }
 });
 
+// --- LIST files inside a fork ---
+// GET /api/previews/list?path=/previews/forks/<slug>/
+router.get("/list", async (req, res) => {
+  try {
+    const href = req.query?.path;
+    if (!href) return res.status(400).json({ error: "path required" });
+
+    const absDir = safeJoinPreviews(href);
+
+    const MAX_FILES = 200;
+    const files = [];
+    async function walk(dir, prefix = "", depth = 0) {
+      if (files.length >= MAX_FILES || depth > 3) return;
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      for (const e of entries) {
+        const full = path.join(dir, e.name);
+        const rel = path.posix.join(prefix, e.name);
+        if (e.isDirectory()) {
+          await walk(full, rel, depth + 1);
+        } else if (allowedFile(rel)) {
+          files.push(rel);
+          if (files.length >= MAX_FILES) break;
+        }
+      }
+    }
+    await walk(absDir, "");
+
+    files.sort((a, b) => a.localeCompare(b));
+    return res.json({ ok: true, files });
+  } catch (e) {
+    return res.status(404).json({ error: "list failed" });
+  }
+});
+
 export default router;
