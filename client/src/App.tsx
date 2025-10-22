@@ -11,6 +11,7 @@ import Library from "@/pages/Library";       // your library page
 import Previews from "@/pages/Previews";     // previews index
 import DevLogs from "@/pages/DevLogs";       // live dev logs
 import Templates from "@/pages/Templates";   // templates index
+import TemplateDetail from "@/pages/TemplateDetail"; // template detail
 
 // Weavy wrapper + board (bridge band)
 import WeavySection from "@/components/WeavySection";
@@ -58,6 +59,9 @@ export default function App() {
 
         {/* Previews index */}
         <Route path="/previews" component={Previews} />
+
+        {/* Template detail (must be ABOVE the generic /templates route) */}
+        <Route path="/templates/:id">{() => <TemplateDetail />}</Route>
 
         {/* Templates index */}
         <Route path="/templates" component={Templates} />
