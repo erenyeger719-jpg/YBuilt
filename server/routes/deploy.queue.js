@@ -7,7 +7,14 @@ const router = express.Router();
 const jobs = new Map();
 const queue = new PQueue({ concurrency: 2 });
 
+console.log("[deploy.queue] router initialized");
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// quick health check for the queue
+router.get("/_ping", (req, res) => {
+  res.json({ ok: true, queueSize: queue.size, pending: queue.pending });
+});
 
 router.post("/enqueue", express.json(), async (req, res) => {
   const { provider, previewPath, siteName } = req.body || {};
@@ -18,7 +25,8 @@ router.post("/enqueue", express.json(), async (req, res) => {
   jobs.set(id, job);
 
   queue.add(async () => {
-    const j = jobs.get(id); if (!j) return;
+    const j = jobs.get(id);
+    if (!j) return;
     j.status = "running";
     try {
       // --- FAKE DEPLOY for smoke test ---

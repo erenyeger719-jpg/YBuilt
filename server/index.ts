@@ -12,6 +12,7 @@ import { requestIdMiddleware, logger } from './middleware/logging.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { initializeSocket } from './socket.js';
 import { wireRequestLogs, wireLogsNamespace } from './logs.js';
+import deployQueue from './routes/deploy.queue.js'; // <-- added
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -193,7 +194,9 @@ if (reqMw) app.use(reqMw);
   const { default: jobsRouter } = await import('./routes/jobs.js');
   const { default: workspaceRouter } = await import('./routes/workspace.js');
   const { default: authRoutes } = await import('./routes/auth.js').catch(() => ({ default: undefined as any }));
-  const { default: projectsRoutes } = await import('./routes/projects.js').catch(() => ({ default: undefined as any }));
+  const { default: projectsRoutes } = await import('./routes/projects.js').catch(() => ({
+    default: undefined as any,
+  }));
   const { default: chatRoutes } = await import('./routes/chat.js').catch(() => ({ default: undefined as any }));
   const { default: executeRoutes } = await import('./routes/execute.js').catch(() => ({ default: undefined as any }));
   const { default: previewsRouter } = await import('./routes/previews.js').catch(() => ({
@@ -217,6 +220,9 @@ if (reqMw) app.use(reqMw);
   const { default: previewsManage } = await import('./routes/previews.manage.js').catch(() => ({
     default: undefined as any,
   }));
+
+  // Mount deploy queue router (in addition to deploy API)
+  app.use('/api/deploy', deployQueue); // <-- added
 
   if (authRoutes) app.use('/api/auth', authRoutes);
   if (projectsRoutes) app.use('/api/projects', projectsRoutes);
