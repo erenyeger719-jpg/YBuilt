@@ -123,4 +123,23 @@ router.get("/list", async (req, res) => {
   }
 });
 
+// --- REMOVE a file inside a fork ---
+// POST /api/previews/remove-file { path:"/previews/forks/<slug>/", file:"styles.css" }
+router.post("/remove-file", express.json(), async (req, res) => {
+  try {
+    const href = req.body?.path;
+    const file = String(req.body?.file || "");
+    if (!href || !allowedFile(file)) return res.status(400).json({ error: "bad args" });
+
+    const absDir = safeJoinPreviews(href);
+    const absFile = path.resolve(absDir, file);
+    if (!absFile.startsWith(absDir)) return res.status(400).json({ error: "path escape" });
+
+    await fs.promises.unlink(absFile);
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: "remove failed" });
+  }
+});
+
 export default router;
