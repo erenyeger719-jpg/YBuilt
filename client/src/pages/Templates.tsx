@@ -1,4 +1,5 @@
 import TemplatesPanel from "@/components/templates/TemplatesPanel";
+import ImportFromGitHub from "@/components/templates/ImportFromGitHub";
 
 async function forkTemplate(sourceId: string, name: string) {
   const r = await fetch("/api/previews/fork", {
@@ -28,9 +29,10 @@ async function forkTemplate(sourceId: string, name: string) {
 export default function Templates() {
   return (
     <div className="container mx-auto px-4 py-8">
-      <TemplatesPanel
-        onFork={(sourceId: string, name: string) => forkTemplate(sourceId, name)}
-      />
+      {/* Box above the grid */}
+      <ImportFromGitHub />
+      {/* Templates grid */}
+      <TemplatesPanel onFork={(sourceId: string, name: string) => forkTemplate(sourceId, name)} />
     </div>
   );
 }
