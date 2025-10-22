@@ -6,6 +6,7 @@ import fs from "fs";
 const router = express.Router();
 const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || "previews");
 
+/** Expect /previews/forks/<slug>/... and return absolute fork dir */
 function safeForkDirFromPublic(href) {
   // Expect /previews/forks/<slug>/...
   const rel = String(href || "").replace(/^https?:\/\/[^/]+/i, "");
@@ -19,6 +20,23 @@ function safeForkDirFromPublic(href) {
   return abs;
 }
 
+/** Reuse-safe: harden path joining to previews dir */
+function safeJoinPreviews(inputPath) {
+  const p = String(inputPath || "");
+  const rel = p.replace(/^https?:\/\/[^/]+/i, "").replace(/^\/+/, "");
+  if (!rel.startsWith("previews/")) throw new Error("bad path");
+  const abs = path.resolve(PREVIEWS_DIR, rel.replace(/^previews\//, ""));
+  if (!abs.startsWith(PREVIEWS_DIR)) throw new Error("path escape");
+  return abs;
+}
+
+function allowedFile(file) {
+  return (
+    /^[a-zA-Z0-9._/-]+$/.test(file) &&
+    [".html", ".htm", ".css", ".js"].some((ext) => file.endsWith(ext))
+  );
+}
+
 // POST /api/previews/delete { path: "/previews/forks/<slug>/" }
 router.post("/delete", async (req, res) => {
   try {
@@ -29,6 +47,45 @@ router.post("/delete", async (req, res) => {
     return res.json({ ok: true });
   } catch (_e) {
     return res.status(400).json({ error: "invalid or missing path" });
+  }
+});
+
+// --- READ a file from a fork ---
+// GET /api/previews/read?path=/previews/forks/<slug>/&file=index.html
+router.get("/read", async (req, res) => {
+  try {
+    const href = req.query?.path;
+    const file = String(req.query?.file || "index.html");
+    if (!href || !allowedFile(file)) return res.status(400).json({ error: "bad args" });
+
+    const absDir = safeJoinPreviews(href);
+    const absFile = path.resolve(absDir, file);
+    if (!absFile.startsWith(absDir)) return res.status(400).json({ error: "path escape" });
+
+    const content = await fs.promises.readFile(absFile, "utf8");
+    res.json({ ok: true, content });
+  } catch (e) {
+    res.status(404).json({ error: "read failed" });
+  }
+});
+
+// --- WRITE a file into a fork ---
+// POST /api/previews/write { path:"/previews/forks/<slug>/", file:"index.html", content:"..." }
+router.post("/write", express.json({ limit: "2mb" }), async (req, res) => {
+  try {
+    const href = req.body?.path;
+    const file = String(req.body?.file || "index.html");
+    const content = String(req.body?.content ?? "");
+    if (!href || !allowedFile(file)) return res.status(400).json({ error: "bad args" });
+
+    const absDir = safeJoinPreviews(href);
+    const absFile = path.resolve(absDir, file);
+    if (!absFile.startsWith(absDir)) return res.status(400).json({ error: "path escape" });
+
+    await fs.promises.writeFile(absFile, content, "utf8");
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "write failed" });
   }
 });
 

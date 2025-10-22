@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { exportZip, deployNetlify, deployVercel } from "@/lib/previewsActions";
 import { useToast } from "@/hooks/use-toast";
 import DeployDrawer from "./DeployDrawer";
+import QuickEditDialog from "./QuickEditDialog";
 
 type DeployInfo = { provider: "netlify" | "vercel"; url?: string; adminUrl?: string; createdAt: number };
 type StoredPreview = {
@@ -37,6 +38,10 @@ export default function PreviewsList() {
   const [drawerMsg, setDrawerMsg] = useState<string | undefined>();
   const [drawerUrl, setDrawerUrl] = useState<string | undefined>();
   const [drawerAdminUrl, setDrawerAdminUrl] = useState<string | undefined>();
+
+  // quick edit state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editPath, setEditPath] = useState<string | null>(null);
 
   useEffect(() => {
     const onStorage = () => setItems(load());
@@ -223,6 +228,17 @@ export default function PreviewsList() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {/* Edit HTML */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={() => {
+                  setEditPath(it.previewPath);
+                  setEditOpen(true);
+                }}
+              >
+                Edit HTML
+              </button>
+
               {/* Open */}
               <button
                 className="text-xs px-2 py-1 border rounded"
@@ -312,6 +328,16 @@ export default function PreviewsList() {
         message={drawerMsg}
         url={drawerUrl}
         adminUrl={drawerAdminUrl}
+      />
+
+      <QuickEditDialog
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        previewPath={editPath || "/previews/"}
+        file="index.html"
+        onSaved={() => {
+          /* no-op; we also open a new tab after save */
+        }}
       />
     </>
   );
