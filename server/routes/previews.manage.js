@@ -37,6 +37,21 @@ function allowedFile(file) {
   );
 }
 
+/** Helper: recursively copy a directory */
+async function copyDir(src, dest) {
+  await fs.promises.mkdir(dest, { recursive: true });
+  const entries = await fs.promises.readdir(src, { withFileTypes: true });
+  for (const e of entries) {
+    const s = path.join(src, e.name);
+    const d = path.join(dest, e.name);
+    if (e.isDirectory()) {
+      await copyDir(s, d);
+    } else {
+      await fs.promises.copyFile(s, d);
+    }
+  }
+}
+
 // POST /api/previews/delete { path: "/previews/forks/<slug>/" }
 router.post("/delete", async (req, res) => {
   try {
@@ -145,6 +160,42 @@ router.post("/remove-file", express.json(), async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ error: "remove failed" });
+  }
+});
+
+// --- DUPLICATE a fork ---
+// POST /api/previews/duplicate { path:"/previews/forks/<slug>/" }
+router.post("/duplicate", express.json(), async (req, res) => {
+  try {
+    const href = req.body?.path;
+    if (!href) return res.status(400).json({ error: "path required" });
+
+    const srcDir = safeForkDirFromPublic(href);
+
+    // derive a new slug
+    const srcMatch =
+      String(href).match(/\/previews\/forks\/([^/]+)\//i) ||
+      String(href).match(/\/previews\/forks\/([^/]+)$/i);
+    const base = srcMatch ? srcMatch[1] : `copy`;
+    const newSlug = `${base}-copy-${Math.random().toString(36).slice(2, 5)}${Math.random()
+      .toString(36)
+      .slice(2, 4)}`;
+
+    const destDir = path.resolve(path.join(PREVIEWS_DIR, "forks", newSlug));
+    if (!destDir.startsWith(path.resolve(PREVIEWS_DIR))) {
+      return res.status(400).json({ error: "path escape" });
+    }
+
+    await copyDir(srcDir, destDir);
+
+    return res.json({
+      ok: true,
+      path: `/previews/forks/${newSlug}/`,
+      slug: newSlug,
+    });
+  } catch (e) {
+    console.error("[PREVIEWS] duplicate error", e);
+    return res.status(500).json({ error: "duplicate failed" });
   }
 });
 

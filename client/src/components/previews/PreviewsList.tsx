@@ -159,6 +159,18 @@ export default function PreviewsList() {
     return data.files || [];
   }
 
+  // NEW: duplicate helper
+  async function duplicatePreview(previewPath: string) {
+    const r = await fetch("/api/previews/duplicate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: previewPath }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data?.ok || !data?.path) throw new Error(data?.error || "duplicate failed");
+    return data.path as string;
+  }
+
   async function ensureAsset(previewPath: string, kind: "css" | "js") {
     const files = await listFiles(previewPath);
 
@@ -397,6 +409,39 @@ export default function PreviewsList() {
                 }}
               >
                 Copy link
+              </button>
+
+              {/* Duplicate */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={async () => {
+                  try {
+                    const newPath = await duplicatePreview(it.previewPath);
+                    // store locally so it appears in the list
+                    const nextItem: StoredPreview = {
+                      id: `dup-${Date.now()}`,
+                      name: `${it.name} (Copy)`,
+                      previewPath: newPath,
+                      createdAt: Date.now(),
+                      deploys: [],
+                    };
+                    setItems((prev) => {
+                      const next = [nextItem, ...prev];
+                      localStorage.setItem(STORE_KEY, JSON.stringify(next));
+                      return next;
+                    });
+                    toast({ title: "Duplicated", description: newPath });
+                    window.open(newPath, "_blank", "noopener,noreferrer");
+                  } catch (e: any) {
+                    toast({
+                      title: "Duplicate failed",
+                      description: e?.message || "Error",
+                      variant: "destructive",
+                    });
+                  }
+                }}
+              >
+                Duplicate
               </button>
 
               {/* Export ZIP */}
