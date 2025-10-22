@@ -77,7 +77,7 @@ export default function PreviewsList() {
     previewPath: string,
     name?: string,
   ): Promise<string> {
-    const r = await fetch("/api/deploy/queue", {
+    const r = await fetch("/api/deploy/enqueue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ provider, previewPath, name }),
