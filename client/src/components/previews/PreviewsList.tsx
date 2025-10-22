@@ -3,6 +3,7 @@ import { exportZip, deployNetlify, deployVercel } from "@/lib/previewsActions";
 import { useToast } from "@/hooks/use-toast";
 import DeployDrawer from "./DeployDrawer";
 import QuickEditDialog from "./QuickEditDialog";
+import QuickStyleDialog from "./QuickStyleDialog";
 
 type DeployInfo = { provider: "netlify" | "vercel"; url?: string; adminUrl?: string; createdAt: number };
 type StoredPreview = {
@@ -43,6 +44,11 @@ export default function PreviewsList() {
   const [editOpen, setEditOpen] = useState(false);
   const [editPath, setEditPath] = useState<string | null>(null);
   const [editInitialFile, setEditInitialFile] = useState<string | undefined>(undefined);
+
+  // quick style state
+  const [styleOpen, setStyleOpen] = useState(false);
+  const [stylePath, setStylePath] = useState<string | null>(null);
+  const [styleFile, setStyleFile] = useState<string | null>(null);
 
   useEffect(() => {
     const onStorage = () => setItems(load());
@@ -381,6 +387,27 @@ export default function PreviewsList() {
                 Edit CSS
               </button>
 
+              {/* Style Tweaks (no-code CSS) */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={async () => {
+                  try {
+                    const f = await ensureAsset(it.previewPath, "css");
+                    setStylePath(it.previewPath);
+                    setStyleFile(f);
+                    setStyleOpen(true);
+                  } catch (e: any) {
+                    toast({
+                      title: "Style panel failed",
+                      description: e?.message || "Error",
+                      variant: "destructive",
+                    });
+                  }
+                }}
+              >
+                Style Tweaks
+              </button>
+
               {/* Edit JS */}
               <button
                 className="text-xs px-2 py-1 border rounded"
@@ -558,6 +585,13 @@ export default function PreviewsList() {
         onSaved={() => {
           /* no-op */
         }}
+      />
+
+      <QuickStyleDialog
+        open={styleOpen}
+        onClose={() => setStyleOpen(false)}
+        previewPath={stylePath || "/previews/"}
+        file={styleFile || "styles.css"}
       />
     </>
   );
