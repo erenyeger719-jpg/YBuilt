@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { exportZip } from "@/lib/previewsActions";
+import { exportZip, enqueueDeploy, getDeployJob } from "@/lib/previewsActions";
 import { useToast } from "@/hooks/use-toast";
 import DeployDrawer from "./DeployDrawer";
 import QuickEditDialog from "./QuickEditDialog";
@@ -71,149 +71,7 @@ export default function PreviewsList() {
     });
   }
 
-  // --- Deploy queue helpers ---
-  async function enqueueDeploy(
-    provider: "netlify" | "vercel",
-    previewPath: string,
-    name?: string,
-  ): Promise<string> {
-    const r = await fetch("/api/deploy/enqueue", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, previewPath, name }),
-    });
-    const data = await r.json();
-    if (!r.ok || !data?.ok || !data?.jobId) {
-      throw new Error(data?.error || "failed to enqueue deploy");
-    }
-    return String(data.jobId);
-  }
-
-  type DeployJob =
-    | {
-        status: "queued" | "running" | "success" | "error";
-        result?: any;
-        error?: string;
-      }
-    | any;
-
-  async function getDeployJob(jobId: string): Promise<DeployJob> {
-    const r = await fetch(`/api/deploy/jobs/${encodeURIComponent(jobId)}`);
-    const data = await r.json();
-    if (!r.ok || (!data?.ok && !data?.status)) {
-      throw new Error(data?.error || "failed to fetch job");
-    }
-    return (data.job || data) as DeployJob;
-  }
-
-  async function handleDeployNetlify(it: StoredPreview) {
-    setDrawerProvider("netlify");
-    setDrawerState("starting");
-    setDrawerMsg("Queuing…");
-    setDrawerUrl(undefined);
-    setDrawerAdminUrl(undefined);
-    setDrawerOpen(true);
-
-    try {
-      const suggested = `ybuilt-${slugify(it.name)}`;
-      const siteName = window.prompt("Netlify site name (optional)", suggested)?.trim() || suggested;
-
-      // enqueue job
-      const jobId = await enqueueDeploy("netlify", it.previewPath, siteName);
-
-      // poll
-      let done = false;
-      while (!done) {
-        await new Promise((r) => setTimeout(r, 1200));
-        const j = await getDeployJob(jobId);
-
-        if (j.status === "queued") setDrawerMsg("Queued…");
-        if (j.status === "running") setDrawerMsg("Deploying…");
-
-        if (j.status === "success") {
-          done = true;
-          const url = j.result?.url || j.result?.deploy_url;
-          const admin = j.result?.admin_url || j.result?.dashboard_url;
-
-          updatePreview(it.previewPath, (p) => {
-            p.deploys!.unshift({ provider: "netlify", url, adminUrl: admin, createdAt: Date.now() });
-          });
-
-          setDrawerState("success");
-          setDrawerMsg("Deployed.");
-          setDrawerUrl(url);
-          setDrawerAdminUrl(admin);
-
-          try {
-            await navigator.clipboard.writeText(url);
-          } catch {}
-          toast({ title: "Netlify", description: url });
-        }
-
-        if (j.status === "error") {
-          done = true;
-          setDrawerState("error");
-          setDrawerMsg(j.error || "Deploy failed.");
-        }
-      }
-    } catch (e: any) {
-      setDrawerState("error");
-      setDrawerMsg(e?.message || "Deploy failed.");
-    }
-  }
-
-  async function handleDeployVercel(it: StoredPreview) {
-    setDrawerProvider("vercel");
-    setDrawerState("starting");
-    setDrawerMsg("Queuing…");
-    setDrawerUrl(undefined);
-    setDrawerAdminUrl(undefined);
-    setDrawerOpen(true);
-
-    try {
-      const name = `ybuilt-${slugify(it.name)}`;
-      const jobId = await enqueueDeploy("vercel", it.previewPath, name);
-
-      let done = false;
-      while (!done) {
-        await new Promise((r) => setTimeout(r, 1200));
-        const j = await getDeployJob(jobId);
-
-        if (j.status === "queued") setDrawerMsg("Queued…");
-        if (j.status === "running") setDrawerMsg("Deploying…");
-
-        if (j.status === "success") {
-          done = true;
-          const url = j.result?.url || j.result?.inspectUrl;
-
-          updatePreview(it.previewPath, (p) => {
-            p.deploys!.unshift({ provider: "vercel", url, adminUrl: undefined, createdAt: Date.now() });
-          });
-
-          setDrawerState("success");
-          setDrawerMsg("Deployment created.");
-          setDrawerUrl(url);
-          setDrawerAdminUrl(undefined);
-
-          try {
-            await navigator.clipboard.writeText(url);
-          } catch {}
-          toast({ title: "Vercel", description: url });
-        }
-
-        if (j.status === "error") {
-          done = true;
-          setDrawerState("error");
-          setDrawerMsg(j.error || "Deploy failed.");
-        }
-      }
-    } catch (e: any) {
-      setDrawerState("error");
-      setDrawerMsg(e?.message || "Deploy failed.");
-    }
-  }
-
-  // helpers —— server file ops + asset ensure
+  // ---- server file ops + asset ensure helpers ----
   async function readFile(previewPath: string, file: string) {
     const r = await fetch(
       `/api/previews/read?path=${encodeURIComponent(previewPath)}&file=${encodeURIComponent(file)}`
@@ -308,6 +166,109 @@ export default function PreviewsList() {
     }
 
     return picked;
+  }
+
+  // ------- Deploy queue polling helper -------
+  async function pollJobUntilDone(id: string, onUpdate: (j: any) => void) {
+    // simple loop; breaks on success/error (MVP: no timeout)
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const j = await getDeployJob(id);
+      onUpdate(j);
+      if (j.status === "success" || j.status === "error") break;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+
+  // ------- Deploy handlers (queued flow) -------
+  async function handleDeployNetlify(it: StoredPreview) {
+    setDrawerProvider("netlify");
+    setDrawerState("starting");
+    setDrawerMsg("Queuing…");
+    setDrawerUrl(undefined);
+    setDrawerAdminUrl(undefined);
+    setDrawerOpen(true);
+
+    try {
+      const suggested = `ybuilt-${slugify(it.name)}`;
+      const siteName = window.prompt("Netlify site name (optional)", suggested)?.trim() || suggested;
+
+      // enqueue
+      const id = await enqueueDeploy("netlify", it.previewPath, siteName);
+
+      // poll status
+      await pollJobUntilDone(id, (j) => {
+        if (j.status === "queued") {
+          setDrawerState("starting");
+          setDrawerMsg("Queued…");
+        } else if (j.status === "running") {
+          setDrawerState("starting");
+          setDrawerMsg("Deploying…");
+        } else if (j.status === "success") {
+          const url = j?.result?.url;
+          if (url) {
+            updatePreview(it.previewPath, (p) => {
+              p.deploys!.unshift({ provider: "netlify", url, adminUrl: undefined, createdAt: Date.now() });
+            });
+            setDrawerState("success");
+            setDrawerMsg("Deployed.");
+            setDrawerUrl(url);
+          } else {
+            setDrawerState("error");
+            setDrawerMsg("No URL returned.");
+          }
+        } else if (j.status === "error") {
+          setDrawerState("error");
+          setDrawerMsg(j?.error || "Deploy failed.");
+        }
+      });
+    } catch (e: any) {
+      setDrawerState("error");
+      setDrawerMsg(e?.message || "Deploy failed.");
+    }
+  }
+
+  async function handleDeployVercel(it: StoredPreview) {
+    setDrawerProvider("vercel");
+    setDrawerState("starting");
+    setDrawerMsg("Queuing…");
+    setDrawerUrl(undefined);
+    setDrawerAdminUrl(undefined);
+    setDrawerOpen(true);
+
+    try {
+      const name = `ybuilt-${slugify(it.name)}`;
+      const id = await enqueueDeploy("vercel", it.previewPath, name);
+
+      await pollJobUntilDone(id, (j) => {
+        if (j.status === "queued") {
+          setDrawerState("starting");
+          setDrawerMsg("Queued…");
+        } else if (j.status === "running") {
+          setDrawerState("starting");
+          setDrawerMsg("Deploying…");
+        } else if (j.status === "success") {
+          const url = j?.result?.url;
+          if (url) {
+            updatePreview(it.previewPath, (p) => {
+              p.deploys!.unshift({ provider: "vercel", url, adminUrl: undefined, createdAt: Date.now() });
+            });
+            setDrawerState("success");
+            setDrawerMsg("Deployed.");
+            setDrawerUrl(url);
+          } else {
+            setDrawerState("error");
+            setDrawerMsg("No URL returned.");
+          }
+        } else if (j.status === "error") {
+          setDrawerState("error");
+          setDrawerMsg(j?.error || "Deploy failed.");
+        }
+      });
+    } catch (e: any) {
+      setDrawerState("error");
+      setDrawerMsg(e?.message || "Deploy failed.");
+    }
   }
 
   // Updated empty state
