@@ -91,6 +91,31 @@ export default function PreviewsLibrary() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // Auto-open Quick Edit when coming from Templates "Use"
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const shouldOpen = url.searchParams.get("open");
+      const raw = localStorage.getItem("ybuilt.quickedit.autoOpen");
+      if (raw) {
+        const { path, file } = JSON.parse(raw) || {};
+        if (path) {
+          setEditPath(path);
+          setEditInitialFile(file || "index.html");
+          setEditOpen(true);
+        }
+      }
+      localStorage.removeItem("ybuilt.quickedit.autoOpen");
+      if (shouldOpen) {
+        url.searchParams.delete("open");
+        window.history.replaceState({}, "", url.pathname);
+      }
+    } catch {
+      // non-fatal
+      localStorage.removeItem("ybuilt.quickedit.autoOpen");
+    }
+  }, []);
+
   function updatePreview(previewPath: string, mut: (p: StoredPreview) => void) {
     setItems((prev) => {
       const next = prev.map((p) => {
@@ -264,25 +289,32 @@ export default function PreviewsLibrary() {
 
       await pollJobUntilDone(id, (j) => {
         if (j.status === "queued") {
-          setDrawerState("starting"); setDrawerMsg("Queued…");
+          setDrawerState("starting");
+          setDrawerMsg("Queued…");
         } else if (j.status === "running") {
-          setDrawerState("starting"); setDrawerMsg("Deploying…");
+          setDrawerState("starting");
+          setDrawerMsg("Deploying…");
         } else if (j.status === "success") {
           const url = j?.result?.url;
           if (url) {
             updatePreview(it.previewPath, (p) => {
               p.deploys!.unshift({ provider: "netlify", url, adminUrl: undefined, createdAt: Date.now() });
             });
-            setDrawerState("success"); setDrawerMsg("Deployed."); setDrawerUrl(url);
+            setDrawerState("success");
+            setDrawerMsg("Deployed.");
+            setDrawerUrl(url);
           } else {
-            setDrawerState("error"); setDrawerMsg("No URL returned.");
+            setDrawerState("error");
+            setDrawerMsg("No URL returned.");
           }
         } else if (j.status === "error") {
-          setDrawerState("error"); setDrawerMsg(j?.error || "Deploy failed.");
+          setDrawerState("error");
+          setDrawerMsg(j?.error || "Deploy failed.");
         }
       });
     } catch (e: any) {
-      setDrawerState("error"); setDrawerMsg(e?.message || "Deploy failed.");
+      setDrawerState("error");
+      setDrawerMsg(e?.message || "Deploy failed.");
     }
   }
 
@@ -300,25 +332,32 @@ export default function PreviewsLibrary() {
 
       await pollJobUntilDone(id, (j) => {
         if (j.status === "queued") {
-          setDrawerState("starting"); setDrawerMsg("Queued…");
+          setDrawerState("starting");
+          setDrawerMsg("Queued…");
         } else if (j.status === "running") {
-          setDrawerState("starting"); setDrawerMsg("Deploying…");
+          setDrawerState("starting");
+          setDrawerMsg("Deploying…");
         } else if (j.status === "success") {
           const url = j?.result?.url;
           if (url) {
             updatePreview(it.previewPath, (p) => {
               p.deploys!.unshift({ provider: "vercel", url, adminUrl: undefined, createdAt: Date.now() });
             });
-            setDrawerState("success"); setDrawerMsg("Deployed."); setDrawerUrl(url);
+            setDrawerState("success");
+            setDrawerMsg("Deployed.");
+            setDrawerUrl(url);
           } else {
-            setDrawerState("error"); setDrawerMsg("No URL returned.");
+            setDrawerState("error");
+            setDrawerMsg("No URL returned.");
           }
         } else if (j.status === "error") {
-          setDrawerState("error"); setDrawerMsg(j?.error || "Deploy failed.");
+          setDrawerState("error");
+          setDrawerMsg(j?.error || "Deploy failed.");
         }
       });
     } catch (e: any) {
-      setDrawerState("error"); setDrawerMsg(e?.message || "Deploy failed.");
+      setDrawerState("error");
+      setDrawerMsg(e?.message || "Deploy failed.");
     }
   }
 
@@ -331,14 +370,24 @@ export default function PreviewsLibrary() {
       const bundle = `/* index.html */\n${html}\n\n/* styles.css */\n${css}\n\n/* app.js */\n${js}`;
       const { review } = await aiReview({ code: bundle, tier });
       const n = (review?.issues || []).length;
-      updatePreview(previewPath, (p) => { p.issuesCount = n; });
-    } catch {/* silent */}
+      updatePreview(previewPath, (p) => {
+        p.issuesCount = n;
+      });
+    } catch {
+      /* silent */
+    }
   }
 
   // tokens helper
   async function applyTokens(previewPath: string) {
     const planRaw = await readFile(previewPath, "plan.json").catch(() => "{}");
-    const plan = (() => { try { return JSON.parse(planRaw); } catch { return {}; } })();
+    const plan = (() => {
+      try {
+        return JSON.parse(planRaw);
+      } catch {
+        return {};
+      }
+    })();
     const tokens = (plan as any).tokens || {};
     const primary = window.prompt("Primary color (CSS value)", tokens.primary || "#4f46e5")?.trim();
     if (!primary) return;
@@ -359,7 +408,11 @@ export default function PreviewsLibrary() {
   async function openSectionsModal(previewPath: string) {
     const raw = await readFile(previewPath, "plan.json").catch(() => "");
     let plan: any = null;
-    try { plan = raw ? JSON.parse(raw) : null; } catch { plan = null; }
+    try {
+      plan = raw ? JSON.parse(raw) : null;
+    } catch {
+      plan = null;
+    }
 
     const known = ["hero", "features", "pricing", "faq", "testimonials", "cta"];
     const fromPlan = Array.isArray(plan?.sections)
@@ -622,7 +675,8 @@ export default function PreviewsLibrary() {
 
               {!!(typeof it.issuesCount === "number") && (
                 <Button
-                  size="sm" variant="ghost"
+                  size="sm"
+                  variant="ghost"
                   className="mt-2 h-6 px-2 text-[10px] border border-white/20"
                   title="Open AI Review"
                   onClick={() => handleCheckIssues(it)}
@@ -640,88 +694,158 @@ export default function PreviewsLibrary() {
 
             {/* actions */}
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" onClick={() => { setEditPath(it.previewPath); setEditInitialFile("index.html"); setEditOpen(true); }}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setEditPath(it.previewPath);
+                  setEditInitialFile("index.html");
+                  setEditOpen(true);
+                }}
+              >
                 Edit HTML
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => { setEditPath(it.previewPath); setEditInitialFile("plan.json"); setEditOpen(true); }}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setEditPath(it.previewPath);
+                  setEditInitialFile("plan.json");
+                  setEditOpen(true);
+                }}
+              >
                 Edit Plan
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => applyTokens(it.previewPath)} title="Set primary color, radius, font-size">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => applyTokens(it.previewPath)}
+                title="Set primary color, radius, font-size"
+              >
                 Tokens
               </Button>
-              <Button size="sm" variant="secondary" onClick={async () => {
-                try {
-                  const f = await ensureAsset(it.previewPath, "css");
-                  setEditPath(it.previewPath); setEditInitialFile(f); setEditOpen(true);
-                  toast({ title: "CSS ready", description: f });
-                } catch (e: any) {
-                  toast({ title: "CSS setup failed", description: e?.message || "Error", variant: "destructive" });
-                }
-              }}>Edit CSS</Button>
-              <Button size="sm" variant="secondary" onClick={async () => {
-                try {
-                  const f = await ensureAsset(it.previewPath, "css");
-                  setStylePath(it.previewPath); setStyleFile(f); setStyleOpen(true);
-                } catch (e: any) {
-                  toast({ title: "Style panel failed", description: e?.message || "Error", variant: "destructive" });
-                }
-              }}>Style Tweaks</Button>
-              <Button size="sm" variant="secondary" onClick={async () => {
-                try {
-                  const f = await ensureAsset(it.previewPath, "js");
-                  setEditPath(it.previewPath); setEditInitialFile(f); setEditOpen(true);
-                  toast({ title: "JS ready", description: f });
-                } catch (e: any) {
-                  toast({ title: "JS setup failed", description: e?.message || "Error", variant: "destructive" });
-                }
-              }}>Edit JS</Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    const f = await ensureAsset(it.previewPath, "css");
+                    setEditPath(it.previewPath);
+                    setEditInitialFile(f);
+                    setEditOpen(true);
+                    toast({ title: "CSS ready", description: f });
+                  } catch (e: any) {
+                    toast({ title: "CSS setup failed", description: e?.message || "Error", variant: "destructive" });
+                  }
+                }}
+              >
+                Edit CSS
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    const f = await ensureAsset(it.previewPath, "css");
+                    setStylePath(it.previewPath);
+                    setStyleFile(f);
+                    setStyleOpen(true);
+                  } catch (e: any) {
+                    toast({ title: "Style panel failed", description: e?.message || "Error", variant: "destructive" });
+                  }
+                }}
+              >
+                Style Tweaks
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    const f = await ensureAsset(it.previewPath, "js");
+                    setEditPath(it.previewPath);
+                    setEditInitialFile(f);
+                    setEditOpen(true);
+                    toast({ title: "JS ready", description: f });
+                  } catch (e: any) {
+                    toast({ title: "JS setup failed", description: e?.message || "Error", variant: "destructive" });
+                  }
+                }}
+              >
+                Edit JS
+              </Button>
               <Button size="sm" variant="secondary" onClick={() => openOrNavigate(it.previewPath)}>
                 Open
               </Button>
-              <Button size="sm" variant="secondary" onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(it.previewPath);
-                  toast({ title: "Link copied", description: it.previewPath });
-                } catch {
-                  prompt("Copy link:", it.previewPath);
-                }
-              }}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(it.previewPath);
+                    toast({ title: "Link copied", description: it.previewPath });
+                  } catch {
+                    prompt("Copy link:", it.previewPath);
+                  }
+                }}
+              >
                 Share
               </Button>
-              <Button size="sm" variant="secondary" onClick={async () => {
-                try {
-                  const newPath = await duplicatePreview(it.previewPath);
-                  const nextItem: StoredPreview = {
-                    id: `dup-${Date.now()}`, name: `${it.name} (Copy)`, previewPath: newPath, createdAt: Date.now(), deploys: [],
-                  };
-                  setItems((prev) => {
-                    const next = setSorted([nextItem, ...prev]);
-                    localStorage.setItem(STORE_KEY, JSON.stringify(next));
-                    return next;
-                  });
-                  toast({ title: "Duplicated", description: newPath });
-                  try { await navigator.clipboard.writeText(newPath); } catch { prompt("Copy link:", newPath); }
-                  openOrNavigate(newPath);
-                } catch (e: any) {
-                  toast({ title: "Duplicate failed", description: e?.message || "Error", variant: "destructive" });
-                }
-              }}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    const newPath = await duplicatePreview(it.previewPath);
+                    const nextItem: StoredPreview = {
+                      id: `dup-${Date.now()}`,
+                      name: `${it.name} (Copy)`,
+                      previewPath: newPath,
+                      createdAt: Date.now(),
+                      deploys: [],
+                    };
+                    setItems((prev) => {
+                      const next = setSorted([nextItem, ...prev]);
+                      localStorage.setItem(STORE_KEY, JSON.stringify(next));
+                      return next;
+                    });
+                    toast({ title: "Duplicated", description: newPath });
+                    try {
+                      await navigator.clipboard.writeText(newPath);
+                    } catch {
+                      prompt("Copy link:", newPath);
+                    }
+                    openOrNavigate(newPath);
+                  } catch (e: any) {
+                    toast({ title: "Duplicate failed", description: e?.message || "Error", variant: "destructive" });
+                  }
+                }}
+              >
                 Duplicate
               </Button>
               <Button size="sm" variant="secondary" onClick={() => handleRebuild(it)}>
                 Rebuild (AI)
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => openSectionsModal(it.previewPath)} title="Pick sections, then rebuild">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => openSectionsModal(it.previewPath)}
+                title="Pick sections, then rebuild"
+              >
                 Rebuild (Sections)
               </Button>
               <Button size="sm" variant="secondary" onClick={() => handleCheckIssues(it)}>
                 Check issues (AI)
               </Button>
-              <Button size="sm" variant="secondary" onClick={() =>
-                exportZip(it.previewPath).catch((e) =>
-                  toast({ title: "Export", description: String(e?.message || e), variant: "destructive" })
-                )
-              }>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() =>
+                  exportZip(it.previewPath).catch((e) =>
+                    toast({ title: "Export", description: String(e?.message || e), variant: "destructive" })
+                  )
+                }
+              >
                 Export ZIP
               </Button>
               <Button size="sm" variant="secondary" onClick={() => handleDeployNetlify(it)}>
@@ -730,36 +854,44 @@ export default function PreviewsLibrary() {
               <Button size="sm" variant="secondary" onClick={() => handleDeployVercel(it)}>
                 Deploy → Vercel
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => {
-                const newName = window.prompt("New name", it.name || "Untitled")?.trim();
-                if (!newName) return;
-                setItems((prev) => {
-                  const next = setSorted(rename(prev, it.previewPath, newName));
-                  save(next);
-                  return next;
-                });
-                toast({ title: "Renamed", description: newName });
-              }}>
-                Rename
-              </Button>
-              <Button size="sm" variant="ghost" onClick={async () => {
-                try {
-                  const r = await fetch("/api/previews/delete", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ path: it.previewPath }),
-                  });
-                  if (!r.ok) throw new Error(await r.text());
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  const newName = window.prompt("New name", it.name || "Untitled")?.trim();
+                  if (!newName) return;
                   setItems((prev) => {
-                    const next = setSorted(prev.filter((x) => x.previewPath !== it.previewPath));
-                    localStorage.setItem(STORE_KEY, JSON.stringify(next));
+                    const next = setSorted(rename(prev, it.previewPath, newName));
+                    save(next);
                     return next;
                   });
-                  toast({ title: "Deleted", description: it.name });
-                } catch (e: any) {
-                  toast({ title: "Delete failed", description: e?.message || "Error", variant: "destructive" });
-                }
-              }}>
+                  toast({ title: "Renamed", description: newName });
+                }}
+              >
+                Rename
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => {
+                  try {
+                    const r = await fetch("/api/previews/delete", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ path: it.previewPath }),
+                    });
+                    if (!r.ok) throw new Error(await r.text());
+                    setItems((prev) => {
+                      const next = setSorted(prev.filter((x) => x.previewPath !== it.previewPath));
+                      localStorage.setItem(STORE_KEY, JSON.stringify(next));
+                      return next;
+                    });
+                    toast({ title: "Deleted", description: it.name });
+                  } catch (e: any) {
+                    toast({ title: "Delete failed", description: e?.message || "Error", variant: "destructive" });
+                  }
+                }}
+              >
                 Delete
               </Button>
             </div>
@@ -773,7 +905,9 @@ export default function PreviewsLibrary() {
           <div className="w-full max-w-lg rounded-lg bg-black/80 text-white border border-white/20 p-4 shadow-xl">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">Rebuild with Sections</h3>
-              <Button size="sm" variant="ghost" onClick={() => setSectionsOpen(false)}>Close</Button>
+              <Button size="sm" variant="ghost" onClick={() => setSectionsOpen(false)}>
+                Close
+              </Button>
             </div>
 
             <div className="space-y-2 mb-3">
@@ -790,7 +924,9 @@ export default function PreviewsLibrary() {
             </div>
 
             <div className="flex items-center justify-end gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setSectionsOpen(false)}>Cancel</Button>
+              <Button size="sm" variant="ghost" onClick={() => setSectionsOpen(false)}>
+                Cancel
+              </Button>
               <Button
                 size="sm"
                 variant="secondary"
@@ -799,10 +935,17 @@ export default function PreviewsLibrary() {
                   try {
                     const raw = await readFile(sectionsPath, "plan.json").catch(() => "");
                     let plan: any = null;
-                    try { plan = raw ? JSON.parse(raw) : null; } catch { plan = null; }
+                    try {
+                      plan = raw ? JSON.parse(raw) : null;
+                    } catch {
+                      plan = null;
+                    }
 
                     const blocks = Object.keys(pickedSections).filter((k) => pickedSections[k]);
-                    if (!blocks.length) { alert("Pick at least one section."); return; }
+                    if (!blocks.length) {
+                      alert("Pick at least one section.");
+                      return;
+                    }
 
                     const payload = plan ? { plan } : { prompt: "AI page" };
                     const { path } = await aiScaffold({ ...(payload as any), blocks, tier: aiTier } as any);
@@ -858,11 +1001,10 @@ export default function PreviewsLibrary() {
                         for (const op of allOps) {
                           // ensure file exists if needed
                           if (op.file.endsWith(".css")) await ensureAsset(reviewPath, "css");
-                          if (op.file.endsWith(".js"))  await ensureAsset(reviewPath, "js");
+                          if (op.file.endsWith(".js")) await ensureAsset(reviewPath, "js");
 
                           const before =
-                            filesCache[op.file] ??
-                            (await readFile(reviewPath, op.file).catch(() => ""));
+                            filesCache[op.file] ?? (await readFile(reviewPath, op.file).catch(() => ""));
                           filesCache[op.file] = before;
 
                           if (op.find === "$$EOF$$" && !op.isRegex) {
@@ -900,7 +1042,9 @@ export default function PreviewsLibrary() {
                     Fix all (AI)
                   </Button>
                 )}
-                <Button size="sm" variant="ghost" onClick={() => setIssuesOpen(false)}>Close</Button>
+                <Button size="sm" variant="ghost" onClick={() => setIssuesOpen(false)}>
+                  Close
+                </Button>
               </div>
             </div>
 
@@ -921,8 +1065,12 @@ export default function PreviewsLibrary() {
                           size="sm"
                           variant="ghost"
                           onClick={async () => {
-                            try { await navigator.clipboard.writeText(issue.fix!); toast({ title: "Copied fix" }); }
-                            catch { /* noop */ }
+                            try {
+                              await navigator.clipboard.writeText(issue.fix!);
+                              toast({ title: "Copied fix" });
+                            } catch {
+                              /* noop */
+                            }
                           }}
                         >
                           Copy fix
@@ -995,7 +1143,11 @@ export default function PreviewsLibrary() {
                               toast({ title: "Fix appended to CSS" });
                               await runReviewFor(reviewPath, aiTier);
                             } catch (e: any) {
-                              toast({ title: "Couldn’t append", description: e?.message || "Error", variant: "destructive" });
+                              toast({
+                                title: "Couldn’t append",
+                                description: e?.message || "Error",
+                                variant: "destructive",
+                              });
                             }
                           }}
                         >
@@ -1028,7 +1180,11 @@ export default function PreviewsLibrary() {
         onClose={() => setEditOpen(false)}
         previewPath={editPath || "/previews/"}
         initialFile={editInitialFile}
-        onSaved={async () => { if (editPath) { runReviewFor(editPath, aiTier); } }}
+        onSaved={async () => {
+          if (editPath) {
+            runReviewFor(editPath, aiTier);
+          }
+        }}
       />
 
       <QuickStyleDialog

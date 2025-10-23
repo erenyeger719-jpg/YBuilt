@@ -47,7 +47,13 @@ export default function TemplatesPage() {
       localStorage.setItem(STORE_KEY, JSON.stringify(next));
 
       toast({ title: "Template generated", description: tpl.name });
-      openOrNavigate(path);
+      // tell the Library to auto-open this preview in the editor
+      localStorage.setItem(
+        "ybuilt.quickedit.autoOpen",
+        JSON.stringify({ path, file: "index.html" })
+      );
+      // same-tab navigation avoids popup blockers
+      window.location.assign("/library?open=1");
     } catch (e: any) {
       toast({ title: "Generate failed", description: e?.message || "Error", variant: "destructive" });
     } finally {
