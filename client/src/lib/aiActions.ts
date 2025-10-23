@@ -1,3 +1,20 @@
+// client/src/lib/aiActions.ts
+
+// --- types for AI Review patches ---
+export type PatchOp = {
+  file: "index.html" | "styles.css" | "app.js";
+  find: string;        // exact string or regex (when isRegex = true)
+  replace: string;
+  isRegex?: boolean;   // default false
+};
+
+export type ReviewIssue = {
+  type: string;
+  msg: string;
+  fix?: string;        // human-readable suggestion
+  ops?: PatchOp[];     // machine-applicable steps (optional)
+};
+
 export async function aiPlan(
   prompt: string,
   tier: "fast" | "balanced" | "best" = "balanced",
@@ -30,5 +47,5 @@ export async function aiReview(opts: { code: string; tier?: string }) {
   });
   const d = await r.json();
   if (!r.ok || !d?.ok) throw new Error(d?.error || "review failed");
-  return d as { ok: true; review: { issues: { type: string; msg: string; fix?: string }[] } };
+  return d as { ok: true; review: { issues: ReviewIssue[] } };
 }

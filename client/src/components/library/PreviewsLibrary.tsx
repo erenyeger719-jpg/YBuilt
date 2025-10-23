@@ -18,6 +18,9 @@ type StoredPreview = {
   issuesCount?: number;
 };
 
+type PatchOp = { file: string; find: string; replace: string; isRegex?: boolean };
+type ReviewIssue = { type: string; msg: string; fix?: string; ops?: PatchOp[] };
+
 const STORE_KEY = "ybuilt.previews";
 const TIER_KEY = "ybuilt.aiTier";
 
@@ -69,7 +72,7 @@ export default function PreviewsLibrary() {
   // AI review modal
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [issuesLoading, setIssuesLoading] = useState(false);
-  const [issues, setIssues] = useState<{ type: string; msg: string; fix?: string }[]>([]);
+  const [issues, setIssues] = useState<ReviewIssue[]>([]);
   const [issuesErr, setIssuesErr] = useState<string | undefined>();
   const [reviewPath, setReviewPath] = useState<string | null>(null);
 
@@ -188,6 +191,40 @@ export default function PreviewsLibrary() {
     }
 
     return picked;
+  }
+
+  // --- apply AI patch operations to files ---
+  async function applyOps(previewPath: string, ops: PatchOp[]) {
+    let touched: Record<string, string> = {};
+    let changedFiles: string[] = [];
+
+    for (const op of ops) {
+      // make sure target files exist when CSS/JS
+      if (op.file.endsWith(".css")) await ensureAsset(previewPath, "css");
+      if (op.file.endsWith(".js")) await ensureAsset(previewPath, "js");
+
+      const before = touched[op.file] ?? (await readFile(previewPath, op.file).catch(() => ""));
+      let after = before;
+
+      if (op.isRegex) {
+        const re = new RegExp(op.find, "g");
+        if (!re.test(after)) throw new Error(`Pattern not found in ${op.file}: ${op.find}`);
+        after = after.replace(re, op.replace);
+      } else {
+        if (!after.includes(op.find)) throw new Error(`Text not found in ${op.file}: ${op.find}`);
+        after = after.split(op.find).join(op.replace);
+      }
+
+      if (after !== before) {
+        touched[op.file] = after;
+        if (!changedFiles.includes(op.file)) changedFiles.push(op.file);
+      }
+    }
+
+    for (const f of changedFiles) {
+      await writeFile(previewPath, f, touched[f]);
+    }
+    return changedFiles;
   }
 
   // deploy polling
@@ -840,6 +877,62 @@ export default function PreviewsLibrary() {
                         Open in editor
                       </Button>
                     </div>
+
+                    {/* Apply fix (when ops are provided) */}
+                    {issue.ops?.length ? (
+                      <div className="mt-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={async () => {
+                            try {
+                              if (!reviewPath) throw new Error("No preview selected");
+                              const files = await applyOps(reviewPath, issue.ops!);
+                              toast({ title: "Applied", description: `Updated ${files.join(", ")}` });
+                              // refresh badge + re-run focused review
+                              await runReviewFor(reviewPath, aiTier);
+                              await handleCheckIssues({ previewPath: reviewPath } as any);
+                            } catch (e: any) {
+                              toast({
+                                title: "Couldn’t apply fix",
+                                description: e?.message || "Patch failed",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                        >
+                          Apply fix
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    {/* Heuristic fallback: append CSS when no ops are provided */}
+                    {!issue.ops?.length && issue.fix?.includes("{") && (
+                      <div className="mt-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={async () => {
+                            try {
+                              if (!reviewPath) throw new Error("No preview selected");
+                              const cssFile = await ensureAsset(reviewPath, "css");
+                              const before = await readFile(reviewPath, cssFile).catch(() => "");
+                              await writeFile(
+                                reviewPath,
+                                cssFile,
+                                `${before.trim()}\n\n/* @ai-fix */\n${issue.fix!.trim()}\n`
+                              );
+                              toast({ title: "Fix appended to CSS" });
+                              await runReviewFor(reviewPath, aiTier);
+                            } catch (e: any) {
+                              toast({ title: "Couldn’t append", description: e?.message || "Error", variant: "destructive" });
+                            }
+                          }}
+                        >
+                          Append to CSS
+                        </Button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
