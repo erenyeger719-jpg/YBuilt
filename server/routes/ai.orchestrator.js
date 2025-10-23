@@ -6,6 +6,8 @@ import { callModel } from "../ai/models.js";
 import { pickModel } from "../ai/router.js";
 
 const router = express.Router();
+router.use(express.json({ limit: "1mb" })); // ensure JSON body parsing for all routes
+
 const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || "previews");
 
 function slugify(s) {
@@ -118,118 +120,130 @@ ${body}
   ];
 }
 
-router.post("/plan", express.json({ limit: "2mb" }), async (req, res) => {
-  try {
-    const prompt = String(req.body?.prompt || "").trim();
-    const tier = req.body?.tier || "balanced";
-    if (!prompt) return res.status(400).json({ error: "prompt required" });
-
-    const { provider, model } = pickModel("planner", tier);
-    const system = `You are a web planner. Output JSON only:
+// --- Real model wrappers ---
+async function callPlanner(prompt, tier) {
+  const { provider, model } = pickModel("planner", tier);
+  const system = `You are a web planner. Output JSON only:
 {
  "title": "...",
  "sections": [{"id":"hero","purpose":"...","contentHints":["..."]}],
  "tokens": {"primary":"#4f46e5","radius":"10px"}
 }`;
-    const { content } = await callModel({
-      provider,
-      model,
-      system,
-      response_format: { type: "json_object" },
-      messages: [{ role: "user", content: `Plan a simple landing page for: ${prompt}` }],
-      temperature: 0.2,
-      max_tokens: 1200,
-    });
-    const plan = JSON.parse(content);
-    return res.json({ ok: true, plan, model: { provider, model } });
-  } catch (e) {
-    res.status(500).json({ error: e?.message || "plan failed" });
-  }
-});
+  const { content } = await callModel({
+    provider,
+    model,
+    system,
+    response_format: { type: "json_object" },
+    messages: [{ role: "user", content: `Plan a simple landing page for: ${prompt}` }],
+    temperature: 0.2,
+    max_tokens: 1200,
+  });
+  return JSON.parse(content);
+}
 
-router.post("/scaffold", express.json({ limit: "4mb" }), async (req, res) => {
-  try {
-    const prompt = String(req.body?.prompt || "").trim();
-    const tier = String(req.body?.tier || "balanced");
-    const incomingPlan = req.body?.plan || null;
-
-    // Short-circuit to MOCK when requested or no key present
-    const useMock =
-      process.env.MOCK_AI === "1" || !process.env.OPENAI_API_KEY || tier === "mock";
-
-    let finalPlan;
-    let files = [];
-
-    if (useMock) {
-      // use mock plan or the provided plan
-      finalPlan = incomingPlan || mockPlanFrom(prompt || "Demo Page");
-      files = filesFromPlan(finalPlan);
-    } else {
-      if (incomingPlan) {
-        // Real tier but plan already decided → just build files from plan (no model call)
-        finalPlan = incomingPlan;
-        files = filesFromPlan(finalPlan);
-      } else {
-        // Real flow (planner already done elsewhere, or prompt-only → coder step)
-        const { provider, model } = pickModel("coder", tier);
-        const system = `You generate THREE web files from a plan/prompt. Output ONLY JSON:
+async function callCoder(plan, tier) {
+  const { provider, model } = pickModel("coder", tier);
+  const system = `You generate THREE web files from a plan/prompt. Output ONLY JSON:
 {"files":[{"path":"index.html","content":"..."},{"path":"styles.css","content":"..."},{"path":"app.js","content":"..."}]}
 Rules:
 - Self-contained HTML/CSS/JS, no external CDNs.
 - index.html must link styles.css and app.js.
 - Respect tokens if provided: primary color, radius.`;
+  const { content } = await callModel({
+    provider,
+    model,
+    system,
+    response_format: { type: "json_object" },
+    messages: [{ role: "user", content: `Build files for this plan:\n${JSON.stringify(plan)}` }],
+    temperature: 0.25,
+    max_tokens: 2800,
+  });
 
-        if (!prompt) return res.status(400).json({ error: "prompt or plan required" });
+  let parsed = {};
+  try {
+    parsed = JSON.parse(content);
+  } catch {}
+  let files = Array.isArray(parsed.files) ? parsed.files : [];
+  files = files
+    .filter((f) => f?.path && f?.content)
+    .map((f) => ({ path: String(f.path), content: String(f.content) }))
+    .filter((f) => allowedFile(f.path));
+  return files;
+}
 
-        const { content } = await callModel({
-          provider,
-          model,
-          system,
-          response_format: { type: "json_object" },
-          messages: [{ role: "user", content: `Build files for this idea:\n${prompt}` }],
-          temperature: 0.25,
-          max_tokens: 2800,
-        });
+// ---------- Routes ----------
+router.post("/plan", async (req, res) => {
+  try {
+    const prompt = String(req.body?.prompt || "").trim();
+    const tier = req.body?.tier || "balanced";
+    if (!prompt) return res.status(400).json({ error: "prompt required" });
 
-        let parsed = {};
-        try {
-          parsed = JSON.parse(content);
-        } catch {}
-        files = Array.isArray(parsed.files) ? parsed.files : [];
-        files = files
-          .filter((f) => f?.path && f?.content)
-          .map((f) => ({ path: String(f.path), content: String(f.content) }));
-        files = files.filter((f) => allowedFile(f.path));
-        // Ensure basics + tokens even if coder forgot
-        files = ensureIndexFallback(files, prompt || "Page");
-        files = upsertStylesWithTokens(files, undefined);
-        finalPlan = { title: prompt || "Page", tokens: {} };
+    const plan =
+      process.env.MOCK_AI === "1" || tier === "mock" || !process.env.OPENAI_API_KEY
+        ? mockPlanFrom(prompt)
+        : await callPlanner(prompt, tier);
+
+    return res.json({ ok: true, plan });
+  } catch (e) {
+    res.status(500).json({ error: e?.message || "plan failed" });
+  }
+});
+
+router.post("/scaffold", async (req, res) => {
+  try {
+    const tier = String(req.body?.tier || "mock");
+    let plan = req.body?.plan ?? null;
+    let prompt = String(req.body?.prompt || "").trim();
+
+    // If plan was sent as a JSON string, parse it
+    if (typeof plan === "string") {
+      try {
+        plan = JSON.parse(plan);
+      } catch {
+        /* ignore parse error; will fall back to prompt */
       }
     }
 
+    // Guard: need either a prompt or a plan
+    if (!prompt && !plan) {
+      return res.status(400).json({ error: "bad args: send prompt or plan" });
+    }
+
+    const useMock =
+      process.env.MOCK_AI === "1" || tier === "mock" || !process.env.OPENAI_API_KEY;
+
+    // If no plan provided, create one (mock or real)
+    if (!plan) {
+      plan = useMock ? mockPlanFrom(prompt) : await callPlanner(prompt, tier);
+    }
+
+    // Turn plan into files (mock or real)
+    let files = useMock ? filesFromPlan(plan) : await callCoder(plan, tier);
+
+    // Safety & tokens wiring
+    files = ensureIndexFallback(files, plan?.title || prompt || "Page");
+    files = upsertStylesWithTokens(files, plan?.tokens);
+
     // Persist under /previews/forks/<slug>/
-    const slug = `${Date.now().toString(36)}-${slugify(finalPlan?.title || prompt || "ai")}`;
+    const slug = `${Date.now().toString(36)}-${slugify(plan?.title || prompt || "ai")}`;
     const destDir = path.join(PREVIEWS_DIR, "forks", slug);
     await fs.promises.mkdir(destDir, { recursive: true });
 
-    // Save the plan for later rebuilds
-    if (finalPlan) {
-      await fs.promises.writeFile(
-        path.join(destDir, "plan.json"),
-        JSON.stringify(finalPlan, null, 2),
-        "utf8"
-      );
-    }
-
-    // Write files (allow plan.json explicitly)
+    // Write files
     for (const f of files) {
       const isPlanJson = f.path === "plan.json";
       if (!isPlanJson && !allowedFile(f.path)) continue;
-
       const abs = path.join(destDir, f.path);
       await fs.promises.mkdir(path.dirname(abs), { recursive: true });
       await fs.promises.writeFile(abs, f.content, "utf8");
     }
+
+    // Save the plan for later rebuilds (ensure exists even if coder didn't emit it)
+    await fs.promises.writeFile(
+      path.join(destDir, "plan.json"),
+      JSON.stringify(plan, null, 2),
+      "utf8"
+    );
 
     return res.json({
       ok: true,
@@ -238,14 +252,35 @@ Rules:
       model: useMock ? { provider: "mock", model: "mock" } : undefined,
     });
   } catch (e) {
-    res.status(500).json({ error: e?.message || "scaffold failed" });
+    return res.status(500).json({ error: e?.message || "scaffold failed" });
   }
 });
 
-router.post("/review", express.json({ limit: "1mb" }), async (req, res) => {
+router.post("/review", async (req, res) => {
   try {
     const { code, tier = "fast" } = req.body || {};
     if (!code) return res.status(400).json({ error: "code required" });
+
+    const useMock =
+      process.env.MOCK_AI === "1" || tier === "mock" || !process.env.OPENAI_API_KEY;
+
+    if (useMock) {
+      // Simple static review in mock mode
+      return res.json({
+        ok: true,
+        review: {
+          issues: [
+            {
+              type: "quality",
+              msg: "Mock review: looks fine for a demo.",
+              fix: "Switch to a real tier for detailed feedback.",
+            },
+          ],
+        },
+        model: { provider: "mock", model: "mock" },
+      });
+    }
+
     const { provider, model } = pickModel("critic", tier);
     const system = `You are a code critic. Output JSON only:
 {"issues":[{"type":"accessibility|seo|performance|quality","msg":"...","fix":"..."}]}`;
