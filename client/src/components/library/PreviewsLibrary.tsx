@@ -28,6 +28,7 @@ const load = (): StoredPreview[] => {
     return [];
   }
 };
+const setSorted = (items: StoredPreview[]) => [...items].sort((a, b) => b.createdAt - a.createdAt);
 const save = (items: StoredPreview[]) => localStorage.setItem(STORE_KEY, JSON.stringify(items));
 const slugify = (s: string) => s.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 const openOrNavigate = (url: string) => {
@@ -40,7 +41,7 @@ function rename(items: StoredPreview[], previewPath: string, newName: string) {
 
 export default function PreviewsLibrary() {
   const { toast } = useToast();
-  const [items, setItems] = useState<StoredPreview[]>(load());
+  const [items, setItems] = useState<StoredPreview[]>(setSorted(load()));
 
   // drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -70,6 +71,7 @@ export default function PreviewsLibrary() {
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [issues, setIssues] = useState<{ type: string; msg: string; fix?: string }[]>([]);
   const [issuesErr, setIssuesErr] = useState<string | undefined>();
+  const [reviewPath, setReviewPath] = useState<string | null>(null);
 
   // Sections modal
   const [sectionsOpen, setSectionsOpen] = useState(false);
@@ -77,8 +79,11 @@ export default function PreviewsLibrary() {
   const [availableSections, setAvailableSections] = useState<string[]>([]);
   const [pickedSections, setPickedSections] = useState<Record<string, boolean>>({});
 
+  // search
+  const [q, setQ] = useState("");
+
   useEffect(() => {
-    const onStorage = () => setItems(load());
+    const onStorage = () => setItems(setSorted(load()));
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
@@ -93,8 +98,9 @@ export default function PreviewsLibrary() {
         }
         return p;
       });
-      save(next);
-      return next;
+      const sorted = setSorted(next);
+      save(sorted);
+      return sorted;
     });
   }
 
@@ -310,14 +316,18 @@ export default function PreviewsLibrary() {
 
     const known = ["hero", "features", "pricing", "faq", "testimonials", "cta"];
     const fromPlan = Array.isArray(plan?.sections)
-      ? Array.from(new Set(plan.sections
-          .map((s: any) => (s?.type || s?.id || "").toString().toLowerCase().trim())
-          .filter((x: string) => known.includes(x))))
+      ? Array.from(
+          new Set(
+            plan.sections
+              .map((s: any) => (s?.type || s?.id || "").toString().toLowerCase().trim())
+              .filter((x: string) => known.includes(x))
+          )
+        )
       : [];
 
     const avail = fromPlan.length ? fromPlan : known;
     const defaults: Record<string, boolean> = {};
-    for (const k of avail) defaults[k] = true;
+    for (const k of avail) defaults[k] = fromPlan.length ? fromPlan.includes(k) : true;
 
     setAvailableSections(avail);
     setPickedSections(defaults);
@@ -345,7 +355,7 @@ export default function PreviewsLibrary() {
         deploys: [],
       };
       setItems((prev) => {
-        const next = [item, ...prev];
+        const next = setSorted([item, ...prev]);
         localStorage.setItem(STORE_KEY, JSON.stringify(next));
         return next;
       });
@@ -362,6 +372,7 @@ export default function PreviewsLibrary() {
     setIssuesLoading(true);
     setIssuesErr(undefined);
     setIssues([]);
+    setReviewPath(it.previewPath);
 
     try {
       const html = await readFile(it.previewPath, "index.html").catch(() => "");
@@ -376,6 +387,24 @@ export default function PreviewsLibrary() {
       setIssuesLoading(false);
     }
   }
+
+  // Guess file to open from an issue
+  function guessFileFromIssue(i: { type: string; msg: string }): "index.html" | "styles.css" | "app.js" {
+    const m = (i.msg + " " + i.type).toLowerCase();
+    if (m.includes("css")) return "styles.css";
+    if (m.includes("js") || m.includes("script")) return "app.js";
+    return "index.html";
+  }
+
+  // Background review on load for items without a count
+  useEffect(() => {
+    items.forEach((it) => {
+      if (typeof it.issuesCount !== "number") {
+        runReviewFor(it.previewPath, aiTier);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length, aiTier]);
 
   // ----- UI -----
   if (items.length === 0) {
@@ -396,9 +425,18 @@ export default function PreviewsLibrary() {
                 });
                 const data = await r.json();
                 if (!r.ok || !data?.path) throw new Error(data?.error || "fork failed");
-                const existing = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
-                const item = { id: `fork-${Date.now()}`, name: "Hello World", previewPath: data.path, createdAt: Date.now() };
-                localStorage.setItem(STORE_KEY, JSON.stringify([item, ...existing]));
+                const item: StoredPreview = {
+                  id: `fork-${Date.now()}`,
+                  name: "Hello World",
+                  previewPath: data.path,
+                  createdAt: Date.now(),
+                  deploys: [],
+                };
+                setItems((prev) => {
+                  const next = setSorted([item, ...prev]);
+                  localStorage.setItem(STORE_KEY, JSON.stringify(next));
+                  return next;
+                });
                 openOrNavigate(data.path);
               } catch (e: any) {
                 alert(e?.message || "Couldn’t fork Hello World");
@@ -412,14 +450,27 @@ export default function PreviewsLibrary() {
     );
   }
 
+  const filtered = items.filter(
+    (it) =>
+      it.name.toLowerCase().includes(q.toLowerCase()) ||
+      it.previewPath.toLowerCase().includes(q.toLowerCase())
+  );
+
   return (
     <div className="space-y-4">
       {/* toolbar */}
       <div className="flex items-center justify-between bg-black/30 backdrop-blur-md rounded-lg border border-white/20 p-3">
         <div className="text-sm text-white/80">
-          {items.length} preview{items.length === 1 ? "" : "s"}
+          {filtered.length} preview{filtered.length === 1 ? "" : "s"}
         </div>
         <div className="flex items-center gap-2">
+          <input
+            className="text-sm px-2 py-1 rounded bg-black/30 border border-white/20 text-white"
+            placeholder="Search…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+
           <select
             className="text-sm px-2 py-1 rounded bg-black/30 border border-white/20 text-white"
             value={aiTier}
@@ -464,7 +515,7 @@ export default function PreviewsLibrary() {
                   deploys: [],
                 };
                 setItems((prev) => {
-                  const next = [item, ...prev];
+                  const next = setSorted([item, ...prev]);
                   localStorage.setItem(STORE_KEY, JSON.stringify(next));
                   return next;
                 });
@@ -506,7 +557,7 @@ export default function PreviewsLibrary() {
 
       {/* grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {items.map((it, idx) => (
+        {filtered.map((it, idx) => (
           <div
             key={idx}
             className="bg-black/30 backdrop-blur-md rounded-lg border border-white/20 p-4 flex flex-col gap-3"
@@ -597,7 +648,7 @@ export default function PreviewsLibrary() {
                     id: `dup-${Date.now()}`, name: `${it.name} (Copy)`, previewPath: newPath, createdAt: Date.now(), deploys: [],
                   };
                   setItems((prev) => {
-                    const next = [nextItem, ...prev];
+                    const next = setSorted([nextItem, ...prev]);
                     localStorage.setItem(STORE_KEY, JSON.stringify(next));
                     return next;
                   });
@@ -636,7 +687,7 @@ export default function PreviewsLibrary() {
                 const newName = window.prompt("New name", it.name || "Untitled")?.trim();
                 if (!newName) return;
                 setItems((prev) => {
-                  const next = rename(prev, it.previewPath, newName);
+                  const next = setSorted(rename(prev, it.previewPath, newName));
                   save(next);
                   return next;
                 });
@@ -653,7 +704,7 @@ export default function PreviewsLibrary() {
                   });
                   if (!r.ok) throw new Error(await r.text());
                   setItems((prev) => {
-                    const next = prev.filter((x) => x.previewPath !== it.previewPath);
+                    const next = setSorted(prev.filter((x) => x.previewPath !== it.previewPath));
                     localStorage.setItem(STORE_KEY, JSON.stringify(next));
                     return next;
                   });
@@ -717,7 +768,7 @@ export default function PreviewsLibrary() {
                       deploys: [],
                     };
                     setItems((prev) => {
-                      const next = [item, ...prev];
+                      const next = setSorted([item, ...prev]);
                       localStorage.setItem(STORE_KEY, JSON.stringify(next));
                       return next;
                     });
@@ -751,11 +802,44 @@ export default function PreviewsLibrary() {
 
             {!issuesLoading && !issuesErr && (issues.length ? (
               <ul className="space-y-3">
-                {issues.map((it, i) => (
+                {issues.map((issue, i) => (
                   <li key={i} className="rounded border border-white/20 p-3 bg-black/60">
-                    <div className="text-[11px] uppercase tracking-wide text-white/60">{it.type}</div>
-                    <div className="text-sm text-white">{it.msg}</div>
-                    {it.fix && <div className="text-sm text-white/70 mt-1">Fix: {it.fix}</div>}
+                    <div className="text-[11px] uppercase tracking-wide text-white/60">{issue.type}</div>
+                    <div className="text-sm text-white">{issue.msg}</div>
+
+                    {issue.fix && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="text-xs text-white/70 select-text break-words">{issue.fix}</div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={async () => {
+                            try { await navigator.clipboard.writeText(issue.fix!); toast({ title: "Copied fix" }); }
+                            catch { /* noop */ }
+                          }}
+                        >
+                          Copy fix
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="mt-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={async () => {
+                          const f = guessFileFromIssue(issue);
+                          const path = reviewPath || editPath || items[0]?.previewPath || "/previews/";
+                          if (f.endsWith(".css")) await ensureAsset(path, "css");
+                          if (f.endsWith(".js")) await ensureAsset(path, "js");
+                          setEditPath(path);
+                          setEditInitialFile(f);
+                          setEditOpen(true);
+                        }}
+                      >
+                        Open in editor
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
