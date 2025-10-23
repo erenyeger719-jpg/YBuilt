@@ -195,12 +195,12 @@ router.post("/scaffold", async (req, res) => {
     let plan = req.body?.plan ?? null;
     let prompt = String(req.body?.prompt || "").trim();
 
-    // If plan was sent as a JSON string, parse it
+    // If plan was sent as a JSON string, parse it (treat "" or bad JSON as null)
     if (typeof plan === "string") {
       try {
-        plan = JSON.parse(plan);
+        plan = plan.trim() ? JSON.parse(plan) : null;
       } catch {
-        /* ignore parse error; will fall back to prompt */
+        plan = null; // treat bad JSON like no plan
       }
     }
 

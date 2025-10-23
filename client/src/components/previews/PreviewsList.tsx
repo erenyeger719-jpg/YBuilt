@@ -275,6 +275,41 @@ export default function PreviewsList() {
     }
   }
 
+  // ------- Rebuild (AI) helper -------
+  async function handleRebuild(it: StoredPreview) {
+    try {
+      // 1) read plan.json from the preview folder
+      const r = await fetch(
+        `/api/previews/read?path=${encodeURIComponent(it.previewPath)}&file=plan.json`
+      );
+      const d = await r.json();
+      if (!r.ok || !d?.ok || !d?.content) throw new Error("no plan.json");
+
+      // 2) parse the JSON string into an object
+      const plan = JSON.parse(String(d.content));
+
+      // 3) call scaffold with the plan (no prompt needed)
+      const { path } = await aiScaffold({ plan, tier: "balanced" });
+
+      // 4) store + open the new preview
+      const item: StoredPreview = {
+        id: `ai-${Date.now()}`,
+        name: (plan?.title || "AI page").slice(0, 40),
+        previewPath: path,
+        createdAt: Date.now(),
+        deploys: [],
+      };
+      setItems((prev) => {
+        const next = [item, ...prev];
+        localStorage.setItem(STORE_KEY, JSON.stringify(next));
+        return next;
+      });
+      window.open(path, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      toast({ title: "Rebuild failed", description: e?.message || "error", variant: "destructive" });
+    }
+  }
+
   // Updated empty state
   if (items.length === 0) {
     return (
@@ -575,40 +610,7 @@ export default function PreviewsList() {
               {/* Rebuild (AI) */}
               <button
                 className="text-xs px-2 py-1 border rounded"
-                onClick={async () => {
-                  try {
-                    // read plan.json
-                    const r = await fetch(
-                      `/api/previews/read?path=${encodeURIComponent(it.previewPath)}&file=plan.json`
-                    );
-                    const data = await r.json();
-                    if (!r.ok || !data?.ok) throw new Error(data?.error || "No plan.json");
-
-                    const plan = JSON.parse(String(data.content || "{}"));
-
-                    // scaffold again from plan (new fork)
-                    const { path } = await aiScaffold({ plan, tier: aiTier });
-                    const item: StoredPreview = {
-                      id: `ai-${Date.now()}`,
-                      name: (plan?.title || it.name) + " (AI)",
-                      previewPath: path,
-                      createdAt: Date.now(),
-                      deploys: [],
-                    };
-                    setItems((prev) => {
-                      const next = [item, ...prev];
-                      localStorage.setItem(STORE_KEY, JSON.stringify(next));
-                      return next;
-                    });
-                    window.open(path, "_blank", "noopener,noreferrer");
-                  } catch (e: any) {
-                    toast({
-                      title: "Rebuild failed",
-                      description: e?.message || "Error",
-                      variant: "destructive",
-                    });
-                  }
-                }}
+                onClick={() => handleRebuild(it)}
               >
                 Rebuild (AI)
               </button>
