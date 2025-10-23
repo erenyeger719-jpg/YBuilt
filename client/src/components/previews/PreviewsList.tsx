@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { exportZip, enqueueDeploy, getDeployJob } from "@/lib/previewsActions";
+import { aiScaffold } from "@/lib/aiActions";
 import { useToast } from "@/hooks/use-toast";
 import DeployDrawer from "./DeployDrawer";
 import QuickEditDialog from "./QuickEditDialog";
@@ -326,30 +327,69 @@ export default function PreviewsList() {
         <div className="text-sm text-zinc-500">
           {items.length} preview{items.length === 1 ? "" : "s"}
         </div>
-        <button
-          className="text-xs px-2 py-1 border rounded"
-          onClick={async () => {
-            if (!confirm("Delete ALL previews from disk and clear the list?")) return;
-            try {
-              // delete on server
-              await Promise.all(
-                items.map((it) =>
-                  fetch("/api/previews/delete", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ path: it.previewPath }),
-                  })
-                )
-              );
-            } catch (_) {}
-            // clear locally
-            setItems([]);
-            localStorage.setItem(STORE_KEY, JSON.stringify([]));
-            toast({ title: "Cleared", description: "All previews removed." });
-          }}
-        >
-          Clear all
-        </button>
+        <div className="flex items-center gap-2">
+          {/* New → AI Page (Orchestrator) */}
+          <button
+            className="text-xs px-2 py-1 border rounded"
+            onClick={async () => {
+              const prompt =
+                window
+                  .prompt("What should we build? (e.g., SaaS landing with hero, features, pricing)")
+                  ?.trim();
+              if (!prompt) return;
+              try {
+                const { path } = await aiScaffold({ prompt, tier: "balanced" });
+                const item: StoredPreview = {
+                  id: `ai-${Date.now()}`,
+                  name: prompt.slice(0, 40),
+                  previewPath: path,
+                  createdAt: Date.now(),
+                  deploys: [],
+                };
+                setItems((prev) => {
+                  const next = [item, ...prev];
+                  localStorage.setItem(STORE_KEY, JSON.stringify(next));
+                  return next;
+                });
+                window.open(path, "_blank", "noopener,noreferrer");
+              } catch (e: any) {
+                toast({
+                  title: "AI scaffold failed",
+                  description: e?.message || "Error",
+                  variant: "destructive",
+                });
+              }
+            }}
+          >
+            New → AI Page (Orch)
+          </button>
+
+          {/* Clear all */}
+          <button
+            className="text-xs px-2 py-1 border rounded"
+            onClick={async () => {
+              if (!confirm("Delete ALL previews from disk and clear the list?")) return;
+              try {
+                // delete on server
+                await Promise.all(
+                  items.map((it) =>
+                    fetch("/api/previews/delete", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ path: it.previewPath }),
+                    })
+                  )
+                );
+              } catch (_) {}
+              // clear locally
+              setItems([]);
+              localStorage.setItem(STORE_KEY, JSON.stringify([]));
+              toast({ title: "Cleared", description: "All previews removed." });
+            }}
+          >
+            Clear all
+          </button>
+        </div>
       </div>
 
       <div className="space-y-4">
