@@ -278,22 +278,24 @@ export default function PreviewsList() {
   // ------- Rebuild (AI) helper -------
   async function handleRebuild(it: StoredPreview) {
     try {
-      // 1) read plan.json from the preview folder
-      const r = await fetch(
-        `/api/previews/read?path=${encodeURIComponent(it.previewPath)}&file=plan.json`
-      );
-      const d = await r.json();
-      if (!r.ok || !d?.ok || !d?.content) throw new Error("no plan.json");
+      // Try to read plan.json; if missing, fall back to prompt
+      let plan: any = null;
+      try {
+        const r = await fetch(
+          `/api/previews/read?path=${encodeURIComponent(it.previewPath)}&file=plan.json`
+        );
+        const d = await r.json();
+        if (r.ok && d?.ok && d?.content) plan = JSON.parse(String(d.content));
+      } catch (_) {
+        // ignore and fall back to prompt
+      }
 
-      // 2) parse the JSON string into an object
-      const plan = JSON.parse(String(d.content));
+      const payload = plan ? { plan } : { prompt: it.name || "AI page" };
+      const { path } = await aiScaffold({ ...payload, tier: aiTier });
 
-      // 3) call scaffold with the plan (no prompt needed)
-      const { path } = await aiScaffold({ plan, tier: aiTier });
-      // 4) store + open the new preview
       const item: StoredPreview = {
         id: `ai-${Date.now()}`,
-        name: (plan?.title || "AI page").slice(0, 40),
+        name: (plan?.title || it.name || "AI page").slice(0, 40),
         previewPath: path,
         createdAt: Date.now(),
         deploys: [],
