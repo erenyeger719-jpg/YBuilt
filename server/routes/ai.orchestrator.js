@@ -71,38 +71,46 @@ function upsertStylesWithTokens(files, tokens) {
 }
 
 // --- CTA wiring / section helpers ---
+// replace: ensureSectionIds (global matches)
 function ensureSectionIds(html) {
   const withIds = String(html || "")
-    .replace(/<section([^>]*class="[^"]*\bhero\b[^"]*"[^>]*)>/i, (m, attrs) =>
+    .replace(/<section([^>]*class="[^"]*\bhero\b[^"]*"[^>]*)>/gi, (m, attrs) =>
       /id=/.test(m) ? m : `<section id="hero"${attrs}>`
     )
-    .replace(/<section([^>]*class="[^"]*\bfeatures\b[^"]*"[^>]*)>/i, (m, attrs) =>
+    .replace(/<section([^>]*class="[^"]*\bfeatures\b[^"]*"[^>]*)>/gi, (m, attrs) =>
       /id=/.test(m) ? m : `<section id="features"${attrs}>`
     )
-    .replace(/<section([^>]*class="[^"]*\bpricing\b[^"]*"[^>]*)>/i, (m, attrs) =>
+    .replace(/<section([^>]*class="[^"]*\bpricing\b[^"]*"[^>]*)>/gi, (m, attrs) =>
       /id=/.test(m) ? m : `<section id="pricing"${attrs}>`
     )
-    .replace(/<section([^>]*class="[^"]*\bfaq\b[^"]*"[^>]*)>/i, (m, attrs) =>
+    .replace(/<section([^>]*class="[^"]*\bfaq\b[^"]*"[^>]*)>/gi, (m, attrs) =>
       /id=/.test(m) ? m : `<section id="faq"${attrs}>`
     )
-    .replace(/<section([^>]*class="[^"]*\btestimonials\b[^"]*"[^>]*)>/i, (m, attrs) =>
+    .replace(/<section([^>]*class="[^"]*\btestimonials\b[^"]*"[^>]*)>/gi, (m, attrs) =>
       /id=/.test(m) ? m : `<section id="testimonials"${attrs}>`
     )
-    .replace(/<section([^>]*class="[^"]*\bcta\b[^"]*"[^>]*)>/i, (m, attrs) =>
+    .replace(/<section([^>]*class="[^"]*\bcta\b[^"]*"[^>]*)>/gi, (m, attrs) =>
       /id=/.test(m) ? m : `<section id="cta"${attrs}>`
     );
 
-  // Heuristic: primary buttons linking to "#" → reroute to #cta
+  // reroute primary btns pointing to "#" → "#cta"
   return withIds.replace(
     /<a([^>]*class="[^"]*\bbtn\b[^"]*"[^>]*)href=["']#["']/gi,
     (_m, attrs) => `<a${attrs}href="#cta"`
   );
 }
+
+// replace: appendSmoothScroll (avoid double inject)
 function appendSmoothScroll(js) {
   const shim =
-    "document.addEventListener('click',e=>{const a=e.target.closest('a[href^=\"#\"]');if(!a)return;const id=a.getAttribute('href').slice(1);const el=document.getElementById(id);if(!el)return;e.preventDefault();el.scrollIntoView({behavior:'smooth',block:'start'});});";
-  return (js || "") + "\n" + shim + "\n";
+`document.addEventListener('click',e=>{const a=e.target.closest('a[href^="#"]');if(!a)return;
+const id=a.getAttribute('href').slice(1);const el=document.getElementById(id);if(!el)return;
+e.preventDefault();el.scrollIntoView({behavior:'smooth',block:'start'});});`;
+  const src = String(js || "");
+  const already = /scrollIntoView\(\{behavior:'smooth'/.test(src);
+  return already ? src : src + "\n" + shim + "\n";
 }
+
 function postProcessFiles(files) {
   // index.html → ensure section IDs and CTA anchors
   const idx = files.findIndex((f) => f.path === "index.html");
