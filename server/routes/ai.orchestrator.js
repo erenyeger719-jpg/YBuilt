@@ -149,63 +149,66 @@ router.post("/plan", express.json({ limit: "2mb" }), async (req, res) => {
 
 router.post("/scaffold", express.json({ limit: "4mb" }), async (req, res) => {
   try {
-    const { prompt, plan, tier = "balanced" } = req.body || {};
-    const usePrompt = String(prompt || "").trim();
+    const prompt = String(req.body?.prompt || "").trim();
+    const tier = String(req.body?.tier || "balanced");
+    const incomingPlan = req.body?.plan || null;
 
     // Short-circuit to MOCK when requested or no key present
     const useMock =
       process.env.MOCK_AI === "1" || !process.env.OPENAI_API_KEY || tier === "mock";
 
-    let finalPlan = plan || (useMock ? mockPlanFrom(usePrompt) : undefined);
+    let finalPlan;
     let files = [];
 
     if (useMock) {
-      // Build minimal site directly from a mock plan
-      finalPlan = finalPlan || mockPlanFrom(usePrompt || "Demo Page");
+      // use mock plan or the provided plan
+      finalPlan = incomingPlan || mockPlanFrom(prompt || "Demo Page");
       files = filesFromPlan(finalPlan);
     } else {
-      // Real flow: call model to generate files
-      if (!finalPlan && !usePrompt) {
-        return res.status(400).json({ error: "prompt or plan required" });
-      }
-
-      const { provider, model } = pickModel("coder", tier);
-      const system = `You generate THREE web files from a plan/prompt. Output ONLY JSON:
+      if (incomingPlan) {
+        // Real tier but plan already decided → just build files from plan (no model call)
+        finalPlan = incomingPlan;
+        files = filesFromPlan(finalPlan);
+      } else {
+        // Real flow (planner already done elsewhere, or prompt-only → coder step)
+        const { provider, model } = pickModel("coder", tier);
+        const system = `You generate THREE web files from a plan/prompt. Output ONLY JSON:
 {"files":[{"path":"index.html","content":"..."},{"path":"styles.css","content":"..."},{"path":"app.js","content":"..."}]}
 Rules:
 - Self-contained HTML/CSS/JS, no external CDNs.
 - index.html must link styles.css and app.js.
 - Respect tokens if provided: primary color, radius.`;
 
-      const user = finalPlan
-        ? `Build files for this plan:\n${JSON.stringify(finalPlan)}`
-        : `Build files for this idea:\n${usePrompt}`;
+        if (!prompt) return res.status(400).json({ error: "prompt or plan required" });
 
-      const { content } = await callModel({
-        provider,
-        model,
-        system,
-        response_format: { type: "json_object" },
-        messages: [{ role: "user", content: user }],
-        temperature: 0.25,
-        max_tokens: 2800,
-      });
+        const { content } = await callModel({
+          provider,
+          model,
+          system,
+          response_format: { type: "json_object" },
+          messages: [{ role: "user", content: `Build files for this idea:\n${prompt}` }],
+          temperature: 0.25,
+          max_tokens: 2800,
+        });
 
-      let parsed = {};
-      try {
-        parsed = JSON.parse(content);
-      } catch {}
-      files = Array.isArray(parsed.files) ? parsed.files : [];
-      files = files
-        .filter((f) => f?.path && f?.content)
-        .map((f) => ({ path: String(f.path), content: String(f.content) }));
-      files = files.filter((f) => allowedFile(f.path));
-      files = ensureIndexFallback(files, finalPlan?.title || usePrompt || "Page");
-      files = upsertStylesWithTokens(files, finalPlan?.tokens);
+        let parsed = {};
+        try {
+          parsed = JSON.parse(content);
+        } catch {}
+        files = Array.isArray(parsed.files) ? parsed.files : [];
+        files = files
+          .filter((f) => f?.path && f?.content)
+          .map((f) => ({ path: String(f.path), content: String(f.content) }));
+        files = files.filter((f) => allowedFile(f.path));
+        // Ensure basics + tokens even if coder forgot
+        files = ensureIndexFallback(files, prompt || "Page");
+        files = upsertStylesWithTokens(files, undefined);
+        finalPlan = { title: prompt || "Page", tokens: {} };
+      }
     }
 
     // Persist under /previews/forks/<slug>/
-    const slug = `${Date.now().toString(36)}-${slugify(finalPlan?.title || usePrompt || "ai")}`;
+    const slug = `${Date.now().toString(36)}-${slugify(finalPlan?.title || prompt || "ai")}`;
     const destDir = path.join(PREVIEWS_DIR, "forks", slug);
     await fs.promises.mkdir(destDir, { recursive: true });
 
@@ -218,10 +221,8 @@ Rules:
       );
     }
 
-    // Write files (allow plan.json explicitly in mock flow)
+    // Write files (allow plan.json explicitly)
     for (const f of files) {
-      // In real flow we filtered for allowed extensions already;
-      // In mock flow, we also allow plan.json.
       const isPlanJson = f.path === "plan.json";
       if (!isPlanJson && !allowedFile(f.path)) continue;
 
