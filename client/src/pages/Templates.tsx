@@ -1,64 +1,31 @@
 // client/src/pages/Templates.tsx
 import { useState } from "react";
 import { TEMPLATES, type TemplateDef } from "@/lib/templates";
-import { aiScaffold } from "@/lib/aiActions";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
-const STORE_KEY = "ybuilt.previews";
 const TIER_KEY = "ybuilt.aiTier";
-
-const setSorted = (items: any[]) => [...items].sort((a, b) => b.createdAt - a.createdAt);
-const openOrNavigate = (url: string) => {
- // same-tab = not a popup, so it won't be blocked
-  window.location.assign(url);
-};
 
 export default function TemplatesPage() {
   const { toast } = useToast();
   const [busyId, setBusyId] = useState<string | null>(null);
   const aiTier = (localStorage.getItem(TIER_KEY) as any) || "balanced";
 
-  async function useTemplate(tpl: TemplateDef, picked: Record<string, boolean>) {
-    try {
-      setBusyId(tpl.id);
-      const blocks = Object.keys(picked).filter((k) => picked[k]);
-
-      const { path } = await aiScaffold({
+  function useTemplate(tpl: TemplateDef, picked: Record<string, boolean>) {
+    // Light handoff: Studio owns generation.
+    const blocks = Object.keys(picked).filter((k) => picked[k]);
+    localStorage.setItem(
+      "ybuilt.studio.autorun",
+      JSON.stringify({
+        tplId: tpl.id,
+        name: tpl.name,
         prompt: tpl.prompt,
-        tier: aiTier,
         blocks,
-      } as any);
-
-      const item = {
-        id: `ai-${Date.now()}`,
-        name: tpl.name.slice(0, 40),
-        previewPath: path,
-        createdAt: Date.now(),
-        deploys: [],
-      };
-
-      const prev = (() => {
-        try { return JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); }
-        catch { return []; }
-      })();
-
-      const next = setSorted([item, ...prev]);
-      localStorage.setItem(STORE_KEY, JSON.stringify(next));
-
-      toast({ title: "Template generated", description: tpl.name });
-      // tell the Library to auto-open this preview in the editor
-      localStorage.setItem(
-        "ybuilt.quickedit.autoOpen",
-        JSON.stringify({ path, file: "index.html" })
-      );
-      // same-tab navigation avoids popup blockers
-      window.location.assign("/library?open=1");
-    } catch (e: any) {
-      toast({ title: "Generate failed", description: e?.message || "Error", variant: "destructive" });
-    } finally {
-      setBusyId(null);
-    }
+        tier: aiTier,
+      })
+    );
+    // same-tab → no popup blockers
+    window.location.assign("/studio?from=templates");
   }
 
   return (

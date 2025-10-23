@@ -19,6 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Sparkles, Upload, Palette, Server, ShieldCheck } from "lucide-react";
+import { aiScaffold } from "@/lib/aiActions";
 
 type Job = { id: string; status?: string; title?: string; prompt?: string };
 type DeployPreset = "beginner" | "pro" | "business" | "custom";
@@ -139,6 +140,52 @@ function useForceStudioTheme(enable: boolean) {
 
 export default function StudioPage() {
   const { jobId } = useParams<{ jobId?: string }>();
+  const { toast } = useToast();
+
+  // Autorun AI build (from Templates → Studio)
+  const [busy, setBusy] = useState(false);
+  const [resultPath, setResultPath] = useState<string | null>(null);
+  const [autoRan, setAutoRan] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const tierDefault = (localStorage.getItem("ybuilt.aiTier") as any) || "balanced";
+
+  useEffect(() => {
+    if (autoRan) return;
+    const raw = localStorage.getItem("ybuilt.studio.autorun");
+    if (!raw) return;
+
+    setAutoRan(true);
+    localStorage.removeItem("ybuilt.studio.autorun");
+
+    let payload: any = null;
+    try { payload = JSON.parse(raw); } catch {}
+    if (!payload?.prompt) return;
+
+    (async () => {
+      setBusy(true);
+      setErr(null);
+      try {
+        const { prompt, blocks, tier } = payload;
+        const { path } = await aiScaffold({
+          prompt,
+          blocks: Array.isArray(blocks) ? blocks : [],
+          tier: tier || tierDefault,
+        } as any);
+        setResultPath(path);
+        toast({ title: "Generated", description: payload.name || "Template" });
+      } catch (e: any) {
+        setErr(e?.message || "Generation failed");
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [autoRan, tierDefault, toast]);
+
+  // helper for links
+  const openOrNavigate = (u: string) => {
+    const w = window.open(u, "_blank", "noopener,noreferrer");
+    if (!w) window.location.href = u;
+  };
 
   // Marketing view (no :jobId)
   if (!jobId) {
@@ -160,6 +207,51 @@ export default function StudioPage() {
             <Button className="btn btn-magnetic card-glass px-6 py-3 rounded-xl">Start building</Button>
             <Button variant="secondary" className="btn btn-magnetic px-6 py-3 rounded-xl border">Watch demo</Button>
           </div>
+
+          {/* Autorun status/CTAs */}
+          {busy && (
+            <div className="mt-6 mx-auto max-w-2xl rounded-lg border border-white/20 bg-black/40 p-4 text-white/80">
+              Building from template…
+            </div>
+          )}
+
+          {err && (
+            <div className="mt-6 mx-auto max-w-2xl rounded-lg border border-red-400/30 bg-red-900/30 p-4 text-red-200">
+              {err}
+            </div>
+          )}
+
+          {!busy && resultPath && (
+            <div className="mt-6 mx-auto max-w-2xl rounded-lg border border-white/20 bg-black/50 p-4 text-white">
+              <div className="text-sm mb-2">Preview ready:</div>
+              <a className="text-xs underline break-all text-blue-300" href={resultPath} target="_blank" rel="noreferrer">
+                {resultPath}
+              </a>
+              <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                <button
+                  className="px-3 py-1.5 text-sm rounded border border-white/20 hover:bg-white/10"
+                  onClick={() => openOrNavigate(resultPath!)}
+                >
+                  Open preview
+                </button>
+                <button
+                  className="px-3 py-1.5 text-sm rounded border border-white/20 hover:bg-white/10"
+                  onClick={() => {
+                    localStorage.setItem("ybuilt.quickedit.autoOpen", JSON.stringify({ path: resultPath, file: "index.html" }));
+                    window.location.assign("/library?open=1"); // “Open in workspace”
+                  }}
+                >
+                  Open in workspace
+                </button>
+                <a
+                  href="/templates"
+                  className="px-3 py-1.5 text-sm rounded border border-white/20 hover:bg-white/10"
+                >
+                  Try another template
+                </a>
+              </div>
+            </div>
+          )}
         </header>
 
         <div className="relative z-10">
