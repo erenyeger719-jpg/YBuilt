@@ -40,7 +40,7 @@ function ensureIndexFallback(files, title = "Page") {
   return files;
 }
 
-// --- NEW: tokens → CSS variables helpers ---
+// --- tokens → CSS variables helpers ---
 function tokensToCSSVars(tokens = {}) {
   const map = {
     "--color-primary": tokens?.primary,
@@ -66,6 +66,56 @@ function upsertStylesWithTokens(files, tokens) {
     });
   }
   return files;
+}
+
+// --- MOCK helpers (bypass OpenAI when MOCK mode is on) ---
+function mockPlanFrom(prompt) {
+  const title = (prompt || "Demo Page").slice(0, 60);
+  return {
+    title,
+    tokens: { primary: "#4F46E5", radius: "12px", fontSize: "16px" },
+    sections: [
+      {
+        type: "hero",
+        html: `<section class="hero"><h1>${title}</h1><p>Ship faster with AI-built pages.</p><a class="btn" href="#">Get started</a></section>`,
+      },
+      {
+        type: "features",
+        html: `<section class="features"><h2>Features</h2><ul><li>Clean HTML</li><li>CSS tokens</li><li>Instant deploy</li></ul></section>`,
+      },
+      {
+        type: "cta",
+        html: `<section class="cta"><h2>Ready?</h2><a class="btn" href="#">Launch</a></section>`,
+      },
+    ],
+  };
+}
+function filesFromPlan(plan) {
+  const cssVars = tokensToCSSVars(plan?.tokens || {});
+  const css = `${cssVars}
+
+:root{color-scheme:light dark}
+*{box-sizing:border-box}
+body{font-family:system-ui, sans-serif; margin:40px; line-height:1.6}
+.hero{padding:24px 0}
+.features{padding:24px 0}
+.cta{padding:24px 0}
+.btn{display:inline-block;padding:10px 14px;border-radius:var(--radius,10px);background:var(--color-primary,#4F46E5);color:#fff;text-decoration:none}
+`;
+
+  const body = (plan.sections || []).map((s) => s.html || "").join("\n\n");
+  const html = `<!doctype html><meta charset="utf-8"/><title>${plan.title}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="styles.css"/>
+<body>
+${body}
+</body>`;
+
+  return [
+    { path: "index.html", content: html },
+    { path: "styles.css", content: css },
+    { path: "plan.json", content: JSON.stringify(plan, null, 2) },
+  ];
 }
 
 router.post("/plan", express.json({ limit: "2mb" }), async (req, res) => {
@@ -101,66 +151,90 @@ router.post("/scaffold", express.json({ limit: "4mb" }), async (req, res) => {
   try {
     const { prompt, plan, tier = "balanced" } = req.body || {};
     const usePrompt = String(prompt || "").trim();
-    if (!usePrompt && !plan) return res.status(400).json({ error: "prompt or plan required" });
 
-    const { provider, model } = pickModel("coder", tier);
-    const system = `You generate THREE web files from a plan/prompt. Output ONLY JSON:
+    // Short-circuit to MOCK when requested or no key present
+    const useMock =
+      process.env.MOCK_AI === "1" || !process.env.OPENAI_API_KEY || tier === "mock";
+
+    let finalPlan = plan || (useMock ? mockPlanFrom(usePrompt) : undefined);
+    let files = [];
+
+    if (useMock) {
+      // Build minimal site directly from a mock plan
+      finalPlan = finalPlan || mockPlanFrom(usePrompt || "Demo Page");
+      files = filesFromPlan(finalPlan);
+    } else {
+      // Real flow: call model to generate files
+      if (!finalPlan && !usePrompt) {
+        return res.status(400).json({ error: "prompt or plan required" });
+      }
+
+      const { provider, model } = pickModel("coder", tier);
+      const system = `You generate THREE web files from a plan/prompt. Output ONLY JSON:
 {"files":[{"path":"index.html","content":"..."},{"path":"styles.css","content":"..."},{"path":"app.js","content":"..."}]}
 Rules:
 - Self-contained HTML/CSS/JS, no external CDNs.
 - index.html must link styles.css and app.js.
 - Respect tokens if provided: primary color, radius.`;
 
-    const user = plan
-      ? `Build files for this plan:\n${JSON.stringify(plan)}`
-      : `Build files for this idea:\n${usePrompt}`;
+      const user = finalPlan
+        ? `Build files for this plan:\n${JSON.stringify(finalPlan)}`
+        : `Build files for this idea:\n${usePrompt}`;
 
-    const { content } = await callModel({
-      provider,
-      model,
-      system,
-      response_format: { type: "json_object" },
-      messages: [{ role: "user", content: user }],
-      temperature: 0.25,
-      max_tokens: 2800,
-    });
+      const { content } = await callModel({
+        provider,
+        model,
+        system,
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: user }],
+        temperature: 0.25,
+        max_tokens: 2800,
+      });
 
-    let parsed = {};
-    try {
-      parsed = JSON.parse(content);
-    } catch {}
-    let files = Array.isArray(parsed.files) ? parsed.files : [];
-    files = files
-      .filter((f) => f?.path && f?.content)
-      .map((f) => ({ path: String(f.path), content: String(f.content) }));
-    files = files.filter((f) => allowedFile(f.path));
-    files = ensureIndexFallback(files, plan?.title || usePrompt || "Page");
-    // NEW: inject tokens as CSS variables
-    files = upsertStylesWithTokens(files, plan?.tokens);
+      let parsed = {};
+      try {
+        parsed = JSON.parse(content);
+      } catch {}
+      files = Array.isArray(parsed.files) ? parsed.files : [];
+      files = files
+        .filter((f) => f?.path && f?.content)
+        .map((f) => ({ path: String(f.path), content: String(f.content) }));
+      files = files.filter((f) => allowedFile(f.path));
+      files = ensureIndexFallback(files, finalPlan?.title || usePrompt || "Page");
+      files = upsertStylesWithTokens(files, finalPlan?.tokens);
+    }
 
-    const slug = `${Date.now().toString(36)}-${slugify(plan?.title || usePrompt || "ai")}`;
+    // Persist under /previews/forks/<slug>/
+    const slug = `${Date.now().toString(36)}-${slugify(finalPlan?.title || usePrompt || "ai")}`;
     const destDir = path.join(PREVIEWS_DIR, "forks", slug);
     await fs.promises.mkdir(destDir, { recursive: true });
 
-    // NEW: Save the plan for later rebuilds
-    if (plan) {
+    // Save the plan for later rebuilds
+    if (finalPlan) {
       await fs.promises.writeFile(
         path.join(destDir, "plan.json"),
-        JSON.stringify(plan, null, 2),
+        JSON.stringify(finalPlan, null, 2),
         "utf8"
       );
     }
 
+    // Write files (allow plan.json explicitly in mock flow)
     for (const f of files) {
+      // In real flow we filtered for allowed extensions already;
+      // In mock flow, we also allow plan.json.
+      const isPlanJson = f.path === "plan.json";
+      if (!isPlanJson && !allowedFile(f.path)) continue;
+
       const abs = path.join(destDir, f.path);
       await fs.promises.mkdir(path.dirname(abs), { recursive: true });
       await fs.promises.writeFile(abs, f.content, "utf8");
     }
+
     return res.json({
       ok: true,
       path: `/previews/forks/${slug}/`,
       slug,
-      model: { provider, model },
+      model: useMock ? { provider: "mock", model: "mock" } : undefined,
     });
   } catch (e) {
     res.status(500).json({ error: e?.message || "scaffold failed" });
