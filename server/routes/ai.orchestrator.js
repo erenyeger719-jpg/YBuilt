@@ -70,6 +70,81 @@ function upsertStylesWithTokens(files, tokens) {
   return files;
 }
 
+// --- CTA wiring / section helpers ---
+function ensureSectionIds(html) {
+  const withIds = String(html || "")
+    .replace(/<section([^>]*class="[^"]*\bhero\b[^"]*"[^>]*)>/i, (m, attrs) =>
+      /id=/.test(m) ? m : `<section id="hero"${attrs}>`
+    )
+    .replace(/<section([^>]*class="[^"]*\bfeatures\b[^"]*"[^>]*)>/i, (m, attrs) =>
+      /id=/.test(m) ? m : `<section id="features"${attrs}>`
+    )
+    .replace(/<section([^>]*class="[^"]*\bpricing\b[^"]*"[^>]*)>/i, (m, attrs) =>
+      /id=/.test(m) ? m : `<section id="pricing"${attrs}>`
+    )
+    .replace(/<section([^>]*class="[^"]*\bfaq\b[^"]*"[^>]*)>/i, (m, attrs) =>
+      /id=/.test(m) ? m : `<section id="faq"${attrs}>`
+    )
+    .replace(/<section([^>]*class="[^"]*\btestimonials\b[^"]*"[^>]*)>/i, (m, attrs) =>
+      /id=/.test(m) ? m : `<section id="testimonials"${attrs}>`
+    )
+    .replace(/<section([^>]*class="[^"]*\bcta\b[^"]*"[^>]*)>/i, (m, attrs) =>
+      /id=/.test(m) ? m : `<section id="cta"${attrs}>`
+    );
+
+  // Heuristic: primary buttons linking to "#" → reroute to #cta
+  return withIds.replace(
+    /<a([^>]*class="[^"]*\bbtn\b[^"]*"[^>]*)href=["']#["']/gi,
+    (_m, attrs) => `<a${attrs}href="#cta"`
+  );
+}
+function appendSmoothScroll(js) {
+  const shim =
+    "document.addEventListener('click',e=>{const a=e.target.closest('a[href^=\"#\"]');if(!a)return;const id=a.getAttribute('href').slice(1);const el=document.getElementById(id);if(!el)return;e.preventDefault();el.scrollIntoView({behavior:'smooth',block:'start'});});";
+  return (js || "") + "\n" + shim + "\n";
+}
+function postProcessFiles(files) {
+  // index.html → ensure section IDs and CTA anchors
+  const idx = files.findIndex((f) => f.path === "index.html");
+  if (idx >= 0) files[idx].content = ensureSectionIds(files[idx].content);
+
+  // app.js → ensure smooth scroll handler exists
+  const jsIdx = files.findIndex((f) => f.path === "app.js");
+  if (jsIdx >= 0) {
+    files[jsIdx].content = appendSmoothScroll(files[jsIdx].content);
+  } else {
+    files.push({ path: "app.js", content: appendSmoothScroll("") });
+  }
+  return files;
+}
+
+// --- Blocks filtering helpers ---
+function normalizeBlocks(blocks) {
+  if (!Array.isArray(blocks)) return null;
+  const map = new Map([
+    ["hero", "hero"],
+    ["features", "features"],
+    ["pricing", "pricing"],
+    ["faq", "faq"],
+    ["testimonials", "testimonials"],
+    ["cta", "cta"],
+  ]);
+  return blocks
+    .map((s) => String(s || "").toLowerCase().trim())
+    .map((s) => map.get(s) || null)
+    .filter(Boolean);
+}
+function filterPlanSections(plan, blocks) {
+  const wanted = normalizeBlocks(blocks);
+  if (!wanted || !wanted.length) return plan;
+  const set = new Set(wanted);
+  const take = (s) => {
+    const t = (s.type || s.id || "").toLowerCase();
+    return set.has(t);
+  };
+  return { ...plan, sections: (plan.sections || []).filter(take) };
+}
+
 // --- MOCK helpers (bypass OpenAI when MOCK mode is on) ---
 function mockPlanFrom(prompt) {
   const title = (prompt || "Demo Page").slice(0, 60);
@@ -217,12 +292,19 @@ router.post("/scaffold", async (req, res) => {
       plan = useMock ? mockPlanFrom(prompt) : await callPlanner(prompt, tier);
     }
 
+    // Optional blocks filter from client
+    const blocks = Array.isArray(req.body?.blocks) ? req.body.blocks : null;
+    if (blocks && blocks.length) {
+      plan = filterPlanSections(plan, blocks);
+    }
+
     // Turn plan into files (mock or real)
     let files = useMock ? filesFromPlan(plan) : await callCoder(plan, tier);
 
     // Safety & tokens wiring
     files = ensureIndexFallback(files, plan?.title || prompt || "Page");
     files = upsertStylesWithTokens(files, plan?.tokens);
+    files = postProcessFiles(files); // wire CTAs & smooth-scroll
 
     // Persist under /previews/forks/<slug>/
     const slug = `${Date.now().toString(36)}-${slugify(plan?.title || prompt || "ai")}`;

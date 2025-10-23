@@ -412,13 +412,27 @@ export default function PreviewsList() {
           <button
             className="text-xs px-2 py-1 border rounded"
             onClick={async () => {
-              const prompt =
-                window
-                  .prompt("What should we build? (e.g., SaaS landing with hero, features, pricing)")
-                  ?.trim();
+              const prompt = window
+                .prompt("What should we build? (e.g., SaaS landing with hero, features, pricing)")
+                ?.trim();
               if (!prompt) return;
+
+              // Ask for blocks (comma list)
+              const blocksStr =
+                window
+                  .prompt(
+                    "Which sections? (comma-separated) hero, features, pricing, faq, testimonials, cta",
+                    "hero, features, cta"
+                  )
+                  ?.toLowerCase() || "";
+              const blocks = blocksStr
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean);
+
               try {
-                const { path } = await aiScaffold({ prompt, tier: aiTier });
+                // cast to any to allow blocks without tightening aiScaffold's type here
+                const { path } = await aiScaffold({ prompt, tier: aiTier, blocks } as any);
                 const item: StoredPreview = {
                   id: `ai-${Date.now()}`,
                   name: prompt.slice(0, 40),
@@ -637,18 +651,12 @@ export default function PreviewsList() {
               </button>
 
               {/* Rebuild (AI) */}
-              <button
-                className="text-xs px-2 py-1 border rounded"
-                onClick={() => handleRebuild(it)}
-              >
+              <button className="text-xs px-2 py-1 border rounded" onClick={() => handleRebuild(it)}>
                 Rebuild (AI)
               </button>
 
               {/* Check issues (AI) */}
-              <button
-                className="text-xs px-2 py-1 border rounded"
-                onClick={() => handleCheckIssues(it)}
-              >
+              <button className="text-xs px-2 py-1 border rounded" onClick={() => handleCheckIssues(it)}>
                 Check issues (AI)
               </button>
 
@@ -731,10 +739,7 @@ export default function PreviewsList() {
           <div className="w-full max-w-lg rounded-lg bg-white dark:bg-zinc-900 p-4 shadow-xl">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-medium">AI Review</h3>
-              <button
-                className="text-xs px-2 py-1 border rounded"
-                onClick={() => setIssuesOpen(false)}
-              >
+              <button className="text-xs px-2 py-1 border rounded" onClick={() => setIssuesOpen(false)}>
                 Close
               </button>
             </div>
@@ -742,21 +747,19 @@ export default function PreviewsList() {
             {issuesLoading && <div className="text-sm text-zinc-500">Analyzing…</div>}
             {issuesErr && <div className="text-sm text-red-600">Error: {issuesErr}</div>}
 
-            {!issuesLoading && !issuesErr && (
-              issues.length ? (
-                <ul className="space-y-3">
-                  {issues.map((it, i) => (
-                    <li key={i} className="border rounded p-3">
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">{it.type}</div>
-                      <div className="text-sm">{it.msg}</div>
-                      {it.fix && <div className="text-xs text-zinc-600 mt-1">Fix: {it.fix}</div>}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="text-sm text-zinc-500">No issues found.</div>
-              )
-            )}
+            {!issuesLoading && !issuesErr && (issues.length ? (
+              <ul className="space-y-3">
+                {issues.map((it, i) => (
+                  <li key={i} className="border rounded p-3">
+                    <div className="text-xs uppercase tracking-wide text-zinc-500">{it.type}</div>
+                    <div className="text-sm">{it.msg}</div>
+                    {it.fix && <div className="text-xs text-zinc-600 mt-1">Fix: {it.fix}</div>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-sm text-zinc-500">No issues found.</div>
+            ))}
           </div>
         </div>
       )}
