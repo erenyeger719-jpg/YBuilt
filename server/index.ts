@@ -100,7 +100,12 @@ if (reqMw) app.use(reqMw);
   logger.info(`[PREVIEWS] Serving static previews from ${PREVIEWS_DIR}`);
 
   // Serve /previews as static (so /previews/forks/<id>/index.html resolves)
-  app.use('/previews', express.static(PREVIEWS_DIR, { extensions: ['html'] }));
+  // only serve the actual forked sites, not the /previews page
+  app.use(
+    '/previews/forks',
+    express.static(path.join(PREVIEWS_DIR, 'forks'), { extensions: ['html'] })
+  );
+
 
   // Observability + rate limiting
   app.use(requestIdMiddleware);
