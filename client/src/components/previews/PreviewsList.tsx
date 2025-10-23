@@ -13,9 +13,11 @@ type StoredPreview = {
   previewPath: string;
   createdAt: number;
   deploys?: DeployInfo[];
+  issuesCount?: number; // NEW
 };
 
 const STORE_KEY = "ybuilt.previews";
+const TIER_KEY = "ybuilt.aiTier"; // NEW
 const load = (): StoredPreview[] => {
   try {
     return JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
@@ -25,6 +27,10 @@ const load = (): StoredPreview[] => {
 };
 const save = (items: StoredPreview[]) => localStorage.setItem(STORE_KEY, JSON.stringify(items));
 const slugify = (s: string) => s.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+const openOrNavigate = (url: string) => {
+  const w = window.open(url, "_blank", "noopener,noreferrer");
+  if (!w) window.location.href = url;
+};
 function rename(items: StoredPreview[], previewPath: string, newName: string) {
   return items.map((p) => (p.previewPath === previewPath ? { ...p, name: newName } : p));
 }
@@ -52,7 +58,9 @@ export default function PreviewsList() {
   const [styleFile, setStyleFile] = useState<string | null>(null);
 
   // AI tier
-  const [aiTier, setAiTier] = useState<"mock" | "fast" | "balanced" | "best">("mock");
+  const [aiTier, setAiTier] = useState<"mock" | "fast" | "balanced" | "best">(
+    (localStorage.getItem(TIER_KEY) as any) || "mock"
+  );
 
   // AI review state
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -281,6 +289,23 @@ export default function PreviewsList() {
     }
   }
 
+  // Helper: background AI review for a preview (stores count on the card)
+  async function runReviewFor(previewPath: string, tier: string) {
+    try {
+      const html = await readFile(previewPath, "index.html").catch(() => "");
+      const css = await readFile(previewPath, "styles.css").catch(() => "");
+      const js = await readFile(previewPath, "app.js").catch(() => "");
+      const bundle = `/* index.html */\n${html}\n\n/* styles.css */\n${css}\n\n/* app.js */\n${js}`;
+      const { review } = await aiReview({ code: bundle, tier });
+      const n = (review?.issues || []).length;
+      updatePreview(previewPath, (p) => {
+        p.issuesCount = n;
+      });
+    } catch {
+      // keep quiet on background errors
+    }
+  }
+
   // ------- Rebuild (AI) helper -------
   async function handleRebuild(it: StoredPreview) {
     try {
@@ -311,7 +336,10 @@ export default function PreviewsList() {
         localStorage.setItem(STORE_KEY, JSON.stringify(next));
         return next;
       });
-      window.open(path, "_blank", "noopener,noreferrer");
+
+      // background review + open
+      runReviewFor(path, aiTier);
+      openOrNavigate(path);
     } catch (e: any) {
       toast({ title: "Rebuild failed", description: e?.message || "error", variant: "destructive" });
     }
@@ -372,9 +400,8 @@ export default function PreviewsList() {
                   };
                   localStorage.setItem(STORE_KEY, JSON.stringify([item, ...existing]));
 
-                  // open it (with popup fallback)
-                  const win = window.open(data.path, "_blank", "noopener,noreferrer");
-                  if (!win) window.location.href = data.path;
+                  // open it with fallback
+                  openOrNavigate(data.path);
                 } catch (e: any) {
                   alert(e?.message || "Couldn’t fork Hello World");
                 }
@@ -399,7 +426,11 @@ export default function PreviewsList() {
           <select
             className="text-xs px-2 py-1 border rounded"
             value={aiTier}
-            onChange={(e) => setAiTier(e.target.value as any)}
+            onChange={(e) => {
+              const v = e.target.value as any;
+              setAiTier(v);
+              localStorage.setItem(TIER_KEY, v);
+            }}
             title="AI Tier"
           >
             <option value="mock">Mock</option>
@@ -431,7 +462,6 @@ export default function PreviewsList() {
                 .filter(Boolean);
 
               try {
-                // cast to any to allow blocks without tightening aiScaffold's type here
                 const { path } = await aiScaffold({ prompt, tier: aiTier, blocks } as any);
                 const item: StoredPreview = {
                   id: `ai-${Date.now()}`,
@@ -445,7 +475,10 @@ export default function PreviewsList() {
                   localStorage.setItem(STORE_KEY, JSON.stringify(next));
                   return next;
                 });
-                window.open(path, "_blank", "noopener,noreferrer");
+
+                // background review + open
+                runReviewFor(path, aiTier);
+                openOrNavigate(path);
               } catch (e: any) {
                 toast({
                   title: "AI scaffold failed",
@@ -499,6 +532,17 @@ export default function PreviewsList() {
               >
                 {it.previewPath}
               </a>
+
+              {!!(typeof it.issuesCount === "number") && (
+                <button
+                  className="ml-2 mt-1 inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border"
+                  title="Open AI Review"
+                  onClick={() => handleCheckIssues(it)}
+                >
+                  Issues ({it.issuesCount})
+                </button>
+              )}
+
               {!!it.deploys?.length && (
                 <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
                   Last deploy: {it.deploys[0].provider} → {it.deploys[0].url || "—"}
@@ -587,7 +631,7 @@ export default function PreviewsList() {
               {/* Open */}
               <button
                 className="text-xs px-2 py-1 border rounded"
-                onClick={() => window.open(it.previewPath, "_blank", "noopener,noreferrer")}
+                onClick={() => openOrNavigate(it.previewPath)}
               >
                 Open
               </button>
@@ -637,7 +681,7 @@ export default function PreviewsList() {
                       prompt("Copy link:", newPath);
                     }
 
-                    window.open(newPath, "_blank", "noopener,noreferrer");
+                    openOrNavigate(newPath);
                   } catch (e: any) {
                     toast({
                       title: "Duplicate failed",
