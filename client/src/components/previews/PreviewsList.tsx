@@ -289,8 +289,7 @@ export default function PreviewsList() {
       const plan = JSON.parse(String(d.content));
 
       // 3) call scaffold with the plan (no prompt needed)
-      const { path } = await aiScaffold({ plan, tier: "balanced" });
-
+      const { path } = await aiScaffold({ plan, tier: aiTier });
       // 4) store + open the new preview
       const item: StoredPreview = {
         id: `ai-${Date.now()}`,
