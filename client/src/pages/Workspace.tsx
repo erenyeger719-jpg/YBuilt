@@ -538,7 +538,7 @@ export default function Workspace() {
           />
         </div>
         {!isCompact && (
-          <p className="text-xs text-muted-foreground">{workspace.manifest.description}</p>
+          <p className="text-sm text-muted-foreground">{workspace.manifest.description}</p>
         )}
       </div>
       

@@ -136,14 +136,7 @@ router.post("/vercel", async (req, res) => {
     const body = {
       name,
       files,
-      // Ensure Vercel treats this as a purely static output folder (no build)
-      projectSettings: {
-        framework: "other",
-        buildCommand: null,
-        devCommand: null,
-        outputDirectory: ".",
-      },
-      target: "production",
+      target: "production", // files-only deploy, no projectSettings needed
     };
 
     const resp = await fetch(url.toString(), {

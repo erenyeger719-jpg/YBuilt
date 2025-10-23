@@ -166,7 +166,7 @@ export default function Status() {
         </Card>
 
         {/* Auto-refresh Notice */}
-        <p className="text-xs text-muted-foreground text-center mt-6">
+        <p className="text-sm text-muted-foreground text-center mt-6">
           Status automatically refreshes every 30 seconds
         </p>
       </div>

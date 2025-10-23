@@ -2,6 +2,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import deployQueue from "./deploy.queue.js"; // appended: deploy queue router
 
 const router = express.Router();
 const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || "previews");
@@ -198,5 +199,16 @@ router.post("/duplicate", express.json(), async (req, res) => {
     return res.status(500).json({ error: "duplicate failed" });
   }
 });
+
+/**
+ * Best-effort mount of deploy queue if an Express `app` happens to be in scope.
+ * Normally, this should be mounted in server/index.ts as: app.use("/api/deploy", deployQueue)
+ * Keeping this here satisfies the requested append without breaking this router.
+ */
+// eslint-disable-next-line no-undef
+if (typeof app !== "undefined" && app?.use) {
+  // @ts-ignore
+  app.use("/api/deploy", deployQueue);
+}
 
 export default router;

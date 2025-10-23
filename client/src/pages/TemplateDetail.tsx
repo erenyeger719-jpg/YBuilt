@@ -83,16 +83,16 @@ export default function TemplateDetail() {
       </div>
 
       <div className="flex gap-2">
-        <a className="text-xs px-3 py-1.5 border rounded" href={tpl.demo} target="_blank" rel="noreferrer">
+        <a className="text-sm px-3 py-1.5 border rounded" href={tpl.demo} target="_blank" rel="noreferrer">
           Live demo
         </a>
         <button
-          className="text-xs px-3 py-1.5 border rounded"
+          className="text-sm px-3 py-1.5 border rounded"
           onClick={() => fork(tpl.sourceId, tpl.name)}
         >
           Fork this template
         </button>
-        <a className="text-xs px-3 py-1.5 border rounded" href="/templates">All templates</a>
+        <a className="text-sm px-3 py-1.5 border rounded" href="/templates">All templates</a>
       </div>
     </div>
   );

@@ -979,7 +979,7 @@ export default function Account() {
                     <div className="flex-1">
                       <p className="font-medium">{key.name}</p>
                       <p className="text-sm text-muted-foreground font-mono">{key.fingerprint}</p>
-                      <p className="text-xs text-muted-foreground">Added {key.createdAt}</p>
+                      <p className="text-sm text-muted-foreground">Added {key.createdAt}</p>
                     </div>
                     <Button
                       variant="ghost"
@@ -1076,7 +1076,7 @@ export default function Account() {
                       <p className="text-sm text-muted-foreground font-mono">
                         {revealedSecrets.has(secret.name) ? secret.value : "••••••••"}
                       </p>
-                      <p className="text-xs text-muted-foreground">Added {secret.createdAt}</p>
+                      <p className="text-sm text-muted-foreground">Added {secret.createdAt}</p>
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -1296,12 +1296,12 @@ export default function Account() {
                       <p className="font-medium">{theme.name}</p>
                       <div className="flex gap-2 mt-1">
                         {theme.official && (
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge variant="secondary" className="text-sm">
                             Official
                           </Badge>
                         )}
                         {theme.installed && (
-                          <Badge variant="default" className="text-xs">
+                          <Badge variant="default" className="text-sm">
                             <Check className="w-3 h-3 mr-1" />
                             Installed
                           </Badge>

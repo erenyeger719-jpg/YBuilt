@@ -324,7 +324,7 @@ export default function Profile() {
                     className="hidden"
                     data-testid="input-avatar"
                   />
-                  <p className="text-xs text-muted-foreground mt-2">
+                  <p className="text-sm text-muted-foreground mt-2">
                     Max 5MB • PNG, JPG, GIF, WEBP
                   </p>
                 </div>
@@ -348,7 +348,7 @@ export default function Profile() {
               <div className="space-y-2">
                 <Label>Email</Label>
                 <Input value={user?.email || ""} disabled />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Email cannot be changed
                 </p>
               </div>
@@ -384,7 +384,7 @@ export default function Profile() {
                   rows={3}
                   maxLength={140}
                 />
-                <p className="text-xs text-muted-foreground text-right">
+                <p className="text-sm text-muted-foreground text-right">
                   {(form.watch("bio") || "").length}/140
                 </p>
               </div>
@@ -392,7 +392,7 @@ export default function Profile() {
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label htmlFor="publicProfile">Public Profile</Label>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     Make your profile visible to others
                   </p>
                 </div>
@@ -434,7 +434,7 @@ export default function Profile() {
                   )}
                 </div>
                 <Link href="/settings/account">
-                  <Button variant="ghost" className="h-auto p-0 text-xs">
+                  <Button variant="ghost" className="h-auto p-0 text-sm">
                     <LinkIcon className="w-3 h-3 mr-1" />
                     Change email in Account settings
                   </Button>
@@ -462,7 +462,7 @@ export default function Profile() {
                     <div key={role} className="flex items-center justify-between">
                       <div className="space-y-1">
                         <Badge variant="secondary">{role}</Badge>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                           {role === "owner" && "Full system access and control"}
                           {role === "admin" && "Administrative privileges"}
                           {role === "editor" && "Can create and edit content"}
@@ -498,7 +498,7 @@ export default function Profile() {
                     <Key className="w-4 h-4" />
                     <div className="flex-1 text-left">
                       <p className="font-medium">SSH Keys</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         {counts.sshKeys} SSH key{counts.sshKeys !== 1 ? "s" : ""}
                       </p>
                     </div>
@@ -511,7 +511,7 @@ export default function Profile() {
                     <Shield className="w-4 h-4" />
                     <div className="flex-1 text-left">
                       <p className="font-medium">Account Secrets</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         {counts.secrets} secret{counts.secrets !== 1 ? "s" : ""}
                       </p>
                     </div>

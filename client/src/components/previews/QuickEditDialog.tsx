@@ -35,14 +35,14 @@ export default function QuickEditDialog({
         );
         const data = await r.json();
         if (!r.ok || !data?.ok) throw new Error(data?.error || "list failed");
-        setFiles(data.files || []);
+
+        // Guard against non-array responses
+        const files: string[] = Array.isArray(data.files) ? data.files : [];
+
+        setFiles(files);
         // choose default
         const preferred = initialFile || file || "index.html";
-        setSel(
-          data.files.includes(preferred)
-            ? preferred
-            : data.files[0] || "index.html"
-        );
+        setSel(files.includes(preferred) ? preferred : files[0] || "index.html");
       } catch (e: any) {
         setFiles([]);
         setSel("index.html");

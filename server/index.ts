@@ -106,7 +106,6 @@ if (reqMw) app.use(reqMw);
     express.static(path.join(PREVIEWS_DIR, 'forks'), { extensions: ['html'] })
   );
 
-
   // Observability + rate limiting
   app.use(requestIdMiddleware);
 
@@ -236,6 +235,10 @@ if (reqMw) app.use(reqMw);
   const { default: aiOrchestrator } = await import('./routes/ai.orchestrator.js').catch(() => ({
     default: undefined as any,
   }));
+  // NEW: AI review router (server/ai/router.js)
+  const { default: aiRouter } = await import('./ai/router.js').catch(() => ({
+    default: undefined as any,
+  }));
 
   // Mount deploy queue router (in addition to deploy API)
   app.use('/api/deploy', deployQueue); // <-- added
@@ -251,7 +254,11 @@ if (reqMw) app.use(reqMw);
   if (scaffoldRouter) app.use('/api/scaffold', express.json(), scaffoldRouter);
   if (importRouter) app.use('/api/import', express.json({ limit: '2mb' }), importRouter);
   if (previewsManage) app.use('/api/previews', express.json(), previewsManage);
-  if (aiOrchestrator) app.use('/api/ai', aiOrchestrator); // <-- added
+
+  // Mount AI routers UNDER THE SAME PREFIX. Order matters:
+  // - Mount aiRouter (with /review) first so it takes precedence over any duplicate paths.
+  if (aiRouter) app.use('/api/ai', express.json({ limit: '1mb' }), aiRouter);
+  if (aiOrchestrator) app.use('/api/ai', aiOrchestrator); // planner/scaffold endpoints
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);

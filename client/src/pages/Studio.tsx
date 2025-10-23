@@ -398,7 +398,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   API keys and URLs will be collected inside the Workspace.
                 </p>
               </div>
@@ -417,7 +417,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                     {uploading ? "Uploading…" : "Upload"}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   JPEG/PNG/SVG or text docs. You can add more later.
                 </p>
               </div>
@@ -515,7 +515,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                   readOnly
                   className="mt-1.5 bg-background/50"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   This came from the Home prompt. You can refine inside the Workspace.
                 </p>
               </div>
@@ -534,7 +534,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                 Save to Library
               </Button>
 
-              <div className="mt-3 text-xs text-muted-foreground">
+              <div className="mt-3 text-sm text-muted-foreground">
                 Job <span className="font-mono">{jobId}</span>
               </div>
             </div>
@@ -562,7 +562,7 @@ function PresetCard({ title, desc, active, onClick }: { title: string; desc: str
       className={`p-3 rounded-lg border text-left hover-elevate ${active ? "ring-2 ring-primary" : ""}`}
     >
       <div className="font-medium">{title}</div>
-      <div className="text-xs text-muted-foreground">{desc}</div>
+      <div className="text-sm text-muted-foreground">{desc}</div>
     </button>
   );
 }

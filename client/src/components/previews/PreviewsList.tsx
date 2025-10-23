@@ -68,6 +68,12 @@ export default function PreviewsList() {
   const [issues, setIssues] = useState<{ type: string; msg: string; fix?: string }[]>([]);
   const [issuesErr, setIssuesErr] = useState<string | undefined>();
 
+  // Sections-rebuild UI state
+  const [sectionsOpen, setSectionsOpen] = useState(false);
+  const [sectionsPath, setSectionsPath] = useState<string | null>(null);
+  const [availableSections, setAvailableSections] = useState<string[]>([]);
+  const [pickedSections, setPickedSections] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     const onStorage = () => setItems(load());
     window.addEventListener("storage", onStorage);
@@ -338,6 +344,38 @@ export default function PreviewsList() {
     const stripped = cssRaw.replace(/\/\* @tokens:start \*\/[\s\S]*?\/\* @tokens:end \*\//, "").trim();
     const nextCss = `${block}\n\n${stripped}`;
     await writeFile(previewPath, cssFile, nextCss);
+  }
+
+  // Sections modal opener
+  async function openSectionsModal(previewPath: string) {
+    // try to read plan.json → derive available section types
+    const raw = await readFile(previewPath, "plan.json").catch(() => "");
+    let plan: any = null;
+    try {
+      plan = raw ? JSON.parse(raw) : null;
+    } catch {
+      plan = null;
+    }
+
+    const known = ["hero", "features", "pricing", "faq", "testimonials", "cta"];
+    const fromPlan = Array.isArray(plan?.sections)
+      ? Array.from(
+          new Set(
+            plan.sections
+              .map((s: any) => (s?.type || s?.id || "").toString().toLowerCase().trim())
+              .filter((x: string) => known.includes(x))
+          )
+        )
+      : [];
+
+    const avail = fromPlan.length ? fromPlan : known;
+    const defaults: Record<string, boolean> = {};
+    for (const k of avail) defaults[k] = true;
+
+    setAvailableSections(avail);
+    setPickedSections(defaults);
+    setSectionsPath(previewPath);
+    setSectionsOpen(true);
   }
 
   // ------- Rebuild (AI) helper -------
@@ -754,6 +792,15 @@ export default function PreviewsList() {
                 Rebuild (AI)
               </button>
 
+              {/* Rebuild (Sections) */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={() => openSectionsModal(it.previewPath)}
+                title="Pick which sections to include, then rebuild"
+              >
+                Rebuild (Sections)
+              </button>
+
               {/* Check issues (AI) */}
               <button className="text-xs px-2 py-1 border rounded" onClick={() => handleCheckIssues(it)}>
                 Check issues (AI)
@@ -831,6 +878,89 @@ export default function PreviewsList() {
           </div>
         ))}
       </div>
+
+      {/* Rebuild with Sections modal */}
+      {sectionsOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 grid place-items-center p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white dark:bg-zinc-900 p-4 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium">Rebuild with Sections</h3>
+              <button className="text-xs px-2 py-1 border rounded" onClick={() => setSectionsOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-2 mb-3">
+              {availableSections.map((s) => (
+                <label key={s} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={!!pickedSections[s]}
+                    onChange={(e) =>
+                      setPickedSections((prev) => ({ ...prev, [s]: e.target.checked }))
+                    }
+                  />
+                  <span className="capitalize">{s}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button className="text-xs px-2 py-1 border rounded" onClick={() => setSectionsOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={async () => {
+                  if (!sectionsPath) return;
+                  try {
+                    // read plan again so we pass the full plan object
+                    const raw = await readFile(sectionsPath, "plan.json").catch(() => "");
+                    let plan: any = null;
+                    try {
+                      plan = raw ? JSON.parse(raw) : null;
+                    } catch {
+                      plan = null;
+                    }
+
+                    const blocks = Object.keys(pickedSections).filter((k) => pickedSections[k]);
+                    if (!blocks.length) {
+                      alert("Pick at least one section.");
+                      return;
+                    }
+
+                    const payload = plan ? { plan } : { prompt: "AI page" };
+                    const { path } = await aiScaffold({ ...(payload as any), blocks, tier: aiTier } as any);
+
+                    const item: StoredPreview = {
+                      id: `ai-${Date.now()}`,
+                      name: (plan?.title || "AI page").slice(0, 40),
+                      previewPath: path,
+                      createdAt: Date.now(),
+                      deploys: [],
+                    };
+                    setItems((prev) => {
+                      const next = [item, ...prev];
+                      localStorage.setItem(STORE_KEY, JSON.stringify(next));
+                      return next;
+                    });
+
+                    // background review + open
+                    runReviewFor(path, aiTier);
+                    openOrNavigate(path);
+
+                    setSectionsOpen(false);
+                  } catch (e: any) {
+                    toast({ title: "Rebuild failed", description: e?.message || "error", variant: "destructive" });
+                  }
+                }}
+              >
+                Rebuild
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lightweight AI Review modal */}
       {issuesOpen && (

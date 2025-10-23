@@ -55,7 +55,7 @@ export default function PreviewsPage() {
           >
             <div>
               <div className="font-medium">{it.name}</div>
-              <div className="text-xs text-zinc-500">
+              <div className="text-sm text-zinc-500">
                 {new Date(it.createdAt).toLocaleString()}
               </div>
             </div>
