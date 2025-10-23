@@ -193,12 +193,19 @@ if (reqMw) app.use(reqMw);
   // API routers
   const { default: jobsRouter } = await import('./routes/jobs.js');
   const { default: workspaceRouter } = await import('./routes/workspace.js');
-  const { default: authRoutes } = await import('./routes/auth.js').catch(() => ({ default: undefined as any }));
+
+  const { default: authRoutes } = await import('./routes/auth.js').catch(() => ({
+    default: undefined as any,
+  }));
   const { default: projectsRoutes } = await import('./routes/projects.js').catch(() => ({
     default: undefined as any,
   }));
-  const { default: chatRoutes } = await import('./routes/chat.js').catch(() => ({ default: undefined as any }));
-  const { default: executeRoutes } = await import('./routes/execute.js').catch(() => ({ default: undefined as any }));
+  const { default: chatRoutes } = await import('./routes/chat.js').catch(() => ({
+    default: undefined as any,
+  }));
+  const { default: executeRoutes } = await import('./routes/execute.js').catch(() => ({
+    default: undefined as any,
+  }));
   const { default: previewsRouter } = await import('./routes/previews.js').catch(() => ({
     default: undefined as any,
   }));
@@ -220,6 +227,10 @@ if (reqMw) app.use(reqMw);
   const { default: previewsManage } = await import('./routes/previews.manage.js').catch(() => ({
     default: undefined as any,
   }));
+  // NEW: AI orchestrator (mounted near other routers)
+  const { default: aiOrchestrator } = await import('./routes/ai.orchestrator.js').catch(() => ({
+    default: undefined as any,
+  }));
 
   // Mount deploy queue router (in addition to deploy API)
   app.use('/api/deploy', deployQueue); // <-- added
@@ -235,6 +246,7 @@ if (reqMw) app.use(reqMw);
   if (scaffoldRouter) app.use('/api/scaffold', express.json(), scaffoldRouter);
   if (importRouter) app.use('/api/import', express.json({ limit: '2mb' }), importRouter);
   if (previewsManage) app.use('/api/previews', express.json(), previewsManage);
+  if (aiOrchestrator) app.use('/api/ai', aiOrchestrator); // <-- added
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
