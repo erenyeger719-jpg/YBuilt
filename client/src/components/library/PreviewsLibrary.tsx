@@ -841,7 +841,67 @@ export default function PreviewsLibrary() {
           <div className="w-full max-w-lg rounded-lg bg-black/80 text-white border border-white/20 p-4 shadow-xl">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-medium">AI Review</h3>
-              <Button size="sm" variant="ghost" onClick={() => setIssuesOpen(false)}>Close</Button>
+              <div className="flex items-center gap-2">
+                {issues.some((it) => it.ops?.length) && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={async () => {
+                      try {
+                        if (!reviewPath) throw new Error("No preview selected");
+
+                        // Build a safe-op set: only ops whose 'find' actually matches (or EOF)
+                        const filesCache: Record<string, string> = {};
+                        const allOps = issues.flatMap((it) => it.ops || []);
+                        const safeOps: PatchOp[] = [];
+
+                        for (const op of allOps) {
+                          // ensure file exists if needed
+                          if (op.file.endsWith(".css")) await ensureAsset(reviewPath, "css");
+                          if (op.file.endsWith(".js"))  await ensureAsset(reviewPath, "js");
+
+                          const before =
+                            filesCache[op.file] ??
+                            (await readFile(reviewPath, op.file).catch(() => ""));
+                          filesCache[op.file] = before;
+
+                          if (op.find === "$$EOF$$" && !op.isRegex) {
+                            safeOps.push(op);
+                            continue;
+                          }
+                          if (op.isRegex) {
+                            const re = new RegExp(op.find, "g");
+                            if (re.test(before)) safeOps.push(op);
+                          } else {
+                            if (before.includes(op.find)) safeOps.push(op);
+                          }
+                        }
+
+                        if (!safeOps.length) {
+                          toast({ title: "No safe fixes found", description: "Nothing matched." });
+                          return;
+                        }
+
+                        const updatedFiles = await applyOps(reviewPath, safeOps);
+                        toast({ title: "Applied", description: `Updated ${updatedFiles.join(", ")}` });
+
+                        // Refresh counts + modal contents
+                        await runReviewFor(reviewPath, aiTier);
+                        await handleCheckIssues({ previewPath: reviewPath } as any);
+                      } catch (e: any) {
+                        toast({
+                          title: "Fix all failed",
+                          description: e?.message || "Error",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                  >
+                    Fix all (AI)
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => setIssuesOpen(false)}>Close</Button>
+              </div>
             </div>
 
             {issuesLoading && <div className="text-sm text-white/70">Analyzing…</div>}
