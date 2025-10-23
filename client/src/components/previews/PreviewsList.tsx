@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { exportZip, enqueueDeploy, getDeployJob } from "@/lib/previewsActions";
-import { aiScaffold } from "@/lib/aiActions";
+import { aiScaffold, aiReview } from "@/lib/aiActions";
 import { useToast } from "@/hooks/use-toast";
 import DeployDrawer from "./DeployDrawer";
 import QuickEditDialog from "./QuickEditDialog";
@@ -53,6 +53,12 @@ export default function PreviewsList() {
 
   // AI tier
   const [aiTier, setAiTier] = useState<"mock" | "fast" | "balanced" | "best">("mock");
+
+  // AI review state
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  const [issuesLoading, setIssuesLoading] = useState(false);
+  const [issues, setIssues] = useState<{ type: string; msg: string; fix?: string }[]>([]);
+  const [issuesErr, setIssuesErr] = useState<string | undefined>();
 
   useEffect(() => {
     const onStorage = () => setItems(load());
@@ -308,6 +314,28 @@ export default function PreviewsList() {
       window.open(path, "_blank", "noopener,noreferrer");
     } catch (e: any) {
       toast({ title: "Rebuild failed", description: e?.message || "error", variant: "destructive" });
+    }
+  }
+
+  // ------- Check issues (AI) helper -------
+  async function handleCheckIssues(it: StoredPreview) {
+    setIssuesOpen(true);
+    setIssuesLoading(true);
+    setIssuesErr(undefined);
+    setIssues([]);
+
+    try {
+      const html = await readFile(it.previewPath, "index.html").catch(() => "");
+      const css = await readFile(it.previewPath, "styles.css").catch(() => "");
+      const js = await readFile(it.previewPath, "app.js").catch(() => "");
+      const bundle = `/* index.html */\n${html}\n\n/* styles.css */\n${css}\n\n/* app.js */\n${js}`;
+
+      const { review } = await aiReview({ code: bundle, tier: aiTier });
+      setIssues(review?.issues || []);
+    } catch (e: any) {
+      setIssuesErr(e?.message || "review failed");
+    } finally {
+      setIssuesLoading(false);
     }
   }
 
@@ -616,6 +644,14 @@ export default function PreviewsList() {
                 Rebuild (AI)
               </button>
 
+              {/* Check issues (AI) */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={() => handleCheckIssues(it)}
+              >
+                Check issues (AI)
+              </button>
+
               {/* Export ZIP */}
               <button
                 className="text-xs px-2 py-1 border rounded"
@@ -688,6 +724,42 @@ export default function PreviewsList() {
           </div>
         ))}
       </div>
+
+      {/* Lightweight AI Review modal */}
+      {issuesOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 grid place-items-center p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white dark:bg-zinc-900 p-4 shadow-xl">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium">AI Review</h3>
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={() => setIssuesOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            {issuesLoading && <div className="text-sm text-zinc-500">Analyzing…</div>}
+            {issuesErr && <div className="text-sm text-red-600">Error: {issuesErr}</div>}
+
+            {!issuesLoading && !issuesErr && (
+              issues.length ? (
+                <ul className="space-y-3">
+                  {issues.map((it, i) => (
+                    <li key={i} className="border rounded p-3">
+                      <div className="text-xs uppercase tracking-wide text-zinc-500">{it.type}</div>
+                      <div className="text-sm">{it.msg}</div>
+                      {it.fix && <div className="text-xs text-zinc-600 mt-1">Fix: {it.fix}</div>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-sm text-zinc-500">No issues found.</div>
+              )
+            )}
+          </div>
+        </div>
+      )}
 
       <DeployDrawer
         open={drawerOpen}
