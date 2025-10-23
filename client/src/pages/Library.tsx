@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import ChatDock from "@/components/ChatDock";
+import PreviewsLibrary from "@/components/library/PreviewsLibrary";
 
 interface Draft {
   draftId: string;
@@ -194,6 +195,12 @@ export default function Library() {
               </div>
             </motion.div>
           )}
+
+          {/* My Previews section */}
+          <div className="mt-12">
+            <h2 className="text-2xl font-bold text-white mb-4">My Previews</h2>
+            <PreviewsLibrary />
+          </div>
         </div>
 
         {/* Right-side chat dock for Library page */}
