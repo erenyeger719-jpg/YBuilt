@@ -163,7 +163,12 @@ export default function ExploreWheel() {
           className="wheel flex gap-8 px-[8vw] overflow-x-auto overflow-y-hidden select-none cursor-default"
           onWheel={(e) => { e.preventDefault(); e.stopPropagation(); }}
           onScroll={recenterIfNeeded}
-          onMouseDown={(e) => e.preventDefault()}
+          onMouseDown={(e) => {
+            const t = e.target as HTMLElement | null;
+            // allow clicks on interactive controls inside the wheel
+            if (t && t.closest('a,button,[role="button"],input,textarea,select,label')) return;
+            e.preventDefault();
+          }}
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollBehavior: 'auto' }}
         >
           {tripled.map((t, i) => (<Card key={`${t.id}-${i}`} title={t.title} />))}
@@ -193,14 +198,15 @@ function Card({ title }: { title: string }) {
           <span className="inline-block h-2 w-2 rounded-full bg-rose-400" />
           <span className="text-sm">ready to customize</span>
         </div>
-        <button
-          type="button"
+        <a
+          href="/templates"
+          onMouseDown={(e) => e.stopPropagation()}
           className="px-5 py-2 rounded-lg border border-white/15 text-white/90
                      bg-white/5 hover:bg-white/10 focus-visible:outline-none
                      focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] transition-colors"
         >
           Use
-        </button>
+        </a>
       </div>
       <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-white/10" />
     </article>

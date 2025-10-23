@@ -10,8 +10,8 @@ const TIER_KEY = "ybuilt.aiTier";
 
 const setSorted = (items: any[]) => [...items].sort((a, b) => b.createdAt - a.createdAt);
 const openOrNavigate = (url: string) => {
-  const w = window.open(url, "_blank", "noopener,noreferrer");
-  if (!w) window.location.href = url;
+ // same-tab = not a popup, so it won't be blocked
+  window.location.assign(url);
 };
 
 export default function TemplatesPage() {
