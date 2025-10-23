@@ -306,6 +306,40 @@ export default function PreviewsList() {
     }
   }
 
+  // Quick Tokens helper: edit plan tokens + stamp CSS vars
+  async function applyTokens(previewPath: string) {
+    // read plan
+    const planRaw = await readFile(previewPath, "plan.json").catch(() => "{}");
+    const plan = (() => {
+      try {
+        return JSON.parse(planRaw);
+      } catch {
+        return {};
+      }
+    })();
+    const tokens = (plan as any).tokens || {};
+
+    // prompt user
+    const primary = window.prompt("Primary color (CSS value)", tokens.primary || "#4f46e5")?.trim();
+    if (!primary) return;
+    const radius = window.prompt("Corner radius (e.g., 10px)", tokens.radius || "10px")?.trim() || "10px";
+    const fontSize =
+      window.prompt("Base font size (e.g., 16px)", tokens.fontSize || "16px")?.trim() || "16px";
+
+    // update plan.json
+    (plan as any).tokens = { primary, radius, fontSize };
+    await writeFile(previewPath, "plan.json", JSON.stringify(plan, null, 2));
+
+    // stamp/update CSS vars at the top of styles file (idempotent with markers)
+    const cssFile = await ensureAsset(previewPath, "css");
+    const cssRaw = await readFile(previewPath, cssFile).catch(() => "");
+    const block =
+      `/* @tokens:start */\n:root{--color-primary:${primary};--radius:${radius};--font-size:${fontSize}}\n/* @tokens:end */`;
+    const stripped = cssRaw.replace(/\/\* @tokens:start \*\/[\s\S]*?\/\* @tokens:end \*\//, "").trim();
+    const nextCss = `${block}\n\n${stripped}`;
+    await writeFile(previewPath, cssFile, nextCss);
+  }
+
   // ------- Rebuild (AI) helper -------
   async function handleRebuild(it: StoredPreview) {
     try {
@@ -561,6 +595,27 @@ export default function PreviewsList() {
                 }}
               >
                 Edit HTML
+              </button>
+
+              {/* Edit Plan (plan.json) */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={() => {
+                  setEditPath(it.previewPath);
+                  setEditInitialFile("plan.json");
+                  setEditOpen(true);
+                }}
+              >
+                Edit Plan
+              </button>
+
+              {/* Tokens quick set */}
+              <button
+                className="text-xs px-2 py-1 border rounded"
+                onClick={() => applyTokens(it.previewPath)}
+                title="Set primary color, radius, font-size"
+              >
+                Tokens
               </button>
 
               {/* Edit CSS */}
@@ -823,8 +878,10 @@ export default function PreviewsList() {
         onClose={() => setEditOpen(false)}
         previewPath={editPath || "/previews/"}
         initialFile={editInitialFile}
-        onSaved={() => {
-          /* no-op */
+        onSaved={async () => {
+          if (editPath) {
+            runReviewFor(editPath, aiTier); // keep Issues badge up-to-date
+          }
         }}
       />
 
