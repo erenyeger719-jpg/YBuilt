@@ -206,6 +206,16 @@ export default function PreviewsLibrary() {
       const before = touched[op.file] ?? (await readFile(previewPath, op.file).catch(() => ""));
       let after = before;
 
+      // --- EOF append special-case ---
+      if (op.find === "$$EOF$$" && !op.isRegex) {
+        after = `${before.trimEnd()}\n${op.replace}`;
+        if (after !== before) {
+          touched[op.file] = after;
+          if (!changedFiles.includes(op.file)) changedFiles.push(op.file);
+        }
+        continue;
+      }
+
       if (op.isRegex) {
         const re = new RegExp(op.find, "g");
         if (!re.test(after)) throw new Error(`Pattern not found in ${op.file}: ${op.find}`);
