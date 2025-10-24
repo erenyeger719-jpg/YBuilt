@@ -166,6 +166,34 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
     setDraft("");
   }
 
+  // classify a log line for color
+  function lineClass(line: string) {
+    const s = line.toLowerCase();
+    if (s.includes("error") || s.includes("failed")) return "text-red-600";
+    if (s.includes("warn")) return "text-amber-600";
+    if (s.includes("deployed") || s.includes("success")) return "text-green-600";
+    return "text-muted-foreground";
+  }
+
+  // escape basic HTML
+  function escapeHtml(str: string) {
+    return str
+      .replaceAll(/&/g, "&amp;")
+      .replaceAll(/</g, "&lt;")
+      .replaceAll(/>/g, "&gt;");
+  }
+
+  // simple linkify (Netlify/Admin URLs, http(s) generally)
+  function linkify(line: string) {
+    const safe = escapeHtml(line);
+    const urlRe =
+      /(https?:\/\/[^\s)]+)|(app\.netlify\.com\/[^\s)]+)|(\b[\w-]+\.netlify\.app[^\s)]*)/gi;
+    return safe.replace(urlRe, (m) => {
+      const href = m.startsWith("http") ? m : `https://${m}`;
+      return `<a href="${href}" target="_blank" rel="noreferrer">${m}</a>`;
+    });
+  }
+
   return (
     <div className="border rounded bg-background">
       <div className="px-3 py-2 text-xs border-b flex items-center gap-2">
@@ -206,9 +234,19 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
 
       <div
         ref={boxRef}
-        className="p-3 text-xs font-mono h-48 overflow-auto whitespace-pre-wrap leading-relaxed"
+        className="p-3 text-xs font-mono h-48 overflow-auto whitespace-pre-wrap leading-relaxed space-y-1"
       >
-        {lines.length ? lines.join("\n") : "Waiting for deploy logs…"}
+        {lines.length ? (
+          lines.map((ln, i) => (
+            <div
+              key={i}
+              className={lineClass(ln)}
+              dangerouslySetInnerHTML={{ __html: linkify(ln) }}
+            />
+          ))
+        ) : (
+          "Waiting for deploy logs…"
+        )}
       </div>
 
       {/* lightweight chat box */}
