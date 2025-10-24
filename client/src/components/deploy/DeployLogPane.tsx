@@ -112,6 +112,19 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
     navigator.clipboard.writeText(text).catch(() => {});
   }
 
+  function downloadLogs() {
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    a.href = url;
+    a.download = `deploy-${jobId}-${ts}.log`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function redeploy() {
     try {
       const r = await fetch("/api/deploy/enqueue", {
@@ -177,10 +190,7 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
 
   // escape basic HTML
   function escapeHtml(str: string) {
-    return str
-      .replaceAll(/&/g, "&amp;")
-      .replaceAll(/</g, "&lt;")
-      .replaceAll(/>/g, "&gt;");
+    return str.replaceAll(/&/g, "&amp;").replaceAll(/</g, "&lt;").replaceAll(/>/g, "&gt;");
   }
 
   // simple linkify (Netlify/Admin URLs, http(s) generally)
@@ -205,6 +215,9 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={downloadLogs}>
+            Download logs
+          </Button>
           <Button
             size="sm"
             variant="destructive"
