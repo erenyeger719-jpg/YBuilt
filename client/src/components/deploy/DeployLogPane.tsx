@@ -30,7 +30,10 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
   useEffect(() => {
     if (!jobId) return;
     try {
-      localStorage.setItem(`deploy-chat:${jobId}`, JSON.stringify(chat.slice(-200)));
+      localStorage.setItem(
+        `deploy-chat:${jobId}`,
+        JSON.stringify(chat.slice(-200))
+      );
     } catch {}
   }, [chat, jobId]);
 
@@ -49,15 +52,30 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
       if (p?.type === "chat") {
         setChat((prev) => [
           ...prev,
-          { user: p.user || "anon", text: String(p.text || ""), ts: p.ts || Date.now() },
+          {
+            user: p.user || "anon",
+            text: String(p.text || ""),
+            ts: p.ts || Date.now(),
+          },
         ]);
       }
       if (p?.type === "done") {
         setStage("done");
+
+        // Error branch: show failure toast and stop.
+        if (p?.status === "error") {
+          toast({
+            title: "Deploy failed",
+            description: p?.error || "Unknown error",
+            variant: "destructive",
+          });
+          return;
+        }
+
         if (p?.url) setUrl(p.url);
         if (p?.adminUrl) setAdminUrl(p.adminUrl);
 
-        // Quick UX: notify and offer to open the deployed site — only once
+        // Success branch: notify and offer to open the deployed site — only once
         if (p?.url && !promptedRef.current) {
           promptedRef.current = true;
           toast({
@@ -92,6 +110,29 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
     navigator.clipboard.writeText(text).catch(() => {});
   }
 
+  async function redeploy() {
+    try {
+      const r = await fetch("/api/deploy/enqueue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "netlify",
+          previewPath: `/previews/${jobId}/`,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data?.ok) throw new Error(data?.error || "enqueue failed");
+      toast({ title: "Queued new deploy" });
+      window.dispatchEvent(new CustomEvent("workspace:show-build"));
+    } catch (e: any) {
+      toast({
+        title: "Could not queue deploy",
+        description: e?.message || "Unknown error",
+        variant: "destructive",
+      });
+    }
+  }
+
   function sendChat() {
     const text = draft.trim();
     if (!text) return;
@@ -108,16 +149,29 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
         <div className="font-medium">Deploy</div>
         <div className="text-muted-foreground">• {stage}</div>
         <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" onClick={redeploy}>
+            Redeploy
+          </Button>
           <Button size="sm" variant="outline" onClick={copyAll}>
             Copy logs
           </Button>
           {url && (
-            <a className="text-xs underline" href={url} target="_blank" rel="noreferrer">
+            <a
+              className="text-xs underline"
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+            >
               Open
             </a>
           )}
           {adminUrl && (
-            <a className="text-xs underline" href={adminUrl} target="_blank" rel="noreferrer">
+            <a
+              className="text-xs underline"
+              href={adminUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
               Netlify
             </a>
           )}
@@ -135,7 +189,9 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
       <div className="border-t grid grid-rows-[1fr_auto] h-40">
         <div className="p-3 overflow-auto">
           {chat.length === 0 ? (
-            <div className="text-xs text-muted-foreground">Chat about this build…</div>
+            <div className="text-xs text-muted-foreground">
+              Chat about this build…
+            </div>
           ) : (
             chat.map((m, i) => (
               <div key={i} className="text-xs">
