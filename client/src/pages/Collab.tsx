@@ -43,9 +43,11 @@ export default function CollabPage() {
     }
   })();
 
+  const isValidRoom = previewPath.startsWith("/previews/");
+
   // guard: if bad param, bounce to library
   useEffect(() => {
-    if (!previewPath.startsWith("/previews/")) {
+    if (!isValidRoom) {
       toast({
         title: "Invalid room",
         description: "Bad link or missing preview.",
@@ -53,7 +55,7 @@ export default function CollabPage() {
       });
       setLoc("/library");
     }
-  }, [previewPath, setLoc, toast]);
+  }, [isValidRoom, setLoc, toast]);
 
   // files + editor
   const [files, setFiles] = useState<string[]>([]);
@@ -76,10 +78,12 @@ export default function CollabPage() {
     color: localStorage.getItem("ybuilt.color") || "#8b5cf6",
     file: sel,
   };
-  const { peers } = usePresence(previewPath, { ...me, file: sel });
+  const { peers } = usePresence(isValidRoom ? previewPath : "", { ...me, file: sel });
 
   // load list
   useEffect(() => {
+    if (!isValidRoom) return;
+
     let alive = true;
     (async () => {
       try {
@@ -101,11 +105,12 @@ export default function CollabPage() {
     return () => {
       alive = false;
     };
-  }, [previewPath, toast]);
+  }, [isValidRoom, previewPath, toast]);
 
   // load file content
   useEffect(() => {
-    if (!sel) return;
+    if (!isValidRoom || !sel) return;
+
     let alive = true;
     (async () => {
       setLoading(true);
@@ -126,7 +131,7 @@ export default function CollabPage() {
     return () => {
       alive = false;
     };
-  }, [previewPath, sel, toast]);
+  }, [isValidRoom, previewPath, sel, toast]);
 
   const canSave = useMemo(() => !saving && !!sel, [saving, sel]);
 

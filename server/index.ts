@@ -3,6 +3,7 @@ import 'dotenv/config';
 import express, { type Request, type Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import fs from 'fs';
 import path from 'path';
 import { createServer } from 'http';
@@ -90,6 +91,7 @@ if (reqMw) app.use(reqMw);
 
   // CORS + parsers
   app.use(cors());
+  app.use(cookieParser()); // <-- cookie support for session/team routes
   app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
@@ -174,7 +176,7 @@ if (reqMw) app.use(reqMw);
         if (room) socket.to(room).emit('collab:comment:event', payload);
       });
 
-      // --- NEW: cursor relay ---
+      // --- cursor relay ---
       socket.on('collab:cursor', (payload: any) => {
         // payload: { file?: string, startLine?: number, endLine?: number }
         if (room) {
@@ -186,7 +188,7 @@ if (reqMw) app.use(reqMw);
         }
       });
 
-      // --- NEW: mention relay ---
+      // --- mention relay ---
       socket.on('collab:mention', (payload: any) => {
         // payload: { toName: string, from: { name, color }, previewPath, file, commentId }
         if (room) {
@@ -194,7 +196,7 @@ if (reqMw) app.use(reqMw);
         }
       });
 
-      // --- NEW: explicit leave handler ---
+      // --- explicit leave handler ---
       socket.on('collab:leave', ({ room: r }: { room: string }) => {
         if (room === r) {
           const peers = presence.get(room);
@@ -357,6 +359,10 @@ if (reqMw) app.use(reqMw);
     .then((m) => (m as any).default ?? m)
     .catch(() => ({} as any));
 
+  // Optional routes: previews.remove-file + teams
+  const previewsRemoveMod: any = await import('./routes/previews.remove-file.js').catch(() => ({} as any));
+  const teamsMod: any = await import('./routes/teams.js').catch(() => ({} as any));
+
   // Mount deploy queue router (in addition to deploy API)
   app.use('/api/deploy', deployQueue);
 
@@ -381,9 +387,26 @@ if (reqMw) app.use(reqMw);
   if (commentsMod?.list) app.get('/api/comments/list', commentsMod.list);
   if (commentsMod?.add) app.post('/api/comments/add', express.json(), commentsMod.add);
   if (commentsMod?.resolve) app.post('/api/comments/resolve', express.json(), commentsMod.resolve);
+  if (commentsMod?.remove) app.post('/api/comments/remove', express.json(), commentsMod.remove); // optional remove
 
   // AI Q&A
   if (aiqnaMod?.qna) app.post('/api/ai/qna', express.json(), aiqnaMod.qna);
+
+  // Previews: remove-file endpoint
+  if (previewsRemoveMod?.removeFile) {
+    app.post('/api/previews/remove-file', express.json(), previewsRemoveMod.removeFile);
+  } else if (previewsRemoveMod?.default) {
+    // fallback to a router if provided as default
+    app.use('/api/previews', express.json(), previewsRemoveMod.default);
+  }
+
+  // Teams/session endpoints (optional)
+  if (teamsMod?.session) app.get('/api/session', teamsMod.session);
+  if (teamsMod?.create) app.post('/api/teams', express.json(), teamsMod.create);
+  if (teamsMod?.mine) app.get('/api/teams/mine', teamsMod.mine);
+  if (teamsMod?.switch) app.post('/api/teams/switch', express.json(), teamsMod.switch);
+  if (teamsMod?.invite) app.post('/api/teams/invite', express.json(), teamsMod.invite);
+  if (teamsMod?.accept) app.post('/api/teams/accept', express.json(), teamsMod.accept);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
