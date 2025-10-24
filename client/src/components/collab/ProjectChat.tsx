@@ -34,6 +34,8 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   // scroll
   const [atBottom, setAtBottom] = useState(true);
   const [pendingNew, setPendingNew] = useState(0);
+  // keep "am I at bottom?" out of the effect deps
+  const atBottomRef = useRef(true);
 
   // local "I reacted" memory (not persisted)
   const [myReacts, setMyReacts] = useState<Set<string>>(new Set());
@@ -69,6 +71,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     const onScroll = () => {
       const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
       setAtBottom(nearBottom);
+      atBottomRef.current = nearBottom; // keep ref synced
       if (nearBottom) setPendingNew(0);
     };
     el.addEventListener("scroll", onScroll);
@@ -86,7 +89,9 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
 
     const onMsg = (m: Msg) => {
       setMsgs((prev) => [...prev, m]);
-      if (!atBottom) setPendingNew((n) => n + 1);
+
+      // use ref so effect doesn't depend on atBottom
+      if (!atBottomRef.current) setPendingNew((n) => n + 1);
 
       const notActive = !activeRef.current || document.hidden;
       if (notActive) {
@@ -161,7 +166,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       s.off("chat:history", onHistory);
       s.off("chat:react:update", onReactUpdate);
     };
-  }, [projectId, atBottom]);
+  }, [projectId]);
 
   // react when you're mentioned
   useEffect(() => {
@@ -172,7 +177,11 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       if (p.projectId !== projectId) return;
       setMsgs((prev) => [
         ...prev,
-        { role: "system", content: `@you from ${p.from}: ${p.content}`, createdAt: new Date(p.at).toISOString() },
+        {
+          role: "system",
+          content: `@you from ${p.from}: ${p.content}`,
+          createdAt: new Date(p.at).toISOString(),
+        },
       ]);
     };
 
@@ -228,7 +237,10 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       if (/^\B@[\w-]+$/.test(p)) {
         const isAll = p.toLowerCase() === "@all";
         return (
-          <span key={i} className={"rounded px-1 " + (isAll ? "bg-red-100 text-red-700" : "bg-yellow-100")}>
+          <span
+            key={i}
+            className={"rounded px-1 " + (isAll ? "bg-red-100 text-red-700" : "bg-yellow-100")}
+          >
             {p}
           </span>
         );
@@ -300,7 +312,13 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       const arg = rest.join(" ");
       switch (cmd.toLowerCase()) {
         case "help":
-          setMsgs((prev) => [...prev, { role: "system", content: "Commands: /who, /me <text>, /deploy <jobId>, /cancel <jobId>" }]);
+          setMsgs((prev) => [
+            ...prev,
+            {
+              role: "system",
+              content: "Commands: /who, /me <text>, /deploy <jobId>, /cancel <jobId>",
+            },
+          ]);
           break;
         case "who": {
           const list = members.map((m) => m.username).join(", ") || "just you";
@@ -322,7 +340,9 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
               const ok = d?.ok ? "queued" : `failed: ${d?.error || "unknown"}`;
               setMsgs((prev) => [...prev, { role: "system", content: `deploy ${ok}` }]);
             })
-            .catch(() => setMsgs((prev) => [...prev, { role: "system", content: "deploy failed" }]));
+            .catch(() =>
+              setMsgs((prev) => [...prev, { role: "system", content: "deploy failed" }])
+            );
           break;
         case "cancel":
           fetch("/api/deploy/cancel", {
@@ -336,7 +356,9 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
               const ok = d?.ok ? "requested" : `failed: ${d?.error || "unknown"}`;
               setMsgs((prev) => [...prev, { role: "system", content: `cancel ${ok}` }]);
             })
-            .catch(() => setMsgs((prev) => [...prev, { role: "system", content: "cancel failed" }]));
+            .catch(() =>
+              setMsgs((prev) => [...prev, { role: "system", content: "cancel failed" }])
+            );
           break;
         default:
           setMsgs((prev) => [...prev, { role: "system", content: `unknown command: /${cmd}` }]);
@@ -403,7 +425,10 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                   <span className="font-medium">{m.username || m.role}</span>
                   <span className="text-muted-foreground ml-1">
                     {m.createdAt
-                      ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                      ? new Date(m.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
                       : ""}
                   </span>
                   <span>: </span>
@@ -446,6 +471,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                 if (!el) return;
                 el.scrollTop = el.scrollHeight;
                 setAtBottom(true);
+                atBottomRef.current = true;
                 setPendingNew(0);
               }}
             >
@@ -459,7 +485,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         <div className="flex gap-2">
           <textarea
             ref={inputRef}
-            className="flex-1 border rounded px-2 py-1 text-xs bg-background resize-y min-h-8 max-h-32"
+            className="flex-1 border rounded px-2 py-1 text-xs bg-background resize-y min-h-[2rem] max-h-[8rem]"
             placeholder="Message…"
             value={draft}
             onChange={(e) => {
@@ -486,7 +512,8 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                   e.preventDefault();
                   const picked = mentionOptions[activeIdx] || mentionQuery || "";
                   if (picked) {
-                    const caret = (e.currentTarget as HTMLTextAreaElement).selectionStart ?? draft.length;
+                    const caret =
+                      (e.currentTarget as HTMLTextAreaElement).selectionStart ?? draft.length;
                     const upto = draft.slice(0, caret);
                     const rest = draft.slice(caret);
                     const repl = upto.replace(/(@[\w-]{0,32})$/, `@${picked} `);
@@ -503,20 +530,29 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
               }
 
               if (mentionOpen) {
-                if (e.key === "ArrowDown") { e.preventDefault(); setMentionIndex((i) => i + 1); }
-                else if (e.key === "ArrowUp") { e.preventDefault(); setMentionIndex((i) => Math.max(0, i - 1)); }
-                else if (e.key === "Escape") { e.preventDefault(); setMentionOpen(false); }
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setMentionIndex((i) => i + 1);
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setMentionIndex((i) => Math.max(0, i - 1));
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setMentionOpen(false);
+                }
               }
             }}
             onFocus={() => getSocket().emit("typing:start", { projectId })}
             onBlur={() => getSocket().emit("typing:stop", { projectId })}
           />
-          <Button size="sm" onClick={send}>Send</Button>
+          <Button size="sm" onClick={send}>
+            Send
+          </Button>
         </div>
 
         {mentionOpen && (
           <div className="px-0.5 pb-2 -mt-1 w-full">
-            <div className="border rounded bg-popover text-xs max-h-40 overflow-auto">
+            <div className="border rounded bg-popover text-xs max-h-[10rem] overflow-auto">
               {mentionOptions.length > 0 ? (
                 mentionOptions.map((name, idx) => (
                   <div
