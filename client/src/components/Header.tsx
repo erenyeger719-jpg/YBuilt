@@ -7,6 +7,7 @@ import PaymentButton from "./PaymentButton";
 import CurrencyToggle from "./CurrencyToggle";
 import ProfileIcon from "./ProfileIcon";
 import { useState, useEffect } from "react";
+import { getSession, switchTeam } from "@/lib/session";
 
 interface HeaderProps {
   logSummary?: {
@@ -15,6 +16,54 @@ interface HeaderProps {
   };
   workspaceName?: string;
   onThemeModalOpen?: () => void;
+}
+
+/** Minimal team switcher for the header's right side */
+function TeamSwitcher() {
+  const [loading, setLoading] = useState(true);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [current, setCurrent] = useState<any>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await getSession();
+        setTeams(s?.teams || []);
+        setCurrent(s?.currentTeam || null);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) return null;
+
+  return (
+    <select
+      className="text-xs border rounded px-2 py-1 bg-transparent"
+      value={current?.id || (teams[0]?.id ?? "")}
+      onChange={async (e) => {
+        const id = e.target.value;
+        try {
+          await switchTeam(id);
+        } finally {
+          window.location.reload(); // simplest: refresh UI scoped to team
+        }
+      }}
+      aria-label="Switch team"
+      title="Switch team"
+    >
+      {teams.length ? (
+        teams.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))
+      ) : (
+        <option value="">(no team)</option>
+      )}
+    </select>
+  );
 }
 
 export default function Header({
@@ -144,6 +193,9 @@ export default function Header({
               </Link>
             </Button>
 
+            {/* Team switcher (minimal) */}
+            <TeamSwitcher />
+
             {/* Keep payment visible on desktop only to avoid crowding on mobile */}
             <div className="hidden md:inline-flex">
               <PaymentButton amount={amount} currency={currency} />
@@ -186,6 +238,8 @@ export default function Header({
                 <Library className="h-4 w-4" />
               </Link>
             </Button>
+            {/* Optional: include team switcher on mobile too */}
+            <TeamSwitcher />
             <CurrencyToggle onCurrencyChange={setCurrency} />
             <Button
               size="icon"

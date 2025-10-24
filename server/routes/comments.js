@@ -1,81 +1,86 @@
-import fs from "fs";
-import path from "path";
+// server/routes/comments.js
+const fs = require("fs");
+const path = require("path");
 
-const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || "previews");
-
-function safeCommentsFile(previewPath) {
-  if (typeof previewPath !== "string") throw new Error("path required");
-  const rel = previewPath.replace(/^\/+/, "");               // strip leading /
-  if (!rel.startsWith("previews/")) throw new Error("bad path");
-  const absDir = path.resolve(PREVIEWS_DIR, rel.replace(/^previews\//, ""));
-  if (!absDir.startsWith(PREVIEWS_DIR)) throw new Error("escape blocked");
-  return path.join(absDir, ".comments.json");
+function safeDir(previewPath) {
+  const rel = String(previewPath || "").replace(/^\/+/, "").replace(/\.\./g, "");
+  return path.join(process.cwd(), rel);
+}
+function ensureFile(fp) {
+  try { fs.mkdirSync(path.dirname(fp), { recursive: true }); } catch {}
+  if (!fs.existsSync(fp)) fs.writeFileSync(fp, JSON.stringify({ comments: [] }, null, 2));
+}
+function load(absDir) {
+  const f = path.join(absDir, ".comments.json");
+  ensureFile(f);
+  try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return { comments: [] }; }
+}
+function save(absDir, data) {
+  const f = path.join(absDir, ".comments.json");
+  ensureFile(f);
+  fs.writeFileSync(f, JSON.stringify(data, null, 2));
 }
 
-function readStore(fp) {
+exports.list = (req, res) => {
   try {
-    const raw = fs.existsSync(fp) ? fs.readFileSync(fp, "utf8") : "";
-    const json = raw ? JSON.parse(raw) : { items: [] };
-    if (!Array.isArray(json.items)) json.items = [];
-    return json;
-  } catch {
-    return { items: [] };
-  }
-}
-
-function writeStore(fp, data) {
-  fs.mkdirSync(path.dirname(fp), { recursive: true });
-  fs.writeFileSync(fp, JSON.stringify({ items: data.items || [] }, null, 2), "utf8");
-}
-
-export async function list(req, res) {
-  try {
-    const previewPath = String(req.query.path || "");
-    const fp = safeCommentsFile(previewPath);
-    const store = readStore(fp);
-    res.json({ ok: true, items: store.items });
+    const pp = req.query?.path;
+    if (!pp) return res.json({ ok: true, comments: [] }); // be lenient
+    const db = load(safeDir(pp));
+    const file = req.query?.file;
+    const items = file ? (db.comments || []).filter(c => c.file === file) : (db.comments || []);
+    res.json({ ok: true, comments: items });
   } catch (e) {
-    res.status(400).json({ ok: false, error: String(e.message || e) });
+    res.status(500).json({ ok: false, error: e?.message || "list failed" });
   }
-}
+};
 
-export async function add(req, res) {
+exports.add = (req, res) => {
   try {
-    const { path: previewPath, file, text, startLine, endLine, author } = req.body || {};
-    const fp = safeCommentsFile(String(previewPath || ""));
-    const store = readStore(fp);
-    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const item = {
-      id,
-      file: String(file || "index.html"),
-      text: String(text || ""),
-      startLine: typeof startLine === "number" ? startLine : undefined,
-      endLine: typeof endLine === "number" ? endLine : undefined,
-      author: author && author.name ? { name: String(author.name) } : { name: "Anon" },
+    const { path: pp, file, text, startLine, endLine, meta } = req.body || {};
+    if (!pp || !file || !text) return res.status(400).json({ ok: false, error: "bad args" });
+    const db = load(safeDir(pp));
+    const c = {
+      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      file, text,
+      startLine: Number.isFinite(startLine) ? startLine : undefined,
+      endLine: Number.isFinite(endLine) ? endLine : undefined,
+      meta: meta || {},
+      status: "open",
       createdAt: Date.now(),
-      resolved: false,
     };
-    store.items.unshift(item);
-    writeStore(fp, store);
-    res.json({ ok: true, item });
+    db.comments = [c, ...(db.comments || [])];
+    save(safeDir(pp), db);
+    res.json({ ok: true, comment: c });
   } catch (e) {
-    res.status(400).json({ ok: false, error: String(e.message || e) });
+    res.status(500).json({ ok: false, error: e?.message || "add failed" });
   }
-}
+};
 
-export async function resolve(req, res) {
+exports.resolve = (req, res) => {
   try {
-    const { path: previewPath, id, resolved } = req.body || {};
-    const fp = safeCommentsFile(String(previewPath || ""));
-    const store = readStore(fp);
-    const idx = store.items.findIndex((x) => x.id === id);
-    if (idx === -1) return res.status(404).json({ ok: false, error: "not found" });
-    store.items[idx] = { ...store.items[idx], resolved: !!resolved };
-    writeStore(fp, store);
-    res.json({ ok: true, item: store.items[idx] });
+    const { path: pp, id } = req.body || {};
+    if (!pp || !id) return res.status(400).json({ ok: false, error: "bad args" });
+    const db = load(safeDir(pp));
+    db.comments = (db.comments || []).map(c => c.id === id ? { ...c, status: "resolved" } : c);
+    save(safeDir(pp), db);
+    res.json({ ok: true });
   } catch (e) {
-    res.status(400).json({ ok: false, error: String(e.message || e) });
+    res.status(500).json({ ok: false, error: e?.message || "resolve failed" });
   }
-}
+};
 
-export default { list, add, resolve };
+exports.remove = (req, res) => {
+  try {
+    const { path: pp, id } = req.body || {};
+    if (!pp || !id) return res.status(400).json({ ok: false, error: "bad args" });
+    const db = load(safeDir(pp));
+    db.comments = (db.comments || []).filter(c => c.id !== id);
+    save(safeDir(pp), db);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "remove failed" });
+  }
+};
+
+// ESM/CJS interop safety
+module.exports.default = module.exports;
