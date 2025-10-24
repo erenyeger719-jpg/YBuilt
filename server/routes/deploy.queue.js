@@ -14,6 +14,19 @@ const router = express.Router();
 const jobs = new Map();
 const queue = new PQueue({ concurrency: 2 });
 
+// sweep finished jobs older than 24h every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, j] of jobs) {
+    if (
+      ["success", "error", "cancelled"].includes(j.status) &&
+      now - j.createdAt > 24 * 60 * 60 * 1000
+    ) {
+      jobs.delete(id);
+    }
+  }
+}, 10 * 60 * 1000);
+
 console.log("[deploy.queue] router initialized");
 
 // --- cancellation helper ---
