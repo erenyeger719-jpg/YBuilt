@@ -288,7 +288,7 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
               Done
             </Button>
           </div>
-        ) : showPayment || hasInsufficientCredits ? (
+        ) : showPayment ? (
           // Payment Required State (legacy)
           <div className="space-y-4">
             <div className="flex items-center gap-2 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">

@@ -166,8 +166,8 @@ router.post("/enqueue", express.json(), async (req, res) => {
 
   const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
   // try to derive a “client room” segment (works for /previews/<jobId>/)
-  const m = String(previewPath).match(/^\/previews\/([^/]+)/i);
-  const clientRoom = m ? m[1] : null;
+  const m = String(previewPath).match(/^\/previews\/(?:forks\/([^/]+)|([^/]+))/i);
+  const clientRoom = m ? (m[1] || m[2]) : null; // slug for forks OR jobId
 
   const id = uuid();
   const job = {
