@@ -14,6 +14,7 @@ import Templates from "@/pages/Templates";   // templates index
 import TemplateDetail from "@/pages/TemplateDetail"; // template detail
 import CollabPage from "@/pages/Collab";     // collab room
 import AcceptInvite from "@/pages/AcceptInvite"; // accept team invite
+import TeamHome from "@/pages/TeamHome";     // team home
 
 // Weavy wrapper + board (bridge band)
 import WeavySection from "@/components/WeavySection";
@@ -84,6 +85,9 @@ export default function App() {
 
         {/* Accept team invite */}
         <Route path="/invite/:token" component={AcceptInvite} />
+
+        {/* Team home */}
+        <Route path="/team" component={TeamHome} />
 
         {/* Fallback (must be last, no path) */}
         <Route>

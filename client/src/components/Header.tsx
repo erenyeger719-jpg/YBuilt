@@ -212,6 +212,11 @@ export default function Header({
               </Link>
             </Button>
 
+            {/* NEW: Team nav next to Library */}
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/team">Team</Link>
+            </Button>
+
             {/* Team switcher (minimal) */}
             <TeamSwitcher />
             <InviteDialog />
@@ -258,9 +263,16 @@ export default function Header({
                 <Library className="h-4 w-4" />
               </Link>
             </Button>
+
+            {/* Optional: add Team text button on mobile too */}
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/team">Team</Link>
+            </Button>
+
             {/* Optional: include team switcher on mobile too */}
             <TeamSwitcher />
             <InviteDialog />
+
             <CurrencyToggle onCurrencyChange={setCurrency} />
             <Button
               size="icon"

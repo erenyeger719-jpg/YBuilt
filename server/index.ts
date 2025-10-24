@@ -415,6 +415,12 @@ if (reqMw) app.use(reqMw);
   if (teamsMod?.switch) app.post('/api/teams/switch', express.json(), teamsMod.switch);
   if (teamsMod?.invite) app.post('/api/teams/invite', express.json(), teamsMod.invite);
   if (teamsMod?.accept) app.post('/api/teams/accept', express.json(), teamsMod.accept);
+  // NEW: mount extra team handlers
+  if (teamsMod?.detail) app.get('/api/teams/:id', teamsMod.detail);
+  if (teamsMod?.updateRole) app.post('/api/teams/role', express.json(), teamsMod.updateRole);
+  if (teamsMod?.removeMember) app.post('/api/teams/removeMember', express.json(), teamsMod.removeMember);
+  if (teamsMod?.revokeInvite) app.post('/api/teams/invites/revoke', express.json(), teamsMod.revokeInvite);
+  if (teamsMod?.resendInvite) app.post('/api/teams/invites/resend', express.json(), teamsMod.resendInvite);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
