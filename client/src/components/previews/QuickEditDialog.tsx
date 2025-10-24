@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { usePresence } from "@/lib/collab";
+import { usePresence, onCursor, emitCursor, onMention } from "@/lib/collab";
 import CommentsDialog from "@/components/collab/CommentsDialog";
 import AiQnaDialog from "@/components/collab/AiQnaDialog";
 
@@ -134,6 +134,69 @@ export default function QuickEditDialog({
     }
   };
 
+  // --- cursors/mentions ---
+
+  // remote cursor state keyed by peerId
+  const [cursors, setCursors] = useState<
+    Record<string, { file?: string; startLine?: number; endLine?: number; ts: number }>
+  >({});
+
+  // compute line range for current selection
+  function computeLineRange(
+    selr: { from: number; to: number } | null,
+    body: string
+  ): { startLine?: number; endLine?: number } {
+    if (!selr) return {};
+    const len = body?.length ?? 0;
+    const from = Math.max(0, Math.min(selr.from ?? 0, len));
+    const to = Math.max(from, Math.min(selr.to ?? from, len));
+    const pre = body.slice(0, from);
+    const within = body.slice(from, to);
+    const startLine = pre.split("\n").length;
+    const lineCount = within ? within.split("\n").length : 1;
+    const endLine = startLine + lineCount - 1;
+    return { startLine, endLine };
+  }
+
+  // debounce emit cursor updates to the room
+  const emitTimer = useRef<number | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const range = computeLineRange(selRange, text);
+    if (emitTimer.current) window.clearTimeout(emitTimer.current);
+    emitTimer.current = window.setTimeout(() => {
+      emitCursor({ file: sel, ...range });
+    }, 120);
+    return () => {
+      if (emitTimer.current) window.clearTimeout(emitTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, selRange?.from, selRange?.to, sel, text]);
+
+  // listen for remote cursor updates
+  useEffect(() => {
+    const off = onCursor((p: any) => {
+      if (!p?.peerId) return;
+      setCursors((prev) => ({ ...prev, [p.peerId]: p }));
+    });
+    return off;
+  }, []);
+
+  // mention pings -> toast when it's for me
+  useEffect(() => {
+    const myName = (localStorage.getItem("ybuilt.name") || "You").trim().toLowerCase();
+    const off = onMention((p: any) => {
+      if (!p?.toName) return;
+      if (String(p.toName).trim().toLowerCase() === myName) {
+        toast({
+          title: `Mentioned by ${p.from?.name || "someone"}`,
+          description: `${p.file || ""}${p.commentId ? ` • comment ${String(p.commentId).slice(0, 8)}` : ""}`,
+        });
+      }
+    });
+    return off;
+  }, [toast]);
+
   // Hotkey: Cmd/Ctrl+S to save while dialog is open
   useEffect(() => {
     if (!open) return;
@@ -227,25 +290,44 @@ export default function QuickEditDialog({
             Delete file
           </button>
 
-          {/* presence chips */}
+          {/* presence chips (with live selection ranges when on the same file) */}
           <div className="ml-2 flex items-center gap-1">
             {(peers || [])
               .filter((p: any) => p?.name !== me.name)
               .slice(0, 4)
-              .map((p: any) => (
-                <span
-                  key={p.id}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]"
-                  style={{ background: `${p.color ?? "#8b5cf6"}22`, border: `1px solid ${(p.color ?? "#8b5cf6")}66` }}
-                  title={p.file ? `${p.name} • ${p.file}` : p.name}
-                >
+              .map((p: any) => {
+                const cur = cursors[p.id];
+                const lineBadge =
+                  cur &&
+                  cur.file === sel &&
+                  typeof cur.startLine === "number"
+                    ? ` • L${cur.startLine}${
+                        cur.endLine && cur.endLine !== cur.startLine
+                          ? `–${cur.endLine}`
+                          : ""
+                      }`
+                    : p.file
+                    ? ` • ${p.file}`
+                    : "";
+                return (
                   <span
-                    className="inline-block h-2 w-2 rounded-full"
-                    style={{ background: p.color ?? "#8b5cf6" }}
-                  />
-                  {p.name}{p.file ? ` • ${p.file}` : ""}
-                </span>
-              ))}
+                    key={p.id}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]"
+                    style={{
+                      background: `${p.color ?? "#8b5cf6"}22`,
+                      border: `1px solid ${(p.color ?? "#8b5cf6")}66`,
+                    }}
+                    title={p.file ? `${p.name} • ${p.file}` : p.name}
+                  >
+                    <span
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ background: p.color ?? "#8b5cf6" }}
+                    />
+                    {p.name}
+                    {lineBadge}
+                  </span>
+                );
+              })}
             {peers && peers.length > 5 && (
               <span className="text-[10px] text-white/60">+{peers.length - 5}</span>
             )}

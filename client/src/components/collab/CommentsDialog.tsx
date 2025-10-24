@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { onCommentEvent, broadcastComment } from "@/lib/collab";
+import { onCommentEvent, broadcastComment, sendMention } from "@/lib/collab";
 
 type CommentItem = {
   id: string; file: string; startLine?: number; endLine?: number;
@@ -56,18 +56,39 @@ export default function CommentsDialog({
   async function addComment() {
     if (!text.trim()) return;
     const range = selLines();
+    const body = text; // capture before clearing for mention parsing
     try {
       const r = await fetch("/api/comments/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: previewPath, file, text, ...range, author: { name: "You" } }),
+        body: JSON.stringify({ path: previewPath, file, text: body, ...range, author: { name: "You" } }),
       });
       const data = await r.json();
       if (!r.ok || !data?.ok) throw new Error(data?.error || "add failed");
-      setText("");
       setItems((prev) => [data.item, ...prev]);
       broadcastComment({ type: "added", previewPath, item: data.item });
-    } catch (e:any) {
+
+      // --- Mentions (@Name) ---
+      const meName = localStorage.getItem("ybuilt.name") || "You";
+      const atNames = Array.from(
+        new Set(
+          (body.match(/@\w[\w.-]*/g) || [])
+            .map((s) => s.slice(1))
+            .filter(Boolean)
+        )
+      );
+      for (const toName of atNames) {
+        sendMention({
+          toName,
+          from: { name: meName, color: localStorage.getItem("ybuilt.color") || "#8b5cf6" },
+          previewPath,
+          file,
+          commentId: data.item?.id || "",
+        });
+      }
+
+      setText("");
+    } catch (e: any) {
       toast({ title: "Add failed", description: e?.message || "Error", variant: "destructive" });
     }
   }
@@ -83,7 +104,7 @@ export default function CommentsDialog({
       if (!r.ok || !data?.ok) throw new Error(data?.error || "resolve failed");
       setItems((prev) => prev.map(x => x.id === it.id ? data.item : x));
       broadcastComment({ type: "resolved", previewPath, id: it.id, resolved: !it.resolved });
-    } catch (e:any) {
+    } catch (e: any) {
       toast({ title: "Update failed", description: e?.message || "Error", variant: "destructive" });
     }
   }

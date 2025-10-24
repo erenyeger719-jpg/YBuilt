@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
 let _sock: Socket | null = null;
-function getSocket() {
+function getSocket(): Socket {
   if (_sock) return _sock;
   _sock = io("/", { transports: ["websocket"] });
   return _sock;
@@ -61,4 +61,42 @@ export function onCommentEvent(handler: (p: any) => void) {
   const wrapped = (p: any) => handler(p);
   s.on("collab:comment:event", wrapped);
   return () => s.off("collab:comment:event", wrapped);
+}
+
+// --- cursor helpers ---
+export function emitCursor(payload: { file?: string; startLine?: number; endLine?: number }) {
+  getSocket().emit("collab:cursor", payload);
+}
+
+export function onCursor(
+  handler: (p: {
+    peerId: string;
+    file?: string;
+    startLine?: number;
+    endLine?: number;
+    ts: number;
+  }) => void
+) {
+  const s = getSocket();
+  const wrap = (p: any) => handler(p);
+  s.on("collab:cursor:update", wrap);
+  return () => s.off("collab:cursor:update", wrap);
+}
+
+// --- mention helpers ---
+export function sendMention(payload: {
+  toName: string;
+  from: { name: string; color: string };
+  previewPath: string;
+  file: string;
+  commentId: string;
+}) {
+  getSocket().emit("collab:mention", payload);
+}
+
+export function onMention(handler: (p: any) => void) {
+  const s = getSocket();
+  const wrap = (p: any) => handler(p);
+  s.on("collab:mention", wrap);
+  return () => s.off("collab:mention", wrap);
 }

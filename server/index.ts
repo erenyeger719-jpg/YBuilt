@@ -174,6 +174,26 @@ if (reqMw) app.use(reqMw);
         if (room) socket.to(room).emit('collab:comment:event', payload);
       });
 
+      // --- NEW: cursor relay ---
+      socket.on('collab:cursor', (payload: any) => {
+        // payload: { file?: string, startLine?: number, endLine?: number }
+        if (room) {
+          io.to(room).emit('collab:cursor:update', {
+            peerId,
+            ...payload,
+            ts: Date.now(),
+          });
+        }
+      });
+
+      // --- NEW: mention relay ---
+      socket.on('collab:mention', (payload: any) => {
+        // payload: { toName: string, from: { name, color }, previewPath, file, commentId }
+        if (room) {
+          io.to(room).emit('collab:mention', payload);
+        }
+      });
+
       socket.on('disconnect', () => {
         if (!room) return;
         const peers = presence.get(room);
@@ -389,7 +409,7 @@ if (reqMw) app.use(reqMw);
         throw e;
       }
     }
-  throw new Error(`Failed to start server after ${maxAttempts} attempts`);
+    throw new Error(`Failed to start server after ${maxAttempts} attempts`);
   }
 
   const port = parseInt(process.env.PORT || '5050', 10);
