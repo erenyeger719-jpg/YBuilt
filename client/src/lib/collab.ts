@@ -45,6 +45,8 @@ export function usePresence(
     return () => {
       clearInterval(hb);
       s.off("collab:presence:update", onUpd);
+      // tell the room we left (server may prune immediately or ignore)
+      s.emit("collab:leave", { room });
       // we keep the socket alive; server handles room lifecycle on disconnect
     };
   }, [room, me.name, me.color]);
@@ -99,4 +101,9 @@ export function onMention(handler: (p: any) => void) {
   const wrap = (p: any) => handler(p);
   s.on("collab:mention", wrap);
   return () => s.off("collab:mention", wrap);
+}
+
+// --- util: my socket id (for accurate chip filtering, etc.) ---
+export function getMySocketId() {
+  return getSocket().id;
 }

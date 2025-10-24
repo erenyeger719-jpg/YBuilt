@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { usePresence, onCursor, emitCursor, onMention } from "@/lib/collab";
+import { usePresence, onCursor, emitCursor, onMention, getMySocketId } from "@/lib/collab";
 import CommentsDialog from "@/components/collab/CommentsDialog";
 import AiQnaDialog from "@/components/collab/AiQnaDialog";
 
@@ -43,6 +43,7 @@ export default function QuickEditDialog({
     file: sel,
   };
   const { peers } = usePresence(previewPath, { ...me, file: sel });
+  const myId = getMySocketId();
   useEffect(() => {
     // switching `sel` updates my current file in presence via the hook deps
   }, [sel, previewPath]);
@@ -346,7 +347,7 @@ export default function QuickEditDialog({
           {/* presence chips (with live selection ranges when on the same file) */}
           <div className="ml-2 flex items-center gap-1">
             {(peers || [])
-              .filter((p: any) => p?.name !== me.name)
+              .filter((p: any) => p?.id !== myId)
               .slice(0, 4)
               .map((p: any) => {
                 const cur = cursors[p.id];

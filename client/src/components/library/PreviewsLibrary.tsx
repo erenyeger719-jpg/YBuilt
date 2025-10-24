@@ -7,6 +7,7 @@ import DeployDrawer from "@/components/previews/DeployDrawer";
 import QuickEditDialog from "@/components/previews/QuickEditDialog";
 import QuickStyleDialog from "@/components/previews/QuickStyleDialog";
 import { Button } from "@/components/ui/button";
+import { collabUrlForPreview } from "@/pages/Collab";
 
 type DeployInfo = { provider: "netlify" | "vercel"; url?: string; adminUrl?: string; createdAt: number };
 type StoredPreview = {
@@ -776,6 +777,13 @@ export default function PreviewsLibrary() {
               </Button>
               <Button size="sm" variant="secondary" onClick={() => openOrNavigate(it.previewPath)}>
                 Open
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => window.location.assign(collabUrlForPreview(it.previewPath))}
+              >
+                Collaborate
               </Button>
               <Button
                 size="sm"
