@@ -12,7 +12,7 @@ import { requestIdMiddleware, logger } from './middleware/logging.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { initializeSocket } from './socket.js';
 import { wireRequestLogs, wireLogsNamespace } from './logs.js';
-import deployQueue from './routes/deploy.queue.js'; // <-- added
+import deployQueue from './routes/deploy.queue.js';
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -126,6 +126,78 @@ if (reqMw) app.use(reqMw);
     wireLogsNamespace(io);
     wireRequestLogs(app, io); // attaches BEFORE routers for full coverage
     logger.info('[SOCKET.IO] Real-time server initialized');
+
+    // --- Presence (in-memory) ---
+    type Peer = { id: string; name: string; color: string; file?: string; ts: number };
+    const presence = new Map<string, Map<string, Peer>>(); // room -> peerId -> Peer
+
+    function emitPresence(ioInst: any, room: string) {
+      const peers = Array.from(presence.get(room)?.values() || []);
+      ioInst.to(room).emit('collab:presence:update', { room, peers });
+    }
+
+    io.on('connection', (socket: any) => {
+      let room: string | null = null;
+      const peerId = socket.id;
+
+      socket.on(
+        'collab:join',
+        ({ room: r, user }: { room: string; user: { name?: string; color?: string } }) => {
+          room = r;
+          socket.join(r);
+          const peers = presence.get(r) || new Map<string, Peer>();
+          peers.set(peerId, {
+            id: peerId,
+            name: user?.name || 'Guest',
+            color: user?.color || '#8b5cf6',
+            ts: Date.now(),
+          });
+          presence.set(r, peers);
+          emitPresence(io, r);
+        }
+      );
+
+      socket.on('collab:presence', ({ file }: { file?: string }) => {
+        if (!room) return;
+        const peers = presence.get(room);
+        if (!peers) return;
+        const p = peers.get(peerId);
+        if (!p) return;
+        p.ts = Date.now();
+        if (file) p.file = file;
+        peers.set(peerId, p);
+        presence.set(room, peers);
+        emitPresence(io, room);
+      });
+
+      socket.on('collab:comment:broadcast', (payload: any) => {
+        if (room) socket.to(room).emit('collab:comment:event', payload);
+      });
+
+      socket.on('disconnect', () => {
+        if (!room) return;
+        const peers = presence.get(room);
+        if (!peers) return;
+        peers.delete(peerId);
+        presence.set(room, peers);
+        emitPresence(io, room);
+      });
+    });
+
+    // prune stale peers every 60s
+    setInterval(() => {
+      const now = Date.now();
+      for (const [room, peers] of presence.entries()) {
+        let changed = false;
+        for (const [id, p] of peers.entries()) {
+          if (now - p.ts > 90_000) {
+            peers.delete(id);
+            changed = true;
+          }
+        }
+        if (changed) presence.set(room, peers);
+      }
+    }, 60_000);
   }
 
   // Health checks (early)
@@ -240,8 +312,12 @@ if (reqMw) app.use(reqMw);
     default: undefined as any,
   }));
 
+  // Comments + Q&A (CommonJS-style modules adapted to dynamic import)
+  const commentsMod: any = await import('./routes/comments.js').catch(() => ({} as any));
+  const aiqnaMod: any = await import('./routes/ai.qna.js').catch(() => ({} as any));
+
   // Mount deploy queue router (in addition to deploy API)
-  app.use('/api/deploy', deployQueue); // <-- added
+  app.use('/api/deploy', deployQueue);
 
   if (authRoutes) app.use('/api/auth', authRoutes);
   if (projectsRoutes) app.use('/api/projects', projectsRoutes);
@@ -259,6 +335,14 @@ if (reqMw) app.use(reqMw);
   // - Mount aiRouter (with /review) first so it takes precedence over any duplicate paths.
   if (aiRouter) app.use('/api/ai', express.json({ limit: '1mb' }), aiRouter);
   if (aiOrchestrator) app.use('/api/ai', aiOrchestrator); // planner/scaffold endpoints
+
+  // Comments API
+  if (commentsMod?.list) app.get('/api/comments/list', commentsMod.list);
+  if (commentsMod?.add) app.post('/api/comments/add', express.json(), commentsMod.add);
+  if (commentsMod?.resolve) app.post('/api/comments/resolve', express.json(), commentsMod.resolve);
+
+  // AI Q&A
+  if (aiqnaMod?.qna) app.post('/api/ai/qna', express.json(), aiqnaMod.qna);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);

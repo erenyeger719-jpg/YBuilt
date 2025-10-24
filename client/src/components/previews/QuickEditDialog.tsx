@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { usePresence } from "@/lib/collab";
+import CommentsDialog from "@/components/collab/CommentsDialog";
+import AiQnaDialog from "@/components/collab/AiQnaDialog";
 
 type Props = {
   open: boolean;
@@ -24,6 +27,22 @@ export default function QuickEditDialog({
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // collab: comments / qna + selection
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [qnaOpen, setQnaOpen] = useState(false);
+  const [selRange, setSelRange] = useState<{ from: number; to: number } | null>(null);
+
+  // presence
+  const me = {
+    name: localStorage.getItem("ybuilt.name") || "You",
+    color: localStorage.getItem("ybuilt.color") || "#8b5cf6",
+    file: sel,
+  };
+  const { peers } = usePresence(previewPath, { ...me, file: sel });
+  useEffect(() => {
+    // switching `sel` updates my current file in presence via the hook deps
+  }, [sel, previewPath]);
 
   // load file list when opened / path changes
   useEffect(() => {
@@ -208,6 +227,38 @@ export default function QuickEditDialog({
             Delete file
           </button>
 
+          {/* presence chips */}
+          <div className="ml-2 flex items-center gap-1">
+            {(peers || [])
+              .filter((p: any) => p?.name !== me.name)
+              .slice(0, 4)
+              .map((p: any) => (
+                <span
+                  key={p.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]"
+                  style={{ background: `${p.color ?? "#8b5cf6"}22`, border: `1px solid ${(p.color ?? "#8b5cf6")}66` }}
+                  title={p.file ? `${p.name} • ${p.file}` : p.name}
+                >
+                  <span
+                    className="inline-block h-2 w-2 rounded-full"
+                    style={{ background: p.color ?? "#8b5cf6" }}
+                  />
+                  {p.name}{p.file ? ` • ${p.file}` : ""}
+                </span>
+              ))}
+            {peers && peers.length > 5 && (
+              <span className="text-[10px] text-white/60">+{peers.length - 5}</span>
+            )}
+          </div>
+
+          {/* comments / qna */}
+          <button className="text-xs px-2 py-1 border rounded" onClick={() => setCommentsOpen(true)}>
+            Comments
+          </button>
+          <button className="text-xs px-2 py-1 border rounded" onClick={() => setQnaOpen(true)}>
+            Ask AI
+          </button>
+
           <button className="text-xs px-2 py-1 border rounded" onClick={onClose}>
             Close
           </button>
@@ -228,11 +279,31 @@ export default function QuickEditDialog({
               className="w-full h-[60vh] text-sm font-mono border rounded p-3 bg-transparent"
               value={text}
               onChange={(e) => setText(e.target.value)}
+              onSelect={(e) => {
+                const t = e.currentTarget;
+                setSelRange({ from: t.selectionStart || 0, to: t.selectionEnd || 0 });
+              }}
               spellCheck={false}
             />
           )}
         </div>
       </div>
+
+      {/* Collab modals */}
+      <CommentsDialog
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        previewPath={previewPath}
+        file={sel}
+        selection={selRange || undefined}
+        totalText={text}
+      />
+      <AiQnaDialog
+        open={qnaOpen}
+        onClose={() => setQnaOpen(false)}
+        previewPath={previewPath}
+        file={sel}
+      />
     </div>
   );
 }
