@@ -67,6 +67,31 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
   const messageFlags: Map<string, { editedAt?: number; deleted?: boolean }> = new Map();
   // Track authors for ownership checks when storage can't fetch a row
   const messageAuthors: Map<string, string> = new Map();
+  // Track creation timestamps for fallback window checks
+  const messageCreatedAt: Map<string, number> = new Map();
+
+  // ---- Simple per-user rate limit (5 msgs / 10s per project) ----
+  const rateBuckets: Map<string, number[]> = new Map();
+  const RATE_MAX = 5;
+  const RATE_WINDOW_MS = 10 * 1000;
+
+  function hitRate(key: string) {
+    const now = Date.now();
+    const arr = rateBuckets.get(key) || [];
+    const fresh = arr.filter((ts) => now - ts < RATE_WINDOW_MS);
+    fresh.push(now);
+    rateBuckets.set(key, fresh);
+    return fresh.length <= RATE_MAX;
+  }
+
+  // ---- Basic content guard (very small) ----
+  const bannedPatterns: RegExp[] = [
+    /\b(?:fuck|shit)\b/i,
+    /\b(?:slur1|slur2)\b/i, // replace with actual terms to guard against, or remove
+  ];
+  function violates(text: string) {
+    return bannedPatterns.some((rx) => rx.test(text));
+  }
 
   // Authentication middleware for Socket.IO
   io.use((socket: AuthenticatedSocket, next) => {
@@ -149,6 +174,14 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           });
           const msgs = rows.reverse().map((r: any) => {
             const flags = messageFlags.get(String(r.id)) || {};
+            const m = r.metadata || {};
+            const editedIso = flags.editedAt
+              ? new Date(flags.editedAt).toISOString()
+              : m.editedAt
+              ? new Date(m.editedAt).toISOString()
+              : undefined;
+            const deletedFlag = flags.deleted ?? !!m.deleted;
+
             return {
               id: r.id,
               userId: r.userId,
@@ -157,8 +190,8 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
               content: r.content,
               createdAt: r.createdAt,
               reactions: getCountsFor(String(r.id)),
-              editedAt: flags.editedAt ? new Date(flags.editedAt).toISOString() : undefined,
-              deleted: !!flags.deleted,
+              editedAt: editedIso,
+              deleted: deletedFlag,
             };
           });
           socket.emit("chat:history", { projectId: data.projectId, msgs });
@@ -232,6 +265,19 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             return;
           }
 
+          // Rate limit + content guard
+          const key = `${data.projectId}:${socket.user.sub}`;
+          if (!hitRate(key)) {
+            socket.emit("error", {
+              message: "You’re sending messages too quickly. Please slow down.",
+            });
+            return;
+          }
+          if (violates(data.message || "")) {
+            socket.emit("error", { message: "Message blocked by content policy." });
+            return;
+          }
+
           // Save message
           const chatMessage = await storage.createChatMessage({
             userId: socket.user.sub.toString(),
@@ -241,8 +287,12 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             metadata: { type: "collaboration", username: socket.user.email }, // store username for history
           });
 
-          // Remember author for fallback ownership checks
+          // Remember author + createdAt for fallback ownership/window checks
           messageAuthors.set(String(chatMessage.id), String(socket.user.sub));
+          messageCreatedAt.set(
+            String(chatMessage.id),
+            new Date(chatMessage.createdAt).getTime()
+          );
 
           // Broadcast to all users in the project room
           io.to(`project:${data.projectId}`).emit("chat:message", {
@@ -319,6 +369,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             ownerId = messageAuthors.get(String(messageId)) || null;
           }
 
+          // Fallback createdAt if storage unavailable
+          if (!createdAt) createdAt = messageCreatedAt.get(String(messageId)) ?? null;
+
           if (!ownerId || String(ownerId) !== String(socket.user.sub)) {
             socket.emit("error", { message: "Only the author can edit" });
             return;
@@ -385,6 +438,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           } else {
             ownerId = messageAuthors.get(String(messageId)) || null;
           }
+
+          // Fallback createdAt if storage unavailable
+          if (!createdAt) createdAt = messageCreatedAt.get(String(messageId)) ?? null;
 
           if (!ownerId || String(ownerId) !== String(socket.user.sub)) {
             socket.emit("error", { message: "Only the author can delete" });

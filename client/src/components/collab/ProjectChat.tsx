@@ -70,12 +70,16 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     }
   }, []);
 
-  // decode JWT once to know "me"
+  // decode JWT once to know "me" (handle unpadded base64url)
   useEffect(() => {
     try {
       const t = localStorage.getItem("jwt");
       if (!t) return;
-      const payload = JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+      const b64 = t.split(".")[1] || "";
+      const b64url = b64.replace(/-/g, "+").replace(/_/g, "/");
+      const padLen = (4 - (b64url.length % 4)) % 4;
+      const padded = b64url + "=".repeat(padLen);
+      const payload = JSON.parse(atob(padded));
       setMe({ userId: String(payload.sub), email: payload.email });
     } catch {}
   }, []);
@@ -680,30 +684,32 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         </div>
 
         {mentionOpen && (
-          <div className="px-0.5 pb-2 -mt-1 w-full">
-            <div className="border rounded bg-popover text-xs max-h-[10rem] overflow-auto">
-              {mentionOptions.length > 0 ? (
-                mentionOptions.map((name, idx) => (
-                  <div
-                    key={name}
-                    className={"px-2 py-1 cursor-pointer " + (idx === activeIdx ? "bg-muted" : "")}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      insertAtCursor(`@${name} `);
-                      setMentionOpen(false);
-                      setMentionQuery("");
-                      setMentionIndex(0);
-                    }}
-                  >
-                    @{name}
-                  </div>
-                ))
-              ) : (
-                <div className="px-2 py-1 text-muted-foreground">No matches</div>
-              )}
+            <div className="px-0.5 pb-2 -mt-1 w-full">
+              <div className="border rounded bg-popover text-xs max-h-[10rem] overflow-auto">
+                {mentionOptions.length > 0 ? (
+                  mentionOptions.map((name, idx) => (
+                    <div
+                      key={name}
+                      className={
+                        "px-2 py-1 cursor-pointer " + (idx === activeIdx ? "bg-muted" : "")
+                      }
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        insertAtCursor(`@${name} `);
+                        setMentionOpen(false);
+                        setMentionQuery("");
+                        setMentionIndex(0);
+                      }}
+                    >
+                      @{name}
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-2 py-1 text-muted-foreground">No matches</div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
       </div>
     </div>
   );
