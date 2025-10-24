@@ -30,7 +30,7 @@ Sentry.init({
 
 logger.info(`[SENTRY] server DSN present: ${Boolean(process.env.SENTRY_DSN)}`);
 // Basic app setup
-logger.info('[SECURITY] JWT_SECRET is configured and validated']);
+logger.info('[SECURITY] JWT_SECRET is configured and validated');
 
 const RAZORPAY_MODE = process.env.RAZORPAY_MODE || 'mock';
 if (RAZORPAY_MODE === 'live') {

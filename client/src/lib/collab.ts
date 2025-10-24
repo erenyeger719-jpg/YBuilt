@@ -10,26 +10,42 @@ function getSocket() {
 
 export type Peer = { id: string; name: string; color: string; file?: string };
 
-export function usePresence(room: string, me: { name: string; color: string; file?: string }) {
+export function usePresence(
+  room: string,
+  me: { name: string; color: string; file?: string }
+) {
   const [peers, setPeers] = useState<Peer[]>([]);
   const fileRef = useRef(me.file);
 
-  useEffect(() => { fileRef.current = me.file; }, [me.file]);
+  // keep latest file ref for heartbeats
+  useEffect(() => {
+    fileRef.current = me.file;
+  }, [me.file]);
 
   useEffect(() => {
     if (!room) return;
+
     const s = getSocket();
+
+    // join room with identity
     s.emit("collab:join", { room, user: { name: me.name, color: me.color } });
-    const onUpd = (p: { room: string; peers: Peer[] }) => { if (p.room === room) setPeers(p.peers); };
+
+    // presence updates from server
+    const onUpd = (p: { room: string; peers: Peer[] }) => {
+      if (p?.room === room) setPeers(Array.isArray(p.peers) ? p.peers : []);
+    };
     s.on("collab:presence:update", onUpd);
 
+    // initial heartbeat (carry current file), then periodic
+    s.emit("collab:presence", { file: fileRef.current });
     const hb = setInterval(() => {
       s.emit("collab:presence", { file: fileRef.current });
-    }, 10_000);
+    }, 15_000);
+
     return () => {
       clearInterval(hb);
       s.off("collab:presence:update", onUpd);
-      // socket room leaves on disconnect; we keep the socket alive
+      // we keep the socket alive; server handles room lifecycle on disconnect
     };
   }, [room, me.name, me.color]);
 
@@ -39,8 +55,10 @@ export function usePresence(room: string, me: { name: string; color: string; fil
 export function broadcastComment(payload: any) {
   getSocket().emit("collab:comment:broadcast", payload);
 }
-export function onCommentEvent(handler: (p:any)=>void) {
+
+export function onCommentEvent(handler: (p: any) => void) {
   const s = getSocket();
-  s.on("collab:comment:event", handler);
-  return () => s.off("collab:comment:event", handler);
+  const wrapped = (p: any) => handler(p);
+  s.on("collab:comment:event", wrapped);
+  return () => s.off("collab:comment:event", wrapped);
 }
