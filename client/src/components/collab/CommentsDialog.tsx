@@ -41,11 +41,14 @@ export default function CommentsDialog({
   }, [open, previewPath]);
 
   function selLines() {
-    if (!selection) return {};
-    const pre = totalText.slice(0, selection.from);
-    const within = totalText.slice(selection.from, selection.to);
+    if (!selection || !totalText) return {};
+    const body = String(totalText);
+    const from = Math.max(0, Math.min(selection.from ?? 0, body.length));
+    const to = Math.max(from, Math.min(selection.to ?? from, body.length));
+    const pre = body.slice(0, from);
+    const within = body.slice(from, to);
     const startLine = pre.split("\n").length;
-    const lineCount = within.split("\n").length;
+    const lineCount = within ? within.split("\n").length : 1;
     const endLine = startLine + lineCount - 1;
     return { startLine, endLine };
   }

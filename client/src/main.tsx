@@ -52,6 +52,16 @@ if (import.meta.env.MODE !== "production") {
   };
 }
 
+// ---- Seed a name/color once (presence defaults) ----
+if (!localStorage.getItem("ybuilt.color")) {
+  const hues = [260, 200, 150, 120, 340];
+  const h = hues[Math.floor(Math.random() * hues.length)];
+  localStorage.setItem("ybuilt.color", `hsl(${h} 80% 60%)`);
+}
+if (!localStorage.getItem("ybuilt.name")) {
+  localStorage.setItem("ybuilt.name", "You");
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

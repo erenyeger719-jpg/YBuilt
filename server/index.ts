@@ -30,7 +30,7 @@ Sentry.init({
 
 logger.info(`[SENTRY] server DSN present: ${Boolean(process.env.SENTRY_DSN)}`);
 // Basic app setup
-logger.info('[SECURITY] JWT_SECRET is configured and validated');
+logger.info('[SECURITY] JWT_SECRET is configured and validated']);
 
 const RAZORPAY_MODE = process.env.RAZORPAY_MODE || 'mock';
 if (RAZORPAY_MODE === 'live') {
@@ -312,9 +312,13 @@ if (reqMw) app.use(reqMw);
     default: undefined as any,
   }));
 
-  // Comments + Q&A (CommonJS-style modules adapted to dynamic import)
-  const commentsMod: any = await import('./routes/comments.js').catch(() => ({} as any));
-  const aiqnaMod: any = await import('./routes/ai.qna.js').catch(() => ({} as any));
+  // CJS dynamic-import interop (comments + qna)
+  const commentsMod: any = await import('./routes/comments.js')
+    .then((m) => (m as any).default ?? m)
+    .catch(() => ({} as any));
+  const aiqnaMod: any = await import('./routes/ai.qna.js')
+    .then((m) => (m as any).default ?? m)
+    .catch(() => ({} as any));
 
   // Mount deploy queue router (in addition to deploy API)
   app.use('/api/deploy', deployQueue);
@@ -385,7 +389,7 @@ if (reqMw) app.use(reqMw);
         throw e;
       }
     }
-    throw new Error(`Failed to start server after ${maxAttempts} attempts`);
+  throw new Error(`Failed to start server after ${maxAttempts} attempts`);
   }
 
   const port = parseInt(process.env.PORT || '5050', 10);

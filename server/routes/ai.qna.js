@@ -1,3 +1,4 @@
+// server/routes/ai.qna.js
 const fs = require("fs");
 const path = require("path");
 
@@ -39,8 +40,7 @@ exports.qna = async (req, res) => {
       return res.json({ ok: true, answer: "Mock answer (no OPENAI_API_KEY set). The issue is likely in your CSS selector; ensure the class names match and the stylesheet is linked." });
     }
 
-    // Minimal OpenAI call (gpt-4o-mini or similar)
-    const fetch = (await import("node-fetch")).default;
+    // Use built-in fetch (Node 18+)
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
