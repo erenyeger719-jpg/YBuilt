@@ -29,6 +29,10 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
 
+  // scroll state
+  const [atBottom, setAtBottom] = useState(true);
+  const [pendingNew, setPendingNew] = useState(0);
+
   // ---- Local cache: load first (before joining), then save on every change ----
   useEffect(() => {
     if (!projectId) return;
@@ -53,6 +57,19 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     }
   }, []);
 
+  // track scroll position for "jump to latest" + unread chip
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+      setAtBottom(nearBottom);
+      if (nearBottom) setPendingNew(0);
+    };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
   useEffect(() => {
     if (!projectId) return;
     const s = getSocket();
@@ -66,6 +83,9 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
 
     const onMsg = (m: Msg) => {
       setMsgs((prev) => [...prev, m]);
+
+      // if user isn't at bottom, collect a "new" counter
+      if (!atBottom) setPendingNew((n) => n + 1);
 
       // bump unread if not active or page hidden
       const notActive = !activeRef.current || document.hidden;
@@ -139,14 +159,14 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       s.off("presence:users", onUsers);
       s.off("chat:history", onHistory);
     };
-  }, [projectId]);
+  }, [projectId, atBottom]);
 
-  // auto-scroll to newest message
+  // auto-scroll to newest message only if user is at bottom
   useEffect(() => {
     const el = boxRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [msgs.length]);
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  }, [msgs.length, atBottom]);
 
   // track focus/visibility → clear unread when user is present
   useEffect(() => {
@@ -223,6 +243,17 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     });
   }
 
+  // helper: clear unread + restore title
+  function clearUnread() {
+    setUnread(0);
+    try {
+      const anyDoc = document as any;
+      const base = anyDoc.__baseTitle || document.title.replace(/^\(\d+\)\s+/, "");
+      document.title = base;
+      anyDoc.__baseTitle = base;
+    } catch {}
+  }
+
   function send() {
     const text = draft.trim();
     if (!text) return;
@@ -296,7 +327,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     setDraft("");
     // locally this means “I’m active”, keep unread at 0
     activeRef.current = true;
-    setUnread(0);
+    clearUnread();
     lastSentRef.current = Date.now();
   }
 
@@ -305,9 +336,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     .map((m) => m.username.split("@")[0])
     .filter((name) => name.toLowerCase().includes(mentionQuery.toLowerCase()))
     .slice(0, 8);
-  const activeIdx = mentionOptions.length
-    ? mentionIndex % mentionOptions.length
-    : 0;
+  const activeIdx = mentionOptions.length ? mentionIndex % mentionOptions.length : 0;
 
   return (
     <div
@@ -315,7 +344,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       onMouseEnter={() => {
         // treat hover as "active"; clear unread
         activeRef.current = true;
-        if (unread > 0) setUnread(0);
+        if (unread > 0) clearUnread();
       }}
     >
       <div className="px-3 py-2 text-xs border-b flex items-center gap-2">
@@ -341,22 +370,45 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         )}
       </div>
 
-      <div ref={boxRef} className="p-3 overflow-auto text-xs space-y-1">
-        {msgs.length === 0 ? (
-          <div className="text-muted-foreground">Start the conversation…</div>
-        ) : (
-          msgs.map((m, i) => (
-            <div key={m.id || i}>
-              <span className="font-medium">{m.username || m.role}</span>
-              <span className="text-muted-foreground ml-1">
-                {m.createdAt
-                  ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                  : ""}
-              </span>
-              <span>: </span>
-              {renderContent(m.content)}
-            </div>
-          ))
+      {/* Messages area is relative so the "jump to latest" chip can be absolutely positioned */}
+      <div className="relative">
+        <div ref={boxRef} className="p-3 overflow-auto text-xs space-y-1 h-40">
+          {msgs.length === 0 ? (
+            <div className="text-muted-foreground">Start the conversation…</div>
+          ) : (
+            msgs.map((m, i) => (
+              <div key={m.id || i}>
+                <span className="font-medium">{m.username || m.role}</span>
+                <span className="text-muted-foreground ml-1">
+                  {m.createdAt
+                    ? new Date(m.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : ""}
+                </span>
+                <span>: </span>
+                {renderContent(m.content)}
+              </div>
+            ))
+          )}
+        </div>
+
+        {!atBottom && pendingNew > 0 && (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2">
+            <button
+              className="rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow"
+              onClick={() => {
+                const el = boxRef.current;
+                if (!el) return;
+                el.scrollTop = el.scrollHeight;
+                setAtBottom(true);
+                setPendingNew(0);
+              }}
+            >
+              {pendingNew} new — Jump to latest
+            </button>
+          </div>
         )}
       </div>
 
@@ -439,8 +491,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                   <div
                     key={name}
                     className={
-                      "px-2 py-1 cursor-pointer " +
-                      (idx === activeIdx ? "bg-muted" : "")
+                      "px-2 py-1 cursor-pointer " + (idx === activeIdx ? "bg-muted" : "")
                     }
                     onMouseDown={(e) => {
                       // prevent input blur
