@@ -219,7 +219,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             projectId: data.projectId,
             role: "user",
             content: data.message,
-            metadata: { type: "collaboration" },
+            metadata: { type: "collaboration", username: socket.user.email }, // store username for history
           });
 
           // Broadcast to all users in the project room
@@ -240,7 +240,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             if (rawMentions.length) {
               const mentioned = new Set(rawMentions);
               const room = `project:${data.projectId}`;
-              const members = roomMembers.get(room) || new Map<string, { email: string; count: number }>();
+              const members =
+                roomMembers.get(room) ||
+                new Map<string, { email: string; count: number }>();
 
               for (const [uid, { email }] of members.entries()) {
                 const handle = (email || "").split("@")[0].toLowerCase();
@@ -302,7 +304,8 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             userId: socket.user.sub.toString(),
             projectId: null,
             role: "system",
-            content: "Thank you for contacting support. A team member will respond shortly.",
+            content:
+              "Thank you for contacting support. A team member will respond shortly.",
             metadata: {
               type: "support",
               ticketId: data.ticketId,
@@ -356,16 +359,19 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       if (jobId) socket.leave(jobId);
     });
 
-    socket.on("deploy:chat", ({ jobId, text, user }: { jobId?: string; text?: string; user?: string }) => {
-      if (!jobId || !text) return;
-      const payload = {
-        type: "chat" as const,
-        user: user || socket.user?.email || "anon",
-        text: String(text),
-        ts: Date.now(),
-      };
-      io.to(jobId).emit("deploy:event", payload);
-    });
+    socket.on(
+      "deploy:chat",
+      ({ jobId, text, user }: { jobId?: string; text?: string; user?: string }) => {
+        if (!jobId || !text) return;
+        const payload = {
+          type: "chat" as const,
+          user: user || socket.user?.email || "anon",
+          text: String(text),
+          ts: Date.now(),
+        };
+        io.to(jobId).emit("deploy:event", payload);
+      }
+    );
 
     // Presence: update counts/members before socket actually leaves rooms
     socket.on("disconnecting", () => {

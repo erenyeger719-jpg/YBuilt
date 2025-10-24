@@ -250,7 +250,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
 
   // helper: insert text at the input cursor
   function insertAtCursor(val: string) {
-    const el = inputRef.current;
+    const el = inputRef.current as any;
     if (!el) return setDraft((d) => d + val);
     const start = el.selectionStart ?? draft.length;
     const end = el.selectionEnd ?? draft.length;
@@ -436,9 +436,9 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
 
       <div className="p-2">
         <div className="flex gap-2">
-          <input
-            ref={inputRef}
-            className="flex-1 border rounded px-2 py-1 text-xs bg-background"
+          <textarea
+            ref={inputRef as any}
+            className="flex-1 border rounded px-2 py-1 text-xs bg-background resize-y min-h-8 max-h-32"
             placeholder="Message…"
             value={draft}
             onChange={(e) => {
@@ -463,13 +463,14 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
               getSocket().emit("typing:start", { projectId });
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.key === "Enter" && !e.shiftKey) {
                 if (mentionOpen) {
                   e.preventDefault();
                   const picked = mentionOptions[activeIdx] || mentionQuery || "";
                   if (picked) {
                     // replace the @token with @picked + space
-                    const caret = e.currentTarget.selectionStart ?? draft.length;
+                    const caret =
+                      (e.currentTarget as HTMLTextAreaElement).selectionStart ?? draft.length;
                     const upto = draft.slice(0, caret);
                     const rest = draft.slice(caret);
                     const repl = upto.replace(/(@[\w-]{0,32})$/, `@${picked} `);
@@ -477,9 +478,10 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                     setMentionOpen(false);
                     setMentionQuery("");
                     setMentionIndex(0);
+                    return;
                   }
-                  return;
                 }
+                e.preventDefault();
                 send();
                 return;
               }
