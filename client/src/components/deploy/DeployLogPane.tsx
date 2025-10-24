@@ -115,6 +115,7 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
       const r = await fetch("/api/deploy/enqueue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           provider: "netlify",
           previewPath: `/previews/${jobId}/`,

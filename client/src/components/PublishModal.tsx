@@ -86,6 +86,7 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
       const r = await fetch("/api/deploy/enqueue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           provider: "netlify",
           previewPath: `/previews/${jobId}/`,
