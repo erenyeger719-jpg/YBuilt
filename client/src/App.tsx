@@ -12,6 +12,7 @@ import Previews from "@/pages/Previews";     // previews index
 import DevLogs from "@/pages/DevLogs";       // live dev logs
 import Templates from "@/pages/Templates";   // templates index
 import TemplateDetail from "@/pages/TemplateDetail"; // template detail
+import CollabPage from "@/pages/Collab";     // collab room
 
 // Weavy wrapper + board (bridge band)
 import WeavySection from "@/components/WeavySection";
@@ -68,6 +69,11 @@ export default function App() {
 
         {/* Workspace */}
         <Route path="/workspace/:jobId" component={Workspace} />
+
+        {/* Collab room */}
+        <Route path="/collab/:roomId">
+          <CollabPage />
+        </Route>
 
         {/* Weavy bridge band + board (new route) */}
         <Route path="/weavy">{() => <WeavyBridge />}</Route>
