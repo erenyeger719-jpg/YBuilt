@@ -68,12 +68,18 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     socket.on("join:project", (projectId: string) => {
       socket.join(`project:${projectId}`);
       logger.info(`[SOCKET] ${socket.id} joined project: ${projectId}`);
+      const room = `project:${projectId}`;
+      const count = io.sockets.adapter.rooms.get(room)?.size || 0;
+      io.to(room).emit("presence:update", { projectId, count });
     });
 
     // Leave project room
     socket.on("leave:project", (projectId: string) => {
       socket.leave(`project:${projectId}`);
       logger.info(`[SOCKET] ${socket.id} left project: ${projectId}`);
+      const room = `project:${projectId}`;
+      const count = io.sockets.adapter.rooms.get(room)?.size || 0;
+      io.to(room).emit("presence:update", { projectId, count });
     });
 
     // Handle chat messages - AI Assistant mode
@@ -260,6 +266,12 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     // Disconnect handler
     socket.on("disconnect", () => {
       logger.info(`[SOCKET] Client disconnected: ${socket.id}`);
+      for (const room of socket.rooms) {
+        if (room.startsWith("project:")) {
+          const count = io.sockets.adapter.rooms.get(room)?.size || 0;
+          io.to(room).emit("presence:update", { projectId: room.slice(8), count });
+        }
+      }
     });
   });
 
