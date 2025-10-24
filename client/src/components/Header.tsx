@@ -1,3 +1,4 @@
+//client/src/components/previews/Header.tsx
 import { Moon, Sun, Sparkles, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import CurrencyToggle from "./CurrencyToggle";
 import ProfileIcon from "./ProfileIcon";
 import { useState, useEffect } from "react";
 import { getSession, switchTeam } from "@/lib/session";
+import InviteDialog from "@/components/teams/InviteDialog";
 
 interface HeaderProps {
   logSummary?: {
@@ -45,6 +47,17 @@ function TeamSwitcher() {
       onChange={async (e) => {
         const id = e.target.value;
         try {
+          if (id === "__create__") {
+            const name = prompt("Team name?")?.trim();
+            if (!name) return;
+            await fetch("/api/teams", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name }),
+            });
+            window.location.reload();
+            return;
+          }
           await switchTeam(id);
         } finally {
           window.location.reload(); // simplest: refresh UI scoped to team
@@ -54,13 +67,19 @@ function TeamSwitcher() {
       title="Switch team"
     >
       {teams.length ? (
-        teams.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}
-          </option>
-        ))
+        <>
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+          <option value="__create__">+ Create team…</option>
+        </>
       ) : (
-        <option value="">(no team)</option>
+        <>
+          <option value="">(no team)</option>
+          <option value="__create__">+ Create team…</option>
+        </>
       )}
     </select>
   );
@@ -195,6 +214,7 @@ export default function Header({
 
             {/* Team switcher (minimal) */}
             <TeamSwitcher />
+            <InviteDialog />
 
             {/* Keep payment visible on desktop only to avoid crowding on mobile */}
             <div className="hidden md:inline-flex">
@@ -240,6 +260,7 @@ export default function Header({
             </Button>
             {/* Optional: include team switcher on mobile too */}
             <TeamSwitcher />
+            <InviteDialog />
             <CurrencyToggle onCurrencyChange={setCurrency} />
             <Button
               size="icon"

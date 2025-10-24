@@ -4,6 +4,10 @@ import path from "path";
 import fs from "fs/promises";
 import { existsSync } from "fs";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
+
+const requireCjs = createRequire(import.meta.url);
+const { safeJoinTeam } = requireCjs("./_teamPaths");
 
 const r = Router();
 
@@ -42,15 +46,24 @@ async function copyDir(src, dest) {
 r.post("/build", async (req, res, next) => {
   try {
     const { templateId } = req.body || {};
-    if (!templateId) return res.status(400).json({ ok: false, error: "templateId required" });
+    if (!templateId)
+      return res.status(400).json({ ok: false, error: "templateId required" });
 
     const safe = safeSlug(templateId);
     const src = path.join(TEMPLATES_DIR, safe);
-    if (!existsSync(src)) return res.status(404).json({ ok: false, error: "template not found" });
+    if (!existsSync(src))
+      return res
+        .status(404)
+        .json({ ok: false, error: "template not found" });
 
     // simple unique id
-    const id = `${safe}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const dest = path.join(PREVIEWS_DIR, "forks", id);
+    const id = `${safe}-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 6)}`;
+
+    // team-scoped destination
+    const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
+    const dest = safeJoinTeam(teamId, `/previews/forks/${id}/`);
 
     // optional Socket.IO progress
     const io = req.app.get("io");
@@ -69,9 +82,11 @@ r.post("/build", async (req, res, next) => {
 });
 
 // GET /api/previews/list
-r.get("/list", async (_req, res, next) => {
+// Lists team-scoped forks under /previews/forks/
+r.get("/list", async (req, res, next) => {
   try {
-    const base = path.join(PREVIEWS_DIR, "forks");
+    const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
+    const base = safeJoinTeam(teamId, "/previews/forks/");
     if (!existsSync(base)) return res.json({ ok: true, items: [] });
     const items = await fs.readdir(base);
     const out = items.map((id) => ({ id, url: `/previews/forks/${id}/` }));

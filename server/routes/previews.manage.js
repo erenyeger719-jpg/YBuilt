@@ -2,35 +2,15 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { createRequire } from "module";
 import deployQueue from "./deploy.queue.js"; // appended: deploy queue router
 
+const requireCjs = createRequire(import.meta.url);
+const { safeJoinTeam } = requireCjs("./_teamPaths");
+
 const router = express.Router();
-const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || "previews");
 
-/** Expect /previews/forks/<slug>/... and return absolute fork dir */
-function safeForkDirFromPublic(href) {
-  // Expect /previews/forks/<slug>/...
-  const rel = String(href || "").replace(/^https?:\/\/[^/]+/i, "");
-  const m =
-    rel.match(/^\/?previews\/forks\/([^/]+)\//i) ||
-    rel.match(/^\/?previews\/forks\/([^/]+)$/i);
-  if (!m) throw new Error("bad path");
-  const slug = m[1];
-  const abs = path.resolve(path.join(PREVIEWS_DIR, "forks", slug));
-  if (!abs.startsWith(path.resolve(PREVIEWS_DIR))) throw new Error("escape");
-  return abs;
-}
-
-/** Reuse-safe: harden path joining to previews dir */
-function safeJoinPreviews(inputPath) {
-  const p = String(inputPath || "");
-  const rel = p.replace(/^https?:\/\/[^/]+/i, "").replace(/^\/+/, "");
-  if (!rel.startsWith("previews/")) throw new Error("bad path");
-  const abs = path.resolve(PREVIEWS_DIR, rel.replace(/^previews\//, ""));
-  if (!abs.startsWith(PREVIEWS_DIR)) throw new Error("path escape");
-  return abs;
-}
-
+/** Validate allowed file names we operate on */
 function allowedFile(file) {
   return (
     /^[a-zA-Z0-9._/-]+$/.test(file) &&
@@ -58,7 +38,8 @@ router.post("/delete", async (req, res) => {
   try {
     const href = req.body?.path;
     if (!href) return res.status(400).json({ error: "path required" });
-    const dir = safeForkDirFromPublic(href);
+    const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
+    const dir = safeJoinTeam(teamId, href);
     await fs.promises.rm(dir, { recursive: true, force: true });
     return res.json({ ok: true });
   } catch (_e) {
@@ -72,11 +53,14 @@ router.get("/read", async (req, res) => {
   try {
     const href = req.query?.path;
     const file = String(req.query?.file || "index.html");
-    if (!href || !allowedFile(file)) return res.status(400).json({ error: "bad args" });
+    if (!href || !allowedFile(file))
+      return res.status(400).json({ error: "bad args" });
 
-    const absDir = safeJoinPreviews(href);
+    const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
+    const absDir = safeJoinTeam(teamId, href);
     const absFile = path.resolve(absDir, file);
-    if (!absFile.startsWith(absDir)) return res.status(400).json({ error: "path escape" });
+    if (!absFile.startsWith(absDir))
+      return res.status(400).json({ error: "path escape" });
 
     const content = await fs.promises.readFile(absFile, "utf8");
     res.json({ ok: true, content });
@@ -92,11 +76,14 @@ router.post("/write", express.json({ limit: "2mb" }), async (req, res) => {
     const href = req.body?.path;
     const file = String(req.body?.file || "index.html");
     const content = String(req.body?.content ?? "");
-    if (!href || !allowedFile(file)) return res.status(400).json({ error: "bad args" });
+    if (!href || !allowedFile(file))
+      return res.status(400).json({ error: "bad args" });
 
-    const absDir = safeJoinPreviews(href);
+    const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
+    const absDir = safeJoinTeam(teamId, href);
     const absFile = path.resolve(absDir, file);
-    if (!absFile.startsWith(absDir)) return res.status(400).json({ error: "path escape" });
+    if (!absFile.startsWith(absDir))
+      return res.status(400).json({ error: "path escape" });
 
     // Ensure parent folders exist (e.g., css/styles.css)
     await fs.promises.mkdir(path.dirname(absFile), { recursive: true });
@@ -115,7 +102,8 @@ router.get("/list", async (req, res) => {
     const href = req.query?.path;
     if (!href) return res.status(400).json({ error: "path required" });
 
-    const absDir = safeJoinPreviews(href);
+    const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
+    const absDir = safeJoinTeam(teamId, href);
 
     const MAX_FILES = 200;
     const files = [];
@@ -148,14 +136,18 @@ router.post("/remove-file", express.json(), async (req, res) => {
   try {
     const href = req.body?.path;
     const file = String(req.body?.file || "");
-    if (!href || !allowedFile(file)) return res.status(400).json({ error: "bad args" });
+    if (!href || !allowedFile(file))
+      return res.status(400).json({ error: "bad args" });
 
     // Optional guard: avoid breaking the preview
-    if (file === "index.html") return res.status(400).json({ error: "cannot delete index.html" });
+    if (file === "index.html")
+      return res.status(400).json({ error: "cannot delete index.html" });
 
-    const absDir = safeJoinPreviews(href);
+    const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
+    const absDir = safeJoinTeam(teamId, href);
     const absFile = path.resolve(absDir, file);
-    if (!absFile.startsWith(absDir)) return res.status(400).json({ error: "path escape" });
+    if (!absFile.startsWith(absDir))
+      return res.status(400).json({ error: "path escape" });
 
     await fs.promises.unlink(absFile);
     return res.json({ ok: true });
@@ -171,21 +163,22 @@ router.post("/duplicate", express.json(), async (req, res) => {
     const href = req.body?.path;
     if (!href) return res.status(400).json({ error: "path required" });
 
-    const srcDir = safeForkDirFromPublic(href);
+    const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
+
+    // source directory (team-scoped)
+    const srcDir = safeJoinTeam(teamId, href);
 
     // derive a new slug
     const srcMatch =
       String(href).match(/\/previews\/forks\/([^/]+)\//i) ||
       String(href).match(/\/previews\/forks\/([^/]+)$/i);
     const base = srcMatch ? srcMatch[1] : `copy`;
-    const newSlug = `${base}-copy-${Math.random().toString(36).slice(2, 5)}${Math.random()
+    const newSlug = `${base}-copy-${Math.random()
       .toString(36)
-      .slice(2, 4)}`;
+      .slice(2, 5)}${Math.random().toString(36).slice(2, 4)}`;
 
-    const destDir = path.resolve(path.join(PREVIEWS_DIR, "forks", newSlug));
-    if (!destDir.startsWith(path.resolve(PREVIEWS_DIR))) {
-      return res.status(400).json({ error: "path escape" });
-    }
+    // destination directory (team-scoped)
+    const destDir = safeJoinTeam(teamId, `/previews/forks/${newSlug}/`);
 
     await copyDir(srcDir, destDir);
 
