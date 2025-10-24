@@ -1,19 +1,19 @@
 // server/routes/ai.qna.js
 const fs = require("fs");
-const path = require("path");
+const { safeJoinTeam } = require("./_teamPaths");
 
-function safePath(previewPath) {
-  const rel = String(previewPath || "").replace(/^\/+/, "").replace(/\.\./g, "");
-  return path.join(process.cwd(), rel);
+function safePath(teamId, previewPath) {
+  return safeJoinTeam(teamId, previewPath || "");
 }
 function readFileSafe(absDir, file) {
-  try { return fs.readFileSync(path.join(absDir, file), "utf8"); } catch { return ""; }
+  try { return fs.readFileSync(require("path").join(absDir, file), "utf8"); } catch { return ""; }
 }
 
 exports.qna = async (req, res) => {
   try {
     const { path: previewPath, file, question, tier } = req.body || {};
-    const abs = safePath(previewPath);
+    const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
+    const abs = safePath(teamId, previewPath);
     const html = readFileSafe(abs, "index.html");
     const css  = readFileSafe(abs, "styles.css");
     const js   = readFileSafe(abs, "app.js");
@@ -60,3 +60,6 @@ exports.qna = async (req, res) => {
     res.status(500).json({ ok: false, error: e?.message || "qna failed" });
   }
 };
+
+// ESM/CJS interop
+module.exports.default = module.exports;

@@ -81,9 +81,9 @@ r.post("/build", async (req, res, next) => {
   }
 });
 
-// GET /api/previews/list
+// GET /api/previews/forks
 // Lists team-scoped forks under /previews/forks/
-r.get("/list", async (req, res, next) => {
+r.get("/forks", async (req, res, next) => {
   try {
     const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
     const base = safeJoinTeam(teamId, "/previews/forks/");

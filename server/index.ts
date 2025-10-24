@@ -91,7 +91,7 @@ if (reqMw) app.use(reqMw);
 
   // CORS + parsers
   app.use(cors());
-  app.use(cookieParser()); // <-- cookie support for session/team routes
+  app.use(cookieParser()); // cookie support for session/team routes
   app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
@@ -101,12 +101,20 @@ if (reqMw) app.use(reqMw);
   if (!fs.existsSync(PREVIEWS_DIR)) fs.mkdirSync(PREVIEWS_DIR, { recursive: true });
   logger.info(`[PREVIEWS] Serving static previews from ${PREVIEWS_DIR}`);
 
-  // Serve /previews as static (so /previews/forks/<id>/index.html resolves)
-  // only serve the actual forked sites, not the /previews page
-  app.use(
-    '/previews/forks',
-    express.static(path.join(PREVIEWS_DIR, 'forks'), { extensions: ['html'] })
-  );
+  // Serve team-scoped forks: /previews/forks/<slug>/...
+  const requireMod = (await import('module')).createRequire(import.meta.url);
+  const { safeJoinTeam } = requireMod('./routes/_teamPaths');
+  app.use('/previews/forks', (req, res, next) => {
+    const teamId =
+      (req as any).cookies?.teamId || (req.headers as any)['x-team-id'] || null;
+    let base: string;
+    try {
+      base = safeJoinTeam(teamId, '/previews/forks');
+    } catch {
+      return res.status(400).send('bad path');
+    }
+    return (express.static(base, { extensions: ['html'] }) as any)(req, res, next);
+  });
 
   // Observability + rate limiting
   app.use(requestIdMiddleware);

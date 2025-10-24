@@ -13,6 +13,7 @@ import DevLogs from "@/pages/DevLogs";       // live dev logs
 import Templates from "@/pages/Templates";   // templates index
 import TemplateDetail from "@/pages/TemplateDetail"; // template detail
 import CollabPage from "@/pages/Collab";     // collab room
+import AcceptInvite from "@/pages/AcceptInvite"; // accept team invite
 
 // Weavy wrapper + board (bridge band)
 import WeavySection from "@/components/WeavySection";
@@ -80,6 +81,9 @@ export default function App() {
 
         {/* Dev logs (live) */}
         <Route path="/dev/logs" component={DevLogs} />
+
+        {/* Accept team invite */}
+        <Route path="/invite/:token" component={AcceptInvite} />
 
         {/* Fallback (must be last, no path) */}
         <Route>
