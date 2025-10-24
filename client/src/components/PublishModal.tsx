@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Dialog,
@@ -211,8 +211,6 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
       });
     }
   };
-
-  const hasInsufficientCredits = planInfo && planInfo.credits < planInfo.publishCost;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
