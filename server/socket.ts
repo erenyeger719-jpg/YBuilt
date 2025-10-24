@@ -13,7 +13,7 @@ interface AuthenticatedSocket extends Socket {
 export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: "*", // Configure this properly in production
+      origin: process.env.APP_ORIGIN || "http://localhost:3000",
       credentials: true,
     },
   });
