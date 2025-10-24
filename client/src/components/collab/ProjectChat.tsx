@@ -13,6 +13,7 @@ type Msg = {
 
 export default function ProjectChat({ projectId }: { projectId: string }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [members, setMembers] = useState<{ userId: string; username: string }[]>([]);
   const [draft, setDraft] = useState("");
   const [online, setOnline] = useState(0);
   const [typingNames, setTypingNames] = useState<string[]>([]);
@@ -82,15 +83,24 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       if (p.projectId === projectId) setOnline(p.count);
     };
 
+    const onUsers = (p: {
+      projectId: string;
+      users: { userId: string; username: string }[];
+    }) => {
+      if (p.projectId === projectId) setMembers(p.users);
+    };
+
     s.on("chat:message", onMsg);
     s.on("typing:user", onTyping);
     s.on("presence:update", onPresence);
+    s.on("presence:users", onUsers);
 
     return () => {
       s.emit("leave:project", projectId);
       s.off("chat:message", onMsg);
       s.off("typing:user", onTyping);
       s.off("presence:update", onPresence);
+      s.off("presence:users", onUsers);
     };
   }, [projectId]);
 
@@ -106,9 +116,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     function restoreTitle() {
       try {
         const anyDoc = document as any;
-        const base =
-          anyDoc.__baseTitle ||
-          document.title.replace(/^\(\d+\)\s+/, "");
+        const base = anyDoc.__baseTitle || document.title.replace(/^\(\d+\)\s+/, "");
         document.title = base;
         anyDoc.__baseTitle = base;
       } catch {}
@@ -151,9 +159,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         return (
           <span
             key={i}
-            className={
-              "rounded px-1 " + (isAll ? "bg-red-100 text-red-700" : "bg-yellow-100")
-            }
+            className={"rounded px-1 " + (isAll ? "bg-red-100 text-red-700" : "bg-yellow-100")}
           >
             {p}
           </span>
@@ -188,15 +194,23 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       <div className="px-3 py-2 text-xs border-b flex items-center gap-2">
         <div className="font-medium">Project Chat</div>
         <div className="text-muted-foreground">• {online} online</div>
+        {members.length > 0 && (
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            {members.slice(0, 5).map((m) => (
+              <span key={m.userId} className="px-1 rounded bg-muted">
+                {m.username.split("@")[0]}
+              </span>
+            ))}
+            {members.length > 5 && <span>+{members.length - 5}</span>}
+          </div>
+        )}
         {unread > 0 && (
           <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
             {unread} new
           </span>
         )}
         {typingNames.length > 0 && (
-          <div className="ml-auto text-muted-foreground">
-            {typingNames.join(", ")} typing…
-          </div>
+          <div className="ml-auto text-muted-foreground">{typingNames.join(", ")} typing…</div>
         )}
       </div>
 
@@ -206,8 +220,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         ) : (
           msgs.map((m, i) => (
             <div key={m.id || i}>
-              <span className="font-medium">{m.username || m.role}:</span>{" "}
-              {renderContent(m.content)}
+              <span className="font-medium">{m.username || m.role}:</span> {renderContent(m.content)}
             </div>
           ))
         )}

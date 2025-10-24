@@ -21,6 +21,39 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
   // Wire IO into the socket bus so stage/log/done can emit
   setIO(io);
 
+  // ---- Live room member tracking for Project Chat ----
+  // room -> userId -> { email, count }
+  const roomMembers: Map<string, Map<string, { email: string; count: number }>> =
+    new Map();
+
+  function emitUsers(room: string) {
+    const members = Array.from(roomMembers.get(room)?.entries() || []).map(
+      ([userId, v]) => ({ userId, username: v.email })
+    );
+    io.to(room).emit("presence:users", {
+      projectId: room.startsWith("project:") ? room.slice(8) : room,
+      users: members,
+    });
+  }
+
+  function joinMember(room: string, userId: string, email: string) {
+    let m = roomMembers.get(room);
+    if (!m) roomMembers.set(room, (m = new Map()));
+    const cur = m.get(userId);
+    m.set(userId, { email, count: (cur?.count || 0) + 1 });
+    emitUsers(room);
+  }
+
+  function leaveMember(room: string, userId: string) {
+    const m = roomMembers.get(room);
+    if (!m) return;
+    const cur = m.get(userId);
+    if (!cur) return;
+    if (cur.count <= 1) m.delete(userId);
+    else m.set(userId, { ...cur, count: cur.count - 1 });
+    emitUsers(room);
+  }
+
   // Authentication middleware for Socket.IO
   io.use((socket: AuthenticatedSocket, next) => {
     try {
@@ -71,6 +104,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       const room = `project:${projectId}`;
       const count = io.sockets.adapter.rooms.get(room)?.size || 0;
       io.to(room).emit("presence:update", { projectId, count });
+      if (socket.user) {
+        joinMember(room, String(socket.user.sub), socket.user.email);
+      }
     });
 
     // Leave project room
@@ -80,6 +116,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       const room = `project:${projectId}`;
       const count = io.sockets.adapter.rooms.get(room)?.size || 0;
       io.to(room).emit("presence:update", { projectId, count });
+      if (socket.user) {
+        leaveMember(room, String(socket.user.sub));
+      }
     });
 
     // Handle chat messages - AI Assistant mode
@@ -270,6 +309,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
         if (room.startsWith("project:")) {
           const count = io.sockets.adapter.rooms.get(room)?.size || 0;
           io.to(room).emit("presence:update", { projectId: room.slice(8), count });
+          if (socket.user) {
+            leaveMember(room, String(socket.user.sub));
+          }
         }
       }
     });
