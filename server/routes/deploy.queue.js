@@ -218,7 +218,7 @@ router.post("/enqueue", express.json(), async (req, res) => {
         emit("stage", "packaging");
         emit("log", null, "Zipping site…");
 
-        const preferred = siteName || `ybuilt-${slugify(path.basename(absDir))}`;
+       const preferred = (j.siteName || siteName) || `ybuilt-${slugify(path.basename(absDir))}`;
         emit("stage", "provisioning");
         emit("log", null, `Ensuring Netlify site "${preferred}"…`);
         const site = await ensureNetlifySite(NETLIFY_TOKEN, preferred);
