@@ -39,13 +39,16 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
 
+  // NEW: Optional Netlify site name (used by deploy queue)
+  const [siteName, setSiteName] = useState("");
+
   // Fetch plan info
   const { data: planInfo, isLoading: planLoading } = useQuery<PlanInfo>({
     queryKey: ["/api/plan"],
     enabled: open,
   });
 
-  // Publish mutation
+  // Legacy publish mutation (kept for compatibility, not used by the new flow)
   const publishMutation = useMutation({
     mutationFn: async () => {
       return apiRequest("POST", `/api/jobs/${jobId}/publish`, {});
@@ -76,23 +79,42 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
     },
   });
 
-  const handlePublish = () => {
-    if (!planInfo) return;
+  // REPLACED: Simple submit handler that enqueues a Netlify deploy via the new server queue
+  async function handlePublish() {
+    try {
+      const r = await fetch("/api/deploy/enqueue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "netlify",
+          previewPath: `/previews/${jobId}/`,
+          siteName: siteName || undefined,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data?.ok) throw new Error(data?.error || "enqueue failed");
 
-    if (planInfo.credits < planInfo.publishCost) {
-      setShowPayment(true);
-    } else {
-      publishMutation.mutate();
+      // Close modal; logs stream into the pane via dual-broadcast (room = jobId)
+      onOpenChange(false);
+
+      // optional: focus the BUILD tab via a custom event
+      window.dispatchEvent(new CustomEvent("workspace:show-build"));
+    } catch (e: any) {
+      toast({
+        title: "Publish failed",
+        description: e?.message || "Unable to start deploy",
+        variant: "destructive",
+      });
     }
-  };
+  }
 
-  // Payment mutation
+  // Payment mutation (kept for compatibility; not used in the new deploy-queue flow)
   const paymentMutation = useMutation({
     mutationFn: async () => {
       if (!planInfo) throw new Error("Plan info not available");
-      
+
       const amountNeeded = planInfo.publishCost - planInfo.credits;
-      
+
       // Create Razorpay order
       const orderData = await apiRequest("POST", "/api/create_order", {
         amount: amountNeeded,
@@ -119,7 +141,7 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
         title: "Payment Successful",
         description: "Credits added to your account",
       });
-      // Now proceed with publish
+      // Now proceed with publish (legacy path)
       publishMutation.mutate();
     },
     onError: (error: any) => {
@@ -209,7 +231,7 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : publishedUrl ? (
-          // Success State
+          // Success State (legacy)
           <div className="space-y-4">
             <div className="flex items-center gap-2 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
               <CheckCircle className="h-5 w-5 text-green-500" />
@@ -266,7 +288,7 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
             </Button>
           </div>
         ) : showPayment || hasInsufficientCredits ? (
-          // Payment Required State
+          // Payment Required State (legacy)
           <div className="space-y-4">
             <div className="flex items-center gap-2 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
               <AlertCircle className="h-5 w-5 text-yellow-500" />
@@ -322,7 +344,7 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
             </p>
           </div>
         ) : (
-          // Confirm Publish State
+          // Confirm Publish State (uses new deploy-queue flow)
           <div className="space-y-4">
             <div className="space-y-3 rounded-lg border p-4">
               <div className="flex items-center justify-between text-sm">
@@ -342,10 +364,27 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
               </div>
             </div>
 
+            {/* NEW: Optional site name for Netlify */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="site-name">
+                Netlify site name (optional)
+              </label>
+              <Input
+                id="site-name"
+                placeholder="e.g., ybuilt-my-app"
+                value={siteName}
+                onChange={(e) => setSiteName(e.target.value)}
+                data-testid="input-site-name"
+              />
+              <p className="text-xs text-muted-foreground">
+                We'll try this name. If it's taken, a random suffix will be used.
+              </p>
+            </div>
+
             <div className="rounded-lg bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">
                 <strong>Note:</strong> Publishing will make your app publicly accessible at a
-                unique URL. The cost will be deducted from your credits balance.
+                unique URL. We’ll kick off a deploy and show live logs in the build pane.
               </p>
             </div>
 
@@ -360,12 +399,11 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
               </Button>
               <Button
                 onClick={handlePublish}
-                disabled={publishMutation.isPending}
                 className="flex-1 gap-2"
                 data-testid="button-confirm-publish"
               >
                 <Rocket className="h-4 w-4" />
-                {publishMutation.isPending ? "Publishing..." : "Publish Now"}
+                Publish Now
               </Button>
             </div>
           </div>

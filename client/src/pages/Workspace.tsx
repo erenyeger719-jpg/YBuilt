@@ -233,6 +233,13 @@ export default function Workspace() {
     }
   }, [theme]);
 
+  // Flip to BUILD tab when external event fires
+  useEffect(() => {
+    function onShowBuild() { setRightTab("build"); }
+    window.addEventListener("workspace:show-build", onShowBuild);
+    return () => window.removeEventListener("workspace:show-build", onShowBuild);
+  }, []);
+
   // Auto-select first non-prompt file when workspace loads
   useEffect(() => {
     if (workspace?.files && !selectedFile) {

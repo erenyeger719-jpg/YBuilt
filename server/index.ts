@@ -388,8 +388,7 @@ if (reqMw) app.use(reqMw);
     .then((m) => (m as any).default ?? m)
     .catch(() => ({} as any));
 
-  // Optional routes: previews.remove-file + teams
-  const previewsRemoveMod: any = await import('./routes/previews.remove-file.js').catch(() => ({} as any));
+  // Optional routes: teams
   const teamsMod: any = await import('./routes/teams.js').catch(() => ({} as any));
 
   // Mount deploy queue router (in addition to deploy API)
@@ -420,14 +419,6 @@ if (reqMw) app.use(reqMw);
 
   // AI Q&A
   if (aiqnaMod?.qna) app.post('/api/ai/qna', express.json(), aiqnaMod.qna);
-
-  // Previews: remove-file endpoint
-  if (previewsRemoveMod?.removeFile) {
-    app.post('/api/previews/remove-file', express.json(), previewsRemoveMod.removeFile);
-  } else if (previewsRemoveMod?.default) {
-    // fallback to a router if provided as default
-    app.use('/api/previews', express.json(), previewsRemoveMod.default);
-  }
 
   // Teams/session endpoints (optional)
   if (teamsMod?.session) app.get('/api/session', teamsMod.session);
