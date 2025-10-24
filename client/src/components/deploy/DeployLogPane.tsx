@@ -30,10 +30,7 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
   useEffect(() => {
     if (!jobId) return;
     try {
-      localStorage.setItem(
-        `deploy-chat:${jobId}`,
-        JSON.stringify(chat.slice(-200))
-      );
+      localStorage.setItem(`deploy-chat:${jobId}`, JSON.stringify(chat.slice(-200)));
     } catch {}
   }, [chat, jobId]);
 
@@ -69,6 +66,11 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
             description: p?.error || "Unknown error",
             variant: "destructive",
           });
+          return;
+        }
+        // Cancelled branch
+        if (p?.status === "cancelled") {
+          toast({ title: "Deploy cancelled" });
           return;
         }
 
@@ -134,6 +136,26 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
     }
   }
 
+  async function cancelDeploy() {
+    try {
+      const r = await fetch("/api/deploy/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ clientRoom: jobId }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data?.ok) throw new Error(data?.error || "cancel failed");
+      toast({ title: "Cancelling…" });
+    } catch (e: any) {
+      toast({
+        title: "Could not cancel",
+        description: e?.message || "Unknown error",
+        variant: "destructive",
+      });
+    }
+  }
+
   function sendChat() {
     const text = draft.trim();
     if (!text) return;
@@ -149,7 +171,20 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
       <div className="px-3 py-2 text-xs border-b flex items-center gap-2">
         <div className="font-medium">Deploy</div>
         <div className="text-muted-foreground">• {stage}</div>
+        {stage !== "idle" && stage !== "done" && (
+          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+            ● LIVE
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={cancelDeploy}
+            disabled={stage === "idle" || stage === "done"}
+          >
+            Cancel
+          </Button>
           <Button size="sm" onClick={redeploy}>
             Redeploy
           </Button>
@@ -157,22 +192,12 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
             Copy logs
           </Button>
           {url && (
-            <a
-              className="text-xs underline"
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a className="text-xs underline" href={url} target="_blank" rel="noreferrer">
               Open
             </a>
           )}
           {adminUrl && (
-            <a
-              className="text-xs underline"
-              href={adminUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a className="text-xs underline" href={adminUrl} target="_blank" rel="noreferrer">
               Netlify
             </a>
           )}
@@ -190,9 +215,7 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
       <div className="border-t grid grid-rows-[1fr_auto] h-40">
         <div className="p-3 overflow-auto">
           {chat.length === 0 ? (
-            <div className="text-xs text-muted-foreground">
-              Chat about this build…
-            </div>
+            <div className="text-xs text-muted-foreground">Chat about this build…</div>
           ) : (
             chat.map((m, i) => (
               <div key={i} className="text-xs">

@@ -16,6 +16,15 @@ const queue = new PQueue({ concurrency: 2 });
 
 console.log("[deploy.queue] router initialized");
 
+// --- cancellation helper ---
+function CancelledError() {
+  const e = new Error("__CANCELLED__");
+  // tags to recognize in catch
+  // @ts-ignore
+  e.code = "CANCELLED";
+  return e;
+}
+
 // previews root (fallback for older workspaces without team scoping)
 const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || "previews");
 
@@ -165,7 +174,7 @@ router.post("/enqueue", express.json(), async (req, res) => {
   if (!provider || !previewPath) return res.status(400).json({ error: "bad args" });
 
   const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
-  // try to derive a “client room” segment (works for /previews/<jobId>/)
+  // try to derive a “client room” segment (works for /previews/<jobId>/ and forks)
   const m = String(previewPath).match(/^\/previews\/(?:forks\/([^/]+)|([^/]+))/i);
   const clientRoom = m ? (m[1] || m[2]) : null; // slug for forks OR jobId
 
@@ -178,6 +187,7 @@ router.post("/enqueue", express.json(), async (req, res) => {
     teamId,
     clientRoom,
     status: "queued",
+    cancelled: false,
     createdAt: Date.now(),
   };
   jobs.set(id, job);
@@ -206,6 +216,8 @@ router.post("/enqueue", express.json(), async (req, res) => {
     emit("log", null, "Starting deploy…");
 
     try {
+      if (j.cancelled) throw CancelledError();
+
       if (provider === "netlify") {
         const NETLIFY_TOKEN = process.env.NETLIFY_TOKEN;
         if (!NETLIFY_TOKEN) throw new Error("NETLIFY_TOKEN missing");
@@ -217,14 +229,18 @@ router.post("/enqueue", express.json(), async (req, res) => {
 
         emit("stage", "packaging");
         emit("log", null, "Zipping site…");
+        if (j.cancelled) throw CancelledError();
 
-       const preferred = (j.siteName || siteName) || `ybuilt-${slugify(path.basename(absDir))}`;
+        const preferred =
+          (j.siteName || siteName) || `ybuilt-${slugify(path.basename(absDir))}`;
         emit("stage", "provisioning");
         emit("log", null, `Ensuring Netlify site "${preferred}"…`);
         const site = await ensureNetlifySite(NETLIFY_TOKEN, preferred);
 
         emit("stage", "uploading");
         emit("log", null, "Uploading deploy to Netlify…");
+        if (j.cancelled) throw CancelledError();
+
         const { url, adminUrl } = await deployNetlifyZip({
           token: NETLIFY_TOKEN,
           site,
@@ -243,10 +259,20 @@ router.post("/enqueue", express.json(), async (req, res) => {
         throw new Error("unknown provider");
       }
     } catch (e) {
-      j.status = "error";
-      j.error = e?.message || String(e);
-      emit("log", null, `Error: ${j.error}`);
-      emit("done", { status: "error", error: j.error });
+      if (e?.code === "CANCELLED" || e?.message === "__CANCELLED__" || jobs.get(id)?.cancelled) {
+        const j2 = jobs.get(id);
+        if (j2) j2.status = "cancelled";
+        emit("log", null, "Cancelled by user");
+        emit("done", { status: "cancelled" });
+        return;
+      }
+      const j2 = jobs.get(id);
+      if (j2) {
+        j2.status = "error";
+        j2.error = e?.message || String(e);
+      }
+      emit("log", null, `Error: ${e?.message || String(e)}`);
+      emit("done", { status: "error", error: e?.message || String(e) });
     }
   });
 
@@ -257,6 +283,62 @@ router.get("/job/:id", (req, res) => {
   const j = jobs.get(req.params.id);
   if (!j) return res.status(404).json({ error: "not found" });
   res.json({ ok: true, ...j });
+});
+
+// Cancel: by queue job id OR by client room (workspace jobId) OR previewPath
+router.post("/cancel", express.json(), async (req, res) => {
+  const { id, clientRoom, previewPath } = req.body || {};
+  let j = id ? jobs.get(id) : null;
+
+  if (!j && clientRoom) {
+    j = Array.from(jobs.values())
+      .filter(
+        (x) =>
+          x.clientRoom === clientRoom &&
+          (x.status === "queued" || x.status === "running")
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+  }
+
+  if (!j && previewPath) {
+    j = Array.from(jobs.values())
+      .filter(
+        (x) =>
+          x.previewPath === previewPath &&
+          (x.status === "queued" || x.status === "running")
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+  }
+
+  if (!j) return res.status(404).json({ error: "not found" });
+  if (["success", "error", "cancelled"].includes(j.status)) {
+    return res.status(409).json({ error: "job already finished" });
+  }
+
+  j.cancelled = true;
+
+  // dual broadcast helpers (id + clientRoom)
+  const dual = (type, payload, line) => {
+    if (type === "log") {
+      bus.log(j.id, line);
+      if (j.clientRoom) bus.log(j.clientRoom, line);
+    } else if (type === "stage") {
+      bus.stage(j.id, payload);
+      if (j.clientRoom) bus.stage(j.clientRoom, payload);
+    } else if (type === "done") {
+      bus.done(j.id, payload);
+      if (j.clientRoom) bus.done(j.clientRoom, payload);
+    }
+  };
+
+  if (j.status === "queued") {
+    j.status = "cancelled";
+    dual("log", null, "Cancelled before start");
+    dual("done", { status: "cancelled" });
+  } else {
+    dual("log", null, "Cancel requested…");
+  }
+  return res.json({ ok: true, id: j.id, status: j.status });
 });
 
 // ---- quick test emitter ----
