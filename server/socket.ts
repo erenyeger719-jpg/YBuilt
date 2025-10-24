@@ -1,3 +1,4 @@
+// server/socket.ts
 import { Server as HTTPServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { verifyToken, type JWTPayload } from "./middleware/auth.js";
@@ -121,13 +122,39 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       }
     });
 
+    // ---- Project Chat: history fetch (last N messages) ----
+    socket.on("chat:history", async (data: { projectId: string; limit?: number }) => {
+      try {
+        const limit = Math.min(Math.max(data?.limit ?? 50, 1), 200);
+        if (!data?.projectId) return;
+
+        if (typeof (storage as any).listChatMessages === "function") {
+          const rows = await (storage as any).listChatMessages({
+            projectId: data.projectId,
+            limit,
+            order: "desc",
+          });
+          const msgs = rows.reverse().map((r: any) => ({
+            id: r.id,
+            userId: r.userId,
+            username: r.metadata?.username || r.userEmail || r.userId,
+            role: r.role,
+            content: r.content,
+            createdAt: r.createdAt,
+          }));
+          socket.emit("chat:history", { projectId: data.projectId, msgs });
+        } else {
+          socket.emit("chat:history", { projectId: data.projectId, msgs: [] });
+        }
+      } catch (e) {
+        logger.error({ e }, "[CHAT:HISTORY] failed");
+      }
+    });
+
     // Handle chat messages - AI Assistant mode
     socket.on(
       "chat:ai-assistant",
-      async (data: {
-        projectId?: string;
-        message: string;
-      }) => {
+      async (data: { projectId?: string; message: string }) => {
         try {
           if (!socket.user) {
             socket.emit("error", { message: "Authentication required for AI chat" });
@@ -179,10 +206,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     // Handle chat messages - Collaboration mode
     socket.on(
       "chat:collaboration",
-      async (data: {
-        projectId: string;
-        message: string;
-      }) => {
+      async (data: { projectId: string; message: string }) => {
         try {
           if (!socket.user) {
             socket.emit("error", { message: "Authentication required for collaboration" });
@@ -221,10 +245,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     // Handle chat messages - Support mode
     socket.on(
       "chat:support",
-      async (data: {
-        message: string;
-        ticketId?: string;
-      }) => {
+      async (data: { message: string; ticketId?: string }) => {
         try {
           if (!socket.user) {
             socket.emit("error", { message: "Authentication required for support chat" });
@@ -256,8 +277,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             userId: socket.user.sub.toString(),
             projectId: null,
             role: "system",
-            content:
-              "Thank you for contacting support. A team member will respond shortly.",
+            content: "Thank you for contacting support. A team member will respond shortly.",
             metadata: {
               type: "support",
               ticketId: data.ticketId,
@@ -302,18 +322,40 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       });
     });
 
-    // Disconnect handler
+    // ---- Deploy log/chat rooms ----
+    socket.on("deploy:join", ({ jobId }: { jobId?: string }) => {
+      if (jobId) socket.join(jobId);
+    });
+
+    socket.on("deploy:leave", ({ jobId }: { jobId?: string }) => {
+      if (jobId) socket.leave(jobId);
+    });
+
+    socket.on("deploy:chat", ({ jobId, text, user }: { jobId?: string; text?: string; user?: string }) => {
+      if (!jobId || !text) return;
+      const payload = {
+        type: "chat" as const,
+        user: user || socket.user?.email || "anon",
+        text: String(text),
+        ts: Date.now(),
+      };
+      io.to(jobId).emit("deploy:event", payload);
+    });
+
+    // Presence: update counts/members before socket actually leaves rooms
+    socket.on("disconnecting", () => {
+      for (const room of socket.rooms) {
+        if (!room.startsWith("project:")) continue;
+        const size = io.sockets.adapter.rooms.get(room)?.size || 1;
+        const next = Math.max(0, size - 1);
+        io.to(room).emit("presence:update", { projectId: room.slice(8), count: next });
+        if (socket.user) leaveMember(room, String(socket.user.sub));
+      }
+    });
+
+    // Disconnect handler (log only)
     socket.on("disconnect", () => {
       logger.info(`[SOCKET] Client disconnected: ${socket.id}`);
-      for (const room of socket.rooms) {
-        if (room.startsWith("project:")) {
-          const count = io.sockets.adapter.rooms.get(room)?.size || 0;
-          io.to(room).emit("presence:update", { projectId: room.slice(8), count });
-          if (socket.user) {
-            leaveMember(room, String(socket.user.sub));
-          }
-        }
-      }
     });
   });
 
