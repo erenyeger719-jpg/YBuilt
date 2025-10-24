@@ -161,6 +161,28 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     };
   }, [projectId, atBottom]);
 
+  // react when you're mentioned (server emits "chat:mention")
+  useEffect(() => {
+    if (!projectId) return;
+    const s = getSocket();
+
+    const onMention = (p: { projectId: string; from: string; content: string; at: number }) => {
+      if (p.projectId !== projectId) return;
+
+      setMsgs((prev) => [
+        ...prev,
+        {
+          role: "system",
+          content: `@you from ${p.from}: ${p.content}`,
+          createdAt: new Date(p.at).toISOString(),
+        },
+      ]);
+    };
+
+    s.on("chat:mention", onMention);
+    return () => s.off("chat:mention", onMention);
+  }, [projectId]);
+
   // auto-scroll to newest message only if user is at bottom
   useEffect(() => {
     const el = boxRef.current;

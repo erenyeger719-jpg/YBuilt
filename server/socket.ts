@@ -232,6 +232,31 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             createdAt: chatMessage.createdAt,
           });
 
+          // ---- mention pings (@all or @username) ----
+          try {
+            const rawMentions = (data.message.match(/\B@[\w-]+/g) || []).map((s) =>
+              s.slice(1).toLowerCase()
+            );
+            if (rawMentions.length) {
+              const mentioned = new Set(rawMentions);
+              const room = `project:${data.projectId}`;
+              const members = roomMembers.get(room) || new Map<string, { email: string; count: number }>();
+
+              for (const [uid, { email }] of members.entries()) {
+                const handle = (email || "").split("@")[0].toLowerCase();
+
+                if (mentioned.has("all") || mentioned.has(handle)) {
+                  io.to(`user:${uid}`).emit("chat:mention", {
+                    projectId: data.projectId,
+                    from: socket.user!.email,
+                    content: data.message,
+                    at: Date.now(),
+                  });
+                }
+              }
+            }
+          } catch {}
+
           logger.info(
             `[CHAT:COLLAB] User ${socket.user.sub} sent message to project ${data.projectId}`
           );
