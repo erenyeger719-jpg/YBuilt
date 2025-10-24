@@ -1,4 +1,3 @@
-// client/src/components/collab/ProjectChat.tsx
 import { useEffect, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
 import { Button } from "@/components/ui/button";
@@ -10,7 +9,10 @@ type Msg = {
   role: string;
   content: string;
   createdAt?: string;
+  reactions?: Record<string, number>;
 };
+
+const EMOJIS = ["👍", "🎉", "❤️", "😂", "✅"];
 
 export default function ProjectChat({ projectId }: { projectId: string }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -19,19 +21,22 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   const [online, setOnline] = useState(0);
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const boxRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [unread, setUnread] = useState(0);
-  const activeRef = useRef(true); // “am I looking at this pane right now?”
-  const lastSentRef = useRef<number>(0); // naive self-guard for notifications
+  const activeRef = useRef(true);
+  const lastSentRef = useRef<number>(0);
 
-  // mention state
+  // mention
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
 
-  // scroll state
+  // scroll
   const [atBottom, setAtBottom] = useState(true);
   const [pendingNew, setPendingNew] = useState(0);
+
+  // local "I reacted" memory (not persisted)
+  const [myReacts, setMyReacts] = useState<Set<string>>(new Set());
 
   // ---- Local cache: load first (before joining), then save on every change ----
   useEffect(() => {
@@ -57,7 +62,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     }
   }, []);
 
-  // track scroll position for "jump to latest" + unread chip
+  // track scroll position
   useEffect(() => {
     const el = boxRef.current;
     if (!el) return;
@@ -73,8 +78,6 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!projectId) return;
     const s = getSocket();
-
-    // (optional) send JWT if your client stores it — harmless if absent
     // @ts-ignore
     if (s.auth && !s.auth.token) s.auth.token = localStorage.getItem("jwt") || undefined;
 
@@ -83,11 +86,8 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
 
     const onMsg = (m: Msg) => {
       setMsgs((prev) => [...prev, m]);
-
-      // if user isn't at bottom, collect a "new" counter
       if (!atBottom) setPendingNew((n) => n + 1);
 
-      // bump unread if not active or page hidden
       const notActive = !activeRef.current || document.hidden;
       if (notActive) {
         setUnread((prev) => {
@@ -100,15 +100,13 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
           } catch {}
           return next;
         });
-
-        // desktop ping (skip if permission denied or this was our own send a moment ago)
         try {
           if ("Notification" in window && Notification.permission === "granted") {
             const justSent = Date.now() - (lastSentRef.current || 0) < 600;
             if (!justSent) {
               new Notification(m.username || "Project chat", {
                 body: m.content?.slice(0, 120) || "",
-                tag: `proj:${projectId}`, // coalesce per project
+                tag: `proj:${projectId}`,
               });
             }
           }
@@ -129,20 +127,22 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       if (p.projectId === projectId) setOnline(p.count);
     };
 
-    const onUsers = (p: {
-      projectId: string;
-      users: { userId: string; username: string }[];
-    }) => {
+    const onUsers = (p: { projectId: string; users: { userId: string; username: string }[] }) => {
       if (p.projectId === projectId) setMembers(p.users);
     };
 
     const onHistory = (p: { projectId: string; msgs: Msg[] }) => {
       if (p.projectId !== projectId) return;
       setMsgs(p.msgs);
-      // also persist to local cache
       try {
         localStorage.setItem(`proj-chat:${projectId}`, JSON.stringify(p.msgs.slice(-200)));
       } catch {}
+    };
+
+    const onReactUpdate = (p: { messageId: string; counts: Record<string, number> }) => {
+      setMsgs((prev) =>
+        prev.map((m) => (m.id === p.messageId ? { ...m, reactions: p.counts } : m))
+      );
     };
 
     s.on("chat:message", onMsg);
@@ -150,6 +150,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     s.on("presence:update", onPresence);
     s.on("presence:users", onUsers);
     s.on("chat:history", onHistory);
+    s.on("chat:react:update", onReactUpdate);
 
     return () => {
       s.emit("leave:project", projectId);
@@ -158,24 +159,20 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       s.off("presence:update", onPresence);
       s.off("presence:users", onUsers);
       s.off("chat:history", onHistory);
+      s.off("chat:react:update", onReactUpdate);
     };
   }, [projectId, atBottom]);
 
-  // react when you're mentioned (server emits "chat:mention")
+  // react when you're mentioned
   useEffect(() => {
     if (!projectId) return;
     const s = getSocket();
 
     const onMention = (p: { projectId: string; from: string; content: string; at: number }) => {
       if (p.projectId !== projectId) return;
-
       setMsgs((prev) => [
         ...prev,
-        {
-          role: "system",
-          content: `@you from ${p.from}: ${p.content}`,
-          createdAt: new Date(p.at).toISOString(),
-        },
+        { role: "system", content: `@you from ${p.from}: ${p.content}`, createdAt: new Date(p.at).toISOString() },
       ]);
     };
 
@@ -183,14 +180,14 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     return () => s.off("chat:mention", onMention);
   }, [projectId]);
 
-  // auto-scroll to newest message only if user is at bottom
+  // auto-scroll to newest message when at bottom
   useEffect(() => {
     const el = boxRef.current;
     if (!el) return;
     if (atBottom) el.scrollTop = el.scrollHeight;
   }, [msgs.length, atBottom]);
 
-  // track focus/visibility → clear unread when user is present
+  // track focus/visibility → clear unread when present
   useEffect(() => {
     function restoreTitle() {
       try {
@@ -211,17 +208,13 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       activeRef.current = false;
     }
     function handleVisibility() {
-      if (!document.hidden) {
-        markRead();
-      } else {
-        markAway();
-      }
+      if (!document.hidden) markRead();
+      else markAway();
     }
 
     window.addEventListener("focus", markRead);
     window.addEventListener("blur", markAway);
     document.addEventListener("visibilitychange", handleVisibility);
-
     return () => {
       window.removeEventListener("focus", markRead);
       window.removeEventListener("blur", markAway);
@@ -230,16 +223,12 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   }, [unread]);
 
   function renderContent(text: string) {
-    // highlight @all and any @word
     const parts = text.split(/(\B@[\w-]+)/g);
     return parts.map((p, i) => {
       if (/^\B@[\w-]+$/.test(p)) {
         const isAll = p.toLowerCase() === "@all";
         return (
-          <span
-            key={i}
-            className={"rounded px-1 " + (isAll ? "bg-red-100 text-red-700" : "bg-yellow-100")}
-          >
+          <span key={i} className={"rounded px-1 " + (isAll ? "bg-red-100 text-red-700" : "bg-yellow-100")}>
             {p}
           </span>
         );
@@ -248,9 +237,9 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     });
   }
 
-  // helper: insert text at the input cursor
+  // insert text at cursor
   function insertAtCursor(val: string) {
-    const el = inputRef.current as any;
+    const el = inputRef.current;
     if (!el) return setDraft((d) => d + val);
     const start = el.selectionStart ?? draft.length;
     const end = el.selectionEnd ?? draft.length;
@@ -258,14 +247,12 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     const after = draft.slice(end);
     const next = before + val + after;
     setDraft(next);
-    // move caret after insertion
     requestAnimationFrame(() => {
       el.setSelectionRange(start + val.length, start + val.length);
       el.focus();
     });
   }
 
-  // helper: clear unread + restore title
   function clearUnread() {
     setUnread(0);
     try {
@@ -276,23 +263,44 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     } catch {}
   }
 
+  // toggle a reaction (optimistic)
+  function toggleReact(messageId?: string, emoji?: string) {
+    if (!messageId || !emoji) return;
+    const key = `${messageId}:${emoji}`;
+    const has = myReacts.has(key);
+    const op: "add" | "remove" = has ? "remove" : "add";
+
+    // optimistic local bump
+    setMsgs((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const counts = { ...(m.reactions || {}) };
+        const cur = counts[emoji] || 0;
+        counts[emoji] = Math.max(0, cur + (op === "add" ? 1 : -1));
+        return { ...m, reactions: counts };
+      })
+    );
+    setMyReacts((prev) => {
+      const next = new Set(prev);
+      if (has) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+    getSocket().emit("chat:react", { projectId, messageId, emoji, op });
+  }
+
   function send() {
     const text = draft.trim();
     if (!text) return;
 
-    // simple slash commands:
+    // slash commands
     if (text.startsWith("/")) {
       const [cmd, ...rest] = text.slice(1).split(/\s+/);
       const arg = rest.join(" ");
       switch (cmd.toLowerCase()) {
         case "help":
-          setMsgs((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content: "Commands: /who, /me <text>, /deploy <jobId>, /cancel <jobId>",
-            },
-          ]);
+          setMsgs((prev) => [...prev, { role: "system", content: "Commands: /who, /me <text>, /deploy <jobId>, /cancel <jobId>" }]);
           break;
         case "who": {
           const list = members.map((m) => m.username).join(", ") || "just you";
@@ -303,7 +311,6 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
           setMsgs((prev) => [...prev, { role: "user", username: "me", content: `*${arg}*` }]);
           break;
         case "deploy":
-          // expects a jobId; reuse your existing API
           fetch("/api/deploy/enqueue", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -315,12 +322,9 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
               const ok = d?.ok ? "queued" : `failed: ${d?.error || "unknown"}`;
               setMsgs((prev) => [...prev, { role: "system", content: `deploy ${ok}` }]);
             })
-            .catch(() =>
-              setMsgs((prev) => [...prev, { role: "system", content: "deploy failed" }])
-            );
+            .catch(() => setMsgs((prev) => [...prev, { role: "system", content: "deploy failed" }]));
           break;
         case "cancel":
-          // cancel latest job for this jobId
           fetch("/api/deploy/cancel", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -332,9 +336,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
               const ok = d?.ok ? "requested" : `failed: ${d?.error || "unknown"}`;
               setMsgs((prev) => [...prev, { role: "system", content: `cancel ${ok}` }]);
             })
-            .catch(() =>
-              setMsgs((prev) => [...prev, { role: "system", content: "cancel failed" }])
-            );
+            .catch(() => setMsgs((prev) => [...prev, { role: "system", content: "cancel failed" }]));
           break;
         default:
           setMsgs((prev) => [...prev, { role: "system", content: `unknown command: /${cmd}` }]);
@@ -347,13 +349,12 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     s.emit("chat:collaboration", { projectId, message: text });
     s.emit("typing:stop", { projectId });
     setDraft("");
-    // locally this means “I’m active”, keep unread at 0
     activeRef.current = true;
     clearUnread();
     lastSentRef.current = Date.now();
   }
 
-  // filtered mention options (max 8)
+  // mention options (max 8)
   const mentionOptions = members
     .map((m) => m.username.split("@")[0])
     .filter((name) => name.toLowerCase().includes(mentionQuery.toLowerCase()))
@@ -364,7 +365,6 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     <div
       className="border rounded bg-background h-72 grid grid-rows-[auto_1fr_auto]"
       onMouseEnter={() => {
-        // treat hover as "active"; clear unread
         activeRef.current = true;
         if (unread > 0) clearUnread();
       }}
@@ -392,25 +392,46 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         )}
       </div>
 
-      {/* Messages area is relative so the "jump to latest" chip can be absolutely positioned */}
       <div className="relative">
-        <div ref={boxRef} className="p-3 overflow-auto text-xs space-y-1 h-40">
+        <div ref={boxRef} className="p-3 overflow-auto text-xs space-y-2 h-40">
           {msgs.length === 0 ? (
             <div className="text-muted-foreground">Start the conversation…</div>
           ) : (
             msgs.map((m, i) => (
-              <div key={m.id || i}>
-                <span className="font-medium">{m.username || m.role}</span>
-                <span className="text-muted-foreground ml-1">
-                  {m.createdAt
-                    ? new Date(m.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : ""}
-                </span>
-                <span>: </span>
-                {renderContent(m.content)}
+              <div key={m.id || i} className="group">
+                <div>
+                  <span className="font-medium">{m.username || m.role}</span>
+                  <span className="text-muted-foreground ml-1">
+                    {m.createdAt
+                      ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                      : ""}
+                  </span>
+                  <span>: </span>
+                  {renderContent(m.content)}
+                </div>
+
+                {/* Reactions bar (skip for system msgs or no id) */}
+                {m.id && m.role !== "system" && (
+                  <div className="mt-0.5 flex items-center gap-2 opacity-80 group-hover:opacity-100">
+                    {EMOJIS.map((e) => {
+                      const count = m.reactions?.[e] || 0;
+                      const mine = myReacts.has(`${m.id}:${e}`);
+                      return (
+                        <button
+                          key={e}
+                          className={
+                            "border rounded-full px-1.5 py-0.5 text-[10px] " +
+                            (mine ? "bg-blue-50 border-blue-300" : "bg-muted")
+                          }
+                          onClick={() => toggleReact(m.id, e)}
+                          title={e}
+                        >
+                          {e} {count > 0 ? count : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -437,7 +458,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       <div className="p-2">
         <div className="flex gap-2">
           <textarea
-            ref={inputRef as any}
+            ref={inputRef}
             className="flex-1 border rounded px-2 py-1 text-xs bg-background resize-y min-h-8 max-h-32"
             placeholder="Message…"
             value={draft}
@@ -445,7 +466,6 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
               const v = e.target.value;
               setDraft(v);
 
-              // find current token where caret is
               const caret = e.target.selectionStart ?? v.length;
               const upto = v.slice(0, caret);
               const m = upto.match(/(^|\s)@([\w-]{0,32})$/);
@@ -458,8 +478,6 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                 setMentionQuery("");
                 setMentionIndex(0);
               }
-
-              // typing signal
               getSocket().emit("typing:start", { projectId });
             }}
             onKeyDown={(e) => {
@@ -468,9 +486,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                   e.preventDefault();
                   const picked = mentionOptions[activeIdx] || mentionQuery || "";
                   if (picked) {
-                    // replace the @token with @picked + space
-                    const caret =
-                      (e.currentTarget as HTMLTextAreaElement).selectionStart ?? draft.length;
+                    const caret = (e.currentTarget as HTMLTextAreaElement).selectionStart ?? draft.length;
                     const upto = draft.slice(0, caret);
                     const rest = draft.slice(caret);
                     const repl = upto.replace(/(@[\w-]{0,32})$/, `@${picked} `);
@@ -487,24 +503,15 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
               }
 
               if (mentionOpen) {
-                if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  setMentionIndex((i) => i + 1);
-                } else if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  setMentionIndex((i) => Math.max(0, i - 1));
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  setMentionOpen(false);
-                }
+                if (e.key === "ArrowDown") { e.preventDefault(); setMentionIndex((i) => i + 1); }
+                else if (e.key === "ArrowUp") { e.preventDefault(); setMentionIndex((i) => Math.max(0, i - 1)); }
+                else if (e.key === "Escape") { e.preventDefault(); setMentionOpen(false); }
               }
             }}
             onFocus={() => getSocket().emit("typing:start", { projectId })}
             onBlur={() => getSocket().emit("typing:stop", { projectId })}
           />
-          <Button size="sm" onClick={send}>
-            Send
-          </Button>
+          <Button size="sm" onClick={send}>Send</Button>
         </div>
 
         {mentionOpen && (
@@ -514,11 +521,8 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                 mentionOptions.map((name, idx) => (
                   <div
                     key={name}
-                    className={
-                      "px-2 py-1 cursor-pointer " + (idx === activeIdx ? "bg-muted" : "")
-                    }
+                    className={"px-2 py-1 cursor-pointer " + (idx === activeIdx ? "bg-muted" : "")}
                     onMouseDown={(e) => {
-                      // prevent input blur
                       e.preventDefault();
                       insertAtCursor(`@${name} `);
                       setMentionOpen(false);

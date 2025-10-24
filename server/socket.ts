@@ -55,6 +55,14 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     emitUsers(room);
   }
 
+  // ---- Reactions (ephemeral) ----
+  // messageId -> emoji -> count
+  const reactCounts: Map<string, Map<string, number>> = new Map();
+  function getCountsFor(messageId: string): Record<string, number> {
+    const m = reactCounts.get(messageId);
+    return m ? Object.fromEntries(m.entries()) : {};
+  }
+
   // Authentication middleware for Socket.IO
   io.use((socket: AuthenticatedSocket, next) => {
     try {
@@ -141,6 +149,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             role: r.role,
             content: r.content,
             createdAt: r.createdAt,
+            reactions: getCountsFor(String(r.id)), // include ephemeral counts
           }));
           socket.emit("chat:history", { projectId: data.projectId, msgs });
         } else {
@@ -370,6 +379,31 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           ts: Date.now(),
         };
         io.to(jobId).emit("deploy:event", payload);
+      }
+    );
+
+    // ---- Reactions: add/remove and broadcast counts ----
+    socket.on(
+      "chat:react",
+      (data: {
+        projectId: string;
+        messageId: string;
+        emoji: string;
+        op: "add" | "remove";
+      }) => {
+        try {
+          if (!data?.projectId || !data?.messageId || !data?.emoji) return;
+          let perMsg = reactCounts.get(data.messageId);
+          if (!perMsg) reactCounts.set(data.messageId, (perMsg = new Map()));
+          const cur = perMsg.get(data.emoji) || 0;
+          const next = Math.max(0, cur + (data.op === "remove" ? -1 : 1));
+          perMsg.set(data.emoji, next);
+
+          io.to(`project:${data.projectId}`).emit("chat:react:update", {
+            messageId: data.messageId,
+            counts: getCountsFor(data.messageId),
+          });
+        } catch {}
       }
     );
 
