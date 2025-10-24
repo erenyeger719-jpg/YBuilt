@@ -70,6 +70,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
   // Track creation timestamps for fallback window checks
   const messageCreatedAt: Map<string, number> = new Map();
 
+  // ---- Pinned messages (ephemeral + optional persisted metadata) ----
+  const pinnedByProject: Map<string, Set<string>> = new Map();
+
   // ---- Simple per-user rate limit (5 msgs / 10s per project) ----
   const rateBuckets: Map<string, number[]> = new Map();
   const RATE_MAX = 5;
@@ -182,6 +185,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
               : undefined;
             const deletedFlag = flags.deleted ?? !!m.deleted;
 
+            const pinnedSet = pinnedByProject.get(data.projectId) || new Set<string>();
+            const pinnedFlag = pinnedSet.has(String(r.id)) || !!m.pinned;
+
             return {
               id: r.id,
               userId: r.userId,
@@ -192,6 +198,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
               reactions: getCountsFor(String(r.id)),
               editedAt: editedIso,
               deleted: deletedFlag,
+              pinned: pinnedFlag,
             };
           });
           socket.emit("chat:history", { projectId: data.projectId, msgs });
@@ -472,6 +479,18 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             deleted: true,
           });
 
+          // If it was pinned, unpin locally and broadcast
+          const set = pinnedByProject.get(projectId);
+          if (set && set.delete(String(messageId))) {
+            io.to(`project:${projectId}`).emit("chat:pin:update", {
+              id: messageId,
+              projectId,
+              pinned: false,
+              by: socket.user?.email,
+              at: new Date().toISOString(),
+            });
+          }
+
           io.to(`project:${projectId}`).emit("chat:message:delete", {
             id: messageId,
             projectId,
@@ -480,6 +499,55 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
         } catch (e) {
           logger.error({ e }, "[CHAT:DELETE] Error");
           socket.emit("error", { message: "Failed to delete message" });
+        }
+      }
+    );
+
+    // ---- Pin / Unpin a message (any authenticated member) ----
+    socket.on(
+      "chat:pin",
+      async (data: { projectId: string; messageId: string; op: "pin" | "unpin" }) => {
+        try {
+          if (!socket.user) {
+            socket.emit("error", { message: "Auth required" });
+            return;
+          }
+          const { projectId, messageId, op } = data || {};
+          if (!projectId || !messageId) return;
+
+          // Optional: verify message belongs to project (when storage exists)
+          if (typeof (storage as any).getChatMessageById === "function") {
+            const row = await (storage as any).getChatMessageById(messageId);
+            if (!row || row.projectId !== projectId) {
+              socket.emit("error", { message: "Message not found" });
+              return;
+            }
+          }
+
+          // Update ephemeral set
+          let set = pinnedByProject.get(projectId);
+          if (!set) pinnedByProject.set(projectId, (set = new Set<string>()));
+          if (op === "pin") set.add(String(messageId));
+          else set.delete(String(messageId));
+
+          // Persist (if available)
+          if (typeof (storage as any).updateChatMessage === "function") {
+            await (storage as any).updateChatMessage({
+              id: messageId,
+              metadata: { pinned: op === "pin" },
+            });
+          }
+
+          io.to(`project:${projectId}`).emit("chat:pin:update", {
+            id: messageId,
+            projectId,
+            pinned: op === "pin",
+            by: socket.user.email,
+            at: new Date().toISOString(),
+          });
+        } catch (e) {
+          logger.error({ e }, "[CHAT:PIN] Error");
+          socket.emit("error", { message: "Failed to update pin" });
         }
       }
     );

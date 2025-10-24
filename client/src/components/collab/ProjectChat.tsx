@@ -12,6 +12,7 @@ type Msg = {
   reactions?: Record<string, number>;
   editedAt?: string;
   deleted?: boolean;
+  pinned?: boolean; // <-- added
 };
 
 const EMOJIS = ["👍", "🎉", "❤️", "😂", "✅"];
@@ -187,6 +188,12 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       setMsgs((prev) => prev.map((m) => (m.id === p.id ? { ...m, deleted: true } : m)));
     };
 
+    // NEW: pin updates
+    const onPinUpdate = (p: { id: string; projectId: string; pinned: boolean }) => {
+      if (p.projectId !== projectId) return;
+      setMsgs((prev) => prev.map((m) => (m.id === p.id ? { ...m, pinned: p.pinned } : m)));
+    };
+
     s.on("chat:message", onMsg);
     s.on("typing:user", onTyping);
     s.on("presence:update", onPresence);
@@ -195,6 +202,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     s.on("chat:react:update", onReactUpdate);
     s.on("chat:message:update", onMsgUpdate);
     s.on("chat:message:delete", onMsgDelete);
+    s.on("chat:pin:update", onPinUpdate); // <-- added
 
     return () => {
       s.emit("leave:project", projectId);
@@ -206,6 +214,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       s.off("chat:react:update", onReactUpdate);
       s.off("chat:message:update", onMsgUpdate);
       s.off("chat:message:delete", onMsgDelete);
+      s.off("chat:pin:update", onPinUpdate); // <-- added
     };
   }, [projectId]);
 
@@ -342,6 +351,13 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   function deleteMsg(id?: string) {
     if (!id) return;
     getSocket().emit("chat:message:delete", { projectId, messageId: id });
+  }
+
+  // NEW: toggle pin helper
+  function togglePin(m: Msg) {
+    if (!m.id) return;
+    const op = m.pinned ? "unpin" : "pin";
+    getSocket().emit("chat:pin", { projectId, messageId: m.id, op });
   }
 
   // toggle a reaction (optimistic)
@@ -505,6 +521,9 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                       {m.editedAt && !m.deleted && (
                         <span className="text-muted-foreground text-[10px]">(edited)</span>
                       )}
+                      {m.pinned && !m.deleted && (
+                        <span className="text-yellow-600 text-[10px] ml-1">★ pinned</span>
+                      )}
                     </div>
 
                     <div className={m.deleted ? "text-muted-foreground italic" : ""}>
@@ -512,37 +531,57 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                     </div>
                   </div>
 
-                  {/* Actions (only on own msgs, within window) */}
-                  {!m.deleted && canEditOrDelete(m) && (
-                    <div className="opacity-0 group-hover:opacity-100 transition">
-                      {editingId === m.id ? (
-                        <div className="flex gap-1">
-                          <button className="text-xs px-2 py-0.5 border rounded" onClick={saveEdit}>
-                            Save
-                          </button>
-                          <button
-                            className="text-xs px-2 py-0.5 border rounded"
-                            onClick={cancelEdit}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-1">
-                          <button
-                            className="text-xs px-2 py-0.5 border rounded"
-                            onClick={() => startEdit(m)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="text-xs px-2 py-0.5 border rounded"
-                            onClick={() => deleteMsg(m.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
+                  {/* Actions: pin for everyone, edit/delete for own msgs within window */}
+                  {!m.deleted && (
+                    <div className="opacity-0 group-hover:opacity-100 transition flex gap-1">
+                      <button
+                        type="button"
+                        className={
+                          "text-xs px-2 py-0.5 border rounded " +
+                          (m.pinned ? "bg-yellow-50 border-yellow-300" : "")
+                        }
+                        onClick={() => togglePin(m)}
+                        title={m.pinned ? "Unpin" : "Pin"}
+                      >
+                        {m.pinned ? "★ Unpin" : "☆ Pin"}
+                      </button>
+
+                      {canEditOrDelete(m) &&
+                        (editingId === m.id ? (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-0.5 border rounded"
+                              onClick={saveEdit}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-0.5 border rounded"
+                              onClick={cancelEdit}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-0.5 border rounded"
+                              onClick={() => startEdit(m)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-0.5 border rounded"
+                              onClick={() => deleteMsg(m.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ))}
                     </div>
                   )}
                 </div>
@@ -577,6 +616,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                       return (
                         <button
                           key={e}
+                          type="button"
                           className={
                             "border rounded-full px-1.5 py-0.5 text-[10px] " +
                             (mine ? "bg-blue-50 border-blue-300" : "bg-muted")
@@ -598,6 +638,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         {!atBottom && pendingNew > 0 && (
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2">
             <button
+              type="button"
               className="rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow"
               onClick={() => {
                 const el = boxRef.current;
@@ -684,32 +725,32 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         </div>
 
         {mentionOpen && (
-            <div className="px-0.5 pb-2 -mt-1 w-full">
-              <div className="border rounded bg-popover text-xs max-h-[10rem] overflow-auto">
-                {mentionOptions.length > 0 ? (
-                  mentionOptions.map((name, idx) => (
-                    <div
-                      key={name}
-                      className={
-                        "px-2 py-1 cursor-pointer " + (idx === activeIdx ? "bg-muted" : "")
-                      }
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        insertAtCursor(`@${name} `);
-                        setMentionOpen(false);
-                        setMentionQuery("");
-                        setMentionIndex(0);
-                      }}
-                    >
-                      @{name}
-                    </div>
-                  ))
-                ) : (
-                  <div className="px-2 py-1 text-muted-foreground">No matches</div>
-                )}
-              </div>
+          <div className="px-0.5 pb-2 -mt-1 w-full">
+            <div className="border rounded bg-popover text-xs max-h-[10rem] overflow-auto">
+              {mentionOptions.length > 0 ? (
+                mentionOptions.map((name, idx) => (
+                  <div
+                    key={name}
+                    className={
+                      "px-2 py-1 cursor-pointer " + (idx === activeIdx ? "bg-muted" : "")
+                    }
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      insertAtCursor(`@${name} `);
+                      setMentionOpen(false);
+                      setMentionQuery("");
+                      setMentionIndex(0);
+                    }}
+                  >
+                    @{name}
+                  </div>
+                ))
+              ) : (
+                <div className="px-2 py-1 text-muted-foreground">No matches</div>
+              )}
             </div>
-          )}
+          </div>
+        )}
       </div>
     </div>
   );
