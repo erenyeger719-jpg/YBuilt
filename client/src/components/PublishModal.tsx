@@ -95,6 +95,13 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
       const data = await r.json();
       if (!r.ok || !data?.ok) throw new Error(data?.error || "enqueue failed");
 
+      if (typeof data.position === "number") {
+        toast({
+          title: "Deploy queued",
+          description: `Position #${data.position + 1}`,
+        });
+      }
+
       // Close modal; logs stream into the pane via dual-broadcast (room = jobId)
       onOpenChange(false);
 

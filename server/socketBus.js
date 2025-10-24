@@ -52,6 +52,14 @@ function setIO(io) {
 // tiny helpers
 const stage = (jobId, stage) => emitDeploy(jobId, { type: "stage", stage });
 const log = (jobId, line) => emitDeploy(jobId, { type: "log", line });
-const done = (jobId, data) => emitDeploy(jobId, { type: "done", ...data });
+const done = (jobId, data) => {
+  emitDeploy(jobId, { type: "done", ...data });
+  // also drop a chat line for context
+  const text =
+    data?.status === "error"
+      ? `❌ Deploy failed: ${data?.error || "Unknown error"}`
+      : `✅ Deploy complete: ${data?.url || ""}`;
+  emitDeploy(jobId, { type: "chat", user: "system", text, ts: Date.now() });
+};
 
 module.exports = { setIO, emitDeploy, stage, log, done, room };
