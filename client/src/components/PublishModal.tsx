@@ -45,6 +45,7 @@ export default function PublishModal({ open, onOpenChange, jobId }: PublishModal
   // Fetch plan info
   const { data: planInfo, isLoading: planLoading } = useQuery<PlanInfo>({
     queryKey: ["/api/plan"],
+    queryFn: () => apiRequest<PlanInfo>("GET", "/api/plan"),
     enabled: open,
   });
 

@@ -16,6 +16,9 @@ const queue = new PQueue({ concurrency: 2 });
 
 console.log("[deploy.queue] router initialized");
 
+// previews root (fallback for older workspaces without team scoping)
+const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || "previews");
+
 // --- optional socket bus (stage/log/done) ---
 let bus = {
   stage: (_id, _s) => {},
@@ -27,18 +30,22 @@ try {
   const mod = m.default ?? m; // CJS interop
   bus = {
     stage: mod.stage || bus.stage,
-    log:   mod.log   || bus.log,
-    done:  mod.done  || bus.done,
+    log: mod.log || bus.log,
+    done: mod.done || bus.done,
   };
   console.log("[deploy.queue] socketBus connected");
 } catch {
   console.log("[deploy.queue] socketBus not found; emitting disabled");
 }
 
-// team-scoped preview absolute path
+// team-scoped preview absolute path (with global fallback)
 function absFromPreview(teamId, previewPath) {
-  // accepts "/previews/<jobId>/" or "/previews/forks/<slug>/"
-  return safeJoinTeam(teamId, previewPath);
+  // team-scoped first
+  const teamScoped = safeJoinTeam(teamId, previewPath);
+  if (fs.existsSync(teamScoped)) return teamScoped;
+  // fallback to global previews root (for older workspaces)
+  const rel = String(previewPath).replace(/^\/+/, "").replace(/^previews\//, "");
+  return path.resolve(PREVIEWS_DIR, rel);
 }
 
 function slugify(s) {
@@ -163,7 +170,16 @@ router.post("/enqueue", express.json(), async (req, res) => {
   const clientRoom = m ? m[1] : null;
 
   const id = uuid();
-  const job = { id, provider, previewPath, siteName, teamId, clientRoom, status: "queued", createdAt: Date.now() };
+  const job = {
+    id,
+    provider,
+    previewPath,
+    siteName,
+    teamId,
+    clientRoom,
+    status: "queued",
+    createdAt: Date.now(),
+  };
   jobs.set(id, job);
 
   const emit = (fn, payload, line) => {
