@@ -1,3 +1,4 @@
+// server/routes/deploy.queue.js
 import express from "express";
 import PQueue from "p-queue";
 import { v4 as uuid } from "uuid";
@@ -5,6 +6,9 @@ import archiver from "archiver";
 import fs from "fs";
 import path from "path";
 import { PassThrough } from "stream";
+import { createRequire } from "module";
+const requireCjs = createRequire(import.meta.url);
+const { safeJoinTeam } = requireCjs("./_teamPaths");
 
 const router = express.Router();
 const jobs = new Map();
@@ -20,28 +24,21 @@ let bus = {
 };
 try {
   const m = await import("../socketBus.js");
+  const mod = m.default ?? m; // CJS interop
   bus = {
-    stage: m.stage || bus.stage,
-    log: m.log || bus.log,
-    done: m.done || bus.done,
+    stage: mod.stage || bus.stage,
+    log:   mod.log   || bus.log,
+    done:  mod.done  || bus.done,
   };
   console.log("[deploy.queue] socketBus connected");
 } catch {
   console.log("[deploy.queue] socketBus not found; emitting disabled");
 }
 
-// --- paths ---
-const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || "previews");
-
-// ensure /previews/... maps to a folder under PREVIEWS_DIR
-function safeAbsDirFromPreviewHref(previewPath) {
-  const rel = String(previewPath || "")
-    .replace(/^https?:\/\/[^/]+/i, "")
-    .replace(/^\/+/, "");
-  if (!rel.startsWith("previews/")) throw new Error("bad previewPath");
-  const abs = path.resolve(PREVIEWS_DIR, rel.replace(/^previews\//, ""));
-  if (!abs.startsWith(PREVIEWS_DIR)) throw new Error("escape");
-  return abs;
+// team-scoped preview absolute path
+function absFromPreview(teamId, previewPath) {
+  // accepts "/previews/<jobId>/" or "/previews/forks/<slug>/"
+  return safeJoinTeam(teamId, previewPath);
 }
 
 function slugify(s) {
@@ -126,8 +123,6 @@ async function ensureNetlifySite(token, preferredName) {
 }
 
 async function deployNetlifyZip({ token, site, dir }) {
-  // zip
-  bus.stage?.("netlify-zip", "packaging");
   const zip = await zipDirToBuffer(dir);
 
   // deploy **by site id** to avoid name collisions
@@ -162,41 +157,58 @@ router.post("/enqueue", express.json(), async (req, res) => {
   const { provider, previewPath, siteName } = req.body || {};
   if (!provider || !previewPath) return res.status(400).json({ error: "bad args" });
 
+  const teamId = req.cookies?.teamId || req.headers["x-team-id"] || null;
+  // try to derive a “client room” segment (works for /previews/<jobId>/)
+  const m = String(previewPath).match(/^\/previews\/([^/]+)/i);
+  const clientRoom = m ? m[1] : null;
+
   const id = uuid();
-  const job = { id, provider, previewPath, siteName, status: "queued", createdAt: Date.now() };
+  const job = { id, provider, previewPath, siteName, teamId, clientRoom, status: "queued", createdAt: Date.now() };
   jobs.set(id, job);
 
-  // emit queue event immediately
-  bus.stage(id, "queued");
-  bus.log(id, `Queued deploy → ${provider} for ${previewPath}`);
+  const emit = (fn, payload, line) => {
+    if (fn === "log") {
+      bus.log(id, line);
+      if (clientRoom) bus.log(clientRoom, line);
+    } else if (fn === "stage") {
+      bus.stage(id, payload);
+      if (clientRoom) bus.stage(clientRoom, payload);
+    } else if (fn === "done") {
+      bus.done(id, payload);
+      if (clientRoom) bus.done(clientRoom, payload);
+    }
+  };
+
+  emit("stage", "queued");
+  emit("log", null, `Queued deploy → ${provider} for ${previewPath}`);
 
   queue.add(async () => {
     const j = jobs.get(id);
     if (!j) return;
     j.status = "running";
-    bus.stage(id, "running");
-    bus.log(id, "Starting deploy…");
+    emit("stage", "running");
+    emit("log", null, "Starting deploy…");
 
     try {
       if (provider === "netlify") {
         const NETLIFY_TOKEN = process.env.NETLIFY_TOKEN;
         if (!NETLIFY_TOKEN) throw new Error("NETLIFY_TOKEN missing");
 
-        const absDir = safeAbsDirFromPreviewHref(j.previewPath);
+        const absDir = absFromPreview(j.teamId, j.previewPath);
         if (!fs.existsSync(path.join(absDir, "index.html"))) {
           throw new Error("index.html missing in preview");
         }
 
-        bus.stage(id, "packaging");
-        bus.log(id, "Zipping site…");
+        emit("stage", "packaging");
+        emit("log", null, "Zipping site…");
 
         const preferred = siteName || `ybuilt-${slugify(path.basename(absDir))}`;
-        bus.stage(id, "provisioning");
-        bus.log(id, `Ensuring Netlify site "${preferred}"…`);
+        emit("stage", "provisioning");
+        emit("log", null, `Ensuring Netlify site "${preferred}"…`);
         const site = await ensureNetlifySite(NETLIFY_TOKEN, preferred);
 
-        bus.stage(id, "uploading");
-        bus.log(id, "Uploading deploy to Netlify…");
+        emit("stage", "uploading");
+        emit("log", null, "Uploading deploy to Netlify…");
         const { url, adminUrl } = await deployNetlifyZip({
           token: NETLIFY_TOKEN,
           site,
@@ -205,20 +217,20 @@ router.post("/enqueue", express.json(), async (req, res) => {
 
         j.status = "success";
         j.result = { url, adminUrl };
-        bus.done(id, { status: "ok", url, adminUrl });
-        bus.log(id, `Deployed: ${url}`);
+        emit("done", { status: "ok", url, adminUrl });
+        emit("log", null, `Deployed: ${url}`);
       } else if (provider === "vercel") {
-        bus.stage(id, "error");
+        emit("stage", "error");
         throw new Error("Vercel deploy not wired yet");
       } else {
-        bus.stage(id, "error");
+        emit("stage", "error");
         throw new Error("unknown provider");
       }
     } catch (e) {
       j.status = "error";
       j.error = e?.message || String(e);
-      bus.log(id, `Error: ${j.error}`);
-      bus.done(id, { status: "error", error: j.error });
+      emit("log", null, `Error: ${j.error}`);
+      emit("done", { status: "error", error: j.error });
     }
   });
 
