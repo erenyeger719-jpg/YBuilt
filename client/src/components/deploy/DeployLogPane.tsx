@@ -1,42 +1,63 @@
 import { useEffect, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
-export default function DeployLogPane({ jobId }: { jobId: string }){
+export default function DeployLogPane({ jobId }: { jobId: string }) {
   const [lines, setLines] = useState<string[]>([]);
   const [stage, setStage] = useState<string>("idle");
   const [url, setUrl] = useState<string | null>(null);
-  const boxRef = useRef<HTMLDivElement|null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const { toast } = useToast();
 
-  useEffect(()=>{
-    if(!jobId) return;
+  useEffect(() => {
+    if (!jobId) return;
     const s = getSocket();
     s.emit("deploy:join", { jobId });
 
     const onEvt = (p: any) => {
-      if(p?.type === "log") setLines(prev => [...prev, p.line]);
-      if(p?.type === "stage") setStage(p.stage || "");
-      if(p?.type === "done"){
-        setStage("done");
-        if(p.url) setUrl(p.url);
+      if (p?.type === "log" && typeof p.line === "string") {
+        setLines((prev) => [...prev, p.line]);
       }
+      if (p?.type === "stage") {
+        setStage(p.stage || "");
+      }
+      if (p?.type === "done") {
+        setStage("done");
+        if (p?.url) setUrl(p.url);
+
+        // Quick UX: notify and offer to open the deployed site
+        if (p?.url) {
+          toast({
+            title: "Deploy complete",
+            description: p.url,
+          });
+          setTimeout(() => {
+            const openNow = confirm("Open deployed site?");
+            if (openNow) window.open(p.url, "_blank");
+          }, 0);
+        }
+      }
+
       // autoscroll
-      requestAnimationFrame(()=>{
-        const el = boxRef.current; if(!el) return;
+      requestAnimationFrame(() => {
+        const el = boxRef.current;
+        if (!el) return;
         el.scrollTop = el.scrollHeight;
       });
     };
+
     s.on("deploy:event", onEvt);
 
     return () => {
       s.emit("deploy:leave", { jobId });
       s.off("deploy:event", onEvt);
     };
-  }, [jobId]);
+  }, [jobId, toast]);
 
-  function copyAll(){
+  function copyAll() {
     const text = lines.join("\n");
-    navigator.clipboard.writeText(text).catch(()=>{});
+    navigator.clipboard.writeText(text).catch(() => {});
   }
 
   return (
@@ -45,11 +66,25 @@ export default function DeployLogPane({ jobId }: { jobId: string }){
         <div className="font-medium">Deploy</div>
         <div className="text-muted-foreground">• {stage}</div>
         <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={copyAll}>Copy logs</Button>
-          {url && <a className="text-xs underline" href={url} target="_blank" rel="noreferrer">Open</a>}
+          <Button size="sm" variant="outline" onClick={copyAll}>
+            Copy logs
+          </Button>
+          {url && (
+            <a
+              className="text-xs underline"
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open
+            </a>
+          )}
         </div>
       </div>
-      <div ref={boxRef} className="p-3 text-xs font-mono h-48 overflow-auto whitespace-pre-wrap leading-relaxed">
+      <div
+        ref={boxRef}
+        className="p-3 text-xs font-mono h-48 overflow-auto whitespace-pre-wrap leading-relaxed"
+      >
         {lines.length ? lines.join("\n") : "Waiting for deploy logs…"}
       </div>
     </div>
