@@ -33,6 +33,9 @@ export default function QuickEditDialog({
   const [qnaOpen, setQnaOpen] = useState(false);
   const [selRange, setSelRange] = useState<{ from: number; to: number } | null>(null);
 
+  // text area ref for Jump-to
+  const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
+
   // presence
   const me = {
     name: localStorage.getItem("ybuilt.name") || "You",
@@ -214,6 +217,56 @@ export default function QuickEditDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, saving]);
 
+  // --- Jump helpers (from comment -> editor selection) ---
+
+  function offsetsForLines(body: string, startLine?: number, endLine?: number) {
+    if (!body) return { start: 0, end: 0 };
+    const lines = body.split("\n");
+    const sL = Math.max(1, Math.min(startLine || 1, lines.length));
+    const eL = Math.max(sL, Math.min(endLine || sL, lines.length));
+
+    let start = 0;
+    for (let i = 0; i < sL - 1; i++) start += lines[i].length + 1; // +1 newline
+
+    let end = start;
+    for (let i = sL - 1; i < eL; i++) end += lines[i].length + (i < eL - 1 ? 1 : 0);
+
+    return { start, end };
+  }
+
+  function handleJump(p: { file: string; startLine?: number; endLine?: number }) {
+    const targetFile = p.file || "index.html";
+    if (targetFile === sel) {
+      // same file: select immediately
+      const { start, end } = offsetsForLines(text, p.startLine, p.endLine);
+      requestAnimationFrame(() => {
+        const ta = textAreaRef.current;
+        if (!ta) return;
+        ta.focus();
+        ta.selectionStart = start;
+        ta.selectionEnd = end;
+        const line = p.startLine || 1;
+        const approxLineHeight = 18; // px
+        ta.scrollTop = Math.max(0, (line - 3) * approxLineHeight);
+      });
+      return;
+    }
+
+    // different file: switch, then select after content loads
+    setSel(targetFile);
+    setTimeout(() => {
+      const ta = textAreaRef.current;
+      if (!ta) return;
+      const { start, end } = offsetsForLines(ta.value || "", p.startLine, p.endLine);
+      ta.focus();
+      ta.selectionStart = start;
+      ta.selectionEnd = end;
+      const line = p.startLine || 1;
+      const approxLineHeight = 18;
+      ta.scrollTop = Math.max(0, (line - 3) * approxLineHeight);
+    }, 350);
+  }
+
   if (!open) return null;
 
   return (
@@ -358,6 +411,7 @@ export default function QuickEditDialog({
             <div className="text-sm text-zinc-500">Loading…</div>
           ) : (
             <textarea
+              ref={textAreaRef}
               className="w-full h-[60vh] text-sm font-mono border rounded p-3 bg-transparent"
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -379,6 +433,7 @@ export default function QuickEditDialog({
         file={sel}
         selection={selRange || undefined}
         totalText={text}
+        onJump={handleJump}
       />
       <AiQnaDialog
         open={qnaOpen}

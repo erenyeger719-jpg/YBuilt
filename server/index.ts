@@ -194,6 +194,20 @@ if (reqMw) app.use(reqMw);
         }
       });
 
+      // --- NEW: explicit leave handler ---
+      socket.on('collab:leave', ({ room: r }: { room: string }) => {
+        if (room === r) {
+          const peers = presence.get(room);
+          if (peers) {
+            peers.delete(peerId);
+            presence.set(room, peers);
+            emitPresence(io, room);
+          }
+          socket.leave(room);
+          room = null;
+        }
+      });
+
       socket.on('disconnect', () => {
         if (!room) return;
         const peers = presence.get(room);
@@ -215,7 +229,10 @@ if (reqMw) app.use(reqMw);
             changed = true;
           }
         }
-        if (changed) presence.set(room, peers);
+        if (changed) {
+          presence.set(room, peers);
+          emitPresence(io, room); // notify clients after pruning
+        }
       }
     }, 60_000);
   }

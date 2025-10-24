@@ -4,12 +4,24 @@ import { useToast } from "@/hooks/use-toast";
 import { onCommentEvent, broadcastComment, sendMention } from "@/lib/collab";
 
 type CommentItem = {
-  id: string; file: string; startLine?: number; endLine?: number;
-  text: string; author: { name: string }; createdAt: number; resolved?: boolean;
+  id: string;
+  file: string;
+  startLine?: number;
+  endLine?: number;
+  text: string;
+  author: { name: string };
+  createdAt: number;
+  resolved?: boolean;
 };
 
 export default function CommentsDialog({
-  open, onClose, previewPath, file, selection, totalText,
+  open,
+  onClose,
+  previewPath,
+  file,
+  selection,
+  totalText,
+  onJump, // <-- new
 }: {
   open: boolean;
   onClose: () => void;
@@ -17,6 +29,7 @@ export default function CommentsDialog({
   file: string;
   selection?: { from: number; to: number };
   totalText: string;
+  onJump?: (p: { file: string; startLine?: number; endLine?: number }) => void; // <-- new
 }) {
   const { toast } = useToast();
   const [items, setItems] = useState<CommentItem[]>([]);
@@ -25,7 +38,9 @@ export default function CommentsDialog({
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const r = await fetch(`/api/comments/list?path=${encodeURIComponent(previewPath)}`);
+      const r = await fetch(
+        `/api/comments/list?path=${encodeURIComponent(previewPath)}`
+      );
       const data = await r.json();
       setItems(data?.items || []);
     })();
@@ -34,7 +49,9 @@ export default function CommentsDialog({
         setItems((prev) => [p.item, ...prev]);
       }
       if (p?.type === "resolved" && p?.previewPath === previewPath) {
-        setItems((prev) => prev.map(x => x.id === p.id ? { ...x, resolved: p.resolved } : x));
+        setItems((prev) =>
+          prev.map((x) => (x.id === p.id ? { ...x, resolved: p.resolved } : x))
+        );
       }
     });
     return off;
@@ -61,7 +78,13 @@ export default function CommentsDialog({
       const r = await fetch("/api/comments/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: previewPath, file, text: body, ...range, author: { name: "You" } }),
+        body: JSON.stringify({
+          path: previewPath,
+          file,
+          text: body,
+          ...range,
+          author: { name: "You" },
+        }),
       });
       const data = await r.json();
       if (!r.ok || !data?.ok) throw new Error(data?.error || "add failed");
@@ -80,7 +103,10 @@ export default function CommentsDialog({
       for (const toName of atNames) {
         sendMention({
           toName,
-          from: { name: meName, color: localStorage.getItem("ybuilt.color") || "#8b5cf6" },
+          from: {
+            name: meName,
+            color: localStorage.getItem("ybuilt.color") || "#8b5cf6",
+          },
           previewPath,
           file,
           commentId: data.item?.id || "",
@@ -89,7 +115,11 @@ export default function CommentsDialog({
 
       setText("");
     } catch (e: any) {
-      toast({ title: "Add failed", description: e?.message || "Error", variant: "destructive" });
+      toast({
+        title: "Add failed",
+        description: e?.message || "Error",
+        variant: "destructive",
+      });
     }
   }
 
@@ -98,14 +128,27 @@ export default function CommentsDialog({
       const r = await fetch("/api/comments/resolve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: previewPath, id: it.id, resolved: !it.resolved }),
+        body: JSON.stringify({
+          path: previewPath,
+          id: it.id,
+          resolved: !it.resolved,
+        }),
       });
       const data = await r.json();
       if (!r.ok || !data?.ok) throw new Error(data?.error || "resolve failed");
-      setItems((prev) => prev.map(x => x.id === it.id ? data.item : x));
-      broadcastComment({ type: "resolved", previewPath, id: it.id, resolved: !it.resolved });
+      setItems((prev) => prev.map((x) => (x.id === it.id ? data.item : x)));
+      broadcastComment({
+        type: "resolved",
+        previewPath,
+        id: it.id,
+        resolved: !it.resolved,
+      });
     } catch (e: any) {
-      toast({ title: "Update failed", description: e?.message || "Error", variant: "destructive" });
+      toast({
+        title: "Update failed",
+        description: e?.message || "Error",
+        variant: "destructive",
+      });
     }
   }
 
@@ -116,7 +159,9 @@ export default function CommentsDialog({
       <div className="w-full max-w-xl rounded-lg bg-black/80 text-white border border-white/20 p-4 shadow-xl">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-medium">Comments — {file}</h3>
-          <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>
+          <Button size="sm" variant="ghost" onClick={onClose}>
+            Close
+          </Button>
         </div>
 
         <div className="mb-3">
@@ -127,22 +172,55 @@ export default function CommentsDialog({
             onChange={(e) => setText(e.target.value)}
           />
           <div className="mt-2 flex justify-end">
-            <Button size="sm" variant="secondary" onClick={addComment}>Add</Button>
+            <Button size="sm" variant="secondary" onClick={addComment}>
+              Add
+            </Button>
           </div>
         </div>
 
         <ul className="space-y-2 max-h-[50vh] overflow-y-auto">
           {items.map((it) => (
-            <li key={it.id} className="rounded border border-white/20 p-3 bg-black/60">
+            <li
+              key={it.id}
+              className="rounded border border-white/20 p-3 bg-black/60"
+            >
               <div className="text-xs text-white/60 mb-1">
-                {it.file}{typeof it.startLine === "number" ? ` • L${it.startLine}${it.endLine && it.endLine !== it.startLine ? `–${it.endLine}` : ""}` : ""}
+                {it.file}
+                {typeof it.startLine === "number"
+                  ? ` • L${it.startLine}${
+                      it.endLine && it.endLine !== it.startLine
+                        ? `–${it.endLine}`
+                        : ""
+                    }`
+                  : ""}
               </div>
               <div className="text-sm">{it.text}</div>
               <div className="mt-2 flex items-center justify-between">
-                <div className="text-xs text-white/50">{new Date(it.createdAt).toLocaleString()}</div>
-                <Button size="sm" variant="ghost" onClick={() => toggleResolve(it)}>
-                  {it.resolved ? "Reopen" : "Resolve"}
-                </Button>
+                <div className="text-xs text-white/50">
+                  {new Date(it.createdAt).toLocaleString()}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      onJump?.({
+                        file: it.file,
+                        startLine: it.startLine,
+                        endLine: it.endLine,
+                      })
+                    }
+                  >
+                    Jump
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => toggleResolve(it)}
+                  >
+                    {it.resolved ? "Reopen" : "Resolve"}
+                  </Button>
+                </div>
               </div>
             </li>
           ))}
