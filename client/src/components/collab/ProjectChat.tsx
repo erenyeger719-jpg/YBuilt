@@ -172,6 +172,63 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   function send() {
     const text = draft.trim();
     if (!text) return;
+
+    // simple slash commands:
+    if (text.startsWith("/")) {
+      const [cmd, ...rest] = text.slice(1).split(/\s+/);
+      const arg = rest.join(" ");
+      switch (cmd.toLowerCase()) {
+        case "who":
+          // local render of current members
+          setMsgs((prev) => [
+            ...prev,
+            { role: "system", content: `Online: ${members.map((m) => m.username).join(", ")}` },
+          ]);
+          break;
+        case "me":
+          setMsgs((prev) => [...prev, { role: "user", username: "me", content: `*${arg}*` }]);
+          break;
+        case "deploy":
+          // expects a jobId; reuse your existing API
+          fetch("/api/deploy/enqueue", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ provider: "netlify", previewPath: `/previews/${arg}/` }),
+          })
+            .then((r) => r.json())
+            .then((d) => {
+              const ok = d?.ok ? "queued" : `failed: ${d?.error || "unknown"}`;
+              setMsgs((prev) => [...prev, { role: "system", content: `deploy ${ok}` }]);
+            })
+            .catch(() =>
+              setMsgs((prev) => [...prev, { role: "system", content: "deploy failed" }])
+            );
+          break;
+        case "cancel":
+          // cancel latest job for this jobId
+          fetch("/api/deploy/cancel", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ clientRoom: arg }),
+          })
+            .then((r) => r.json())
+            .then((d) => {
+              const ok = d?.ok ? "requested" : `failed: ${d?.error || "unknown"}`;
+              setMsgs((prev) => [...prev, { role: "system", content: `cancel ${ok}` }]);
+            })
+            .catch(() =>
+              setMsgs((prev) => [...prev, { role: "system", content: "cancel failed" }])
+            );
+          break;
+        default:
+          setMsgs((prev) => [...prev, { role: "system", content: `unknown command: /${cmd}` }]);
+      }
+      setDraft("");
+      return;
+    }
+
     const s = getSocket();
     s.emit("chat:collaboration", { projectId, message: text });
     s.emit("typing:stop", { projectId });
@@ -220,7 +277,8 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         ) : (
           msgs.map((m, i) => (
             <div key={m.id || i}>
-              <span className="font-medium">{m.username || m.role}:</span> {renderContent(m.content)}
+              <span className="font-medium">{m.username || m.role}:</span>{" "}
+              {renderContent(m.content)}
             </div>
           ))
         )}
