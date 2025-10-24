@@ -137,6 +137,12 @@ if (reqMw) app.use(reqMw);
     wireRequestLogs(app, io); // attaches BEFORE routers for full coverage
     logger.info('[SOCKET.IO] Real-time server initialized');
 
+    // Wire external bus with IO
+    const busMod: any = await import('./socketBus.js')
+      .then((m) => (m as any).default ?? m)
+      .catch(() => ({} as any));
+    if (busMod?.setIO) busMod.setIO(io);
+
     // --- Presence (in-memory) ---
     type Peer = { id: string; name: string; color: string; file?: string; ts: number };
     const presence = new Map<string, Map<string, Peer>>(); // room -> peerId -> Peer
@@ -202,6 +208,16 @@ if (reqMw) app.use(reqMw);
         if (room) {
           io.to(room).emit('collab:mention', payload);
         }
+      });
+
+      // --- DEPLOY ROOMS ---
+      socket.on('deploy:join', ({ jobId }: { jobId: string }) => {
+        if (!jobId) return;
+        socket.join(`deploy:${jobId}`);
+      });
+      socket.on('deploy:leave', ({ jobId }: { jobId: string }) => {
+        if (!jobId) return;
+        socket.leave(`deploy:${jobId}`);
       });
 
       // --- explicit leave handler ---
@@ -290,11 +306,16 @@ if (reqMw) app.use(reqMw);
         return res.status(404).json({ error: 'template not found' });
       }
 
-      const forksDir = path.join(PREVIEWS_DIR, 'forks');
+      // Team-scoped forks directory
+      const teamId =
+        (req as any).cookies?.teamId || (req.headers as any)['x-team-id'] || null;
+      const forksDir = safeJoinTeam(teamId, '/previews/forks'); // team-scoped
       await fs.promises.mkdir(forksDir, { recursive: true });
 
-      const slug = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}-${sourceId}`;
-      const destDir = path.join(forksDir, slug);
+      const slug = `${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 6)}-${sourceId}`;
+      const destDir = path.join(forksDir, slug); // inside team folder
 
       // Node 22 has fs.promises.cp
       await fs.promises.cp(sourceDir, destDir, { recursive: true });

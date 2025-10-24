@@ -1,3 +1,4 @@
+// client/src/pages/Workspace.tsx
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -49,6 +50,7 @@ import PageToolSheet from "@/components/PageToolSheet";
 import ThemeModal from "@/components/ThemeModal";
 import BuildTraceViewer from "@/components/BuildTraceViewer";
 import WorkspaceDock from "@/components/WorkspaceDock"; // ⬅️ added
+import DeployLogPane from "@/components/deploy/DeployLogPane"; // ⬅️ added
 
 interface WorkspaceFile {
   path: string;
@@ -719,6 +721,9 @@ export default function Workspace() {
           <BuildTraceViewer jobId={jobId || ""} enabled={rightTab === "build"} />
         </TabsContent>
       </Tabs>
+
+      {/* Deploy logs below the editor/right column */}
+      <DeployLogPane jobId={jobId || ""} />
     </div>
   );
 
