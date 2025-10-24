@@ -332,14 +332,30 @@ export default function CollabPage() {
 
           <button
             className="text-xs px-2 py-1 border rounded"
-            onClick={() => {
+            onClick={async () => {
               const name = prompt("New file (index2.html / styles2.css / app2.js):", "snippet.js")?.trim();
               if (!name) return;
               const ok = /^[a-zA-Z0-9._/-]+$/.test(name) && /\.(html?|css|js)$/i.test(name);
               if (!ok) return alert("Only .html, .htm, .css, .js with safe name.");
-              setFiles((f) => (f.includes(name) ? f : [...f, name].sort()));
-              setSel(name);
-              setText(name.toLowerCase().endsWith(".html") ? "<!-- new file -->\n" : "/* new file */\n");
+
+              // create the file on disk immediately
+              const starter = name.toLowerCase().endsWith(".html") ? "<!-- new file -->\n" : "/* new file */\n";
+              try {
+                const r = await fetch("/api/previews/write", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ path: previewPath, file: name, content: starter }),
+                });
+                const data = await r.json();
+                if (!r.ok || !data?.ok) throw new Error(data?.error || "write failed");
+
+                // update UI
+                setFiles((f) => (f.includes(name) ? f : [...f, name].sort()));
+                setSel(name);
+                setText(starter);
+              } catch (e: any) {
+                alert(e?.message || "Couldn’t create file");
+              }
             }}
           >
             New file…

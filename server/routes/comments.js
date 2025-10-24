@@ -1,65 +1,81 @@
-const fs = require("fs");
-const path = require("path");
+import fs from "fs";
+import path from "path";
 
-function safePath(previewPath) {
-  const rel = String(previewPath || "").replace(/^\/+/, "").replace(/\.\./g, "");
-  return path.join(process.cwd(), rel); // previews live under repo root
-}
-function commentsFile(absPreviewDir) {
-  return path.join(absPreviewDir, ".comments.json");
-}
-function readComments(absPreviewDir) {
-  try {
-    const p = commentsFile(absPreviewDir);
-    if (!fs.existsSync(p)) return [];
-    return JSON.parse(fs.readFileSync(p, "utf8") || "[]");
-  } catch { return []; }
-}
-function writeComments(absPreviewDir, list) {
-  fs.writeFileSync(commentsFile(absPreviewDir), JSON.stringify(list, null, 2));
+const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || "previews");
+
+function safeCommentsFile(previewPath) {
+  if (typeof previewPath !== "string") throw new Error("path required");
+  const rel = previewPath.replace(/^\/+/, "");               // strip leading /
+  if (!rel.startsWith("previews/")) throw new Error("bad path");
+  const absDir = path.resolve(PREVIEWS_DIR, rel.replace(/^previews\//, ""));
+  if (!absDir.startsWith(PREVIEWS_DIR)) throw new Error("escape blocked");
+  return path.join(absDir, ".comments.json");
 }
 
-exports.list = (req, res) => {
+function readStore(fp) {
   try {
-    const abs = safePath(req.query.path);
-    const items = readComments(abs);
-    res.json({ ok: true, items });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e?.message || "list failed" });
+    const raw = fs.existsSync(fp) ? fs.readFileSync(fp, "utf8") : "";
+    const json = raw ? JSON.parse(raw) : { items: [] };
+    if (!Array.isArray(json.items)) json.items = [];
+    return json;
+  } catch {
+    return { items: [] };
   }
-};
+}
 
-exports.add = (req, res) => {
+function writeStore(fp, data) {
+  fs.mkdirSync(path.dirname(fp), { recursive: true });
+  fs.writeFileSync(fp, JSON.stringify({ items: data.items || [] }, null, 2), "utf8");
+}
+
+export async function list(req, res) {
   try {
-    const { path: previewPath, file, startLine, endLine, text, author } = req.body || {};
-    const abs = safePath(previewPath);
-    const items = readComments(abs);
-    const it = {
-      id: `c_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
-      file, startLine, endLine,
-      text: String(text || "").slice(0, 2000),
-      author: author || { name: "Anon" },
+    const previewPath = String(req.query.path || "");
+    const fp = safeCommentsFile(previewPath);
+    const store = readStore(fp);
+    res.json({ ok: true, items: store.items });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e.message || e) });
+  }
+}
+
+export async function add(req, res) {
+  try {
+    const { path: previewPath, file, text, startLine, endLine, author } = req.body || {};
+    const fp = safeCommentsFile(String(previewPath || ""));
+    const store = readStore(fp);
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const item = {
+      id,
+      file: String(file || "index.html"),
+      text: String(text || ""),
+      startLine: typeof startLine === "number" ? startLine : undefined,
+      endLine: typeof endLine === "number" ? endLine : undefined,
+      author: author && author.name ? { name: String(author.name) } : { name: "Anon" },
       createdAt: Date.now(),
       resolved: false,
     };
-    items.unshift(it);
-    writeComments(abs, items);
-    res.json({ ok: true, item: it });
+    store.items.unshift(item);
+    writeStore(fp, store);
+    res.json({ ok: true, item });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e?.message || "add failed" });
+    res.status(400).json({ ok: false, error: String(e.message || e) });
   }
-};
+}
 
-exports.resolve = (req, res) => {
+export async function resolve(req, res) {
   try {
     const { path: previewPath, id, resolved } = req.body || {};
-    const abs = safePath(previewPath);
-    const items = readComments(abs);
-    const idx = items.findIndex(x => x.id === id);
-    if (idx >= 0) items[idx].resolved = !!resolved;
-    writeComments(abs, items);
-    res.json({ ok: true, item: items[idx] || null });
+    const fp = safeCommentsFile(String(previewPath || ""));
+    const store = readStore(fp);
+    const idx = store.items.findIndex((x) => x.id === id);
+    if (idx === -1) return res.status(404).json({ ok: false, error: "not found" });
+    store.items[idx] = { ...store.items[idx], resolved: !!resolved };
+    writeStore(fp, store);
+    res.json({ ok: true, item: store.items[idx] });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e?.message || "resolve failed" });
+    res.status(400).json({ ok: false, error: String(e.message || e) });
   }
-};
+}
+
+export default { list, add, resolve };
