@@ -3,6 +3,7 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { verifyToken, type JWTPayload } from "./middleware/auth.js";
 import { storage } from "./storage.js";
 import { logger } from "./middleware/logging.js";
+import { setIO } from "./socketBus.js";
 
 interface AuthenticatedSocket extends Socket {
   user?: JWTPayload;
@@ -15,6 +16,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       credentials: true,
     },
   });
+
+  // Wire IO into the socket bus so stage/log/done can emit
+  setIO(io);
 
   // Authentication middleware for Socket.IO
   io.use((socket: AuthenticatedSocket, next) => {
