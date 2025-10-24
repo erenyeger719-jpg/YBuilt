@@ -19,9 +19,15 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   const [online, setOnline] = useState(0);
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [unread, setUnread] = useState(0);
   const activeRef = useRef(true); // “am I looking at this pane right now?”
   const lastSentRef = useRef<number>(0); // naive self-guard for notifications
+
+  // mention state
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionIndex, setMentionIndex] = useState(0);
 
   // ---- Local cache: load first (before joining), then save on every change ----
   useEffect(() => {
@@ -82,6 +88,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
             if (!justSent) {
               new Notification(m.username || "Project chat", {
                 body: m.content?.slice(0, 120) || "",
+                tag: `proj:${projectId}`, // coalesce per project
               });
             }
           }
@@ -199,6 +206,23 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     });
   }
 
+  // helper: insert text at the input cursor
+  function insertAtCursor(val: string) {
+    const el = inputRef.current;
+    if (!el) return setDraft((d) => d + val);
+    const start = el.selectionStart ?? draft.length;
+    const end = el.selectionEnd ?? draft.length;
+    const before = draft.slice(0, start);
+    const after = draft.slice(end);
+    const next = before + val + after;
+    setDraft(next);
+    // move caret after insertion
+    requestAnimationFrame(() => {
+      el.setSelectionRange(start + val.length, start + val.length);
+      el.focus();
+    });
+  }
+
   function send() {
     const text = draft.trim();
     if (!text) return;
@@ -217,13 +241,11 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
             },
           ]);
           break;
-        case "who":
-          // local render of current members
-          setMsgs((prev) => [
-            ...prev,
-            { role: "system", content: `Online: ${members.map((m) => m.username).join(", ")}` },
-          ]);
+        case "who": {
+          const list = members.map((m) => m.username).join(", ") || "just you";
+          setMsgs((prev) => [...prev, { role: "system", content: `Online: ${list}` }]);
           break;
+        }
         case "me":
           setMsgs((prev) => [...prev, { role: "user", username: "me", content: `*${arg}*` }]);
           break;
@@ -278,6 +300,15 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     lastSentRef.current = Date.now();
   }
 
+  // filtered mention options (max 8)
+  const mentionOptions = members
+    .map((m) => m.username.split("@")[0])
+    .filter((name) => name.toLowerCase().includes(mentionQuery.toLowerCase()))
+    .slice(0, 8);
+  const activeIdx = mentionOptions.length
+    ? mentionIndex % mentionOptions.length
+    : 0;
+
   return (
     <div
       className="border rounded bg-background h-72 grid grid-rows-[auto_1fr_auto]"
@@ -329,21 +360,106 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         )}
       </div>
 
-      <div className="p-2 flex gap-2">
-        <input
-          className="flex-1 border rounded px-2 py-1 text-xs bg-background"
-          placeholder="Message…"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") send();
-          }}
-          onFocus={() => getSocket().emit("typing:start", { projectId })}
-          onBlur={() => getSocket().emit("typing:stop", { projectId })}
-        />
-        <Button size="sm" onClick={send}>
-          Send
-        </Button>
+      <div className="p-2">
+        <div className="flex gap-2">
+          <input
+            ref={inputRef}
+            className="flex-1 border rounded px-2 py-1 text-xs bg-background"
+            placeholder="Message…"
+            value={draft}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDraft(v);
+
+              // find current token where caret is
+              const caret = e.target.selectionStart ?? v.length;
+              const upto = v.slice(0, caret);
+              const m = upto.match(/(^|\s)@([\w-]{0,32})$/);
+              if (m) {
+                setMentionOpen(true);
+                setMentionQuery(m[2] || "");
+                setMentionIndex(0);
+              } else {
+                setMentionOpen(false);
+                setMentionQuery("");
+                setMentionIndex(0);
+              }
+
+              // typing signal
+              getSocket().emit("typing:start", { projectId });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (mentionOpen) {
+                  e.preventDefault();
+                  const picked = mentionOptions[activeIdx] || mentionQuery || "";
+                  if (picked) {
+                    // replace the @token with @picked + space
+                    const caret = e.currentTarget.selectionStart ?? draft.length;
+                    const upto = draft.slice(0, caret);
+                    const rest = draft.slice(caret);
+                    const repl = upto.replace(/(@[\w-]{0,32})$/, `@${picked} `);
+                    setDraft(repl + rest);
+                    setMentionOpen(false);
+                    setMentionQuery("");
+                    setMentionIndex(0);
+                  }
+                  return;
+                }
+                send();
+                return;
+              }
+
+              if (mentionOpen) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setMentionIndex((i) => i + 1);
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setMentionIndex((i) => Math.max(0, i - 1));
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setMentionOpen(false);
+                }
+              }
+            }}
+            onFocus={() => getSocket().emit("typing:start", { projectId })}
+            onBlur={() => getSocket().emit("typing:stop", { projectId })}
+          />
+          <Button size="sm" onClick={send}>
+            Send
+          </Button>
+        </div>
+
+        {mentionOpen && (
+          <div className="px-0.5 pb-2 -mt-1 w-full">
+            <div className="border rounded bg-popover text-xs max-h-40 overflow-auto">
+              {mentionOptions.length > 0 ? (
+                mentionOptions.map((name, idx) => (
+                  <div
+                    key={name}
+                    className={
+                      "px-2 py-1 cursor-pointer " +
+                      (idx === activeIdx ? "bg-muted" : "")
+                    }
+                    onMouseDown={(e) => {
+                      // prevent input blur
+                      e.preventDefault();
+                      insertAtCursor(`@${name} `);
+                      setMentionOpen(false);
+                      setMentionQuery("");
+                      setMentionIndex(0);
+                    }}
+                  >
+                    @{name}
+                  </div>
+                ))
+              ) : (
+                <div className="px-2 py-1 text-muted-foreground">No matches</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
