@@ -19,6 +19,14 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const [unread, setUnread] = useState(0);
   const activeRef = useRef(true); // “am I looking at this pane right now?”
+  const lastSentRef = useRef<number>(0); // naive self-guard for notifications
+
+  // ask for notification permission once
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     if (!projectId) return;
@@ -46,6 +54,18 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
           } catch {}
           return next;
         });
+
+        // desktop ping (skip if permission denied or this was our own send a moment ago)
+        try {
+          if ("Notification" in window && Notification.permission === "granted") {
+            const justSent = Date.now() - (lastSentRef.current || 0) < 600;
+            if (!justSent) {
+              new Notification(m.username || "Project chat", {
+                body: m.content?.slice(0, 120) || "",
+              });
+            }
+          }
+        } catch {}
       }
     };
 
@@ -153,6 +173,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     // locally this means “I’m active”, keep unread at 0
     activeRef.current = true;
     setUnread(0);
+    lastSentRef.current = Date.now();
   }
 
   return (
