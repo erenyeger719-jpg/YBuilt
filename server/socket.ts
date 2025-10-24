@@ -63,6 +63,11 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     return m ? Object.fromEntries(m.entries()) : {};
   }
 
+  // ---- Message flags (edited/deleted), ephemeral fallback ----
+  const messageFlags: Map<string, { editedAt?: number; deleted?: boolean }> = new Map();
+  // Track authors for ownership checks when storage can't fetch a row
+  const messageAuthors: Map<string, string> = new Map();
+
   // Authentication middleware for Socket.IO
   io.use((socket: AuthenticatedSocket, next) => {
     try {
@@ -142,15 +147,20 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             limit,
             order: "desc",
           });
-          const msgs = rows.reverse().map((r: any) => ({
-            id: r.id,
-            userId: r.userId,
-            username: r.metadata?.username || r.userEmail || r.userId,
-            role: r.role,
-            content: r.content,
-            createdAt: r.createdAt,
-            reactions: getCountsFor(String(r.id)), // include ephemeral counts
-          }));
+          const msgs = rows.reverse().map((r: any) => {
+            const flags = messageFlags.get(String(r.id)) || {};
+            return {
+              id: r.id,
+              userId: r.userId,
+              username: r.metadata?.username || r.userEmail || r.userId,
+              role: r.role,
+              content: r.content,
+              createdAt: r.createdAt,
+              reactions: getCountsFor(String(r.id)),
+              editedAt: flags.editedAt ? new Date(flags.editedAt).toISOString() : undefined,
+              deleted: !!flags.deleted,
+            };
+          });
           socket.emit("chat:history", { projectId: data.projectId, msgs });
         } else {
           socket.emit("chat:history", { projectId: data.projectId, msgs: [] });
@@ -231,6 +241,9 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             metadata: { type: "collaboration", username: socket.user.email }, // store username for history
           });
 
+          // Remember author for fallback ownership checks
+          messageAuthors.set(String(chatMessage.id), String(socket.user.sub));
+
           // Broadcast to all users in the project room
           io.to(`project:${data.projectId}`).emit("chat:message", {
             id: chatMessage.id,
@@ -274,6 +287,143 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
         } catch (error) {
           logger.error({ error }, "[CHAT:COLLAB] Error");
           socket.emit("error", { message: "Failed to send collaboration message" });
+        }
+      }
+    );
+
+    // ---- Edit message (10-min window, owner only) ----
+    socket.on(
+      "chat:message:update",
+      async (data: { projectId: string; messageId: string; content: string }) => {
+        try {
+          if (!socket.user) {
+            socket.emit("error", { message: "Auth required" });
+            return;
+          }
+          const { projectId, messageId, content } = data || {};
+          if (!projectId || !messageId || typeof content !== "string") return;
+
+          // Try to verify ownership from storage first; fall back to in-memory map
+          let ownerId: string | null = null;
+          let createdAt: number | null = null;
+
+          if (typeof (storage as any).getChatMessageById === "function") {
+            const row = await (storage as any).getChatMessageById(messageId);
+            if (!row || row.projectId !== projectId) {
+              socket.emit("error", { message: "Message not found" });
+              return;
+            }
+            ownerId = String(row.userId);
+            createdAt = new Date(row.createdAt).getTime();
+          } else {
+            ownerId = messageAuthors.get(String(messageId)) || null;
+          }
+
+          if (!ownerId || String(ownerId) !== String(socket.user.sub)) {
+            socket.emit("error", { message: "Only the author can edit" });
+            return;
+          }
+
+          // 10-minute window
+          const now = Date.now();
+          if (createdAt && now - createdAt > 10 * 60 * 1000) {
+            socket.emit("error", { message: "Edit window expired" });
+            return;
+          }
+
+          // Persist if possible
+          if (typeof (storage as any).updateChatMessage === "function") {
+            await (storage as any).updateChatMessage({
+              id: messageId,
+              content,
+              metadata: { editedAt: new Date().toISOString() },
+            });
+          }
+
+          // Ephemeral flag (works even if storage lacks metadata)
+          messageFlags.set(String(messageId), {
+            ...(messageFlags.get(String(messageId)) || {}),
+            editedAt: now,
+          });
+
+          io.to(`project:${projectId}`).emit("chat:message:update", {
+            id: messageId,
+            projectId,
+            content,
+            editedAt: new Date(now).toISOString(),
+          });
+        } catch (e) {
+          logger.error({ e }, "[CHAT:EDIT] Error");
+          socket.emit("error", { message: "Failed to edit message" });
+        }
+      }
+    );
+
+    // ---- Delete (soft) message (10-min window, owner only) ----
+    socket.on(
+      "chat:message:delete",
+      async (data: { projectId: string; messageId: string }) => {
+        try {
+          if (!socket.user) {
+            socket.emit("error", { message: "Auth required" });
+            return;
+          }
+          const { projectId, messageId } = data || {};
+          if (!projectId || !messageId) return;
+
+          let ownerId: string | null = null;
+          let createdAt: number | null = null;
+
+          if (typeof (storage as any).getChatMessageById === "function") {
+            const row = await (storage as any).getChatMessageById(messageId);
+            if (!row || row.projectId !== projectId) {
+              socket.emit("error", { message: "Message not found" });
+              return;
+            }
+            ownerId = String(row.userId);
+            createdAt = new Date(row.createdAt).getTime();
+          } else {
+            ownerId = messageAuthors.get(String(messageId)) || null;
+          }
+
+          if (!ownerId || String(ownerId) !== String(socket.user.sub)) {
+            socket.emit("error", { message: "Only the author can delete" });
+            return;
+          }
+
+          // 10-minute window
+          const now = Date.now();
+          if (createdAt && now - createdAt > 10 * 60 * 1000) {
+            socket.emit("error", { message: "Delete window expired" });
+            return;
+          }
+
+          // Persist if possible (soft-delete)
+          if (typeof (storage as any).softDeleteChatMessage === "function") {
+            await (storage as any).softDeleteChatMessage({
+              id: messageId,
+              metadata: {
+                deleted: true,
+                deletedAt: new Date().toISOString(),
+                deletedBy: socket.user.email,
+              },
+            });
+          }
+
+          // Ephemeral flag
+          messageFlags.set(String(messageId), {
+            ...(messageFlags.get(String(messageId)) || {}),
+            deleted: true,
+          });
+
+          io.to(`project:${projectId}`).emit("chat:message:delete", {
+            id: messageId,
+            projectId,
+            deletedAt: new Date(now).toISOString(),
+          });
+        } catch (e) {
+          logger.error({ e }, "[CHAT:DELETE] Error");
+          socket.emit("error", { message: "Failed to delete message" });
         }
       }
     );

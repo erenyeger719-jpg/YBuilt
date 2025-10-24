@@ -10,6 +10,8 @@ type Msg = {
   content: string;
   createdAt?: string;
   reactions?: Record<string, number>;
+  editedAt?: string;
+  deleted?: boolean;
 };
 
 const EMOJIS = ["👍", "🎉", "❤️", "😂", "✅"];
@@ -34,11 +36,15 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   // scroll
   const [atBottom, setAtBottom] = useState(true);
   const [pendingNew, setPendingNew] = useState(0);
-  // keep "am I at bottom?" out of the effect deps
   const atBottomRef = useRef(true);
 
   // local "I reacted" memory (not persisted)
   const [myReacts, setMyReacts] = useState<Set<string>>(new Set());
+
+  // me + edit state
+  const [me, setMe] = useState<{ userId?: string; email?: string }>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
 
   // ---- Local cache: load first (before joining), then save on every change ----
   useEffect(() => {
@@ -62,6 +68,16 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
+  }, []);
+
+  // decode JWT once to know "me"
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem("jwt");
+      if (!t) return;
+      const payload = JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+      setMe({ userId: String(payload.sub), email: payload.email });
+    } catch {}
   }, []);
 
   // track scroll position
@@ -150,12 +166,31 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       );
     };
 
+    const onMsgUpdate = (p: {
+      id: string;
+      projectId: string;
+      content: string;
+      editedAt?: string;
+    }) => {
+      if (p.projectId !== projectId) return;
+      setMsgs((prev) =>
+        prev.map((m) => (m.id === p.id ? { ...m, content: p.content, editedAt: p.editedAt } : m))
+      );
+    };
+
+    const onMsgDelete = (p: { id: string; projectId: string; deletedAt?: string }) => {
+      if (p.projectId !== projectId) return;
+      setMsgs((prev) => prev.map((m) => (m.id === p.id ? { ...m, deleted: true } : m)));
+    };
+
     s.on("chat:message", onMsg);
     s.on("typing:user", onTyping);
     s.on("presence:update", onPresence);
     s.on("presence:users", onUsers);
     s.on("chat:history", onHistory);
     s.on("chat:react:update", onReactUpdate);
+    s.on("chat:message:update", onMsgUpdate);
+    s.on("chat:message:delete", onMsgDelete);
 
     return () => {
       s.emit("leave:project", projectId);
@@ -165,6 +200,8 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       s.off("presence:users", onUsers);
       s.off("chat:history", onHistory);
       s.off("chat:react:update", onReactUpdate);
+      s.off("chat:message:update", onMsgUpdate);
+      s.off("chat:message:delete", onMsgDelete);
     };
   }, [projectId]);
 
@@ -273,6 +310,34 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       document.title = base;
       anyDoc.__baseTitle = base;
     } catch {}
+  }
+
+  // permissions + edit helpers
+  function canEditOrDelete(m: Msg) {
+    if (!m.id || !m.userId || !m.createdAt || m.deleted) return false;
+    if (!me.userId || String(me.userId) !== String(m.userId)) return false;
+    const age = Date.now() - new Date(m.createdAt).getTime();
+    return age <= 10 * 60 * 1000; // 10 minutes
+  }
+  function startEdit(m: Msg) {
+    setEditingId(m.id!);
+    setEditText(m.content);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setEditText("");
+  }
+  function saveEdit() {
+    if (!editingId) return;
+    const content = editText.trim();
+    if (!content) return;
+    getSocket().emit("chat:message:update", { projectId, messageId: editingId, content });
+    setEditingId(null);
+    setEditText("");
+  }
+  function deleteMsg(id?: string) {
+    if (!id) return;
+    getSocket().emit("chat:message:delete", { projectId, messageId: id });
   }
 
   // toggle a reaction (optimistic)
@@ -421,22 +486,86 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
           ) : (
             msgs.map((m, i) => (
               <div key={m.id || i} className="group">
-                <div>
-                  <span className="font-medium">{m.username || m.role}</span>
-                  <span className="text-muted-foreground ml-1">
-                    {m.createdAt
-                      ? new Date(m.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : ""}
-                  </span>
-                  <span>: </span>
-                  {renderContent(m.content)}
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="font-medium">{m.username || m.role}</span>
+                      <span className="text-muted-foreground">
+                        {m.createdAt
+                          ? new Date(m.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : ""}
+                      </span>
+                      {m.editedAt && !m.deleted && (
+                        <span className="text-muted-foreground text-[10px]">(edited)</span>
+                      )}
+                    </div>
+
+                    <div className={m.deleted ? "text-muted-foreground italic" : ""}>
+                      {m.deleted ? "message deleted" : renderContent(m.content)}
+                    </div>
+                  </div>
+
+                  {/* Actions (only on own msgs, within window) */}
+                  {!m.deleted && canEditOrDelete(m) && (
+                    <div className="opacity-0 group-hover:opacity-100 transition">
+                      {editingId === m.id ? (
+                        <div className="flex gap-1">
+                          <button className="text-xs px-2 py-0.5 border rounded" onClick={saveEdit}>
+                            Save
+                          </button>
+                          <button
+                            className="text-xs px-2 py-0.5 border rounded"
+                            onClick={cancelEdit}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-1">
+                          <button
+                            className="text-xs px-2 py-0.5 border rounded"
+                            onClick={() => startEdit(m)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="text-xs px-2 py-0.5 border rounded"
+                            onClick={() => deleteMsg(m.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Reactions bar (skip for system msgs or no id) */}
-                {m.id && m.role !== "system" && (
+                {/* Inline edit field */}
+                {editingId === m.id && (
+                  <div className="mt-1">
+                    <textarea
+                      className="w-full border rounded px-2 py-1 text-xs bg-background resize-y min-h-[2rem] max-h-[8rem]"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          saveEdit();
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          cancelEdit();
+                        }
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                )}
+
+                {/* Reactions bar (skip system/deleted) */}
+                {m.id && m.role !== "system" && !m.deleted && (
                   <div className="mt-0.5 flex items-center gap-2 opacity-80 group-hover:opacity-100">
                     {EMOJIS.map((e) => {
                       const count = m.reactions?.[e] || 0;
