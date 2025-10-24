@@ -1,3 +1,4 @@
+// client/src/components/collab/ProjectChat.tsx
 import { useEffect, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,23 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   const [unread, setUnread] = useState(0);
   const activeRef = useRef(true); // “am I looking at this pane right now?”
   const lastSentRef = useRef<number>(0); // naive self-guard for notifications
+
+  // ---- Local cache: load first (before joining), then save on every change ----
+  useEffect(() => {
+    if (!projectId) return;
+    try {
+      const raw = localStorage.getItem(`proj-chat:${projectId}`);
+      if (raw) setMsgs(JSON.parse(raw));
+    } catch {}
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    try {
+      const slice = msgs.slice(-200);
+      localStorage.setItem(`proj-chat:${projectId}`, JSON.stringify(slice));
+    } catch {}
+  }, [projectId, msgs]);
 
   // ask for notification permission once
   useEffect(() => {
@@ -92,7 +110,12 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     };
 
     const onHistory = (p: { projectId: string; msgs: Msg[] }) => {
-      if (p.projectId === projectId) setMsgs(p.msgs);
+      if (p.projectId !== projectId) return;
+      setMsgs(p.msgs);
+      // also persist to local cache
+      try {
+        localStorage.setItem(`proj-chat:${projectId}`, JSON.stringify(p.msgs.slice(-200)));
+      } catch {}
     };
 
     s.on("chat:message", onMsg);
@@ -185,6 +208,15 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       const [cmd, ...rest] = text.slice(1).split(/\s+/);
       const arg = rest.join(" ");
       switch (cmd.toLowerCase()) {
+        case "help":
+          setMsgs((prev) => [
+            ...prev,
+            {
+              role: "system",
+              content: "Commands: /who, /me <text>, /deploy <jobId>, /cancel <jobId>",
+            },
+          ]);
+          break;
         case "who":
           // local render of current members
           setMsgs((prev) => [
@@ -284,7 +316,13 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         ) : (
           msgs.map((m, i) => (
             <div key={m.id || i}>
-              <span className="font-medium">{m.username || m.role}:</span>{" "}
+              <span className="font-medium">{m.username || m.role}</span>
+              <span className="text-muted-foreground ml-1">
+                {m.createdAt
+                  ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                  : ""}
+              </span>
+              <span>: </span>
               {renderContent(m.content)}
             </div>
           ))
