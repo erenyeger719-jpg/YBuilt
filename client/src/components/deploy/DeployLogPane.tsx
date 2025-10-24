@@ -41,7 +41,11 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
 
     const onEvt = (p: any) => {
       if (p?.type === "log" && typeof p.line === "string") {
-        setLines((prev) => [...prev, p.line]);
+        setLines((prev) => {
+          const next = [...prev, p.line];
+          // keep last 5000 lines to keep UI snappy
+          return next.length > 5000 ? next.slice(-5000) : next;
+        });
       }
       if (p?.type === "stage") {
         setStage(p.stage || "");
@@ -200,7 +204,7 @@ export default function DeployLogPane({ jobId }: { jobId: string }) {
       /(https?:\/\/[^\s)]+)|(app\.netlify\.com\/[^\s)]+)|(\b[\w-]+\.netlify\.app[^\s)]*)/gi;
     return safe.replace(urlRe, (m) => {
       const href = m.startsWith("http") ? m : `https://${m}`;
-      return `<a href="${href}" target="_blank" rel="noreferrer">${m}</a>`;
+      return `<a href="${href}" target="_blank" rel="noreferrer noopener">${m}</a>`;
     });
   }
 
