@@ -38,6 +38,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     if (s.auth && !s.auth.token) s.auth.token = localStorage.getItem("jwt") || undefined;
 
     s.emit("join:project", projectId);
+    s.emit("chat:history", { projectId, limit: 50 });
 
     const onMsg = (m: Msg) => {
       setMsgs((prev) => [...prev, m]);
@@ -90,10 +91,15 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       if (p.projectId === projectId) setMembers(p.users);
     };
 
+    const onHistory = (p: { projectId: string; msgs: Msg[] }) => {
+      if (p.projectId === projectId) setMsgs(p.msgs);
+    };
+
     s.on("chat:message", onMsg);
     s.on("typing:user", onTyping);
     s.on("presence:update", onPresence);
     s.on("presence:users", onUsers);
+    s.on("chat:history", onHistory);
 
     return () => {
       s.emit("leave:project", projectId);
@@ -101,6 +107,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       s.off("typing:user", onTyping);
       s.off("presence:update", onPresence);
       s.off("presence:users", onUsers);
+      s.off("chat:history", onHistory);
     };
   }, [projectId]);
 
