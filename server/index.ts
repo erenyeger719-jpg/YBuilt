@@ -16,6 +16,8 @@ import { wireRequestLogs, wireLogsNamespace } from './logs.js';
 import deployQueue from './routes/deploy.queue.js';
 import { apiRateLimit, quotaGate } from './middleware/limits.js';
 import { ipGate } from './middleware/ipGate.js';
+import buildsRouter from './routes/builds.js';
+import { wireBuildsNamespace } from './builds.js';
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -195,6 +197,7 @@ app.use(ipGate());
     app.set('io', io);
     wireLogsNamespace(io);
     wireRequestLogs(app, io); // attaches BEFORE routers for full coverage
+    wireBuildsNamespace(io);
     logger.info('[SOCKET.IO] Real-time server initialized');
 
     // Wire external bus with IO
@@ -518,6 +521,9 @@ app.use(ipGate());
   if (teamsMod?.removeMember) app.post('/api/teams/removeMember', express.json(), teamsMod.removeMember);
   if (teamsMod?.revokeInvite) app.post('/api/teams/invites/revoke', express.json(), teamsMod.revokeInvite);
   if (teamsMod?.resendInvite) app.post('/api/teams/invites/resend', express.json(), teamsMod.resendInvite);
+
+  // Mount builds router (ensure before static handlers)
+  app.use('/api', buildsRouter);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
