@@ -2,6 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
 import { Button } from "@/components/ui/button";
 
+type Attachment = {
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
+};
+
 type Msg = {
   id?: string;
   userId?: string;
@@ -12,7 +19,8 @@ type Msg = {
   reactions?: Record<string, number>;
   editedAt?: string;
   deleted?: boolean;
-  pinned?: boolean; // <-- added
+  pinned?: boolean;
+  attachments?: Attachment[]; // <-- NEW
 };
 
 const EMOJIS = ["👍", "🎉", "❤️", "😂", "✅"];
@@ -60,6 +68,48 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<string[]>([]);
   const [hitIdx, setHitIdx] = useState(0);
+
+  // draft attachments
+  const [draftFiles, setDraftFiles] = useState<Attachment[]>([]);
+  const MAX_FILES = 3;
+  const MAX_BYTES = 2_000_000; // ~2MB each (v1 guard)
+
+  function fileToDataUrl(file: File): Promise<Attachment> {
+    return new Promise((res, rej) => {
+      if (file.size > MAX_BYTES) return rej(new Error("Too big"));
+      const reader = new FileReader();
+      reader.onerror = () => rej(new Error("Failed to read file"));
+      reader.onload = () => {
+        res({
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+          dataUrl: String(reader.result),
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function addFiles(files: FileList | File[]) {
+    const arr = Array.from(files || []);
+    if (!arr.length) return;
+    const room = MAX_FILES - draftFiles.length;
+    if (room <= 0) return;
+    const picked = arr.slice(0, room);
+    const out: Attachment[] = [];
+    for (const f of picked) {
+      try {
+        const a = await fileToDataUrl(f);
+        out.push(a);
+      } catch {}
+    }
+    if (out.length) setDraftFiles((prev) => [...prev, ...out]);
+  }
+
+  function removeDraftFile(idx: number) {
+    setDraftFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   // recompute hits when msgs or query change
   useEffect(() => {
@@ -544,9 +594,14 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     }
 
     const s = getSocket();
-    s.emit("chat:collaboration", { projectId, message: text });
+    s.emit("chat:collaboration", {
+      projectId,
+      message: text,
+      attachments: draftFiles, // <-- NEW
+    });
     s.emit("typing:stop", { projectId });
     setDraft("");
+    setDraftFiles([]); // <-- NEW
     activeRef.current = true;
     clearUnread();
     lastSentRef.current = Date.now();
@@ -572,6 +627,14 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       onMouseEnter={() => {
         activeRef.current = true;
         if (unread > 0) clearUnread();
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+      }}
+      onDrop={async (e) => {
+        e.preventDefault();
+        const files = e.dataTransfer?.files;
+        if (files && files.length) await addFiles(files);
       }}
     >
       <div className="px-3 py-2 text-xs border-b flex items-center gap-2">
@@ -672,6 +735,43 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {/* Draft attachment preview tray */}
+      {draftFiles.length > 0 && (
+        <div className="px-3 py-2 text-xs border-b bg-muted/30">
+          <div className="flex flex-wrap gap-2">
+            {draftFiles.map((f, idx) => {
+              const isImg = f.type.startsWith("image/");
+              return (
+                <div key={idx} className="border rounded p-1 flex items-center gap-2 bg-background">
+                  {isImg ? (
+                    <img src={f.dataUrl} alt={f.name} className="h-10 w-10 object-cover rounded" />
+                  ) : (
+                    <div className="h-10 w-10 grid place-items-center rounded bg-muted">📎</div>
+                  )}
+                  <div className="max-w-[16rem] truncate">
+                    <div className="font-medium truncate">{f.name}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {(f.size / 1024).toFixed(0)} KB
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[10px] px-2 py-0.5 border rounded"
+                    onClick={() => removeDraftFile(idx)}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-1 text-[10px] text-muted-foreground">
+            {draftFiles.length}/{MAX_FILES} attached — images preview inline
+          </div>
+        </div>
+      )}
+
       <div className="relative">
         <div ref={boxRef} className="p-3 overflow-auto text-xs space-y-2 h-40">
           {msgs.length === 0 ? (
@@ -722,6 +822,38 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                       <div className={m.deleted ? "text-muted-foreground italic" : ""}>
                         {m.deleted ? "message deleted" : renderContent(m.content)}
                       </div>
+
+                      {/* Attachments */}
+                      {!m.deleted && Array.isArray(m.attachments) && m.attachments.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {m.attachments.map((a, i2) => {
+                            const isImg = (a.type || "").startsWith("image/");
+                            return (
+                              <div key={i2} className="border rounded bg-background p-1">
+                                {isImg ? (
+                                  <a
+                                    href={a.dataUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={a.name}
+                                  >
+                                    <img src={a.dataUrl} alt={a.name} className="max-h-32 rounded" />
+                                  </a>
+                                ) : (
+                                  <a
+                                    href={a.dataUrl}
+                                    download={a.name}
+                                    className="underline hover:no-underline"
+                                    title={`${a.name} (${(a.size / 1024).toFixed(0)} KB)`}
+                                  >
+                                    📎 {a.name}
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions: pin for everyone, edit/delete for own msgs within window */}
@@ -926,6 +1058,13 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
             }}
             onFocus={() => getSocket().emit("typing:start", { projectId })}
             onBlur={() => getSocket().emit("typing:stop", { projectId })}
+            onPaste={async (e) => {
+              const items = e.clipboardData?.files;
+              if (items && items.length) {
+                e.preventDefault();
+                await addFiles(items);
+              }
+            }}
           />
           <Button size="sm" onClick={send}>
             Send
@@ -939,9 +1078,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                 mentionOptions.map((name, idx) => (
                   <div
                     key={name}
-                    className={
-                      "px-2 py-1 cursor-pointer " + (idx === activeIdx ? "bg-muted" : "")
-                    }
+                    className={"px-2 py-1 cursor-pointer " + (idx === activeIdx ? "bg-muted" : "")}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       insertAtCursor(`@${name} `);
