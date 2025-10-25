@@ -472,6 +472,10 @@ app.use(ipGate());
   if (chatRoutes) app.use('/api/chat', chatRoutes);
   if (execSandbox) app.use('/api/execute', express.json({ limit: '256kb' }), execSandbox);
   if (executeRoutes) app.use('/api/execute', express.json({ limit: '256kb' }), executeRoutes);
+
+  // --- Build jobs (must be before /api/previews routers) ---
+  app.use('/api', buildsRouter);
+
   if (previewsRouter) app.use('/api/previews', express.json(), previewsRouter);
   if (exportRouter) app.use('/api/previews', express.json(), exportRouter);
   if (deployRouter) app.use('/api/deploy', express.json({ limit: '5mb' }), deployRouter);
@@ -516,9 +520,6 @@ app.use(ipGate());
   if (teamsMod?.removeMember) app.post('/api/teams/removeMember', express.json(), teamsMod.removeMember);
   if (teamsMod?.revokeInvite) app.post('/api/teams/invites/revoke', express.json(), teamsMod.revokeInvite);
   if (teamsMod?.resendInvite) app.post('/api/teams/invites/resend', express.json(), teamsMod.resendInvite);
-
-  // Mount builds router (ensure before static handlers)
-  app.use('/api', buildsRouter);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
