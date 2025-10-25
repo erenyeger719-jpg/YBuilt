@@ -63,6 +63,13 @@ if (reqMw) app.use(reqMw);
 app.use(ipGate());
 
 (async () => {
+  // Print env snapshot before loading the sink
+  console.log('[ENV]', {
+    LOG_JSONL: process.env.LOG_JSONL,
+    ENABLE_SANDBOX: process.env.ENABLE_SANDBOX,
+    RUNNER_IMPL: process.env.RUNNER_IMPL,
+  });
+
   // Load JSONL sink after env is ready
   await import('./logs.sink.jsonl.js');
 

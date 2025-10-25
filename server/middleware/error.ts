@@ -1,71 +1,59 @@
-import { Request, Response, NextFunction } from 'express';
 import { logger } from './logging.js';
 
-/**
- * Error with status code
- */
 export class HttpError extends Error {
-  constructor(
-    public statusCode: number,
-    message: string,
-    public details?: any
-  ) {
+  constructor(statusCode, message, details) {
     super(message);
     this.name = 'HttpError';
+    this.statusCode = statusCode;
+    this.details = details;
   }
 }
 
-/**
- * Central error handling middleware
- * Never leaks stack traces in production
- * Always includes request ID for debugging
- */
-export function errorHandler(
-  err: Error | HttpError,
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
+async function notifyWebhook(payload) {
+  const url = process.env.ALERT_WEBHOOK_URL || '';
+  if (!url) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch {}
+}
+
+export function errorHandler(err, req, res, _next) {
   const statusCode = err instanceof HttpError ? err.statusCode : 500;
-  const message = err.message || 'Internal server error';
-  
-  // Log error with request ID
-  logger.error({
-    reqId: req.id,
-    error: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    statusCode,
-    path: req.path,
-    method: req.method,
-  }, 'Request error');
-  
-  // Build error response
-  const errorResponse: any = {
-    error: message,
-    reqId: req.id,
+  const isDev = process.env.NODE_ENV !== 'production';
+  const rid = (res.getHeader('X-Request-ID') || req.headers['x-request-id'] || '') + '';
+  const msg = err?.message || (statusCode >= 500 ? 'Something went wrong.' : 'Request error.');
+
+  logger.error(
+    { rid, error: err?.message, stack: isDev ? err?.stack : undefined, statusCode, path: req.path, method: req.method },
+    'Request error'
+  );
+
+  if (statusCode >= 500) {
+    notifyWebhook({ kind: 'server_error', rid, path: req.path, method: req.method, statusCode, message: err?.message || 'error', ts: Date.now() });
+  }
+
+  const payload = {
+    ok: false,
+    error: statusCode >= 500 ? 'server_error' : 'request_error',
+    message: isDev ? msg : (statusCode >= 500 ? 'Something went wrong.' : 'Request error.'),
+    rid,
   };
-  
-  // Include details if available (e.g., validation errors)
-  if (err instanceof HttpError && err.details) {
-    errorResponse.details = err.details;
+  if (err instanceof HttpError && err.details) payload.details = err.details;
+  if (isDev && err?.stack) payload.stack = err.stack;
+
+  if (req.path.startsWith('/api/')) {
+    res.status(statusCode).json(payload);
+  } else {
+    res.status(statusCode).type('text/plain').send(statusCode >= 500 ? '500 — Something went wrong.' : 'Request error.');
   }
-  
-  // Include stack trace only in development
-  if (process.env.NODE_ENV === 'development' && err.stack) {
-    errorResponse.stack = err.stack;
-  }
-  
-  res.status(statusCode).json(errorResponse);
 }
 
-/**
- * 404 handler - must be registered after all routes
- */
-export function notFoundHandler(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  const error = new HttpError(404, `Not found: ${req.method} ${req.path}`);
-  next(error);
+export function notFoundHandler(req, res, next) {
+  if (!req.path.startsWith('/api/')) return next(new HttpError(404, `Not found: ${req.method} ${req.path}`));
+  const rid = (res.getHeader('X-Request-ID') || req.headers['x-request-id'] || '') + '';
+  return res.status(404).json({ ok: false, error: 'not_found', message: 'No such API route.', rid });
 }

@@ -3,7 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import { logsBus } from './logs.js';
 
-const ENABLE = String(process.env.LOG_JSONL || 'false') === 'true';
+const ENABLE = /^(1|true|yes)$/i.test(process.env.LOG_JSONL || '');
+
 const LOG_DIR = process.env.LOG_DIR || './data/logs';
 const HOOK_URL = process.env.LOG_WEBHOOK_URL || '';
 const HOOK_MS = Math.max(1000, parseInt(process.env.LOG_WEBHOOK_BATCH_MS || '5000', 10));
