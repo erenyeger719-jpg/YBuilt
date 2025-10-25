@@ -412,7 +412,7 @@ app.use(ipGate());
   const { default: executeRoutes } = await import('./routes/execute.js').catch(() => ({
     default: undefined as any,
   }));
-  const { default: execSandbox } = await import('./routes/execute.sandbox.js').catch(() => ({
+  const { default: execSandbox } = await import('./routes/execute.sandbox.ts').catch(() => ({
     default: undefined as any,
   }));
   const { default: previewsRouter } = await import('./routes/previews.js').catch(() => ({

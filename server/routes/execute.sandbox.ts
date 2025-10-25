@@ -14,7 +14,7 @@ function safePath(p: string) {
 }
 
 // --- GET /api/execute/health ---
-router.get("/execute/health", (_req, res) => {
+router.get("/health", (_req, res) => {
   res.json({
     ok: true,
     enabled: process.env.ENABLE_SANDBOX === "true",
@@ -23,7 +23,7 @@ router.get("/execute/health", (_req, res) => {
 });
 
 // --- POST /api/execute/run ---
-router.post("/execute/run", async (req: Request, res: Response) => {
+router.post("/run", async (req: Request, res: Response) => {
   const body = (req.body || {}) as ExecRequest;
 
   // 1) shape validation
