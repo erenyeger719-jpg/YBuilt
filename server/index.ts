@@ -18,6 +18,7 @@ import { apiRateLimit, quotaGate } from './middleware/limits.js';
 import { ipGate } from './middleware/ipGate.js';
 import buildsRouter from './routes/builds.js';
 import { wireBuildsNamespace } from './builds.js';
+import logsApiRouter from './routes/logs.js'; // note the .ts
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -255,7 +256,6 @@ app.use(ipGate());
 
       // --- cursor relay ---
       socket.on('collab:cursor', (payload: any) => {
-        // payload: { file?: string, startLine?: number, endLine?: number }
         if (room) {
           io.to(room).emit('collab:cursor:update', {
             peerId,
@@ -267,7 +267,6 @@ app.use(ipGate());
 
       // --- mention relay ---
       socket.on('collab:mention', (payload: any) => {
-        // payload: { toName: string, from: { name, color }, previewPath, file, commentId }
         if (room) {
           io.to(room).emit('collab:mention', payload);
         }
@@ -449,10 +448,6 @@ app.use(ipGate());
   const { default: abuseRouter } = await import('./routes/abuse.js').catch(() => ({
     default: undefined as any,
   }));
-  // NEW: Logs API router
-  const { default: logsApiRouter } = await import('./routes/logs.js').catch(() => ({
-    default: undefined as any,
-  }));
   // NEW: Palette API router
   const { default: paletteRouter } = await import('./routes/palette.js').catch(() => ({
     default: undefined as any,
@@ -493,8 +488,8 @@ app.use(ipGate());
   // NEW: Abuse endpoints
   if (abuseRouter) app.use('/api/abuse', express.json({ limit: '32kb' }), abuseRouter);
 
-  // NEW: Logs API
-  if (logsApiRouter) app.use('/api/logs', logsApiRouter);
+  // NEW: Logs API (unconditional, before static)
+  app.use('/api/logs', logsApiRouter);
 
   // NEW: Palette API
   if (paletteRouter) app.use('/api/palette', paletteRouter);
@@ -527,6 +522,11 @@ app.use(ipGate());
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
+
+  // === API 404 guard (place BEFORE Vite/static) ===
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ ok: false, error: 'api route not found' });
+  });
 
   // Static vs Vite dev (AFTER API)
   if (process.env.NODE_ENV === 'production') {
