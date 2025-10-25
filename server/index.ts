@@ -16,9 +16,9 @@ import { wireRequestLogs, wireLogsNamespace } from './logs.js';
 import deployQueue from './routes/deploy.queue.js';
 import { apiRateLimit, quotaGate } from './middleware/limits.js';
 import { ipGate } from './middleware/ipGate.js';
-import buildsRouter from './routes/builds.js';
-import { wireBuildsNamespace } from './builds.js';
-import logsApiRouter from './routes/logs.js'; // note the .ts
+import buildsRouter from './routes/builds.ts';
+import { wireBuildsNamespace } from './builds.ts';
+import logsApiRouter from './routes/logs.ts'; // note the .ts
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
