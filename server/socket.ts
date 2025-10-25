@@ -175,25 +175,30 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             limit,
             order: "desc",
           });
+
           const msgs = rows.reverse().map((r: any) => {
             const flags = messageFlags.get(String(r.id)) || {};
             const m = r.metadata || {};
+
             const editedIso = flags.editedAt
               ? new Date(flags.editedAt).toISOString()
               : m.editedAt
               ? new Date(m.editedAt).toISOString()
               : undefined;
-            const deletedFlag = flags.deleted ?? !!m.deleted;
 
+            const deletedFlag = flags.deleted ?? !!m.deleted;
             const pinnedSet = pinnedByProject.get(data.projectId) || new Set<string>();
             const pinnedFlag = pinnedSet.has(String(r.id)) || !!m.pinned;
+
+            // Hide content when deleted
+            const contentOut = deletedFlag ? "" : r.content;
 
             return {
               id: r.id,
               userId: r.userId,
               username: r.metadata?.username || r.userEmail || r.userId,
               role: r.role,
-              content: r.content,
+              content: contentOut,
               createdAt: r.createdAt,
               reactions: getCountsFor(String(r.id)),
               editedAt: editedIso,
@@ -201,6 +206,14 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
               pinned: pinnedFlag,
             };
           });
+
+          // Seed in-memory pins for this project from metadata
+          let set = pinnedByProject.get(data.projectId);
+          if (!set) pinnedByProject.set(data.projectId, (set = new Set<string>()));
+          for (const r of rows) {
+            if (r?.metadata?.pinned) set.add(String(r.id));
+          }
+
           socket.emit("chat:history", { projectId: data.projectId, msgs });
         } else {
           socket.emit("chat:history", { projectId: data.projectId, msgs: [] });
@@ -324,7 +337,11 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
                 new Map<string, { email: string; count: number }>();
 
               for (const [uid, { email }] of members.entries()) {
-                const handle = (email || "").split("@")[0].toLowerCase();
+                // normalize handle: john+staff -> john-staff
+                const handle = (email || "")
+                  .split("@")[0]
+                  .replace(/[^a-z0-9_-]/gi, "-")
+                  .toLowerCase();
 
                 if (mentioned.has("all") || mentioned.has(handle)) {
                   io.to(`user:${uid}`).emit("chat:mention", {
@@ -379,6 +396,12 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           // Fallback createdAt if storage unavailable
           if (!createdAt) createdAt = messageCreatedAt.get(String(messageId)) ?? null;
 
+          // Strict: must have createdAt to enforce window
+          if (!createdAt) {
+            socket.emit("error", { message: "Cannot verify edit window" });
+            return;
+          }
+
           if (!ownerId || String(ownerId) !== String(socket.user.sub)) {
             socket.emit("error", { message: "Only the author can edit" });
             return;
@@ -386,7 +409,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
 
           // 10-minute window
           const now = Date.now();
-          if (createdAt && now - createdAt > 10 * 60 * 1000) {
+          if (now - createdAt > 10 * 60 * 1000) {
             socket.emit("error", { message: "Edit window expired" });
             return;
           }
@@ -449,6 +472,12 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           // Fallback createdAt if storage unavailable
           if (!createdAt) createdAt = messageCreatedAt.get(String(messageId)) ?? null;
 
+          // Strict: must have createdAt to enforce window
+          if (!createdAt) {
+            socket.emit("error", { message: "Cannot verify edit window" });
+            return;
+          }
+
           if (!ownerId || String(ownerId) !== String(socket.user.sub)) {
             socket.emit("error", { message: "Only the author can delete" });
             return;
@@ -456,7 +485,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
 
           // 10-minute window
           const now = Date.now();
-          if (createdAt && now - createdAt > 10 * 60 * 1000) {
+          if (now - createdAt > 10 * 60 * 1000) {
             socket.emit("error", { message: "Delete window expired" });
             return;
           }

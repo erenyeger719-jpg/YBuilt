@@ -18,6 +18,11 @@ type Msg = {
 const EMOJIS = ["👍", "🎉", "❤️", "😂", "✅"];
 
 export default function ProjectChat({ projectId }: { projectId: string }) {
+  // helper: normalize a username to a "handle"
+  function handleOf(s?: string) {
+    return (s || "").split("@")[0].replace(/[^a-z0-9_-]/gi, "-");
+  }
+
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [members, setMembers] = useState<{ userId: string; username: string }[]>([]);
   const [draft, setDraft] = useState("");
@@ -46,6 +51,10 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   const [me, setMe] = useState<{ userId?: string; email?: string }>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+
+  // pins tray
+  const [showPins, setShowPins] = useState(false);
+  const pinnedMsgs = msgs.filter((m) => m.pinned && !m.deleted);
 
   // ---- Local cache: load first (before joining), then save on every change ----
   useEffect(() => {
@@ -99,11 +108,28 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
+  // jump to hash (permalink) on mount
+  useEffect(() => {
+    const h = window.location.hash;
+    if (!h || !boxRef.current) return;
+    const el = document.getElementById(h.slice(1));
+    if (el) el.scrollIntoView({ block: "center" });
+  }, []);
+
   useEffect(() => {
     if (!projectId) return;
     const s = getSocket();
+
+    // Ensure auth token is set before the socket connects (avoid 401 on anon connect)
     // @ts-ignore
-    if (s.auth && !s.auth.token) s.auth.token = localStorage.getItem("jwt") || undefined;
+    const tok = localStorage.getItem("jwt") || undefined;
+    // @ts-ignore
+    if (s.auth && !s.auth.token && tok) {
+      s.disconnect();
+      // @ts-ignore
+      s.auth.token = tok;
+      s.connect();
+    }
 
     s.emit("join:project", projectId);
     s.emit("chat:history", { projectId, limit: 50 });
@@ -188,7 +214,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       setMsgs((prev) => prev.map((m) => (m.id === p.id ? { ...m, deleted: true } : m)));
     };
 
-    // NEW: pin updates
+    // pin updates
     const onPinUpdate = (p: { id: string; projectId: string; pinned: boolean }) => {
       if (p.projectId !== projectId) return;
       setMsgs((prev) => prev.map((m) => (m.id === p.id ? { ...m, pinned: p.pinned } : m)));
@@ -202,7 +228,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     s.on("chat:react:update", onReactUpdate);
     s.on("chat:message:update", onMsgUpdate);
     s.on("chat:message:delete", onMsgDelete);
-    s.on("chat:pin:update", onPinUpdate); // <-- added
+    s.on("chat:pin:update", onPinUpdate);
 
     return () => {
       s.emit("leave:project", projectId);
@@ -214,7 +240,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       s.off("chat:react:update", onReactUpdate);
       s.off("chat:message:update", onMsgUpdate);
       s.off("chat:message:delete", onMsgDelete);
-      s.off("chat:pin:update", onPinUpdate); // <-- added
+      s.off("chat:pin:update", onPinUpdate);
     };
   }, [projectId]);
 
@@ -282,20 +308,41 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   }, [unread]);
 
   function renderContent(text: string) {
+    const urlRx = /(https?:\/\/[^\s)]+)(?=[\s)|]?)/gi;
     const parts = text.split(/(\B@[\w-]+)/g);
+
     return parts.map((p, i) => {
+      // mentions
       if (/^\B@[\w-]+$/.test(p)) {
         const isAll = p.toLowerCase() === "@all";
         return (
           <span
-            key={i}
+            key={"m" + i}
             className={"rounded px-1 " + (isAll ? "bg-red-100 text-red-700" : "bg-yellow-100")}
           >
             {p}
           </span>
         );
       }
-      return <span key={i}>{p}</span>;
+
+      // linkify the rest
+      const chunks = p.split(urlRx);
+      return chunks.map((c, j) => {
+        if (/^https?:\/\//i.test(c)) {
+          return (
+            <a
+              key={"u" + i + "-" + j}
+              href={c}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:no-underline"
+            >
+              {c}
+            </a>
+          );
+        }
+        return <span key={"t" + i + "-" + j}>{c}</span>;
+      });
     });
   }
 
@@ -353,7 +400,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
     getSocket().emit("chat:message:delete", { projectId, messageId: id });
   }
 
-  // NEW: toggle pin helper
+  // toggle pin helper
   function togglePin(m: Msg) {
     if (!m.id) return;
     const op = m.pinned ? "unpin" : "pin";
@@ -463,14 +510,21 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
 
   // mention options (max 8)
   const mentionOptions = members
-    .map((m) => m.username.split("@")[0])
+    .map((m) => handleOf(m.username))
     .filter((name) => name.toLowerCase().includes(mentionQuery.toLowerCase()))
     .slice(0, 8);
   const activeIdx = mentionOptions.length ? mentionIndex % mentionOptions.length : 0;
 
+  function jumpTo(id?: string) {
+    if (!id) return;
+    const el = document.getElementById(`m-${id}`);
+    if (el) el.scrollIntoView({ block: "center" });
+    setShowPins(false);
+  }
+
   return (
     <div
-      className="border rounded bg-background h-72 grid grid-rows-[auto_1fr_auto]"
+      className="border rounded bg-background h-72 grid grid-rows-[auto_auto_1fr_auto]"
       onMouseEnter={() => {
         activeRef.current = true;
         if (unread > 0) clearUnread();
@@ -483,7 +537,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
             {members.slice(0, 5).map((m) => (
               <span key={m.userId} className="px-1 rounded bg-muted">
-                {m.username.split("@")[0]}
+                {handleOf(m.username)}
               </span>
             ))}
             {members.length > 5 && <span>+{members.length - 5}</span>}
@@ -494,10 +548,44 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
             {unread} new
           </span>
         )}
+        {pinnedMsgs.length > 0 && (
+          <button
+            type="button"
+            className="ml-2 text-[10px] px-2 py-0.5 border rounded bg-yellow-50 border-yellow-300"
+            onClick={() => setShowPins((v) => !v)}
+            title="Show pinned"
+          >
+            ★ {pinnedMsgs.length} pinned
+          </button>
+        )}
         {typingNames.length > 0 && (
           <div className="ml-auto text-muted-foreground">{typingNames.join(", ")} typing…</div>
         )}
       </div>
+
+      {showPins && (
+        <div className="px-3 py-2 text-xs border-b bg-muted/40 max-h-28 overflow-auto">
+          {pinnedMsgs.map((pm) => (
+            <div key={pm.id} className="flex items-center justify-between gap-2 py-1">
+              <div className="truncate">
+                <span className="font-medium">{handleOf(pm.username) || pm.role}</span>
+                <span className="mx-1">—</span>
+                <span className="text-muted-foreground">
+                  {pm.content.slice(0, 80)}
+                  {pm.content.length > 80 ? "…" : ""}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="text-[10px] px-2 py-0.5 border rounded"
+                onClick={() => jumpTo(pm.id)}
+              >
+                Jump
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="relative">
         <div ref={boxRef} className="p-3 overflow-auto text-xs space-y-2 h-40">
@@ -505,7 +593,11 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
             <div className="text-muted-foreground">Start the conversation…</div>
           ) : (
             msgs.map((m, i) => (
-              <div key={m.id || i} className="group">
+              <div
+                key={m.id || i}
+                id={m.id ? `m-${m.id}` : undefined}
+                className="group"
+              >
                 <div className="flex items-start gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1 flex-wrap">
@@ -544,6 +636,20 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
                         title={m.pinned ? "Unpin" : "Pin"}
                       >
                         {m.pinned ? "★ Unpin" : "☆ Pin"}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="text-xs px-2 py-0.5 border rounded"
+                        onClick={() => {
+                          if (!m.id) return;
+                          const url = new URL(window.location.href);
+                          url.hash = `m-${m.id}`;
+                          navigator.clipboard.writeText(url.toString()).catch(() => {});
+                        }}
+                        title="Copy message link"
+                      >
+                        Link
                       </button>
 
                       {canEditOrDelete(m) &&
