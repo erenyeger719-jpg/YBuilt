@@ -446,6 +446,14 @@ app.use(ipGate());
   const { default: abuseRouter } = await import('./routes/abuse.js').catch(() => ({
     default: undefined as any,
   }));
+  // NEW: Logs API router
+  const { default: logsApiRouter } = await import('./routes/logs.js').catch(() => ({
+    default: undefined as any,
+  }));
+  // NEW: Palette API router
+  const { default: paletteRouter } = await import('./routes/palette.js').catch(() => ({
+    default: undefined as any,
+  }));
 
   // CJS dynamic-import interop (comments + qna)
   const commentsMod: any = await import('./routes/comments.js')
@@ -481,6 +489,12 @@ app.use(ipGate());
 
   // NEW: Abuse endpoints
   if (abuseRouter) app.use('/api/abuse', express.json({ limit: '32kb' }), abuseRouter);
+
+  // NEW: Logs API
+  if (logsApiRouter) app.use('/api/logs', logsApiRouter);
+
+  // NEW: Palette API
+  if (paletteRouter) app.use('/api/palette', paletteRouter);
 
   // Comments API
   if (commentsMod?.list) app.get('/api/comments/list', commentsMod.list);
