@@ -15,6 +15,7 @@ import { initializeSocket } from './socket.js';
 import { wireRequestLogs, wireLogsNamespace } from './logs.js';
 import deployQueue from './routes/deploy.queue.js';
 import { apiRateLimit, quotaGate } from './middleware/limits.js';
+import { ipGate } from './middleware/ipGate.js';
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -55,6 +56,9 @@ const reqMw =
   (Sentry as any).Handlers?.requestHandler?.();
 if (reqMw) app.use(reqMw);
 
+// IP allow/deny gate (must run early)
+app.use(ipGate());
+
 (async () => {
   // Ensure data dir
   const dataDir = './data';
@@ -91,6 +95,11 @@ if (reqMw) app.use(reqMw);
     );
   } else {
     app.use(helmet({ contentSecurityPolicy: false }));
+  }
+
+  // Optional: add HSTS in production (after Helmet)
+  if (process.env.NODE_ENV === 'production') {
+    app.use(helmet.hsts({ maxAge: 15_552_000 })); // ~180 days
   }
 
   // CORS + parsers
@@ -231,11 +240,11 @@ if (reqMw) app.use(reqMw);
       // --- DEPLOY ROOMS ---
       socket.on('deploy:join', ({ jobId }: { jobId: string }) => {
         if (!jobId) return;
-        socket.join(jobId);
+        socket.join(`deploy:${jobId}`);
       });
       socket.on('deploy:leave', ({ jobId }: { jobId: string }) => {
         if (!jobId) return;
-        socket.leave(jobId);
+        socket.leave(`deploy:${jobId}`);
       });
 
       // --- explicit leave handler ---
@@ -419,7 +428,7 @@ if (reqMw) app.use(reqMw);
   if (authRoutes) app.use('/api/auth', authRoutes);
   if (projectsRoutes) app.use('/api/projects', projectsRoutes);
   if (chatRoutes) app.use('/api/chat', chatRoutes);
-  if (executeRoutes) app.use('/api/execute', executeRoutes);
+  if (executeRoutes) app.use('/api/execute', express.json({ limit: '256kb' }), executeRoutes);
   if (previewsRouter) app.use('/api/previews', express.json(), previewsRouter);
   if (exportRouter) app.use('/api/previews', express.json(), exportRouter);
   if (deployRouter) app.use('/api/deploy', express.json({ limit: '5mb' }), deployRouter);
