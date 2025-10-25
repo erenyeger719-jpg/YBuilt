@@ -10,7 +10,7 @@ const FilePresence = lazy(() => import("@/components/collab/FilePresence"));
 export function collabUrlForPreview(previewPath: string) {
   // put the previewPath into projectId; server rooms are strings, this is fine
   const q = new URLSearchParams({ projectId: previewPath }).toString();
-  return `/Collab?${q}`;
+  return `/collab?${q}`;
 }
 
 function useQueryParam(key: string) {

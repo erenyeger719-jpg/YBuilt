@@ -15,6 +15,7 @@ import TemplateDetail from "@/pages/TemplateDetail"; // template detail
 import CollabPage from "@/pages/Collab";     // collab room
 import AcceptInvite from "@/pages/AcceptInvite"; // accept team invite
 import TeamHome from "@/pages/TeamHome";     // team home
+import Collab from "@/pages/Collab";         // alias import for cheap routes
 
 // Weavy wrapper + board (bridge band)
 import WeavySection from "@/components/WeavySection";
@@ -72,9 +73,17 @@ export default function App() {
         {/* Workspace */}
         <Route path="/workspace/:jobId" component={Workspace} />
 
-        {/* Collab room */}
+        {/* Collab room with roomId param */}
         <Route path="/collab/:roomId">
           <CollabPage />
+        </Route>
+
+        {/* Cheap alias routes (case-insensitive UX) */}
+        <Route path="/collab">
+          <Collab />
+        </Route>
+        <Route path="/Collab">
+          <Collab />
         </Route>
 
         {/* Weavy bridge band + board (new route) */}
