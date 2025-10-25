@@ -3,6 +3,7 @@ import { EventEmitter } from "events";
 
 export const logsBus = new EventEmitter();
 
+/* ----------------------------- tiny utils ----------------------------- */
 function durationMs(startNs) {
   const diff = process.hrtime.bigint() - startNs;
   return Math.round(Number(diff) / 1e6);
@@ -11,7 +12,8 @@ function durationMs(startNs) {
 function pickRequestId(req, res) {
   // Try several common places middleware may stash a request id
   const fromHeader =
-    (typeof res.getHeader === "function" && (res.getHeader("x-request-id") || res.getHeader("X-Request-ID"))) ||
+    (typeof res.getHeader === "function" &&
+      (res.getHeader("x-request-id") || res.getHeader("X-Request-ID"))) ||
     req.headers?.["x-request-id"];
   return (
     (req.id && String(req.id)) ||
@@ -21,10 +23,27 @@ function pickRequestId(req, res) {
   );
 }
 
+/* ----------------------------- history buffer ----------------------------- */
+const HISTORY_CAP = 500;
+const _history = [];
+
+/** Push a row into the in-memory log history (with cap) */
+function pushHistory(row) {
+  _history.push(row);
+  if (_history.length > HISTORY_CAP) _history.shift();
+}
+
+/** Return the most recent N log rows (server + client) */
+export function recentLogs(n = 100) {
+  return _history.slice(-Math.max(0, n));
+}
+
+/* ----------------------------- request wiring ----------------------------- */
 export function wireRequestLogs(app, io) {
   // Emits one event per HTTP request when it finishes
   app.use((req, res, next) => {
-    const start = process.hrtime.bigint();
+    const startNs = process.hrtime.bigint();
+    const startWall = Date.now(); // used for the http:done payload (explicit request)
 
     res.on("finish", () => {
       const rid = pickRequestId(req, res);
@@ -42,7 +61,7 @@ export function wireRequestLogs(app, io) {
         method: req.method,
         path: req.originalUrl || req.url,
         status: res.statusCode,
-        ms: durationMs(start),
+        ms: durationMs(startNs),
         ip: req.ip,
         ua: req.headers["user-agent"] || "",
       };
@@ -50,13 +69,16 @@ export function wireRequestLogs(app, io) {
       // Internal event bus
       logsBus.emit("log", payload);
 
+      // Save to recent in-memory history
+      pushHistory(payload);
+
       // Socket.IO broadcasts (namespace: /logs)
       try {
         const ns = io?.of("/logs");
         if (ns) {
           // Keep existing event name for back-compat
           ns.emit("log:server", payload);
-          // Also emit the new event expected by some consumers
+          // Also emit the newer alias some consumers expect
           ns.emit("server:req", payload);
 
           // If we have a request id, also target a room for that request
@@ -64,6 +86,20 @@ export function wireRequestLogs(app, io) {
             ns.to(`req:${rid}`).emit("log:server", payload);
             ns.to(`req:${rid}`).emit("server:req", payload);
           }
+
+          // ---- Extra emission requested by spec: http:done ----
+          const httpDone = {
+            ts: Date.now(),
+            requestId: rid || undefined,
+            method: req.method,
+            path: req.originalUrl || req.url,
+            status: res.statusCode,
+            ms: Math.max(0, Date.now() - startWall),
+          };
+          // Broadcast http:done and store in history as well
+          ns.emit("http:done", httpDone);
+          pushHistory({ ...httpDone, kind: "request", type: "http:done" });
+          if (rid) ns.to(`req:${rid}`).emit("http:done", httpDone);
         }
       } catch {
         // swallow — logging should never crash the app
@@ -74,10 +110,18 @@ export function wireRequestLogs(app, io) {
   });
 }
 
+/* ----------------------------- namespace wiring ----------------------------- */
 export function wireLogsNamespace(io) {
   const ns = io.of("/logs");
 
   ns.on("connection", (socket) => {
+    // On connect, send recent history (backfill)
+    try {
+      socket.emit("history", recentLogs(100));
+    } catch {
+      // non-fatal
+    }
+
     // optional: follow a specific request id
     socket.on("join-req", (reqId) => {
       if (reqId) socket.join(`req:${reqId}`);
@@ -104,6 +148,7 @@ export function wireLogsNamespace(io) {
         message: p.error ? String(p.error) : undefined,
       };
       logsBus.emit("log", row);
+      pushHistory(row);
       ns.emit("log:client", row);
       if (rid) ns.to(`req:${rid}`).emit("log:client", row);
     });
@@ -123,6 +168,7 @@ export function wireLogsNamespace(io) {
         path: p.path || "",
       };
       logsBus.emit("log", row);
+      pushHistory(row);
       ns.emit("log:client", row);
       if (rid) ns.to(`req:${rid}`).emit("log:client", row);
     });
@@ -146,6 +192,7 @@ export function wireLogsNamespace(io) {
 
       // Emit on process bus
       logsBus.emit("log", payload);
+      pushHistory(payload);
 
       // Broadcast to all listeners and, if present, the per-request room
       ns.emit("log:client", payload);
