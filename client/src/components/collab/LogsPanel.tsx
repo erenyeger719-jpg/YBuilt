@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
-import { Button } from "@/components/ui/button";
 
 type LogEvt = { type: "log"; line: string; ts: number; user?: string };
 type StageEvt = { type: "stage"; name: string; ts: number };
@@ -9,15 +8,19 @@ type ChatEvt = { type: "chat"; user: string; text: string; ts: number };
 type DeployEvent = LogEvt | StageEvt | DoneEvt | ChatEvt;
 
 function isDeployEvent(e: any): e is DeployEvent {
-  return e && typeof e === "object" && typeof e.type === "string" &&
-    (e.type === "log" || e.type === "stage" || e.type === "done" || e.type === "chat");
+  return (
+    e &&
+    typeof e === "object" &&
+    typeof e.type === "string" &&
+    (e.type === "log" || e.type === "stage" || e.type === "done" || e.type === "chat")
+  );
 }
 
 export default function LogsPanel() {
   const [jobId, setJobId] = useState("");
   const [joined, setJoined] = useState<string | null>(null);
   const [events, setEvents] = useState<DeployEvent[]>([]);
-  const [draft, setDraft] = useState("");
+  const [chat, setChat] = useState("");
   const boxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -60,28 +63,34 @@ export default function LogsPanel() {
   }
 
   function sendChat() {
-    const text = draft.trim();
+    const text = chat.trim();
     if (!text || !joined) return;
     getSocket().emit("deploy:chat", { jobId: joined, text });
-    setDraft("");
+    setChat("");
   }
 
   return (
     <div className="border rounded bg-background h-72 grid grid-rows-[auto_1fr_auto]">
-      <div className="px-3 py-2 text-xs border-b flex items-center gap-2">
-        <div className="font-medium">Deploy Logs</div>
-        <input
-          className="text-xs px-2 py-0.5 border rounded bg-background w-56"
-          placeholder="Job ID (room)"
-          value={jobId}
-          onChange={(e) => setJobId(e.target.value)}
-        />
-        {joined ? (
-          <Button size="sm" onClick={leave}>Leave</Button>
-        ) : (
-          <Button size="sm" onClick={join}>Join</Button>
-        )}
-        {joined && <span className="text-muted-foreground">• joined: {joined}</span>}
+      <div className="px-3 py-2 text-xs border-b">
+        {/* header row */}
+        <div className="flex items-center gap-2">
+          <div className="font-medium">Deploy Logs</div>
+          <input
+            className="ml-auto w-48 px-2 py-1 border rounded"
+            placeholder="Job ID (room)"
+            value={jobId}
+            onChange={(e) => setJobId(e.target.value)}
+          />
+          {joined ? (
+            <button className="px-3 py-1 border rounded" onClick={leave}>
+              Leave
+            </button>
+          ) : (
+            <button className="px-3 py-1 border rounded" onClick={join}>
+              Join
+            </button>
+          )}
+        </div>
       </div>
 
       <div ref={boxRef} className="p-3 overflow-auto text-xs space-y-1">
@@ -121,13 +130,16 @@ export default function LogsPanel() {
       </div>
 
       <div className="p-2 border-t">
-        <div className="flex gap-2">
+        {/* footer send row */}
+        <div className="mt-2 flex items-center gap-2">
+          <button className="px-3 py-1 border rounded" onClick={() => setChat("Comment")}>
+            Comment
+          </button>
           <input
-            className="flex-1 border rounded px-2 py-1 text-xs bg-background"
-            placeholder={joined ? "Send a chat line to this job…" : "Join a job to chat…"}
-            disabled={!joined}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            className="flex-1 px-2 py-1 border rounded"
+            placeholder="Chat…"
+            value={chat}
+            onChange={(e) => setChat(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -135,9 +147,13 @@ export default function LogsPanel() {
               }
             }}
           />
-          <Button size="sm" onClick={sendChat} disabled={!joined || !draft.trim()}>
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            disabled={!joined || !chat.trim()}
+            onClick={sendChat}
+          >
             Send
-          </Button>
+          </button>
         </div>
       </div>
     </div>

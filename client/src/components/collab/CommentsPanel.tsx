@@ -27,7 +27,7 @@ export default function CommentsPanel({
   const [items, setItems] = useState<Comment[]>([]);
   const [filterFile, setFilterFile] = useState<string>(currentFile || "");
   const [draft, setDraft] = useState("");
-  const [line, setLine] = useState<number | "">("");
+  const [line, setLine] = useState<string>(""); // changed: keep as string
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const textRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -97,11 +97,14 @@ export default function CommentsPanel({
   function createComment(parent?: Comment) {
     const content = draft.trim();
     if (!content) return;
+
+    const parsedLine = line && Number.isFinite(Number(line)) ? Number(line) : null;
+
     const s = getSocket();
     s.emit("comment:create", {
       projectId,
       filePath: filterFile || currentFile || "README.md",
-      line: line === "" ? null : Number(line),
+      line: parsedLine,
       content,
       threadId: parent ? parent.threadId : null,
       parentId: parent ? parent.id : null,
@@ -235,10 +238,11 @@ export default function CommentsPanel({
             onChange={(e) => setFilterFile(e.target.value)}
           />
           <input
+            type="number"
             className="w-24 border rounded px-2 py-1 text-xs bg-background"
             placeholder="Line"
             value={line}
-            onChange={(e) => setLine(e.target.value === "" ? "" : Number(e.target.value))}
+            onChange={(e) => setLine(e.target.value)}
           />
           <textarea
             className="flex-1 border rounded px-2 py-1 text-xs bg-background resize-y min-h-[2rem] max-h-[8rem]"

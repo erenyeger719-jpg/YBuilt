@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { io, Socket } from "socket.io-client";
+import { io } from "socket.io-client";
 
-let _sock: Socket | null = null;
-function getSocket(): Socket {
-  if (_sock) return _sock;
-  _sock = io("/", { transports: ["websocket"] });
-  return _sock;
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  (location.port === "3000" ? "http://localhost:5050" : location.origin);
+
+const s = io(SOCKET_URL, { withCredentials: true, transports: ["websocket"] });
+
+// optional, handy for quick testing in DevTools:
+(window as any).getSocket = () => s;
+
+export function getSocket() {
+  return s;
 }
 
 export type Peer = { id: string; name: string; color: string; file?: string };
@@ -25,28 +31,28 @@ export function usePresence(
   useEffect(() => {
     if (!room) return;
 
-    const s = getSocket();
+    const sock = getSocket();
 
     // join room with identity
-    s.emit("collab:join", { room, user: { name: me.name, color: me.color } });
+    sock.emit("collab:join", { room, user: { name: me.name, color: me.color } });
 
     // presence updates from server
     const onUpd = (p: { room: string; peers: Peer[] }) => {
       if (p?.room === room) setPeers(Array.isArray(p.peers) ? p.peers : []);
     };
-    s.on("collab:presence:update", onUpd);
+    sock.on("collab:presence:update", onUpd);
 
     // initial heartbeat (carry current file), then periodic
-    s.emit("collab:presence", { file: fileRef.current });
+    sock.emit("collab:presence", { file: fileRef.current });
     const hb = setInterval(() => {
-      s.emit("collab:presence", { file: fileRef.current });
+      sock.emit("collab:presence", { file: fileRef.current });
     }, 15_000);
 
     return () => {
       clearInterval(hb);
-      s.off("collab:presence:update", onUpd);
+      sock.off("collab:presence:update", onUpd);
       // tell the room we left (server may prune immediately or ignore)
-      s.emit("collab:leave", { room });
+      sock.emit("collab:leave", { room });
       // we keep the socket alive; server handles room lifecycle on disconnect
     };
   }, [room, me.name, me.color]);
@@ -59,10 +65,10 @@ export function broadcastComment(payload: any) {
 }
 
 export function onCommentEvent(handler: (p: any) => void) {
-  const s = getSocket();
+  const sock = getSocket();
   const wrapped = (p: any) => handler(p);
-  s.on("collab:comment:event", wrapped);
-  return () => s.off("collab:comment:event", wrapped);
+  sock.on("collab:comment:event", wrapped);
+  return () => sock.off("collab:comment:event", wrapped);
 }
 
 // --- cursor helpers ---
@@ -79,10 +85,10 @@ export function onCursor(
     ts: number;
   }) => void
 ) {
-  const s = getSocket();
+  const sock = getSocket();
   const wrap = (p: any) => handler(p);
-  s.on("collab:cursor:update", wrap);
-  return () => s.off("collab:cursor:update", wrap);
+  sock.on("collab:cursor:update", wrap);
+  return () => sock.off("collab:cursor:update", wrap);
 }
 
 // --- mention helpers ---
@@ -97,10 +103,10 @@ export function sendMention(payload: {
 }
 
 export function onMention(handler: (p: any) => void) {
-  const s = getSocket();
+  const sock = getSocket();
   const wrap = (p: any) => handler(p);
-  s.on("collab:mention", wrap);
-  return () => s.off("collab:mention", wrap);
+  sock.on("collab:mention", wrap);
+  return () => sock.off("collab:mention", wrap);
 }
 
 // --- util: my socket id (for accurate chip filtering, etc.) ---
