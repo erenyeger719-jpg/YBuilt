@@ -56,6 +56,41 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   const [showPins, setShowPins] = useState(false);
   const pinnedMsgs = msgs.filter((m) => m.pinned && !m.deleted);
 
+  // search
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<string[]>([]);
+  const [hitIdx, setHitIdx] = useState(0);
+
+  // recompute hits when msgs or query change
+  useEffect(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      setHits([]);
+      setHitIdx(0);
+      return;
+    }
+    const ids = msgs
+      .filter(
+        (m) =>
+          !m.deleted &&
+          !!m.id &&
+          ((m.content || "").toLowerCase().includes(q) ||
+            (m.username || "").toLowerCase().includes(q))
+      )
+      .map((m) => m.id!);
+    setHits(ids);
+    setHitIdx(0);
+  }, [query, msgs]);
+
+  function nextHit() {
+    if (!hits.length) return;
+    setHitIdx((i) => (i + 1) % hits.length);
+  }
+  function prevHit() {
+    if (!hits.length) return;
+    setHitIdx((i) => (i - 1 + hits.length) % hits.length);
+  }
+
   // ---- Local cache: load first (before joining), then save on every change ----
   useEffect(() => {
     if (!projectId) return;
@@ -112,9 +147,18 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   useEffect(() => {
     const h = window.location.hash;
     if (!h || !boxRef.current) return;
+    setQuery(""); // ensure no pre-filter hides the target
     const el = document.getElementById(h.slice(1));
     if (el) el.scrollIntoView({ block: "center" });
   }, []);
+
+  // auto-jump when the current hit changes
+  useEffect(() => {
+    if (!hits.length) return;
+    const id = hits[hitIdx];
+    const t = setTimeout(() => jumpTo(id), 0);
+    return () => clearTimeout(t);
+  }, [hits, hitIdx]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -558,6 +602,47 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
             ★ {pinnedMsgs.length} pinned
           </button>
         )}
+
+        {/* Search */}
+        <div className="ml-2 flex items-center gap-1">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search…"
+            className="text-xs px-2 py-0.5 border rounded bg-background w-40"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && hits.length) {
+                e.preventDefault();
+                nextHit();
+              } else if (e.key === "Escape") {
+                setQuery("");
+              }
+            }}
+          />
+          <div className="text-[10px] text-muted-foreground tabular-nums">
+            {hits.length > 0 ? `${hitIdx + 1}/${hits.length}` : "0/0"}
+          </div>
+          <button
+            type="button"
+            className="text-[10px] px-2 py-0.5 border rounded"
+            onClick={prevHit}
+            disabled={!hits.length}
+            title="Previous match"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            className="text-[10px] px-2 py-0.5 border rounded"
+            onClick={nextHit}
+            disabled={!hits.length}
+            title="Next match"
+          >
+            ↓
+          </button>
+        </div>
+
         {typingNames.length > 0 && (
           <div className="ml-auto text-muted-foreground">{typingNames.join(", ")} typing…</div>
         )}
@@ -592,152 +677,169 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
           {msgs.length === 0 ? (
             <div className="text-muted-foreground">Start the conversation…</div>
           ) : (
-            msgs.map((m, i) => (
-              <div
-                key={m.id || i}
-                id={m.id ? `m-${m.id}` : undefined}
-                className="group"
-              >
-                <div className="flex items-start gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <span className="font-medium">{m.username || m.role}</span>
-                      <span className="text-muted-foreground">
-                        {m.createdAt
-                          ? new Date(m.createdAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : ""}
-                      </span>
-                      {m.editedAt && !m.deleted && (
-                        <span className="text-muted-foreground text-[10px]">(edited)</span>
-                      )}
-                      {m.pinned && !m.deleted && (
-                        <span className="text-yellow-600 text-[10px] ml-1">★ pinned</span>
-                      )}
+            msgs.map((m, i) => {
+              const q = query.trim().toLowerCase();
+              const isHit =
+                !!q &&
+                !m.deleted &&
+                (((m.content || "").toLowerCase().includes(q) ||
+                  (m.username || "").toLowerCase().includes(q)));
+              const isCurrent = !!m.id && hits.length > 0 && m.id === hits[hitIdx];
+
+              return (
+                <div
+                  key={m.id || i}
+                  id={m.id ? `m-${m.id}` : undefined}
+                  className={
+                    "group rounded " +
+                    (isCurrent
+                      ? "ring-1 ring-blue-400 bg-blue-50/40"
+                      : isHit
+                      ? "bg-amber-50/40"
+                      : "")
+                  }
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="font-medium">{m.username || m.role}</span>
+                        <span className="text-muted-foreground">
+                          {m.createdAt
+                            ? new Date(m.createdAt).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : ""}
+                        </span>
+                        {m.editedAt && !m.deleted && (
+                          <span className="text-muted-foreground text-[10px]">(edited)</span>
+                        )}
+                        {m.pinned && !m.deleted && (
+                          <span className="text-yellow-600 text-[10px] ml-1">★ pinned</span>
+                        )}
+                      </div>
+
+                      <div className={m.deleted ? "text-muted-foreground italic" : ""}>
+                        {m.deleted ? "message deleted" : renderContent(m.content)}
+                      </div>
                     </div>
 
-                    <div className={m.deleted ? "text-muted-foreground italic" : ""}>
-                      {m.deleted ? "message deleted" : renderContent(m.content)}
-                    </div>
+                    {/* Actions: pin for everyone, edit/delete for own msgs within window */}
+                    {!m.deleted && (
+                      <div className="opacity-0 group-hover:opacity-100 transition flex gap-1">
+                        <button
+                          type="button"
+                          className={
+                            "text-xs px-2 py-0.5 border rounded " +
+                            (m.pinned ? "bg-yellow-50 border-yellow-300" : "")
+                          }
+                          onClick={() => togglePin(m)}
+                          title={m.pinned ? "Unpin" : "Pin"}
+                        >
+                          {m.pinned ? "★ Unpin" : "☆ Pin"}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="text-xs px-2 py-0.5 border rounded"
+                          onClick={() => {
+                            if (!m.id) return;
+                            const url = new URL(window.location.href);
+                            url.hash = `m-${m.id}`;
+                            navigator.clipboard.writeText(url.toString()).catch(() => {});
+                          }}
+                          title="Copy message link"
+                        >
+                          Link
+                        </button>
+
+                        {canEditOrDelete(m) &&
+                          (editingId === m.id ? (
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-0.5 border rounded"
+                                onClick={saveEdit}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-0.5 border rounded"
+                                onClick={cancelEdit}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-0.5 border rounded"
+                                onClick={() => startEdit(m)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-0.5 border rounded"
+                                onClick={() => deleteMsg(m.id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Actions: pin for everyone, edit/delete for own msgs within window */}
-                  {!m.deleted && (
-                    <div className="opacity-0 group-hover:opacity-100 transition flex gap-1">
-                      <button
-                        type="button"
-                        className={
-                          "text-xs px-2 py-0.5 border rounded " +
-                          (m.pinned ? "bg-yellow-50 border-yellow-300" : "")
-                        }
-                        onClick={() => togglePin(m)}
-                        title={m.pinned ? "Unpin" : "Pin"}
-                      >
-                        {m.pinned ? "★ Unpin" : "☆ Pin"}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="text-xs px-2 py-0.5 border rounded"
-                        onClick={() => {
-                          if (!m.id) return;
-                          const url = new URL(window.location.href);
-                          url.hash = `m-${m.id}`;
-                          navigator.clipboard.writeText(url.toString()).catch(() => {});
+                  {/* Inline edit field */}
+                  {editingId === m.id && (
+                    <div className="mt-1">
+                      <textarea
+                        className="w-full border rounded px-2 py-1 text-xs bg-background resize-y min-h-[2rem] max-h-[8rem]"
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            saveEdit();
+                          } else if (e.key === "Escape") {
+                            e.preventDefault();
+                            cancelEdit();
+                          }
                         }}
-                        title="Copy message link"
-                      >
-                        Link
-                      </button>
+                        autoFocus
+                      />
+                    </div>
+                  )}
 
-                      {canEditOrDelete(m) &&
-                        (editingId === m.id ? (
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              className="text-xs px-2 py-0.5 border rounded"
-                              onClick={saveEdit}
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              className="text-xs px-2 py-0.5 border rounded"
-                              onClick={cancelEdit}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              className="text-xs px-2 py-0.5 border rounded"
-                              onClick={() => startEdit(m)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="text-xs px-2 py-0.5 border rounded"
-                              onClick={() => deleteMsg(m.id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        ))}
+                  {/* Reactions bar (skip system/deleted) */}
+                  {m.id && m.role !== "system" && !m.deleted && (
+                    <div className="mt-0.5 flex items-center gap-2 opacity-80 group-hover:opacity-100">
+                      {EMOJIS.map((e) => {
+                        const count = m.reactions?.[e] || 0;
+                        const mine = myReacts.has(`${m.id}:${e}`);
+                        return (
+                          <button
+                            key={e}
+                            type="button"
+                            className={
+                              "border rounded-full px-1.5 py-0.5 text-[10px] " +
+                              (mine ? "bg-blue-50 border-blue-300" : "bg-muted")
+                            }
+                            onClick={() => toggleReact(m.id, e)}
+                            title={e}
+                          >
+                            {e} {count > 0 ? count : ""}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-
-                {/* Inline edit field */}
-                {editingId === m.id && (
-                  <div className="mt-1">
-                    <textarea
-                      className="w-full border rounded px-2 py-1 text-xs bg-background resize-y min-h-[2rem] max-h-[8rem]"
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          saveEdit();
-                        } else if (e.key === "Escape") {
-                          e.preventDefault();
-                          cancelEdit();
-                        }
-                      }}
-                      autoFocus
-                    />
-                  </div>
-                )}
-
-                {/* Reactions bar (skip system/deleted) */}
-                {m.id && m.role !== "system" && !m.deleted && (
-                  <div className="mt-0.5 flex items-center gap-2 opacity-80 group-hover:opacity-100">
-                    {EMOJIS.map((e) => {
-                      const count = m.reactions?.[e] || 0;
-                      const mine = myReacts.has(`${m.id}:${e}`);
-                      return (
-                        <button
-                          key={e}
-                          type="button"
-                          className={
-                            "border rounded-full px-1.5 py-0.5 text-[10px] " +
-                            (mine ? "bg-blue-50 border-blue-300" : "bg-muted")
-                          }
-                          onClick={() => toggleReact(m.id, e)}
-                          title={e}
-                        >
-                          {e} {count > 0 ? count : ""}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
