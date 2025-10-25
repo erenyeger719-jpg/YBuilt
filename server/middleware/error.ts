@@ -1,53 +1,71 @@
-export function errorHandler(err, req, res, next) {
-  const statusCode = err instanceof HttpError ? err.statusCode : 500;
-  const isDev = process.env.NODE_ENV !== 'production';
-  const rid = (res.getHeader('X-Request-ID') || req.headers['x-request-id'] || '') + '';
-  const message = err?.message || (statusCode >= 500 ? 'Something went wrong.' : 'Request error.');
+import { Request, Response, NextFunction } from 'express';
+import { logger } from './logging.js';
 
-  // log with rid
-  logger.error(
-    {
-      rid,
-      error: err?.message,
-      stack: isDev ? err?.stack : undefined,
-      statusCode,
-      path: req.path,
-      method: req.method,
-    },
-    'Request error'
-  );
-
-  const payload = {
-    ok: false,
-    error: statusCode >= 500 ? 'server_error' : 'request_error',
-    message: isDev ? message : (statusCode >= 500 ? 'Something went wrong.' : 'Request error.'),
-    rid,
-  };
-
-  if (err instanceof HttpError && err.details) payload.details = err.details;
-  if (isDev && err?.stack) payload.stack = err.stack;
-
-  if (req.path.startsWith('/api/')) {
-    res.status(statusCode).json(payload);
-  } else {
-    res
-      .status(statusCode)
-      .type('text/plain')
-      .send(statusCode >= 500 ? '500 — Something went wrong.' : 'Request error.');
+/**
+ * Error with status code
+ */
+export class HttpError extends Error {
+  constructor(
+    public statusCode: number,
+    message: string,
+    public details?: any
+  ) {
+    super(message);
+    this.name = 'HttpError';
   }
 }
 
-export function notFoundHandler(req, res, next) {
-  // for non-API paths, keep your HttpError flow (so it hits errorHandler)
-  if (!req.path.startsWith('/api/')) {
-    return next(new HttpError(404, `Not found: ${req.method} ${req.path}`));
+/**
+ * Central error handling middleware
+ * Never leaks stack traces in production
+ * Always includes request ID for debugging
+ */
+export function errorHandler(
+  err: Error | HttpError,
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const statusCode = err instanceof HttpError ? err.statusCode : 500;
+  const message = err.message || 'Internal server error';
+  
+  // Log error with request ID
+  logger.error({
+    reqId: req.id,
+    error: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    statusCode,
+    path: req.path,
+    method: req.method,
+  }, 'Request error');
+  
+  // Build error response
+  const errorResponse: any = {
+    error: message,
+    reqId: req.id,
+  };
+  
+  // Include details if available (e.g., validation errors)
+  if (err instanceof HttpError && err.details) {
+    errorResponse.details = err.details;
   }
-  // API 404 returns structured JSON here (mirrors the /api catch-all)
-  const rid = (res.getHeader('X-Request-ID') || req.headers['x-request-id'] || '') + '';
-  return res.status(404).json({
-    ok: false,
-    error: 'not_found',
-    message: 'No such API route.',
-    rid,
-  });
+  
+  // Include stack trace only in development
+  if (process.env.NODE_ENV === 'development' && err.stack) {
+    errorResponse.stack = err.stack;
+  }
+  
+  res.status(statusCode).json(errorResponse);
+}
+
+/**
+ * 404 handler - must be registered after all routes
+ */
+export function notFoundHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const error = new HttpError(404, `Not found: ${req.method} ${req.path}`);
+  next(error);
 }

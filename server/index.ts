@@ -529,8 +529,14 @@ app.use(ipGate());
   app.use('/api', workspaceRouter);
 
   // === API 404 guard (place BEFORE Vite/static) ===
-  app.use('/api', (_req, res) => {
-    res.status(404).json({ ok: false, error: 'api route not found' });
+  app.use('/api', (req, res) => {
+    const rid = (res.getHeader('X-Request-ID') || req.headers['x-request-id'] || '') + '';
+    res.status(404).json({
+      ok: false,
+      error: 'not_found',
+      message: 'No such API route.',
+      rid,
+    });
   });
 
   // Static vs Vite dev (AFTER API)

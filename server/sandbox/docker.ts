@@ -9,6 +9,39 @@ const HARD_TIMEOUT = 10_000; // ms
 const STDIO_CAP = 64 * 1024; // 64KB
 const BIN = process.env.RUNNER_BIN || "docker";
 
+// Policy guard (on by default; disable with RUNNER_POLICY_STRICT=false)
+const STRICT = String(process.env.RUNNER_POLICY_STRICT || "true") === "true";
+
+const NODE_PRELUDE = `;(function(){
+  try {
+    const denied = new Set([
+      'child_process','cluster','worker_threads','inspector','vm','v8','async_hooks',
+      'dns','net','tls','dgram','http','https','http2'
+    ]);
+    const Module = require('module');
+    const orig = Module.prototype.require;
+    Module.prototype.require = function(name) {
+      if (denied.has(name) || Array.from(denied).some(d => name === d || name.startsWith(d + '/'))) {
+        throw new Error('Module "' + name + '" is blocked by policy');
+      }
+      return orig.apply(this, arguments);
+    };
+  } catch {}
+})();\n`;
+
+const PY_PRELUDE = `# policy prelude
+import builtins
+_denied = {
+  'subprocess','socket','ssl','ctypes','multiprocessing','resource','pty','fcntl','select',
+}
+_real_import = builtins.__import__
+def _guarded_import(name, *args, **kwargs):
+    if name in _denied or any(name.startswith(m + '.') for m in _denied):
+        raise ImportError(f'import of {name} is blocked by policy')
+    return _real_import(name, *args, **kwargs)
+builtins.__import__ = _guarded_import
+`;
+
 function tmpDir() {
   return path.join(os.tmpdir(), "ybuilt-run-" + crypto.randomBytes(6).toString("hex"));
 }
@@ -45,10 +78,22 @@ export async function runDockerSandbox(req: ExecRequest): Promise<ExecResult> {
   const isNode = req.lang === "node";
 
   const main = isNode ? "main.js" : "main.py";
-  await writeFiles(dir, main, req.code, req.files);
+
+  // prepend language-specific policy prelude if strict
+  const userCode = String(req.code || "");
+  const codeWithPrelude = isNode
+    ? STRICT
+      ? NODE_PRELUDE + userCode
+      : userCode
+    : STRICT
+    ? PY_PRELUDE + "\n" + userCode
+    : userCode;
+
+  await writeFiles(dir, main, codeWithPrelude, req.files);
 
   const image = isNode ? imageNode : imagePy;
   const cmd = isNode ? "node" : "python";
+  // -B to avoid .pyc on read-only mounts, -u unbuffered
   const args = isNode ? [main] : ["-u", "-B", main];
 
   // Pass user-provided args to the script
