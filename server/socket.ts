@@ -109,6 +109,23 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     return bannedPatterns.some((rx) => rx.test(text));
   }
 
+  // ---- File presence (who's viewing a given file) ----
+  type MemberInfo = { email: string; count: number };
+  const fileMembers: Map<string, Map<string, MemberInfo>> = new Map();
+
+  function fileRoomKey(projectId: string, filePath: string) {
+    return `file:${projectId}:${filePath}`;
+  }
+  function emitFilePresence(room: string, projectId: string, filePath: string) {
+    const members = Array.from(fileMembers.get(room)?.entries() || []).map(
+      ([userId, v]) => ({
+        userId,
+        username: v.email,
+      })
+    );
+    io.to(room).emit("file:presence", { projectId, filePath, users: members });
+  }
+
   // Authentication middleware for Socket.IO
   io.use((socket: AuthenticatedSocket, next) => {
     try {
@@ -417,6 +434,45 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       }
     );
 
+    // ---- File presence (join/leave) ----
+    socket.on("file:join", (data: { projectId?: string; filePath?: string }) => {
+      try {
+        const { projectId, filePath } = data || {};
+        if (!projectId || !filePath) return;
+        const room = fileRoomKey(projectId, filePath);
+        socket.join(room);
+
+        let m = fileMembers.get(room);
+        if (!m) fileMembers.set(room, (m = new Map()));
+        const uid = String(socket.user?.sub || socket.id);
+        const email = socket.user?.email || "anon";
+        const cur = m.get(uid);
+        m.set(uid, { email, count: (cur?.count || 0) + 1 });
+
+        emitFilePresence(room, projectId, filePath);
+      } catch {}
+    });
+
+    socket.on("file:leave", (data: { projectId?: string; filePath?: string }) => {
+      try {
+        const { projectId, filePath } = data || {};
+        if (!projectId || !filePath) return;
+        const room = fileRoomKey(projectId, filePath);
+        socket.leave(room);
+
+        const m = fileMembers.get(room);
+        if (m) {
+          const uid = String(socket.user?.sub || socket.id);
+          const cur = m.get(uid);
+          if (cur) {
+            if (cur.count <= 1) m.delete(uid);
+            else m.set(uid, { ...cur, count: cur.count - 1 });
+          }
+        }
+        emitFilePresence(room, projectId, filePath);
+      } catch {}
+    });
+
     // ---- Edit message (10-min window, owner only) ----
     socket.on(
       "chat:message:update",
@@ -631,7 +687,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           io.to(`project:${projectId}`).emit("chat:pin:update", {
             id: messageId,
             projectId,
-            pinned: op === "pin",
+            pinned: op === "unpin" ? false : true,
             by: socket.user.email,
             at: new Date().toISOString(),
           });
@@ -945,11 +1001,26 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     // Presence: update counts/members before socket actually leaves rooms
     socket.on("disconnecting", () => {
       for (const room of socket.rooms) {
-        if (!room.startsWith("project:")) continue;
-        const size = io.sockets.adapter.rooms.get(room)?.size || 1;
-        const next = Math.max(0, size - 1);
-        io.to(room).emit("presence:update", { projectId: room.slice(8), count: next });
-        if (socket.user) leaveMember(room, String(socket.user.sub));
+        if (room.startsWith("project:")) {
+          const size = io.sockets.adapter.rooms.get(room)?.size || 1;
+          const next = Math.max(0, size - 1);
+          io.to(room).emit("presence:update", { projectId: room.slice(8), count: next });
+          if (socket.user) leaveMember(room, String(socket.user.sub));
+        } else if (room.startsWith("file:")) {
+          const parts = room.split(":"); // ["file", projectId, ...filePathParts]
+          const projId = parts[1];
+          const filePath = parts.slice(2).join(":");
+          const m = fileMembers.get(room);
+          if (m) {
+            const uid = String(socket.user?.sub || socket.id);
+            const cur = m.get(uid);
+            if (cur) {
+              if (cur.count <= 1) m.delete(uid);
+              else m.set(uid, { ...cur, count: cur.count - 1 });
+            }
+          }
+          emitFilePresence(room, projId, filePath);
+        }
       }
     });
 

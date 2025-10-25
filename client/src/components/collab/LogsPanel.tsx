@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket";
 import { Button } from "@/components/ui/button";
 
-type DeployEvent =
-  | { type: "log"; line: string; ts: number; user?: string }
-  | { type: "stage"; name: string; ts: number }
-  | { type: "done"; ok: boolean; url?: string; ts: number }
-  | { type: "chat"; user: string; text: string; ts: number }
-  | { [k: string]: any }; // tolerate unknowns
+type LogEvt = { type: "log"; line: string; ts: number; user?: string };
+type StageEvt = { type: "stage"; name: string; ts: number };
+type DoneEvt = { type: "done"; ok: boolean; url?: string; ts: number };
+type ChatEvt = { type: "chat"; user: string; text: string; ts: number };
+type DeployEvent = LogEvt | StageEvt | DoneEvt | ChatEvt;
+
+function isDeployEvent(e: any): e is DeployEvent {
+  return e && typeof e === "object" && typeof e.type === "string" &&
+    (e.type === "log" || e.type === "stage" || e.type === "done" || e.type === "chat");
+}
 
 export default function LogsPanel() {
   const [jobId, setJobId] = useState("");
@@ -18,7 +22,16 @@ export default function LogsPanel() {
 
   useEffect(() => {
     const s = getSocket();
-    const onEvt = (e: DeployEvent) => setEvents((prev) => [...prev, e]);
+    const onEvt = (e: any) => {
+      if (isDeployEvent(e)) setEvents((prev) => [...prev, e]);
+      else {
+        // fallback: show unknown payload as a log line
+        setEvents((prev) => [
+          ...prev,
+          { type: "log", line: JSON.stringify(e), ts: Date.now() },
+        ]);
+      }
+    };
     s.on("deploy:event", onEvt);
     return () => s.off("deploy:event", onEvt);
   }, []);
@@ -30,10 +43,11 @@ export default function LogsPanel() {
   }, [events.length]);
 
   function join() {
-    if (!jobId.trim()) return;
+    const id = jobId.trim();
+    if (!id) return;
     const s = getSocket();
-    s.emit("deploy:join", { jobId: jobId.trim() });
-    setJoined(jobId.trim());
+    s.emit("deploy:join", { jobId: id });
+    setJoined(id);
     setEvents([]);
   }
 
@@ -48,8 +62,7 @@ export default function LogsPanel() {
   function sendChat() {
     const text = draft.trim();
     if (!text || !joined) return;
-    const s = getSocket();
-    s.emit("deploy:chat", { jobId: joined, text });
+    getSocket().emit("deploy:chat", { jobId: joined, text });
     setDraft("");
   }
 
@@ -64,7 +77,7 @@ export default function LogsPanel() {
           onChange={(e) => setJobId(e.target.value)}
         />
         {joined ? (
-          <Button size="sm" variant="secondary" onClick={leave}>Leave</Button>
+          <Button size="sm" onClick={leave}>Leave</Button>
         ) : (
           <Button size="sm" onClick={join}>Join</Button>
         )}
@@ -76,27 +89,33 @@ export default function LogsPanel() {
           <div className="text-muted-foreground">No events yet.</div>
         ) : (
           events.map((e, i) => {
-            if (e.type === "log") {
-              return <div key={i} className="font-mono whitespace-pre-wrap">{e.line}</div>;
+            switch (e.type) {
+              case "log":
+                return (
+                  <div key={i} className="font-mono whitespace-pre-wrap">
+                    {e.line}
+                  </div>
+                );
+              case "stage":
+                return (
+                  <div key={i} className="text-amber-700">
+                    ▶ {e.name}
+                  </div>
+                );
+              case "done":
+                return (
+                  <div key={i} className={e.ok ? "text-green-700" : "text-red-700"}>
+                    ✓ done {e.ok ? "OK" : "FAILED"}
+                    {e.url ? ` — ${e.url}` : ""}
+                  </div>
+                );
+              case "chat":
+                return (
+                  <div key={i} className="text-blue-700">
+                    💬 {e.user || "user"}: {e.text}
+                  </div>
+                );
             }
-            if (e.type === "stage") {
-              return <div key={i} className="text-amber-700">▶ {e.name}</div>;
-            }
-            if (e.type === "done") {
-              return (
-                <div key={i} className={e.ok ? "text-green-700" : "text-red-700"}>
-                  ✓ done {e.ok ? "OK" : "FAILED"}{e.url ? ` — ${e.url}` : ""}
-                </div>
-              );
-            }
-            if (e.type === "chat") {
-              return (
-                <div key={i} className="text-blue-700">
-                  💬 {e.user || "user"}: {e.text}
-                </div>
-              );
-            }
-            return <div key={i} className="text-muted-foreground">• {JSON.stringify(e)}</div>;
           })
         )}
       </div>
