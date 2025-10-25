@@ -1,65 +1,28 @@
-// server/socketBus.js
-let ioRef = null;
+// Pure ESM socket bus used by the server to emit build/deploy events.
 
-function room(jobId) {
-  return `deploy:${jobId}`;
+let ioInstance = null;
+
+export function setIO(io) {
+  ioInstance = io;
 }
 
-function emitDeploy(jobId, payload) {
-  if (!ioRef) return;
-  ioRef.to(room(jobId)).emit("deploy:event", { jobId, ts: Date.now(), ...payload });
+export function room(roomId) {
+  return ioInstance ? ioInstance.to(roomId) : null;
 }
 
-function setIO(io) {
-  ioRef = io;
-
-  // Wire deploy rooms + chat on connection
-  io.on("connection", (socket) => {
-    // Join a deploy room
-    socket.on("deploy:join", (p = {}) => {
-      const id = p.jobId || p.id || p.room;
-      if (!id) return;
-      const target = String(id).startsWith("deploy:") ? String(id) : room(String(id));
-      socket.join(target);
-    });
-
-    // Leave a deploy room
-    socket.on("deploy:leave", (p = {}) => {
-      const id = p.jobId || p.id || p.room;
-      if (!id) return;
-      const target = String(id).startsWith("deploy:") ? String(id) : room(String(id));
-      socket.leave(target);
-    });
-
-    // Simple chat relay within a deploy room (unified deploy:event)
-    socket.on("deploy:chat", (p = {}) => {
-      const id = p.jobId || p.room;
-      const text = String(p.text || "").trim();
-      if (!id || !text) return;
-
-      const target = String(id).startsWith("deploy:") ? String(id) : room(String(id));
-      const msg = {
-        type: "chat",
-        text,
-        user: p.user || "anon",
-        ts: Date.now(),
-      };
-      io.to(target).emit("deploy:event", msg);
-    });
-  });
+export function emitDeploy(jobId, payload) {
+  if (!ioInstance) return;
+  ioInstance.to(jobId).emit("deploy:event", payload);
 }
 
-// tiny helpers
-const stage = (jobId, stage) => emitDeploy(jobId, { type: "stage", stage });
-const log = (jobId, line) => emitDeploy(jobId, { type: "log", line });
-const done = (jobId, data) => {
-  emitDeploy(jobId, { type: "done", ...data });
-  // also drop a chat line for context
-  const text =
-    data?.status === "error"
-      ? `❌ Deploy failed: ${data?.error || "Unknown error"}`
-      : `✅ Deploy complete: ${data?.url || ""}`;
-  emitDeploy(jobId, { type: "chat", user: "system", text, ts: Date.now() });
-};
+export function stage(jobId, name, ts = Date.now()) {
+  emitDeploy(jobId, { type: "stage", name, ts });
+}
 
-module.exports = { setIO, emitDeploy, stage, log, done, room };
+export function log(jobId, line, ts = Date.now()) {
+  emitDeploy(jobId, { type: "log", line, ts });
+}
+
+export function done(jobId, ok, extra = {}) {
+  emitDeploy(jobId, { type: "done", ok, ts: Date.now(), ...extra });
+}

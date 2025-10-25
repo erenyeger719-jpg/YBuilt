@@ -4,8 +4,7 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { verifyToken, type JWTPayload } from "./middleware/auth.js";
 import { storage } from "./storage.js";
 import { logger } from "./middleware/logging.js";
-import * as SocketBus from "./socketBus.js";
-const { setIO } = (SocketBus as any).default ?? SocketBus;
+import { setIO } from "./socketBus.js";
 
 interface AuthenticatedSocket extends Socket {
   user?: JWTPayload;
