@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from "react";
 import { useSearch } from "wouter";
+import ReportAbuseButton from "@/components/ReportAbuseButton";
 
 const ProjectChat = lazy(() => import("@/components/collab/ProjectChat"));
 const CommentsPanel = lazy(() => import("@/components/collab/CommentsPanel"));
@@ -27,11 +28,14 @@ export default function CollabPage() {
     <div className="p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h1 className="text-sm font-medium">Collaboration</h1>
-        {currentFilePath && (
-          <Suspense fallback={null}>
-            <FilePresence projectId={projectId} filePath={currentFilePath} />
-          </Suspense>
-        )}
+        <div className="flex items-center gap-2">
+          {currentFilePath && (
+            <Suspense fallback={null}>
+              <FilePresence projectId={projectId} filePath={currentFilePath} />
+            </Suspense>
+          )}
+          <ReportAbuseButton where={window.location.pathname + window.location.search} />
+        </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-3">

@@ -145,13 +145,37 @@ app.use(ipGate());
   // 🔒 global rate limit for API
   app.use('/api', apiRateLimit({ windowMs: 60_000, max: 120 }));
 
-  // 🔒 daily quotas for heavy operations
+  // 🔒 daily quotas for heavy operations (auth-aware keys)
   app.use(
     '/api',
     quotaGate([
-      { path: /^\/api\/previews\/fork/i,   limit: 50, methods: ['POST'] },
-      { path: /^\/api\/previews\/export/i, limit: 20, methods: ['POST'] },
-      { path: /^\/api\/deploy\/enqueue/i,  limit: 10, methods: ['POST'] },
+      {
+        path: /^\/api\/previews\/fork/i,
+        limit: 50,
+        methods: ['POST'],
+        keyFn: (req) =>
+          (req as any).user?.id ||
+          ((req.headers['x-forwarded-for'] as string) || '') ||
+          req.ip,
+      },
+      {
+        path: /^\/api\/previews\/export/i,
+        limit: 20,
+        methods: ['POST'],
+        keyFn: (req) =>
+          (req as any).user?.id ||
+          ((req.headers['x-forwarded-for'] as string) || '') ||
+          req.ip,
+      },
+      {
+        path: /^\/api\/deploy\/enqueue/i,
+        limit: 10,
+        methods: ['POST'],
+        keyFn: (req) =>
+          (req as any).user?.id ||
+          ((req.headers['x-forwarded-for'] as string) || '') ||
+          req.ip,
+      },
     ]),
   );
 
