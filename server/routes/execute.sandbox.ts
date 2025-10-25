@@ -1,11 +1,23 @@
 // server/routes/execute.sandbox.ts
 import { Router } from 'express';
-import { runInDocker } from '../runners/docker.js';
+import { runInDocker, runnerHealth } from '../runners/docker.js';
+import { runRemote, remoteHealth } from '../runners/remote.js';
 import type { LangKey } from '../policy/allowlist.js';
 
 const router = Router();
 
-// POST /api/execute/run  { lang: "node"|"python", code: "..." }
+const useRemote = Boolean(process.env.RUNNER_HTTP_URL);
+
+// GET /api/execute/health
+router.get('/health', async (_req, res) => {
+  const local = await runnerHealth();
+  const remote = await remoteHealth();
+  const mode = useRemote ? 'remote' : 'docker';
+  const ready = useRemote ? remote.ok : local.ok;
+  return res.json({ ok: ready, mode, local, remote });
+});
+
+// POST /api/execute/run
 router.post('/run', async (req, res) => {
   try {
     const lang = String(req.body?.lang || '').toLowerCase() as LangKey;
@@ -19,7 +31,8 @@ router.post('/run', async (req, res) => {
       return res.status(413).json({ ok: false, error: 'code_too_large' });
     }
 
-    const result = await runInDocker({
+    const run = useRemote ? runRemote : runInDocker;
+    const result = await run({
       lang,
       code,
       timeoutMs: Number(req.body?.timeoutMs ?? 3000),
@@ -29,8 +42,8 @@ router.post('/run', async (req, res) => {
 
     return res.json(result);
   } catch (e: any) {
-    if (e?.code === 'NO_DOCKER') {
-      return res.status(503).json({ ok: false, error: 'runner_unavailable', hint: 'Install/enable Docker' });
+    if (e?.code === 'NO_DOCKER' || e?.code === 'NO_REMOTE') {
+      return res.status(503).json({ ok: false, error: 'runner_unavailable' });
     }
     return res.status(500).json({ ok: false, error: 'runner_failed' });
   }

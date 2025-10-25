@@ -12,11 +12,18 @@ const DOCKER = process.env.DOCKER_BIN || 'docker';
 let dockerChecked = false;
 async function ensureDocker() {
   if (dockerChecked) return;
-  try {
-    await exec(`${DOCKER} version`);
-    dockerChecked = true;
-  } catch {
-    throw Object.assign(new Error('Docker not available'), { code: 'NO_DOCKER' });
+  await exec(`${DOCKER} version`).catch(() => {
+    const err: any = new Error('Docker not available');
+    err.code = 'NO_DOCKER';
+    throw err;
+  });
+  dockerChecked = true;
+}
+
+async function ensureImage(image: string) {
+  const ok = await exec(`${DOCKER} image inspect ${image}`).then(() => true).catch(() => false);
+  if (!ok) {
+    await exec(`${DOCKER} pull ${image}`);
   }
 }
 
@@ -43,11 +50,15 @@ export async function runInDocker(opts: RunOpts) {
   const file = path.join(work, conf.filename);
   await fs.promises.writeFile(file, code, 'utf8');
 
+  // make sure the image is present (pulls once; outside container networking)
+  await ensureImage(conf.image);
+
   const id = `ybx-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
 
   const args = [
     'run', '--rm', '--name', id,
     '--network', 'none',
+    '--ipc', 'none',
     `--cpus=${cpus}`,
     `--memory=${memoryMB}m`, '--memory-swap', `${memoryMB}m`,
     '--pids-limit', '64',
@@ -56,7 +67,7 @@ export async function runInDocker(opts: RunOpts) {
     '--read-only',
     '--ulimit', 'nofile=1024:1024',
     '--ulimit', 'nproc=128:128',
-    '--tmpfs', '\/tmp:rw,exec,size=64m',
+    '--tmpfs', '/tmp:rw,exec,size=64m',
     '-v', `${work}:/sandbox:ro`,
     '-w', '/sandbox',
     conf.image,
@@ -65,15 +76,30 @@ export async function runInDocker(opts: RunOpts) {
 
   const child = spawn(DOCKER, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
+  const MAX_BYTES = 200_000;
   let stdout = '';
   let stderr = '';
-  child.stdout.on('data', (b) => { stdout += String(b); });
-  child.stderr.on('data', (b) => { stderr += String(b); });
+  let outBytes = 0;
+  let truncated = false;
+
+  const add = (src: Buffer, which: 'out' | 'err') => {
+    if (truncated) return;
+    outBytes += src.length;
+    if (outBytes > MAX_BYTES) {
+      truncated = true;
+      try { child.kill('SIGKILL'); } catch {}
+      return;
+    }
+    if (which === 'out') stdout += String(src);
+    else stderr += String(src);
+  };
+
+  child.stdout.on('data', (b) => add(b, 'out'));
+  child.stderr.on('data', (b) => add(b, 'err'));
 
   let timedOut = false;
   const timer = setTimeout(async () => {
     timedOut = true;
-    // hard kill container by name; ignore errors
     try { await exec(`${DOCKER} rm -f ${id}`); } catch {}
   }, timeoutMs);
 
@@ -85,11 +111,12 @@ export async function runInDocker(opts: RunOpts) {
   await safeRmRF(work);
 
   return {
-    ok: exitCode === 0 && !timedOut,
+    ok: exitCode === 0 && !timedOut && !truncated,
     exitCode,
     timedOut,
-    stdout: stdout.slice(0, 200_000), // 200KB cap
-    stderr: stderr.slice(0, 200_000),
+    truncated,
+    stdout,
+    stderr,
     policy: {
       network: 'none',
       rootfs: 'read-only',
@@ -97,6 +124,16 @@ export async function runInDocker(opts: RunOpts) {
       memoryMB,
       cpus,
       pidsLimit: 64,
+      ipc: 'none',
     },
   };
+}
+
+export async function runnerHealth() {
+  try {
+    await ensureDocker();
+    return { ok: true, driver: 'docker' as const };
+  } catch (e: any) {
+    return { ok: false, driver: 'docker' as const, error: e?.code || 'NO_DOCKER' };
+  }
 }
