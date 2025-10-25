@@ -397,6 +397,10 @@ if (reqMw) app.use(reqMw);
   const { default: aiRouter } = await import('./ai/router.js').catch(() => ({
     default: undefined as any,
   }));
+  // NEW: Abuse router (rate-limit/abuse signals)
+  const { default: abuseRouter } = await import('./routes/abuse.js').catch(() => ({
+    default: undefined as any,
+  }));
 
   // CJS dynamic-import interop (comments + qna)
   const commentsMod: any = await import('./routes/comments.js')
@@ -428,6 +432,9 @@ if (reqMw) app.use(reqMw);
   // - Mount aiRouter (with /review) first so it takes precedence over any duplicate paths.
   if (aiRouter) app.use('/api/ai', express.json({ limit: '1mb' }), aiRouter);
   if (aiOrchestrator) app.use('/api/ai', aiOrchestrator); // planner/scaffold endpoints
+
+  // NEW: Abuse endpoints
+  if (abuseRouter) app.use('/api/abuse', express.json({ limit: '32kb' }), abuseRouter);
 
   // Comments API
   if (commentsMod?.list) app.get('/api/comments/list', commentsMod.list);
