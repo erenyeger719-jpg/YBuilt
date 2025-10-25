@@ -87,7 +87,7 @@ export function wireRequestLogs(app, io) {
             ns.to(`req:${rid}`).emit("server:req", payload);
           }
 
-          // ---- Extra emission requested by spec: http:done ----
+          // ---- Extra emission: http:done ----
           const httpDone = {
             ts: Date.now(),
             requestId: rid || undefined,
