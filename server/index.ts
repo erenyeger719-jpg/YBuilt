@@ -14,6 +14,7 @@ import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { initializeSocket } from './socket.js';
 import { wireRequestLogs, wireLogsNamespace } from './logs.js';
 import deployQueue from './routes/deploy.queue.js';
+import { apiRateLimit, quotaGate } from './middleware/limits.js'; // <-- ADD
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -42,6 +43,9 @@ if (RAZORPAY_MODE === 'live') {
 logger.info(`[RAZORPAY] Mode: ${RAZORPAY_MODE}`);
 
 const app = express();
+
+// trust proxy so req.ip uses X-Forwarded-For on Render
+app.set('trust proxy', 1); // <-- ADD
 
 // ---- Sentry request middleware (v7/v8/v10 safe) ----
 const reqMw =
@@ -127,6 +131,19 @@ if (reqMw) app.use(reqMw);
   });
 
   app.use(rateLimiter);
+
+  // 🔒 global rate limit for API
+  app.use('/api', apiRateLimit({ windowMs: 60_000, max: 120 })); // <-- ADD
+
+  // 🔒 daily quotas for heavy operations
+  app.use(
+    '/api',
+    quotaGate([
+      { path: /^\/api\/previews\/fork/i,   limit: 50, methods: ['POST'] },
+      { path: /^\/api\/previews\/export/i, limit: 20, methods: ['POST'] },
+      { path: /^\/api\/deploy\/enqueue/i,  limit: 10, methods: ['POST'] },
+    ]),
+  ); // <-- ADD
 
   // ---- Create server + Socket early (before routers) ----
   const server = createServer(app);
