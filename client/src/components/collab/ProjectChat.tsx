@@ -153,7 +153,8 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!projectId) return;
     try {
-      const slice = msgs.slice(-200);
+      // strip attachments before caching
+      const slice = msgs.slice(-200).map(({ attachments, ...rest }) => rest);
       localStorage.setItem(`proj-chat:${projectId}`, JSON.stringify(slice));
     } catch {}
   }, [projectId, msgs]);
@@ -530,7 +531,7 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
 
   function send() {
     const text = draft.trim();
-    if (!text) return;
+    if (!text && draftFiles.length === 0) return; // allow attachments-only
 
     // slash commands
     if (text.startsWith("/")) {
@@ -1059,10 +1060,12 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
             onFocus={() => getSocket().emit("typing:start", { projectId })}
             onBlur={() => getSocket().emit("typing:stop", { projectId })}
             onPaste={async (e) => {
-              const items = e.clipboardData?.files;
-              if (items && items.length) {
-                e.preventDefault();
-                await addFiles(items);
+              const files = e.clipboardData?.files;
+              const txt = e.clipboardData?.getData("text/plain") || "";
+              if (txt) insertAtCursor(txt);
+              if (files && files.length) {
+                await addFiles(files);
+                e.preventDefault(); // avoid double-inserting after manual insert
               }
             }}
           />

@@ -87,6 +87,19 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     return fresh.length <= RATE_MAX;
   }
 
+  // ---- Attachment limits/helpers (byte-approx for Data URLs) ----
+  function approxBytesFromDataUrl(u: string) {
+    const i = u.indexOf(",");
+    if (i === -1) return 0;
+    const b64 = u.slice(i + 1);
+    const pad = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+    return Math.floor((b64.length * 3) / 4) - pad;
+  }
+
+  const ATT_MAX_FILES = 3;
+  const ATT_MAX_BYTES = 2_000_000; // ~2MB per file
+  const ATT_TOTAL_BYTES = 4_000_000; // ~4MB total across attachments
+
   // ---- Basic content guard (very small) ----
   const bannedPatterns: RegExp[] = [
     /\b(?:fuck|shit)\b/i,
@@ -304,20 +317,29 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             return;
           }
 
-          // sanitize attachments (optional; v1 limits)
+          // sanitize attachments (v1 limits, byte-approx)
           const att = Array.isArray(data.attachments) ? data.attachments : [];
-          const safeAtt = att
-            .filter(
-              (a) =>
-                a &&
-                typeof a.name === "string" &&
-                typeof a.type === "string" &&
-                typeof a.size === "number" &&
-                typeof a.dataUrl === "string" &&
-                a.dataUrl.startsWith("data:") &&
-                a.dataUrl.length <= 2_000_000 * 2 // ~2MB base64-ish guard
+          let total = 0;
+          const safeAtt: { name: string; type: string; size: number; dataUrl: string }[] = [];
+
+          for (const a of att.slice(0, ATT_MAX_FILES)) {
+            if (
+              !a ||
+              typeof a.name !== "string" ||
+              typeof a.type !== "string" ||
+              typeof a.size !== "number" ||
+              typeof a.dataUrl !== "string" ||
+              !a.dataUrl.startsWith("data:")
             )
-            .slice(0, 3); // up to 3 files per message
+              continue;
+
+            const est = approxBytesFromDataUrl(a.dataUrl);
+            if (est > ATT_MAX_BYTES) continue;
+            if (total + est > ATT_TOTAL_BYTES) break;
+
+            total += est;
+            safeAtt.push(a);
+          }
 
           // Save message
           const chatMessage = await storage.createChatMessage({
@@ -606,6 +628,177 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
         }
       }
     );
+
+    // ---- Comments (file/line threads) ----
+    socket.on("comment:list", async (data: { projectId: string; filePath?: string }) => {
+      try {
+        const { projectId, filePath } = data || {};
+        if (!projectId) return;
+
+        if (typeof (storage as any).listChatMessages !== "function") {
+          socket.emit("comment:list", { projectId, comments: [] });
+          return;
+        }
+
+        const rows = await (storage as any).listChatMessages({
+          projectId,
+          limit: 500,
+          order: "desc",
+        });
+
+        const comments = rows
+          .filter((r: any) => r?.metadata?.type === "comment")
+          .filter((r: any) => !filePath || r?.metadata?.filePath === filePath)
+          .reverse()
+          .map((r: any) => ({
+            id: r.id,
+            userId: r.userId,
+            username: r.metadata?.username || r.userEmail || r.userId,
+            content: r.content,
+            createdAt: r.createdAt,
+            filePath: r.metadata?.filePath || "",
+            line: r.metadata?.line || null,
+            threadId: r.metadata?.threadId || String(r.id),
+            parentId: r.metadata?.parentId || null,
+            resolved: !!r.metadata?.resolved,
+          }));
+
+        socket.emit("comment:list", { projectId, comments });
+      } catch (e) {
+        logger.error({ e }, "[COMMENT:LIST] failed");
+      }
+    });
+
+    socket.on("comment:create", async (data: {
+      projectId: string;
+      filePath: string;
+      line?: number | null;
+      content: string;
+      threadId?: string | null;
+      parentId?: string | null;
+    }) => {
+      try {
+        if (!socket.user) {
+          socket.emit("error", { message: "Auth required" });
+          return;
+        }
+        const { projectId, filePath, line = null, content, threadId = null, parentId = null } = data || {};
+        if (!projectId || !filePath || !content) return;
+
+        const created = await storage.createChatMessage({
+          userId: socket.user.sub.toString(),
+          projectId,
+          role: "comment",
+          content,
+          metadata: {
+            type: "comment",
+            username: socket.user.email,
+            filePath,
+            line,
+            threadId: threadId || undefined,
+            parentId: parentId || undefined,
+            resolved: false,
+          },
+        });
+
+        const payload = {
+          id: created.id,
+          userId: socket.user.sub,
+          username: socket.user.email,
+          content: created.content,
+          createdAt: created.createdAt,
+          filePath,
+          line,
+          threadId: threadId || String(created.id),
+          parentId: parentId || null,
+          resolved: false,
+        };
+
+        io.to(`project:${projectId}`).emit("comment:create", { projectId, comment: payload });
+      } catch (e) {
+        logger.error({ e }, "[COMMENT:CREATE] failed");
+        socket.emit("error", { message: "Failed to create comment" });
+      }
+    });
+
+    socket.on("comment:update", async (data: {
+      projectId: string; commentId: string; content: string;
+    }) => {
+      try {
+        if (!socket.user) return;
+        const { projectId, commentId, content } = data || {};
+        if (!projectId || !commentId || !content) return;
+
+        if (typeof (storage as any).getChatMessageById === "function") {
+          const row = await (storage as any).getChatMessageById(commentId);
+          if (!row || row.projectId !== projectId || String(row.userId) !== String(socket.user.sub)) {
+            socket.emit("error", { message: "Not allowed" });
+            return;
+          }
+        }
+        if (typeof (storage as any).updateChatMessage === "function") {
+          await (storage as any).updateChatMessage({ id: commentId, content });
+        }
+        io.to(`project:${projectId}`).emit("comment:update", {
+          projectId, id: commentId, content,
+        });
+      } catch (e) {
+        logger.error({ e }, "[COMMENT:UPDATE] failed");
+      }
+    });
+
+    socket.on("comment:resolve", async (data: {
+      projectId: string; threadId: string; resolved: boolean;
+    }) => {
+      try {
+        if (!socket.user) return;
+        const { projectId, threadId, resolved } = data || {};
+        if (!projectId || !threadId) return;
+
+        if (typeof (storage as any).updateCommentsByThreadId === "function") {
+          await (storage as any).updateCommentsByThreadId(projectId, threadId, { resolved });
+        } else if (typeof (storage as any).updateChatMessage === "function" &&
+                   typeof (storage as any).listChatMessages === "function") {
+          const rows = await (storage as any).listChatMessages({ projectId, limit: 500, order: "desc" });
+          for (const r of rows) {
+            if (r?.metadata?.type === "comment" && (r?.metadata?.threadId === threadId || String(r.id) === threadId)) {
+              await (storage as any).updateChatMessage({
+                id: r.id,
+                metadata: { ...(r.metadata || {}), resolved },
+              });
+            }
+          }
+        }
+
+        io.to(`project:${projectId}`).emit("comment:resolve", { projectId, threadId, resolved });
+      } catch (e) {
+        logger.error({ e }, "[COMMENT:RESOLVE] failed");
+      }
+    });
+
+    socket.on("comment:delete", async (data: { projectId: string; commentId: string }) => {
+      try {
+        if (!socket.user) return;
+        const { projectId, commentId } = data || {};
+        if (!projectId || !commentId) return;
+
+        if (typeof (storage as any).getChatMessageById === "function") {
+          const row = await (storage as any).getChatMessageById(commentId);
+          if (!row || row.projectId !== projectId || String(row.userId) !== String(socket.user.sub)) {
+            socket.emit("error", { message: "Not allowed" });
+            return;
+          }
+        }
+        if (typeof (storage as any).softDeleteChatMessage === "function") {
+          await (storage as any).softDeleteChatMessage({
+            id: commentId, metadata: { deleted: true, deletedAt: new Date().toISOString() },
+          });
+        }
+        io.to(`project:${projectId}`).emit("comment:delete", { projectId, id: commentId });
+      } catch (e) {
+        logger.error({ e }, "[COMMENT:DELETE] failed");
+      }
+    });
 
     // Handle chat messages - Support mode
     socket.on(
