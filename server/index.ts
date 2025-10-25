@@ -19,6 +19,7 @@ import { ipGate } from './middleware/ipGate.js';
 import buildsRouter from './routes/builds.ts';
 import { wireBuildsNamespace } from './builds.ts';
 import logsApiRouter from './routes/logs.ts'; // note the .ts
+import './logs.sink.jsonl.js'; // JSONL sink (self-gated by LOG_JSONL)
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -199,8 +200,7 @@ app.use(ipGate());
     wireLogsNamespace(io);
     wireRequestLogs(app, io); // attaches BEFORE routers for full coverage
 
-    // 🔽 added: JSONL sink for logs (best-effort dynamic import)
-    await import('./logs.sink.jsonl.js').catch(() => {});
+    // (sink now imported top-level)
 
     wireBuildsNamespace(io);
     logger.info('[SOCKET.IO] Real-time server initialized');

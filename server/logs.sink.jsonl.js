@@ -9,6 +9,8 @@ const HOOK_URL = process.env.LOG_WEBHOOK_URL || '';
 const HOOK_MS = Math.max(1000, parseInt(process.env.LOG_WEBHOOK_BATCH_MS || '5000', 10));
 
 if (ENABLE) {
+  console.log('[LOGS] JSONL sink enabled at', LOG_DIR);
+
   // ensure dir
   fs.mkdirSync(LOG_DIR, { recursive: true });
 
