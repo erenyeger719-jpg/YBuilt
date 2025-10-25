@@ -15,11 +15,15 @@ function safePath(p: string) {
 
 // --- GET /api/execute/health ---
 router.get("/health", (_req, res) => {
+  const impl = process.env.RUNNER_IMPL || "local";
   res.json({
     ok: true,
     enabled: process.env.ENABLE_SANDBOX === "true",
-    impl: process.env.RUNNER_IMPL || "local",
+    impl,
     maxConcurrency: parseInt(process.env.RUNNER_MAX_CONCURRENCY || "1", 10),
+    // simple readiness hint for docker/podman users
+    needsContainerRuntime:
+      process.env.ENABLE_SANDBOX === "true" && impl.toLowerCase() === "docker",
   });
 });
 
@@ -67,9 +71,25 @@ router.post("/run", async (req: Request, res: Response) => {
     });
   }
 
-  // 3) run stubbed sandbox (no real exec yet)
+  // 3) run sandbox
   try {
     const out = await runSandbox(body);
+
+    // Stream an audit row to the /logs namespace (best-effort)
+    try {
+      const rid = (res.getHeader("X-Request-ID") as string) || "";
+      (req.app as any).get("io")?.of("/logs").emit("server:exec", {
+        ts: Date.now(),
+        rid,
+        lang: body.lang,
+        ok: out.ok,
+        reason: (out as any).reason,
+        ms: (out as any).durationMs,
+        exitCode: (out as any).exitCode ?? null,
+        bytes: { code: body.code.length, files: (body.files || []).length },
+      });
+    } catch {}
+
     return res.json(out);
   } catch (_e: any) {
     return res.status(500).json({ ok: false, error: "sandbox error" });
