@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
-import { runLocalSandbox } from "../sandbox/local.ts";
+import { runSandbox } from "../sandbox/index.ts";
 import type { ExecRequest, ExecFile } from "../execute/types.ts";
 
 const router = Router();
@@ -68,7 +68,7 @@ router.post("/run", async (req: Request, res: Response) => {
 
   // 3) run stubbed sandbox (no real exec yet)
   try {
-    const out = await runLocalSandbox(body);
+    const out = await runSandbox(body);
     return res.json(out);
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: "sandbox error" });
