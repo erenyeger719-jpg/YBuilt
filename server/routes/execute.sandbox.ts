@@ -83,9 +83,9 @@ router.post("/run", async (req: Request, res: Response) => {
         rid,
         lang: body.lang,
         ok: out.ok,
-        reason: (out as any).reason,
-        ms: (out as any).durationMs,
-        exitCode: (out as any).exitCode ?? null,
+        reason: out.reason,
+        ms: out.durationMs,
+        exitCode: out.exitCode ?? null,
         bytes: { code: body.code.length, files: (body.files || []).length },
       });
     } catch {}
