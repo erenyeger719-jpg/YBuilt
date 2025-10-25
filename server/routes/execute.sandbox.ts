@@ -8,13 +8,25 @@ const router = Router();
 
 const useRemote = Boolean(process.env.RUNNER_HTTP_URL);
 
+// ---- concurrency gate ----
+const MAX_CONCURRENT = Number(process.env.RUNNER_MAX_CONCURRENCY || 2);
+let active = 0;
+function tryAcquire() {
+  if (active >= MAX_CONCURRENT) return false;
+  active += 1;
+  return true;
+}
+function release() {
+  active = Math.max(0, active - 1);
+}
+
 // GET /api/execute/health
 router.get('/health', async (_req, res) => {
   const local = await runnerHealth();
   const remote = await remoteHealth();
   const mode = useRemote ? 'remote' : 'docker';
   const ready = useRemote ? remote.ok : local.ok;
-  return res.json({ ok: ready, mode, local, remote });
+  return res.json({ ok: ready, mode, local, remote, concurrency: { active, max: MAX_CONCURRENT } });
 });
 
 // POST /api/execute/run
@@ -29,6 +41,9 @@ router.post('/run', async (req, res) => {
     }
     if (code.length > 100_000) {
       return res.status(413).json({ ok: false, error: 'code_too_large' });
+    }
+    if (!tryAcquire()) {
+      return res.status(429).json({ ok: false, error: 'too_many_runs' });
     }
 
     const run = useRemote ? runRemote : runInDocker;
@@ -46,6 +61,8 @@ router.post('/run', async (req, res) => {
       return res.status(503).json({ ok: false, error: 'runner_unavailable' });
     }
     return res.status(500).json({ ok: false, error: 'runner_failed' });
+  } finally {
+    release();
   }
 });
 
