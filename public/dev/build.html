@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Build watcher</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; }
+      .row { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+      .bar { height:12px; background:#eee; border-radius:6px; overflow:hidden; width:360px; }
+      .fill { height:100%; width:0%; background:#4f46e5; transition: width .25s linear; }
+      code { background:#f3f4f6; padding:2px 6px; border-radius:4px; }
+    </style>
+  </head>
+  <body>
+    <h1>Build progress</h1>
+
+    <div class="row">
+      <label>Slug:</label>
+      <input id="slug" value="demo-landing" />
+      <button id="start">Start build</button>
+    </div>
+
+    <div class="row">
+      <label>Job ID:</label>
+      <code id="job">—</code>
+      <button id="watch">Watch</button>
+    </div>
+
+    <div class="row">
+      <div class="bar"><div class="fill" id="fill"></div></div>
+      <span id="pct">0%</span>
+      <span id="label" style="margin-left:8px;color:#6b7280">—</span>
+    </div>
+
+    <pre id="log" style="background:#0b1020;color:#e5e7eb;padding:12px;border-radius:8px;height:180px;overflow:auto;"></pre>
+
+    <script type="module">
+      const jobEl = document.getElementById('job');
+      const fill = document.getElementById('fill');
+      const pctEl = document.getElementById('pct');
+      const labelEl = document.getElementById('label');
+      const logEl = document.getElementById('log');
+
+      function line(s){ logEl.textContent += s + "\n"; logEl.scrollTop = logEl.scrollHeight; }
+
+      document.getElementById('start').onclick = async () => {
+        const slug = (document.getElementById('slug') as HTMLInputElement).value.trim() || 'demo-landing';
+        const r = await fetch('/api/previews/build', {
+          method:'POST',
+          headers: {'content-type':'application/json'},
+          body: JSON.stringify({ slug })
+        });
+        const j = await r.json();
+        if (j?.ok && j.jobId) {
+          jobEl.textContent = j.jobId;
+          line(`started ${j.jobId}`);
+        } else {
+          line('failed to start');
+        }
+      };
+
+      document.getElementById('watch').onclick = async () => {
+        const id = jobEl.textContent?.trim();
+        if (!id || id === '—') { line('no job id'); return; }
+        const { io } = await import('https://cdn.socket.io/4.7.5/socket.io.esm.min.js');
+        const s = io(location.origin + '/builds');
+        s.on('connect', () => line('socket connected'));
+        s.emit('watch', { jobId: id });
+        s.on('build:progress', e => {
+          fill.style.width = (e.pct || 0) + '%';
+          pctEl.textContent = (e.pct || 0) + '%';
+          labelEl.textContent = e.label || '';
+          line(`progress ${e.pct}% - ${e.label}`);
+        });
+        s.on('build:done', e => {
+          fill.style.width = '100%';
+          pctEl.textContent = '100%';
+          labelEl.textContent = 'Done';
+          line('done');
+        });
+        s.on('build:error', e => {
+          labelEl.textContent = 'Error';
+          line('error: ' + (e?.message || 'unknown'));
+        });
+      };
+    </script>
+  </body>
+</html>
