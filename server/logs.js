@@ -200,3 +200,13 @@ export function wireLogsNamespace(io) {
     });
   });
 }
+
+/* ----------------------------- extra exports ----------------------------- */
+export function findByRequestId(id) {
+  const needle = String(id || "");
+  if (!needle) return [];
+  // match typical shapes we emit: rid/reqId/requestId
+  return _history.filter(
+    (r) => r?.rid === needle || r?.reqId === needle || r?.requestId === needle
+  );
+}
