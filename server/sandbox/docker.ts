@@ -7,6 +7,7 @@ import type { ExecRequest, ExecResult, ExecFile } from "../execute/types.ts";
 
 const HARD_TIMEOUT = 10_000; // ms
 const STDIO_CAP = 64 * 1024; // 64KB
+const BIN = process.env.RUNNER_BIN || "docker";
 
 function tmpDir() {
   return path.join(os.tmpdir(), "ybuilt-run-" + crypto.randomBytes(6).toString("hex"));
@@ -14,7 +15,9 @@ function tmpDir() {
 
 function truncate(buf: Buffer): string {
   if (buf.length <= STDIO_CAP) return buf.toString("utf8");
-  return Buffer.concat([buf.subarray(0, STDIO_CAP), Buffer.from("\n…[truncated]\n")]).toString("utf8");
+  return Buffer.concat([buf.subarray(0, STDIO_CAP), Buffer.from("\n…[truncated]\n")]).toString(
+    "utf8",
+  );
 }
 
 async function writeFiles(root: string, mainName: string, code: string, files?: ExecFile[]) {
@@ -46,43 +49,59 @@ export async function runDockerSandbox(req: ExecRequest): Promise<ExecResult> {
 
   const image = isNode ? imageNode : imagePy;
   const cmd = isNode ? "node" : "python";
-  const args = isNode ? [main] : ["-u", main];
+  const args = isNode ? [main] : ["-u", "-B", main];
 
   // Pass user-provided args to the script
-  const scriptArgs = (req.args && Array.isArray(req.args)) ? req.args : [];
+  const scriptArgs = req.args && Array.isArray(req.args) ? req.args : [];
 
   // Build docker run args
   const runArgs = [
-    "run", "--rm",
-    "--name", name,
-    "--network", "none",
-    "--cpus", "0.5",
-    "--memory", "256m",
-    "--pids-limit", "64",
+    "run",
+    "--rm",
+    "--name",
+    name,
+    "--network",
+    "none",
+    "--cpus",
+    "0.5",
+    "--memory",
+    "256m",
+    "--pids-limit",
+    "64",
     "--read-only",
-    "--tmpfs", "/tmp:rw,size=64m",
-    "--security-opt", "no-new-privileges",
-    "--cap-drop", "ALL",
-    "--user", "1000:1000",
-    "-v", `${dir}:/workspace:ro`,
-    "-w", "/workspace",
+    "--tmpfs",
+    "/tmp:rw,size=64m",
+    "--security-opt",
+    "no-new-privileges",
+    "--cap-drop",
+    "ALL",
+    "--user",
+    "1000:1000",
+    "-v",
+    `${dir}:/workspace:ro`,
+    "-w",
+    "/workspace",
     image,
     cmd,
     ...args,
     ...scriptArgs,
   ];
 
+  // Optional platform hint (e.g. linux/amd64 for Apple Silicon)
+  const platform = process.env.RUNNER_PLATFORM;
+  if (platform) runArgs.splice(1, 0, "--platform", platform); // insert after "run"
+
   let stdout = Buffer.alloc(0);
   let stderr = Buffer.alloc(0);
 
   return await new Promise<ExecResult>((resolve) => {
-    const child = spawn("docker", runArgs, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(BIN, runArgs, { stdio: ["ignore", "pipe", "pipe"] });
 
     let killedForTimeout = false;
     const timer = setTimeout(() => {
       killedForTimeout = true;
       // best-effort kill + rely on --rm
-      spawn("docker", ["rm", "-f", name]);
+      spawn(BIN, ["rm", "-f", name]);
     }, t);
 
     child.stdout?.on("data", (chunk) => {
