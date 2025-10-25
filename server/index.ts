@@ -198,6 +198,10 @@ app.use(ipGate());
     app.set('io', io);
     wireLogsNamespace(io);
     wireRequestLogs(app, io); // attaches BEFORE routers for full coverage
+
+    // 🔽 added: JSONL sink for logs (best-effort dynamic import)
+    await import('./logs.sink.jsonl.js').catch(() => {});
+
     wireBuildsNamespace(io);
     logger.info('[SOCKET.IO] Real-time server initialized');
 
