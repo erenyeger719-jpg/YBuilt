@@ -18,6 +18,7 @@ router.get("/health", (_req, res) => {
   res.json({
     ok: true,
     enabled: process.env.ENABLE_SANDBOX === "true",
+    impl: process.env.RUNNER_IMPL || "local",
     maxConcurrency: parseInt(process.env.RUNNER_MAX_CONCURRENCY || "1", 10),
   });
 });
@@ -70,7 +71,7 @@ router.post("/run", async (req: Request, res: Response) => {
   try {
     const out = await runSandbox(body);
     return res.json(out);
-  } catch (e: any) {
+  } catch (_e: any) {
     return res.status(500).json({ ok: false, error: "sandbox error" });
   }
 });
