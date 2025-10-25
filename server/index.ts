@@ -14,7 +14,7 @@ import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { initializeSocket } from './socket.js';
 import { wireRequestLogs, wireLogsNamespace } from './logs.js';
 import deployQueue from './routes/deploy.queue.js';
-import { apiRateLimit, quotaGate } from './middleware/limits.js'; // <-- ADD
+import { apiRateLimit, quotaGate } from './middleware/limits.js';
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -45,7 +45,7 @@ logger.info(`[RAZORPAY] Mode: ${RAZORPAY_MODE}`);
 const app = express();
 
 // trust proxy so req.ip uses X-Forwarded-For on Render
-app.set('trust proxy', 1); // <-- ADD
+app.set('trust proxy', 1);
 
 // ---- Sentry request middleware (v7/v8/v10 safe) ----
 const reqMw =
@@ -94,7 +94,8 @@ if (reqMw) app.use(reqMw);
   }
 
   // CORS + parsers
-  app.use(cors());
+  const ORIGIN = process.env.APP_ORIGIN || 'http://localhost:3000';
+  app.use(cors({ origin: ORIGIN, credentials: true }));
   app.use(cookieParser()); // cookie support for session/team routes
   app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
   app.use(express.json({ limit: '1mb' }));
@@ -133,7 +134,7 @@ if (reqMw) app.use(reqMw);
   app.use(rateLimiter);
 
   // 🔒 global rate limit for API
-  app.use('/api', apiRateLimit({ windowMs: 60_000, max: 120 })); // <-- ADD
+  app.use('/api', apiRateLimit({ windowMs: 60_000, max: 120 }));
 
   // 🔒 daily quotas for heavy operations
   app.use(
@@ -143,7 +144,7 @@ if (reqMw) app.use(reqMw);
       { path: /^\/api\/previews\/export/i, limit: 20, methods: ['POST'] },
       { path: /^\/api\/deploy\/enqueue/i,  limit: 10, methods: ['POST'] },
     ]),
-  ); // <-- ADD
+  );
 
   // ---- Create server + Socket early (before routers) ----
   const server = createServer(app);
@@ -230,11 +231,11 @@ if (reqMw) app.use(reqMw);
       // --- DEPLOY ROOMS ---
       socket.on('deploy:join', ({ jobId }: { jobId: string }) => {
         if (!jobId) return;
-        socket.join(`deploy:${jobId}`);
+        socket.join(jobId);
       });
       socket.on('deploy:leave', ({ jobId }: { jobId: string }) => {
         if (!jobId) return;
-        socket.leave(`deploy:${jobId}`);
+        socket.leave(jobId);
       });
 
       // --- explicit leave handler ---
