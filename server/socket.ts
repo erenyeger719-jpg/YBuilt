@@ -204,6 +204,8 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
               editedAt: editedIso,
               deleted: deletedFlag,
               pinned: pinnedFlag,
+              // NEW: surface any stored attachments
+              attachments: Array.isArray(r.metadata?.attachments) ? r.metadata.attachments : [],
             };
           });
 
@@ -275,10 +277,14 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       }
     );
 
-    // Handle chat messages - Collaboration mode
+    // Handle chat messages - Collaboration mode (now supports attachments)
     socket.on(
       "chat:collaboration",
-      async (data: { projectId: string; message: string }) => {
+      async (data: {
+        projectId: string;
+        message: string;
+        attachments?: { name: string; type: string; size: number; dataUrl: string }[];
+      }) => {
         try {
           if (!socket.user) {
             socket.emit("error", { message: "Authentication required for collaboration" });
@@ -298,13 +304,32 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             return;
           }
 
+          // sanitize attachments (optional; v1 limits)
+          const att = Array.isArray(data.attachments) ? data.attachments : [];
+          const safeAtt = att
+            .filter(
+              (a) =>
+                a &&
+                typeof a.name === "string" &&
+                typeof a.type === "string" &&
+                typeof a.size === "number" &&
+                typeof a.dataUrl === "string" &&
+                a.dataUrl.startsWith("data:") &&
+                a.dataUrl.length <= 2_000_000 * 2 // ~2MB base64-ish guard
+            )
+            .slice(0, 3); // up to 3 files per message
+
           // Save message
           const chatMessage = await storage.createChatMessage({
             userId: socket.user.sub.toString(),
             projectId: data.projectId,
             role: "user",
             content: data.message,
-            metadata: { type: "collaboration", username: socket.user.email }, // store username for history
+            metadata: {
+              type: "collaboration",
+              username: socket.user.email,
+              attachments: safeAtt,
+            },
           });
 
           // Remember author + createdAt for fallback ownership/window checks
@@ -322,6 +347,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             role: "user",
             content: chatMessage.content,
             createdAt: chatMessage.createdAt,
+            attachments: safeAtt,
           });
 
           // ---- mention pings (@all or @username) ----
