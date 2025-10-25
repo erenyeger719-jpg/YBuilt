@@ -282,7 +282,8 @@ export default function ProjectChat({ projectId }: { projectId: string }) {
       if (p.projectId !== projectId) return;
       setMsgs(p.msgs);
       try {
-        localStorage.setItem(`proj-chat:${projectId}`, JSON.stringify(p.msgs.slice(-200)));
+        const clean = p.msgs.slice(-200).map(({ attachments, ...rest }) => rest);
+        localStorage.setItem(`proj-chat:${projectId}`, JSON.stringify(clean));
       } catch {}
     };
 

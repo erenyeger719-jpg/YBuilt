@@ -217,8 +217,12 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
               editedAt: editedIso,
               deleted: deletedFlag,
               pinned: pinnedFlag,
-              // NEW: surface any stored attachments
-              attachments: Array.isArray(r.metadata?.attachments) ? r.metadata.attachments : [],
+              // Do not leak attachments for deleted messages
+              attachments: deletedFlag
+                ? []
+                : Array.isArray(r.metadata?.attachments)
+                ? r.metadata.attachments
+                : [],
             };
           });
 
@@ -462,12 +466,16 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             return;
           }
 
-          // Persist if possible
+          // Persist if possible (merge metadata to avoid clobbering)
           if (typeof (storage as any).updateChatMessage === "function") {
+            const oldMeta =
+              (typeof (storage as any).getChatMessageById === "function" &&
+                (await (storage as any).getChatMessageById(messageId))?.metadata) ||
+              {};
             await (storage as any).updateChatMessage({
               id: messageId,
               content,
-              metadata: { editedAt: new Date().toISOString() },
+              metadata: { ...(oldMeta || {}), editedAt: new Date().toISOString() },
             });
           }
 
@@ -607,11 +615,16 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           if (op === "pin") set.add(String(messageId));
           else set.delete(String(messageId));
 
-          // Persist (if available)
+          // Persist (merge metadata to avoid clobbering)
           if (typeof (storage as any).updateChatMessage === "function") {
+            let oldMeta: any = {};
+            if (typeof (storage as any).getChatMessageById === "function") {
+              const row = await (storage as any).getChatMessageById(messageId);
+              oldMeta = (row && row.metadata) || {};
+            }
             await (storage as any).updateChatMessage({
               id: messageId,
-              metadata: { pinned: op === "pin" },
+              metadata: { ...(oldMeta || {}), pinned: op === "pin" },
             });
           }
 
