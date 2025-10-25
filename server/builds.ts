@@ -10,7 +10,32 @@ export function wireBuildsNamespace(io: Server) {
   ioRef = io;
   const nsp = io.of("/builds");
   nsp.on("connection", (socket) => {
-    socket.on("watch", ({ jobId }) => socket.join(room(jobId)));
+    socket.on("watch", ({ jobId }) => {
+      const id = String(jobId || "");
+      if (!id) return;
+      socket.join(room(id));
+
+      // Immediately send the latest known state so late joiners see something
+      const job = JOBS.get(id);
+      if (job) {
+        const total = 5; // our fake pipeline has 5 steps
+        const step = Math.max(1, Math.min(total, Math.round((job.pct / 100) * total)));
+        const snapshot = {
+          jobId: id,
+          step,
+          total,
+          pct: job.pct,
+          label: job.log[job.log.length - 1] || "Initialize",
+        };
+        socket.emit("build:progress", snapshot);
+        if (job.status === "done") {
+          socket.emit("build:done", { jobId: id, url: `/previews/forks/<slug>/` });
+        }
+        if (job.status === "error") {
+          socket.emit("build:error", { jobId: id, message: "failed" });
+        }
+      }
+    });
   });
 }
 
