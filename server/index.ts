@@ -176,6 +176,15 @@ app.use(ipGate());
           ((req.headers['x-forwarded-for'] as string) || '') ||
           req.ip,
       },
+      {
+        path: /^\/api\/execute\/run/i,
+        limit: 50,
+        methods: ['POST'],
+        keyFn: (req) =>
+          (req as any).user?.id ||
+          ((req.headers['x-forwarded-for'] as string) || '') ||
+          req.ip,
+      },
     ]),
   );
 
@@ -401,6 +410,9 @@ app.use(ipGate());
   const { default: executeRoutes } = await import('./routes/execute.js').catch(() => ({
     default: undefined as any,
   }));
+  const { default: execSandbox } = await import('./routes/execute.sandbox.js').catch(() => ({
+    default: undefined as any,
+  }));
   const { default: previewsRouter } = await import('./routes/previews.js').catch(() => ({
     default: undefined as any,
   }));
@@ -452,6 +464,7 @@ app.use(ipGate());
   if (authRoutes) app.use('/api/auth', authRoutes);
   if (projectsRoutes) app.use('/api/projects', projectsRoutes);
   if (chatRoutes) app.use('/api/chat', chatRoutes);
+  if (execSandbox) app.use('/api/execute', express.json({ limit: '256kb' }), execSandbox);
   if (executeRoutes) app.use('/api/execute', express.json({ limit: '256kb' }), executeRoutes);
   if (previewsRouter) app.use('/api/previews', express.json(), previewsRouter);
   if (exportRouter) app.use('/api/previews', express.json(), exportRouter);
