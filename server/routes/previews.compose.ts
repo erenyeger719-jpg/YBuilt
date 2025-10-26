@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
+
+const CACHE = new Map<string, { slug: string; url: string }>();
 
 const router = Router();
 
@@ -71,6 +74,17 @@ router.post('/compose', async (req, res) => {
 
     if (!sections.length) return res.status(400).json({ ok:false, error:'no_sections' });
 
+    // Deduplicate identical composes
+    const keyBrand = safeColor(brand);
+    const payloadKey = createHash('sha1')
+      .update(JSON.stringify({ sections, title, dark, copy, brand: keyBrand }))
+      .digest('hex');
+
+    const hit = CACHE.get(payloadKey);
+    if (hit) {
+      return res.json({ ok:true, path:`/previews/forks/${hit.slug}/`, url: hit.url || `/previews/forks/${hit.slug}/` });
+    }
+
     const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || 'previews');
     const partsDir = path.join(PREVIEWS_DIR, 'sections');
 
@@ -98,6 +112,7 @@ router.post('/compose', async (req, res) => {
     await fs.promises.writeFile(path.join(destDir, 'index.html'), indexHtml, 'utf8');
 
     const persisted = await persistFork({ slug, dir: destDir });
+    CACHE.set(payloadKey, { slug, url: persisted.url || '' });
     return res.json({ ok:true, path:`/previews/forks/${slug}/`, url: persisted.url || `/previews/forks/${slug}/` });
   } catch (e) {
     return res.status(500).json({ ok:false, error:'compose_failed' });

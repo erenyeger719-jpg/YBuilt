@@ -7,7 +7,7 @@ import { runWithBudget } from "../intent/budget.ts";
 import { filterIntent } from "../intent/filter.ts";
 import { cheapCopy, guessBrand } from "../intent/copy.ts";
 import { pushSignal, summarize, boostConfidence } from "../intent/signals.ts";
-import { verifyAndPrepare, rememberLastGood, lastGoodFor } from "../intent/dsl.ts";
+import { verifyAndPrepare, rememberLastGood, lastGoodFor, defaultsForSections } from "../intent/dsl.ts";
 
 // Choose model by task + tier. Swap here when you add providers.
 export function pickModel(task, tier = "balanced") {
@@ -257,6 +257,9 @@ router.post("/act", async (req, res) => {
           if (prev) prep = verifyAndPrepare(prev);
         }
 
+        // Always fill missing copy with defaults for the chosen sections
+        const copyWithDefaults = { ...defaultsForSections(prep.sections), ...prep.copy };
+
         const r = await fetch(`${baseUrl(req)}/api/previews/compose`, {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -264,7 +267,7 @@ router.post("/act", async (req, res) => {
             sections: prep.sections,
             dark,
             title,
-            copy: prep.copy,
+            copy: copyWithDefaults,
             brand: prep.brand,
           }),
         });

@@ -53,3 +53,20 @@ export function rememberLastGood(sessionId: string, dsl: DSL) {
 export function lastGoodFor(sessionId: string): DSL | null {
   return LAST_GOOD[sessionId || 'anon'] || null;
 }
+
+// --- defaults for allowed tokens in selected sections ---
+export function defaultsForSections(ids: SectionId[]) {
+  const allowed = allowedTokens(ids);
+  const D: Record<string,string> = {
+    HERO_TITLE: 'Build faster. Ship calmer.',
+    HERO_SUB: 'Clean blocks, real-time preview.',
+    CTA_LABEL: 'Get started',
+    CTA_HEAD: 'Ready when you are',
+    F1_TITLE: 'Fast',    F1_BODY: 'Idea → live URL in minutes.',
+    F2_TITLE: 'Safe',    F2_BODY: 'Sandboxed runs with strict limits.',
+    F3_TITLE: 'Visible', F3_BODY: 'Unified logs and live events.',
+  };
+  const out: Record<string,string> = {};
+  for (const k of Array.from(allowed)) if (D[k]) out[k] = D[k];
+  return out;
+}
