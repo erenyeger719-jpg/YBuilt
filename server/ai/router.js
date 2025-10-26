@@ -1,5 +1,6 @@
 // server/ai/router.js
 import express from "express";
+import fs from "fs";
 import { buildSpec } from "../intent/brief.ts";
 import { nextActions } from "../intent/planner.ts";
 import { runWithBudget } from "../intent/budget.ts";
@@ -18,6 +19,7 @@ import { pickFromPlaybook } from "../intent/playbook.ts";
 import { clarifyChips } from "../intent/clarify.ts";
 import { localLabels } from "../intent/localLabels.ts";
 import { addExample, nearest } from "../intent/retrieval.ts";
+import { decideLabelPath, outcomeLabelPath, allowCloud } from "../intent/router.brain.ts";
 import crypto from "crypto";
 
 export function pickModel(task, tier = "balanced") {
@@ -112,7 +114,7 @@ function quickGuessIntent(prompt) {
   const coverage = filled / 7; // rough
   const chips = [
     intent.color_scheme !== "light" ? "Switch to light" : "Use dark mode",
-    has("minimal") ? "More playful" : "More minimal", // ensures chips actually map to spec changes
+    has("minimal") ? "More playful" : "More minimal",
     intent.goal === "waitlist" ? "Use email signup CTA" : "Use waitlist",
   ];
 
@@ -446,6 +448,11 @@ router.post("/one", async (req, res) => {
     const { prompt = "", sessionId = "anon" } = req.body || {};
     const key = normalizeKey(prompt);
 
+    // [BANDIT] vars for logging outcome
+    let labelPath = "rules"; // "rules" | "local" | "cloud"
+    let cloudUsed = false;
+    const startedAt = Date.now();
+
     // 0) Playbook first (no-model)
     let fit = pickFromPlaybook(prompt);
 
@@ -453,28 +460,57 @@ router.post("/one", async (req, res) => {
     if (!fit) {
       fit = cacheGet(key);
       if (!fit) {
+        // quick cheap heuristic still first
         const guess = typeof quickGuessIntent === "function" ? quickGuessIntent(prompt) : null;
         if (guess) {
           fit = guess;
+          labelPath = "rules";
         } else {
-          const lab = await localLabels(prompt); // free local model
-          if (lab?.intent) {
-            fit = {
-              intent: {
-                ...lab.intent,
-                sections: lab.intent.sections?.length ? lab.intent.sections : ["hero-basic", "cta-simple"],
-              },
-              confidence: lab.confidence || 0.7,
-              chips: clarifyChips({
-                prompt,
-                spec: {
-                  brand: { dark: lab.intent.color_scheme === "dark" },
-                  layout: { sections: lab.intent.sections || ["hero-basic", "cta-simple"] },
+          // [BANDIT] pick labeler path (local vs cloud)
+          labelPath = decideLabelPath();
+          if (labelPath === "local") {
+            const lab = await localLabels(prompt); // free
+            if (lab?.intent) {
+              fit = {
+                intent: {
+                  ...lab.intent,
+                  sections: lab.intent.sections?.length ? lab.intent.sections : ["hero-basic", "cta-simple"],
                 },
-              }),
-            };
-          } else {
-            fit = await filterIntent(prompt); // cloud fallback as last resort
+                confidence: lab.confidence || 0.7,
+                chips: clarifyChips({
+                  prompt,
+                  spec: {
+                    brand: { dark: lab.intent.color_scheme === "dark" },
+                    layout: { sections: lab.intent.sections || ["hero-basic", "cta-simple"] },
+                  },
+                }),
+              };
+            }
+          }
+          if (!fit) {
+            // cloud fallback only if within budget
+            if (allowCloud({ cents: 0.03, tokens: 1200 })) {
+              fit = await filterIntent(prompt);
+              cloudUsed = true;
+              labelPath = "cloud";
+            } else {
+              // final safe default
+              const dark = /(^|\s)dark(\s|$)/i.test(String(prompt));
+              fit = {
+                intent: {
+                  goal: "waitlist",
+                  vibe: "minimal",
+                  color_scheme: dark ? "dark" : "light",
+                  sections: ["hero-basic", "cta-simple"],
+                },
+                confidence: 0.55,
+                chips: clarifyChips({
+                  prompt,
+                  spec: { brand: { dark }, layout: { sections: ["hero-basic", "cta-simple"] } },
+                }),
+              };
+              labelPath = "rules";
+            }
           }
         }
         cacheSet(key, fit);
@@ -553,7 +589,7 @@ router.post("/one", async (req, res) => {
       result = composeData?.result;
     }
 
-    return res.json({
+    const payload = {
       ok: true,
       spec: { ...spec, brandColor, copy },
       plan: actions,
@@ -562,7 +598,21 @@ router.post("/one", async (req, res) => {
       url,
       chips,
       signals: summarySignals,
-    });
+    };
+
+    // [BANDIT] mark success with real timing + path
+    try {
+      const shipped = Boolean(url);
+      outcomeLabelPath(labelPath, {
+        startedAt,
+        cloudUsed,
+        tokens: cloudUsed ? 1200 : 0,
+        cents: cloudUsed ? 0.03 : 0,
+        shipped,
+      });
+    } catch {}
+
+    return res.json(payload);
   } catch (e) {
     return res.status(500).json({ ok: false, error: "one_failed" });
   }
@@ -754,5 +804,68 @@ router.post("/chips/apply", (req, res) => {
     return res.status(500).json({ ok: false, error: "chip_apply_failed" });
   }
 });
+
+// --- seed retrieval with a few good examples (one-shot) ---
+router.post("/seed", async (req, res) => {
+  try {
+    const seeds = [
+      { prompt: "dark saas waitlist for founders", sections: ["hero-basic", "cta-simple"] },
+      { prompt: "light portfolio landing designer", sections: ["hero-basic", "features-3col", "cta-simple"] },
+      { prompt: "ecommerce product launch page", sections: ["hero-basic", "features-3col", "cta-simple"] },
+      { prompt: "pricing page for startup", sections: ["hero-basic", "pricing-simple", "cta-simple"] },
+      { prompt: "faq page for web app", sections: ["hero-basic", "faq-accordion", "cta-simple"] },
+    ];
+
+    for (const s of seeds) {
+      const copy = cheapCopy(s.prompt, { vibe: "minimal", color_scheme: "light", sections: s.sections });
+      await addExample("seed", s.prompt, { sections: s.sections, copy, brand: { primary: "#6d28d9" } });
+    }
+    return res.json({ ok: true, added: seeds.length });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "seed_failed" });
+  }
+});
+
+// --- lightweight metrics snapshot ---
+router.get("/metrics", (req, res) => {
+  try {
+    const statsPath = pathResolve(".cache/router.stats.json");
+    const retrPath = pathResolve(".cache/retrieval.jsonl");
+
+    const stats = fs.existsSync(statsPath) ? JSON.parse(fs.readFileSync(statsPath, "utf8")) : {};
+    const nRules = stats?.rules?.n || 0;
+    const nLocal = stats?.local?.n || 0;
+    const nCloud = stats?.cloud?.n || 0;
+    const total = Math.max(1, nRules + nLocal + nCloud);
+
+    const ema = (arm) => stats?.[arm]?.ema_ms ?? null;
+    const ttu_ms = Math.round(
+      ((ema("rules") || 0) * nRules + (ema("local") || 0) * nLocal + (ema("cloud") || 0) * nCloud) / total
+    );
+
+    const retrievalLines = fs.existsSync(retrPath)
+      ? fs.readFileSync(retrPath, "utf8").split(/\r?\n/).filter(Boolean).length
+      : 0;
+
+    return res.json({
+      ok: true,
+      counts: { rules: nRules, local: nLocal, cloud: nCloud, total },
+      cloud_pct: Math.round((nCloud / total) * 100),
+      time_to_url_ms_est: ttu_ms || null,
+      retrieval_db: retrievalLines,
+      // edits_to_ship needs UI events; once you emit `publish` & `edit` signals, you can compute median.
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "metrics_failed" });
+  }
+});
+
+function pathResolve(p) {
+  try {
+    return require("path").resolve(p);
+  } catch {
+    return p;
+  }
+}
 
 export default router;
