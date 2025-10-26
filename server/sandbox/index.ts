@@ -34,6 +34,25 @@ const PY_ALLOW = (process.env.PY_ALLOW || "math,random,re,json,datetime,statisti
   .map((s) => s.trim())
   .filter(Boolean);
 
+// keep a minimal env for local fallback (no secrets)
+const SAFE_ENV_KEYS = new Set([
+  "PATH",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "PYTHONIOENCODING",
+  "NODE_NO_WARNINGS",
+]);
+function safeEnv(): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const k of Object.keys(process.env)) {
+    if (SAFE_ENV_KEYS.has(k)) out[k] = process.env[k]!;
+  }
+  // make stdout consistent
+  out.PYTHONIOENCODING = out.PYTHONIOENCODING || "utf-8";
+  return out;
+}
+
 // --- tiny utils ---
 function safePath(p: string) {
   return /^[a-z0-9/_\-.]+$/i.test(p) && !p.includes("..");
@@ -125,8 +144,6 @@ function dockerArgs(image: string, mountDir: string) {
 
 // --- core runner ---
 export async function runSandbox(req: ExecRequest): Promise<RunResult> {
-  const t0 = Date.now();
-
   // shape guard (route already validated; keep light)
   const lang = req.lang === "python" ? "python" : "node";
   const timeoutMs = Math.max(100, Math.min(Number(req.timeoutMs ?? 1500), 10_000));
@@ -149,25 +166,61 @@ export async function runSandbox(req: ExecRequest): Promise<RunResult> {
     }
 
     if (RUNNER_IMPL !== "docker") {
-      const cmdLocal = lang === "node" ? "node" : "python";
-      return await spawnRun(cmdLocal, [entry, ...args], { cwd: dir, timeoutMs });
+      const cmdLocal = lang === "node" ? "node" : process.env.PY_LOCAL || "python3";
+      let res = await spawnRun(cmdLocal, [entry, ...args], {
+        cwd: dir,
+        timeoutMs,
+        env: safeEnv(),
+      });
+      if (
+        !res.ok &&
+        res.reason === "spawn_error" &&
+        /ENOENT/i.test(res.stderr) &&
+        lang === "python"
+      ) {
+        res = await spawnRun("python", [entry, ...args], {
+          cwd: dir,
+          timeoutMs,
+          env: safeEnv(),
+        });
+      }
+      return res;
     }
 
     // Try Docker first; fallback if daemon unavailable
     {
       const image = lang === "node" ? NODE_IMAGE : PY_IMAGE;
       const base = dockerArgs(image, dir);
-      const cmd = lang === "node"
-        ? ["node", "/workspace/main.js", ...args]
-        : ["python", "/workspace/main.py", ...args];
+      const cmd =
+        lang === "node"
+          ? ["node", "/workspace/main.js", ...args]
+          : ["python", "/workspace/main.py", ...args];
 
       const res = await spawnRun(RUNNER_BIN, [...base, ...cmd], { cwd: dir, timeoutMs });
       if (
         !res.ok &&
-        (res.exitCode === 125 || /Cannot connect to the Docker daemon/i.test(res.stderr))
+        (res.exitCode === 125 ||
+          /Cannot connect to the Docker daemon/i.test(res.stderr))
       ) {
-        const cmdLocal = lang === "node" ? "node" : "python";
-        return await spawnRun(cmdLocal, [entry, ...args], { cwd: dir, timeoutMs });
+        const cmdLocal = lang === "node" ? "node" : process.env.PY_LOCAL || "python3";
+        let fallback = await spawnRun(cmdLocal, [entry, ...args], {
+          cwd: dir,
+          timeoutMs,
+          env: safeEnv(),
+        });
+        if (
+          !fallback.ok &&
+          fallback.reason === "spawn_error" &&
+          /ENOENT/i.test(fallback.stderr) &&
+          lang === "python"
+        ) {
+          fallback = await spawnRun("python", [entry, ...args], {
+            cwd: dir,
+            timeoutMs,
+            env: safeEnv(),
+          });
+        }
+        return fallback;
       }
       return res;
     }
@@ -179,7 +232,7 @@ export async function runSandbox(req: ExecRequest): Promise<RunResult> {
 function spawnRun(
   cmd: string,
   argv: string[],
-  opts: { cwd: string; timeoutMs: number },
+  opts: { cwd: string; timeoutMs: number; env?: NodeJS.ProcessEnv },
 ): Promise<RunResult> {
   return new Promise((resolve) => {
     let stdout = "";
@@ -189,7 +242,7 @@ function spawnRun(
     const child = spawn(cmd, argv, {
       cwd: opts.cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env }, // inherits, fine (no secrets mounted in container)
+      env: opts.env || { ...process.env }, // use provided env or inherit
     });
 
     let killed = false;
