@@ -368,4 +368,34 @@ router.post("/one", async (req, res) => {
   }
 });
 
+// POST /api/ai/chips/apply  { sessionId, spec, chip }
+router.post("/chips/apply", (req, res) => {
+  const { sessionId = "anon", spec = {}, chip = "" } = req.body || {};
+  const s = { ...spec, brand: { ...(spec.brand || {}) } };
+
+  if (/Switch to light/i.test(chip)) s.brand.dark = false;
+  if (/Use dark mode/i.test(chip))  s.brand.dark = true;
+  if (/More minimal/i.test(chip))   s.brand.tone = "minimal";
+  if (/More playful/i.test(chip))   s.brand.tone = "playful";
+  if (/Add 3-card features/i.test(chip)) {
+    const cur = new Set((s.layout?.sections || []).map(String));
+    cur.add("features-3col");
+    s.layout = { sections: Array.from(cur) };
+  }
+  if (/Use 2-column features/i.test(chip)) {
+    s.layout = { sections: (s.layout?.sections || []).filter(id => id !== "features-3col") };
+  }
+  if (/Use email signup CTA/i.test(chip)) {
+    s.copy = { ...(s.copy || {}), CTA_LABEL: "Get started", CTA_HEAD: "Ready when you are" };
+  }
+  if (/Use waitlist/i.test(chip)) {
+    s.copy = { ...(s.copy || {}), CTA_LABEL: "Join the waitlist", CTA_HEAD: "Be first in line" };
+  }
+
+  try {
+    pushSignal(sessionId, { ts: Date.now(), kind: "chip_apply", data: { chip } });
+  } catch {}
+  return res.json({ ok: true, spec: s });
+});
+
 export default router;

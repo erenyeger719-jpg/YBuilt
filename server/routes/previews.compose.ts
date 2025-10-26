@@ -15,11 +15,18 @@ function esc(s: string) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// Harden brand color against CSS injection
+function safeColor(input: string, fallback = '#6d28d9') {
+  const s = String(input || '').trim();
+  const m = s.match(/^#?[0-9a-fA-F]{3,8}$/);
+  return m ? (s.startsWith('#') ? s : `#${s}`) : fallback;
+}
+
 // tiny base HTML
 function wrapHTML({ title, dark, brand, body }: { title: string; dark: boolean; brand: string; body: string }) {
   const bg = dark ? '#0b0b0f' : '#ffffff';
   const fg = dark ? '#e8e8ee' : '#111111';
-  const brandColor = brand || (dark ? '#7c3aed' : '#6d28d9');
+  const brandColor = safeColor(brand || (dark ? '#7c3aed' : '#6d28d9'));
   return `<!doctype html>
 <html lang="en">
 <head>
