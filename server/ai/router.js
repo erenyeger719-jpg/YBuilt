@@ -7,6 +7,7 @@ import { runWithBudget } from "../intent/budget.ts";
 import { filterIntent } from "../intent/filter.ts";
 import { cheapCopy, guessBrand } from "../intent/copy.ts";
 import { pushSignal, summarize, boostConfidence } from "../intent/signals.ts";
+import { verifyAndPrepare, rememberLastGood, lastGoodFor } from "../intent/dsl.ts";
 
 // Choose model by task + tier. Swap here when you add providers.
 export function pickModel(task, tier = "balanced") {
@@ -234,32 +235,56 @@ router.post("/act", async (req, res) => {
         return { kind: "patch", spec: next };
       }
 
-      // compose branch with copy/brand forwarding + signal
+      // compose branch with DSL verify + fallback + signal
       if (action.kind === "compose") {
-        const sections = Array.isArray(action.args?.sections)
+        const sectionsIn = Array.isArray(action.args?.sections)
           ? action.args.sections
           : spec?.layout?.sections || [];
-        if (!sections.length) return { error: "no_sections" };
-        const dark = !!spec?.brand?.dark;
+        const dark = !!(spec?.brand?.dark);
         const title = String(spec?.summary || "Preview");
-        const copy = action.args?.copy || spec?.copy || {};
-        const brand = action.args?.brand || (spec?.brandColor ? { primary: spec.brandColor } : {});
+
+        // Proposed DSL from action/spec
+        const proposed = {
+          sections: sectionsIn,
+          copy: action.args?.copy || spec?.copy || {},
+          brand: action.args?.brand || (spec?.brandColor ? { primary: spec.brandColor } : {}),
+        };
+
+        // Verify/sanitize; fallback to last good if needed
+        let prep = verifyAndPrepare(proposed);
+        if (!prep.sections.length) {
+          const prev = lastGoodFor(req.body?.sessionId || "anon");
+          if (prev) prep = verifyAndPrepare(prev);
+        }
 
         const r = await fetch(`${baseUrl(req)}/api/previews/compose`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sections, dark, title, copy, brand }),
+          body: JSON.stringify({
+            sections: prep.sections,
+            dark,
+            title,
+            copy: prep.copy,
+            brand: prep.brand,
+          }),
         });
         if (!r.ok) return { error: `compose_http_${r.status}` };
         const data = await r.json();
-        // record success signal
+
+        // record success + remember last good DSL
         try {
+          rememberLastGood(req.body?.sessionId || "anon", {
+            sections: prep.sections,
+            copy: prep.copy,
+            brand: prep.brand,
+          });
           pushSignal(req.body?.sessionId || "anon", {
             ts: Date.now(),
             kind: "compose_success",
             data: { url: data?.url },
           });
         } catch {}
+
         return { kind: "compose", ...data };
       }
 
