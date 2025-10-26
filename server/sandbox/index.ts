@@ -71,6 +71,8 @@ Module.prototype.require = function(name){
   if (__ALLOW.has(name)) return __origRequire.apply(this, arguments);
   throw new Error('Module "'+ name +'" is blocked by policy');
 };
+// 🆕 Block Node 18+/20+ global fetch in local mode
+try { globalThis.fetch = (..._) => { throw new Error('network blocked by policy'); }; } catch {}
 `.trimStart();
 }
 
@@ -96,16 +98,25 @@ function dockerArgs(image: string, mountDir: string) {
     "--rm",
     "--network",
     "none",
-    "--cpus", RUNNER_CPUS,
-    "--memory", RUNNER_MEMORY,
-    "--pids-limit", RUNNER_PIDS,
-    "--cap-drop", "ALL",
-    "--security-opt", "no-new-privileges",
+    "--cpus",
+    RUNNER_CPUS,
+    "--memory",
+    RUNNER_MEMORY,
+    "--pids-limit",
+    RUNNER_PIDS,
+    "--cap-drop",
+    "ALL",
+    "--security-opt",
+    "no-new-privileges",
     "--read-only",
-    "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=64m",
-    "-u", "1000:1000",
-    "-w", "/workspace",
-    "-v", `${mountDir}:/workspace:ro`,
+    "--tmpfs",
+    "/tmp:rw,noexec,nosuid,nodev,size=64m",
+    "-u",
+    "1000:1000",
+    "-w",
+    "/workspace",
+    "-v",
+    `${mountDir}:/workspace:ro`,
   ];
   if (RUNNER_PLATFORM) args.unshift("--platform", RUNNER_PLATFORM);
   args.push(image);
@@ -138,25 +149,38 @@ export async function runSandbox(req: ExecRequest): Promise<RunResult> {
     }
 
     if (RUNNER_IMPL !== "docker") {
-      // Fallback local (no network flags here—keep for dev only)
-      const cmd = lang === "node" ? "node" : "python";
-      return await spawnRun(cmd, [entry, ...args], { cwd: dir, timeoutMs });
+      const cmdLocal = lang === "node" ? "node" : "python";
+      return await spawnRun(cmdLocal, [entry, ...args], { cwd: dir, timeoutMs });
     }
 
-    // Docker (strict)
-    const image = lang === "node" ? NODE_IMAGE : PY_IMAGE;
-    const base = dockerArgs(image, dir);
-    const cmd = lang === "node"
-      ? ["node", "/workspace/main.js", ...args]
-      : ["python", "/workspace/main.py", ...args];
+    // Try Docker first; fallback if daemon unavailable
+    {
+      const image = lang === "node" ? NODE_IMAGE : PY_IMAGE;
+      const base = dockerArgs(image, dir);
+      const cmd = lang === "node"
+        ? ["node", "/workspace/main.js", ...args]
+        : ["python", "/workspace/main.py", ...args];
 
-    return await spawnRun(RUNNER_BIN, [...base, ...cmd], { cwd: dir, timeoutMs });
+      const res = await spawnRun(RUNNER_BIN, [...base, ...cmd], { cwd: dir, timeoutMs });
+      if (
+        !res.ok &&
+        (res.exitCode === 125 || /Cannot connect to the Docker daemon/i.test(res.stderr))
+      ) {
+        const cmdLocal = lang === "node" ? "node" : "python";
+        return await spawnRun(cmdLocal, [entry, ...args], { cwd: dir, timeoutMs });
+      }
+      return res;
+    }
   } finally {
     rmDir(dir);
   }
 }
 
-function spawnRun(cmd: string, argv: string[], opts: { cwd: string; timeoutMs: number }): Promise<RunResult> {
+function spawnRun(
+  cmd: string,
+  argv: string[],
+  opts: { cwd: string; timeoutMs: number },
+): Promise<RunResult> {
   return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
@@ -171,7 +195,9 @@ function spawnRun(cmd: string, argv: string[], opts: { cwd: string; timeoutMs: n
     let killed = false;
     const timer = setTimeout(() => {
       killed = true;
-      try { child.kill("SIGKILL"); } catch {}
+      try {
+        child.kill("SIGKILL");
+      } catch {}
     }, opts.timeoutMs);
 
     child.stdout.on("data", (c) => (stdout += c.toString()));
@@ -181,16 +207,36 @@ function spawnRun(cmd: string, argv: string[], opts: { cwd: string; timeoutMs: n
       clearTimeout(timer);
       const durationMs = Date.now() - t0;
       if (killed) {
-        return resolve({ ok: false, stdout, stderr, exitCode: code ?? undefined, durationMs, reason: "timeout" });
+        return resolve({
+          ok: false,
+          stdout,
+          stderr,
+          exitCode: code ?? undefined,
+          durationMs,
+          reason: "timeout",
+        });
       }
       const ok = code === 0 && !stderr;
-      resolve({ ok, stdout, stderr, exitCode: code ?? undefined, durationMs, reason: ok ? undefined : "nonzero_exit" });
+      resolve({
+        ok,
+        stdout,
+        stderr,
+        exitCode: code ?? undefined,
+        durationMs,
+        reason: ok ? undefined : "nonzero_exit",
+      });
     });
 
     child.on("error", (err: any) => {
       clearTimeout(timer);
       const durationMs = Date.now() - t0;
-      resolve({ ok: false, stdout, stderr: String(err?.message || err), durationMs, reason: "spawn_error" });
+      resolve({
+        ok: false,
+        stdout,
+        stderr: String(err?.message || err),
+        durationMs,
+        reason: "spawn_error",
+      });
     });
   });
 }
