@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Ybuilt Logs</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; margin: 16px; }
+      .row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+      input, select, button { padding: 6px 8px; font-size: 14px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 6px 8px; border-bottom: 1px solid #eee; font-size: 12px; }
+      th { text-align: left; background: #fafafa; position: sticky; top: 0; }
+      .level-debug { color: #64748b; }
+      .level-info  { color: #0f766e; }
+      .level-warn  { color: #b45309; }
+      .level-error { color: #b91c1c; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+  </head>
+  <body>
+    <h2>Live Logs</h2>
+    <div class="row">
+      <label>Level
+        <select id="level">
+          <option value="">(any)</option>
+          <option value="info+">info+</option>
+          <option value="warn+">warn+</option>
+          <option value="error">error</option>
+          <option value="info">info</option>
+          <option value="debug">debug</option>
+        </select>
+      </label>
+      <label>Source
+        <input id="source" placeholder="http,exec,palette" />
+      </label>
+      <label>RID
+        <input id="rid" placeholder="request id" class="mono"/>
+      </label>
+      <button id="connect">Connect</button>
+      <button id="clear">Clear</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ts</th><th>lvl</th><th>src</th><th>type</th><th>method</th><th>path</th><th>status</th><th>ms</th><th>message</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      let sock = null;
+      const tb = document.getElementById('tbody');
+      const q = (id) => document.getElementById(id);
+
+      function add(ev) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="mono">${new Date(ev.ts).toLocaleTimeString()}</td>
+          <td class="level-${ev.level} mono">${ev.level}</td>
+          <td>${ev.source}</td>
+          <td>${ev.type}</td>
+          <td class="mono">${ev.method || ''}</td>
+          <td class="mono">${ev.path || ''}</td>
+          <td>${ev.status ?? ''}</td>
+          <td>${ev.ms ?? ''}</td>
+          <td class="mono">${(ev.message || '').replaceAll('<','&lt;')}</td>
+        `;
+        tb.appendChild(tr);
+        if (tb.children.length > 1000) tb.removeChild(tb.firstChild);
+        tr.scrollIntoView({ block: 'end' });
+      }
+
+      function connect() {
+        if (sock) try { sock.disconnect(); } catch {}
+        const level  = q('level').value.trim();
+        const source = q('source').value.trim();
+        const rid    = q('rid').value.trim();
+
+        sock = io('/logs', { query: { level, source, rid }});
+        sock.on('hello', () => add({ ts: Date.now(), level: 'info', source: 'viewer', type: 'hello', message: 'connected' }));
+        sock.on('log', add);
+      }
+
+      q('connect').onclick = connect;
+      q('clear').onclick = () => (tb.innerHTML = '');
+
+      // sensible defaults
+      q('level').value = 'info+';
+      q('source').value = 'http,exec,palette';
+    </script>
+  </body>
+</html>

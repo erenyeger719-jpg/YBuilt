@@ -547,6 +547,9 @@ app.use(ipGate());
     });
   });
 
+  // Mount /dev static (before Vite/static)
+  app.use('/dev', express.static(path.resolve('public/dev'), { extensions: ['html'] }));
+
   // Static vs Vite dev (AFTER API)
   if (process.env.NODE_ENV === 'production') {
     serveStatic(app);
