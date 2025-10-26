@@ -20,6 +20,7 @@ import { ipGate } from './middleware/ipGate.js';
 import buildsRouter from './routes/builds.ts';
 import { wireBuildsNamespace } from './builds.ts';
 import logsApiRouter from './routes/logs.ts'; // note the .ts
+import { persistFork } from './previews.storage.ts';
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -395,9 +396,41 @@ app.use(ipGate());
       await fs.promises.cp(sourceDir, destDir, { recursive: true });
 
       const publicPath = `/previews/forks/${slug}/`;
-      return res.json({ path: publicPath });
+      const persisted = await persistFork({ slug, dir: destDir });
+      return res.json({ ok: true, path: publicPath, url: persisted.url });
     } catch (err) {
       return res.status(500).json({ error: 'fork failed' });
+    }
+  });
+
+  // Deep-link auto-fork: /previews/fork?sourceId=<slug>  -> 302 redirect to URL
+  app.get('/previews/fork', async (req: Request, res: Response) => {
+    try {
+      const sourceId = String(
+        (req.query.sourceId || req.query.slug || req.query.id || (req.query as any).fork || '') as
+          | string
+          | undefined,
+      ).trim();
+      if (!/^[a-z0-9-]+$/i.test(sourceId)) return res.status(400).send('invalid sourceId');
+
+      const sourceDir = path.join(PREVIEWS_DIR, sourceId);
+      const indexPath = path.join(sourceDir, 'index.html');
+      if (!fs.existsSync(indexPath)) return res.status(404).send('template not found');
+
+      const teamId =
+        (req as any).cookies?.teamId || (req.headers as any)['x-team-id'] || null;
+      const forksDir = safeJoinTeam(teamId, '/previews/forks');
+      await fs.promises.mkdir(forksDir, { recursive: true });
+
+      const slug = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}-${sourceId}`;
+      const destDir = path.join(forksDir, slug);
+      await fs.promises.cp(sourceDir, destDir, { recursive: true });
+
+      const localPath = `/previews/forks/${slug}/`;
+      const persisted = await persistFork({ slug, dir: destDir });
+      res.redirect(persisted.url || localPath);
+    } catch {
+      res.status(500).send('fork failed');
     }
   });
 
@@ -588,7 +621,6 @@ app.use(ipGate());
         throw e;
       }
     }
-    throw new Error(`Failed to start server after ${maxAttempts} attempts`);
   }
 
   const port = parseInt(process.env.PORT || '5050', 10);
