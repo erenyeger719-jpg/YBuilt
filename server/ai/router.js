@@ -434,6 +434,106 @@ router.post("/one", async (req, res) => {
   }
 });
 
+// ---------- instant (zero-LLM compose) ----------
+router.post("/instant", async (req, res) => {
+  try {
+    const { prompt = "", sessionId = "anon" } = req.body || {};
+
+    // 0) No-model intent: playbook → quick guess → safe defaults
+    let fit = pickFromPlaybook(prompt) || quickGuessIntent(prompt);
+    if (!fit) {
+      const dark = /(^|\s)dark(\s|$)/i.test(String(prompt));
+      const intent = {
+        audience: "",
+        goal: "waitlist",
+        industry: "",
+        vibe: "minimal",
+        color_scheme: dark ? "dark" : "light",
+        density: "minimal",
+        complexity: "simple",
+        sections: ["hero-basic", "cta-simple"],
+      };
+      const chips = clarifyChips({
+        prompt,
+        spec: { brand: { dark }, layout: { sections: intent.sections } },
+      });
+      fit = { intent, confidence: 0.6, chips };
+    }
+
+    const { intent, chips = [] } = fit;
+    const summarySignals = summarize(sessionId);
+    const confidence = boostConfidence(fit.confidence || 0.6, summarySignals);
+
+    // Deterministic spec (no model)
+    const { spec } = buildSpec({
+      prompt,
+      lastSpec: {
+        summary: prompt,
+        brand: {
+          tone:
+            intent.vibe === "playful"
+              ? "playful"
+              : intent.vibe === "minimal"
+              ? "minimal"
+              : "serious",
+          dark: intent.color_scheme === "dark",
+        },
+        layout: { sections: intent.sections },
+        confidence,
+      },
+    });
+
+    // Deterministic copy/brand (no model)
+    const copy = fit.copy || cheapCopy(prompt, intent);
+    const brandColor = fit.brandColor || guessBrand(intent);
+
+    // Always retrieve → compose
+    const retrieve = { kind: "retrieve", args: { sections: intent.sections } };
+    const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, spec, action: retrieve }),
+    });
+    const actData = await actResR.json();
+
+    let url = null;
+    let result = actData?.result;
+
+    if (result?.kind === "retrieve" && Array.isArray(result.sections)) {
+      const composeAction = {
+        kind: "compose",
+        cost_est: 0,
+        gain_est: 20,
+        args: { sections: result.sections, copy, brand: { primary: brandColor } },
+      };
+      const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          spec: { ...spec, brandColor, copy },
+          action: composeAction,
+        }),
+      });
+      const composeData = await composeR.json();
+      url = composeData?.result?.url || composeData?.result?.path || null;
+      result = composeData?.result;
+    }
+
+    return res.json({
+      ok: true,
+      source: "instant",
+      spec: { ...spec, brandColor, copy },
+      url,
+      result,
+      chips: chips.length ? chips : clarifyChips({ prompt, spec }),
+      signals: summarySignals,
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "instant_failed" });
+  }
+});
+
 // ---------- chips ----------
 router.post("/chips/apply", (req, res) => {
   const { sessionId = "anon", spec = {}, chip = "" } = req.body || {};
