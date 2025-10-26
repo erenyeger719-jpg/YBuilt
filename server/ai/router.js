@@ -1,43 +1,37 @@
 // server/ai/router.js
 import express from "express";
-// import TS helpers (tsx will handle .ts)
 import { buildSpec } from "../intent/brief.ts";
 import { nextActions } from "../intent/planner.ts";
 import { runWithBudget } from "../intent/budget.ts";
 import { filterIntent } from "../intent/filter.ts";
 import { cheapCopy, guessBrand } from "../intent/copy.ts";
 import { pushSignal, summarize, boostConfidence } from "../intent/signals.ts";
-import { verifyAndPrepare, rememberLastGood, lastGoodFor, defaultsForSections } from "../intent/dsl.ts";
+import { verifyAndPrepare, rememberLastGood, lastGoodFor, defaultsForSections, hardenCopy } from "../intent/dsl.ts";
+import { cacheGet, cacheSet, normalizeKey } from "../intent/cache.ts";
+import { pickFromPlaybook } from "../intent/playbook.ts";
+import crypto from "crypto";
 
-// Choose model by task + tier. Swap here when you add providers.
 export function pickModel(task, tier = "balanced") {
-  // tiers: "fast" (cheap/quick), "balanced", "best" (highest quality)
   const map = {
     fast: {
       planner: { provider: "openai", model: "gpt-4o-mini" },
-      coder: { provider: "openai", model: "gpt-4o-mini" },
-      critic: { provider: "openai", model: "gpt-4o-mini" },
+      coder:   { provider: "openai", model: "gpt-4o-mini" },
+      critic:  { provider: "openai", model: "gpt-4o-mini" },
     },
     balanced: {
-      planner: { provider: "openai", model: "gpt-4o-mini" }, // quick, coherent
-      coder: { provider: "openai", model: "gpt-4o" }, // stronger codegen
-      critic: { provider: "openai", model: "gpt-4o-mini" }, // cheap pass
+      planner: { provider: "openai", model: "gpt-4o-mini" },
+      coder:   { provider: "openai", model: "gpt-4o" },
+      critic:  { provider: "openai", model: "gpt-4o-mini" },
     },
     best: {
-      // Swap these later if you add Anthropic/Gemini:
-      // planner: { provider: "anthropic", model: "claude-3-5-sonnet" },
-      // coder:   { provider: "openai", model: "gpt-4.1" },
-      // critic:  { provider: "google", model: "gemini-1.5-pro" },
       planner: { provider: "openai", model: "gpt-4o" },
-      coder: { provider: "openai", model: "gpt-4o" },
-      critic: { provider: "openai", model: "gpt-4o" },
+      coder:   { provider: "openai", model: "gpt-4o" },
+      critic:  { provider: "openai", model: "gpt-4o" },
     },
   };
   const tierMap = map[tier] || map.balanced;
   return tierMap[task] || tierMap.coder;
 }
-
-// Route cost by certainty
 export function pickTierByConfidence(c = 0.6) {
   if (c >= 0.8) return "fast";
   if (c >= 0.6) return "balanced";
@@ -46,7 +40,6 @@ export function pickTierByConfidence(c = 0.6) {
 
 const router = express.Router();
 
-// --- helper to pull first JSON block out of an LLM reply ---
 function extractJSON(s) {
   const start = s.indexOf("{");
   const end = s.lastIndexOf("}");
@@ -54,82 +47,137 @@ function extractJSON(s) {
   return s.slice(start, end + 1);
 }
 
-// POST /api/ai/review
+// ---------- helpers ----------
+function baseUrl(req) {
+  return process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+}
+
+function sha1(s) {
+  return crypto.createHash("sha1").update(String(s)).digest("hex");
+}
+
+async function fetchJSONWithTimeout(url, opts, timeoutMs = 20000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { ...(opts || {}), signal: ctrl.signal });
+    const txt = await r.text();
+    if (!r.ok) throw new Error(txt || `HTTP_${r.status}`);
+    return JSON.parse(txt);
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+// Very cheap intent guesser for common phrases (skips a model call a lot)
+function quickGuessIntent(prompt) {
+  const p = String(prompt || "").toLowerCase();
+
+  const has = (w) => p.includes(w);
+  const intent = {
+    audience: has("dev") ? "developers" : has("founder") ? "founders" : has("shopper") ? "shoppers" : "",
+    goal: has("waitlist") ? "waitlist" : has("demo") ? "demo" : has("buy") || has("purchase") ? "purchase" : has("contact") ? "contact" : "",
+    industry: has("saas") ? "saas" : has("ecommerce") ? "ecommerce" : has("portfolio") ? "portfolio" : "",
+    vibe: has("minimal") ? "minimal" : has("bold") ? "bold" : has("playful") ? "playful" : has("serious") ? "serious" : "",
+    color_scheme: has("dark") ? "dark" : has("light") ? "light" : "",
+    density: has("minimal") ? "minimal" : "",
+    complexity: has("simple") ? "simple" : "",
+    sections: ["hero-basic", "cta-simple"].concat(has("feature") ? ["features-3col"] : []),
+  };
+
+  const filled = Object.values({ ...intent, sections: null }).filter(Boolean).length;
+  const coverage = filled / 7; // rough
+  const chips = [
+    intent.color_scheme !== "light" ? "Switch to light" : "Use dark mode",
+    has("minimal") ? "More content" : "Keep it minimal",
+    intent.goal === "waitlist" ? "Use email signup CTA" : "Use waitlist",
+  ];
+
+  return coverage >= 0.5
+    ? { intent, confidence: 0.7, chips }
+    : null;
+}
+
+// Stable stringify (order-insensitive for objects)
+function stableStringify(o) {
+  if (Array.isArray(o)) return "[" + o.map(stableStringify).join(",") + "]";
+  if (o && typeof o === "object") {
+    return (
+      "{" +
+      Object.keys(o)
+        .sort()
+        .map((k) => JSON.stringify(k) + ":" + stableStringify(o[k]))
+        .join(",") +
+      "}"
+    );
+  }
+  return JSON.stringify(o);
+}
+
+const LAST_COMPOSE = new Map(); // sessionId -> { key, url }
+function dslKey(payload) {
+  return sha1(stableStringify(payload));
+}
+
+// ---------- /review ----------
+const LAST_REVIEW_SIG = new Map(); // sessionId -> last sha1(codeTrim)
+
 router.post("/review", async (req, res) => {
   try {
-    const { code = "", tier = "balanced" } = req.body || {};
-    if (!code || typeof code !== "string") {
-      return res.status(400).json({ ok: false, error: "Missing code" });
-    }
+    let { code = "", tier = "balanced", sessionId = "anon" } = req.body || {};
+    if (!code || typeof code !== "string") return res.status(400).json({ ok: false, error: "Missing code" });
+    if (!process.env.OPENAI_API_KEY) return res.status(500).json({ ok: false, error: "OPENAI_API_KEY not set" });
 
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ ok: false, error: "OPENAI_API_KEY not set" });
+    // Trim gigantic inputs (cost guard)
+    const codeTrim = String(code).slice(0, 60_000);
+    const sig = sha1(codeTrim);
+    if (LAST_REVIEW_SIG.get(sessionId) === sig) {
+      return res.json({ ok: true, review: { issues: [] }, note: "skipped_same_code" });
     }
 
     const system = `
 You analyze tiny static web projects (index.html, styles.css, app.js).
 Return ONLY JSON with this exact shape, no prose:
-
-{"issues":[
-  {
-    "type":"accessibility|performance|html|css|js|semantics|seo|content|other",
-    "msg":"short human message",
-    "fix":"short code-oriented suggestion (may include snippet)",
-    "ops":[
-      {
-        "file":"index.html|styles.css|app.js",
-        "find":"STRING or REGEX (if isRegex=true)",
-        "replace":"replacement string",
-        "isRegex":false
-      }
-    ]
-  }
-]}
-
+{"issues":[{"type":"accessibility|performance|html|css|js|semantics|seo|content|other","msg":"short","fix":"short","ops":[{"file":"index.html|styles.css|app.js","find":"...","replace":"...","isRegex":false}]}]}
 Rules:
-- Prefer precise find/replace ops over vague advice.
-- Only target files: index.html, styles.css, app.js.
-- To append new content, use: {"file":"...","find":"$$EOF$$","replace":"\\n...content...","isRegex":false}
+- Prefer precise find/replace ops.
+- Only files: index.html, styles.css, app.js.
+- To append: {"file":"...","find":"$$EOF$$","replace":"\\n...","isRegex":false}
 - If nothing to fix, return {"issues":[]}.
 `.trim();
 
-    const user = `CODE BUNDLE:\n${code}\n---\nTIER: ${tier}`;
+    const user = `CODE BUNDLE:\n${codeTrim}\n---\nTIER: ${tier}`;
 
-    // Choose model based on tier using the same picker
     const { provider, model } = pickModel("critic", tier);
     if (provider !== "openai") {
-      // For now we only implement OpenAI here.
-      return res
-        .status(500)
-        .json({ ok: false, error: `Provider ${provider} not configured in /ai/review` });
+      return res.status(500).json({ ok: false, error: `Provider ${provider} not configured in /ai/review` });
     }
 
-    // Call OpenAI via REST (Node 18+ has global fetch)
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    const payload = {
+      model: model || process.env.OPENAI_MODEL || "gpt-4o-mini",
+      temperature: 0,
+      max_tokens: Number(process.env.OPENAI_REVIEW_MAXTOKENS || 600),
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    };
+
+    // Timeout + JSON-mode fetch
+    const data = await fetchJSONWithTimeout("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: model || process.env.OPENAI_MODEL || "gpt-4o-mini",
-        temperature: 0,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
-    });
+      body: JSON.stringify(payload),
+    }, Number(process.env.OPENAI_TIMEOUT_MS || 20000));
 
-    if (!r.ok) {
-      const txt = await r.text();
-      return res.status(500).json({ ok: false, error: `OpenAI error: ${txt}` });
-    }
-    const data = await r.json();
-    const raw = data?.choices?.[0]?.message?.content || "";
-    const json = JSON.parse(extractJSON(raw));
+    const raw = data?.choices?.[0]?.message?.content || "{}";
+    let json;
+    try { json = JSON.parse(raw); } catch { json = JSON.parse(extractJSON(raw)); }
 
-    // sanitize
     const issues = Array.isArray(json.issues) ? json.issues : [];
     const cleaned = issues.map((it) => ({
       type: String(it.type || "other").slice(0, 40),
@@ -147,13 +195,14 @@ Rules:
         : [],
     }));
 
+    LAST_REVIEW_SIG.set(sessionId, sig);
     return res.json({ ok: true, review: { issues: cleaned } });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e?.message || "review failed" });
   }
 });
 
-/** Build/merge a working spec + suggest chips */
+// ---------- brief / plan / filter ----------
 router.post("/brief", async (req, res) => {
   try {
     const { prompt, spec: lastSpec } = req.body || {};
@@ -164,7 +213,6 @@ router.post("/brief", async (req, res) => {
   }
 });
 
-/** Plan next steps (ask / retrieve / patch) */
 router.post("/plan", async (req, res) => {
   try {
     const { spec, signals } = req.body || {};
@@ -175,7 +223,6 @@ router.post("/plan", async (req, res) => {
   }
 });
 
-// below /plan
 router.post("/filter", async (req, res) => {
   try {
     const { prompt = "" } = req.body || {};
@@ -186,7 +233,7 @@ router.post("/filter", async (req, res) => {
   }
 });
 
-// signals endpoints
+// ---------- signals ----------
 router.post("/signals", (req, res) => {
   const { sessionId = "anon", kind = "", data = {} } = req.body || {};
   if (!kind) return res.status(400).json({ ok: false, error: "missing_kind" });
@@ -198,20 +245,13 @@ router.get("/signals/:sessionId", (req, res) => {
   return res.json({ ok: true, summary: summarize(req.params.sessionId || "anon") });
 });
 
-/**
- * POST /api/ai/act
- * Body: { sessionId?: string, spec: {...}, action: {kind, args, cost_est?, gain_est?} }
- * Runs exactly one action under a tiny budget gate.
- */
+// ---------- act ----------
 router.post("/act", async (req, res) => {
   try {
     const { sessionId = "anon", spec = {}, action = {} } = req.body || {};
-    if (!action || !action.kind) {
-      return res.status(400).json({ ok: false, error: "missing_action" });
-    }
+    if (!action || !action.kind) return res.status(400).json({ ok: false, error: "missing_action" });
 
     const out = await runWithBudget(sessionId, action, async (_tier) => {
-      // tier is here if you want model switching later
       if (action.kind === "retrieve") {
         const sections = Array.isArray(action.args?.sections)
           ? action.args.sections
@@ -220,7 +260,6 @@ router.post("/act", async (req, res) => {
       }
 
       if (action.kind === "ask") {
-        // reuse brief’s chip generator by calling buildSpec with last spec only
         const { chips } = buildSpec({ lastSpec: spec });
         return { kind: "ask", chips };
       }
@@ -235,7 +274,6 @@ router.post("/act", async (req, res) => {
         return { kind: "patch", spec: next };
       }
 
-      // compose branch with DSL verify + fallback + signal
       if (action.kind === "compose") {
         const sectionsIn = Array.isArray(action.args?.sections)
           ? action.args.sections
@@ -243,49 +281,46 @@ router.post("/act", async (req, res) => {
         const dark = !!(spec?.brand?.dark);
         const title = String(spec?.summary || "Preview");
 
-        // Proposed DSL from action/spec
         const proposed = {
           sections: sectionsIn,
           copy: action.args?.copy || spec?.copy || {},
           brand: action.args?.brand || (spec?.brandColor ? { primary: spec.brandColor } : {}),
         };
 
-        // Verify/sanitize; fallback to last good if needed
         let prep = verifyAndPrepare(proposed);
         if (!prep.sections.length) {
           const prev = lastGoodFor(req.body?.sessionId || "anon");
           if (prev) prep = verifyAndPrepare(prev);
         }
 
-        // Always fill missing copy with defaults for the chosen sections
-        const copyWithDefaults = { ...defaultsForSections(prep.sections), ...prep.copy };
+        // build prepped copy with defaults and hygiene
+        const copyWithDefaults = hardenCopy(
+          prep.sections,
+          { ...defaultsForSections(prep.sections), ...prep.copy }
+        );
+
+        // short-circuit if same DSL as last compose for session
+        const payloadForKey = { sections: prep.sections, dark, title, copy: copyWithDefaults, brand: prep.brand };
+        const keyNow = dslKey(payloadForKey);
+        const last = LAST_COMPOSE.get(req.body?.sessionId || "anon");
+        if (last && last.key === keyNow && last.url) {
+          return { kind: "compose", path: last.url, url: last.url };
+        }
 
         const r = await fetch(`${baseUrl(req)}/api/previews/compose`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            sections: prep.sections,
-            dark,
-            title,
-            copy: copyWithDefaults,
-            brand: prep.brand,
-          }),
+          body: JSON.stringify(payloadForKey),
         });
         if (!r.ok) return { error: `compose_http_${r.status}` };
         const data = await r.json();
 
-        // record success + remember last good DSL
+        // remember successful compose for instant reuse
+        LAST_COMPOSE.set(req.body?.sessionId || "anon", { key: keyNow, url: data?.url || data?.path || null });
+
         try {
-          rememberLastGood(req.body?.sessionId || "anon", {
-            sections: prep.sections,
-            copy: copyWithDefaults, // store default-filled copy
-            brand: prep.brand,
-          });
-          pushSignal(req.body?.sessionId || "anon", {
-            ts: Date.now(),
-            kind: "compose_success",
-            data: { url: data?.url },
-          });
+          rememberLastGood(req.body?.sessionId || "anon", { sections: prep.sections, copy: copyWithDefaults, brand: prep.brand });
+          pushSignal(req.body?.sessionId || "anon", { ts: Date.now(), kind: "compose_success", data: { url: data?.url } });
         } catch {}
 
         return { kind: "compose", ...data };
@@ -300,38 +335,35 @@ router.post("/act", async (req, res) => {
   }
 });
 
-// Replace localBase with a host-aware helper
-function baseUrl(req) {
-  return process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
-}
-
-/**
- * POST /api/ai/one
- * Body: { prompt: string, sessionId?: string }
- * Flow: prompt -> brief -> plan -> run best action
- * If retrieve succeeds, it auto-composes and returns a URL.
- */
+// ---------- one ----------
 router.post("/one", async (req, res) => {
   try {
     const { prompt = "", sessionId = "anon" } = req.body || {};
+    const key = normalizeKey(prompt);
 
-    // 1) Mind-read + signals → confidence
-    const { intent, confidence: c0, chips } = await filterIntent(prompt);
-    const summary = summarize(sessionId);
-    const confidence = boostConfidence(c0, summary);
+    // 0) Playbook first (no-model)
+    let fit = pickFromPlaybook(prompt);
 
-    // 2) Build spec with inferred tone/dark + boosted confidence
+    // 1) Cache / quick guess / model
+    if (!fit) {
+      fit = cacheGet(key);
+      if (!fit) {
+        const guess = (typeof quickGuessIntent === "function") ? quickGuessIntent(prompt) : null;
+        fit = guess || (await filterIntent(prompt));
+        cacheSet(key, fit);
+      }
+    }
+
+    const { intent, confidence: c0, chips } = fit;
+    const summarySignals = summarize(sessionId);
+    const confidence = boostConfidence(c0, summarySignals);
+
     const { spec } = buildSpec({
       prompt,
       lastSpec: {
         summary: prompt,
         brand: {
-          tone:
-            intent.vibe === "playful"
-              ? "playful"
-              : intent.vibe === "minimal"
-              ? "minimal"
-              : "serious",
+          tone: intent.vibe === "playful" ? "playful" : intent.vibe === "minimal" ? "minimal" : "serious",
           dark: intent.color_scheme === "dark",
         },
         layout: { sections: intent.sections },
@@ -339,17 +371,11 @@ router.post("/one", async (req, res) => {
       },
     });
 
-    // 3) Cheap copy + brand
-    const copy = cheapCopy(prompt, intent);
-    const brandColor = guessBrand(intent);
-
-    // 4) Plan
+    const copy = fit.copy || cheapCopy(prompt, fit.intent);
+    const brandColor = fit.brandColor || guessBrand(fit.intent);
     const actions = nextActions(spec, { chips });
 
-    // 5) Run best action, then auto-compose (with copy + brand) if retrieve
-    if (!actions.length) {
-      return res.json({ ok: true, spec, actions: [], note: "nothing_to_do" });
-    }
+    if (!actions.length) return res.json({ ok: true, spec, actions: [], note: "nothing_to_do" });
 
     const top = actions[0];
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
@@ -373,7 +399,7 @@ router.post("/one", async (req, res) => {
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId, spec: { ...spec, brandColor }, action: composeAction }),
+        body: JSON.stringify({ sessionId, spec: { ...spec, brandColor, copy }, action: composeAction }),
       });
       const composeData = await composeR.json();
       url = composeData?.result?.url || composeData?.result?.path || null;
@@ -383,20 +409,20 @@ router.post("/one", async (req, res) => {
 
     return res.json({
       ok: true,
-      spec: { ...spec, brandColor, copy }, // include filled copy for chip edits
+      spec: { ...spec, brandColor, copy },
       plan: actions,
       ran: usedAction,
       result,
       url,
       chips,
-      signals: summary,
+      signals: summarySignals,
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "one_failed" });
   }
 });
 
-// POST /api/ai/chips/apply  { sessionId, spec, chip }
+// ---------- chips ----------
 router.post("/chips/apply", (req, res) => {
   const { sessionId = "anon", spec = {}, chip = "" } = req.body || {};
   const s = { ...spec, brand: { ...(spec.brand || {}) } };
@@ -420,9 +446,7 @@ router.post("/chips/apply", (req, res) => {
     s.copy = { ...(s.copy || {}), CTA_LABEL: "Join the waitlist", CTA_HEAD: "Be first in line" };
   }
 
-  try {
-    pushSignal(sessionId, { ts: Date.now(), kind: "chip_apply", data: { chip } });
-  } catch {}
+  try { pushSignal(sessionId, { ts: Date.now(), kind: "chip_apply", data: { chip } }); } catch {}
   return res.json({ ok: true, spec: s });
 });
 

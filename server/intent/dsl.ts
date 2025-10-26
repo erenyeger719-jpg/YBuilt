@@ -70,3 +70,20 @@ export function defaultsForSections(ids: SectionId[]) {
   for (const k of Array.from(allowed)) if (D[k]) out[k] = D[k];
   return out;
 }
+
+// Add below existing exports
+export function hardenCopy(ids: SectionId[], copy: Record<string, string>) {
+  const allowed = allowedTokens(ids);
+  const defaults = defaultsForSections(ids);
+  const BAD = /lorem|ipsum|your product|insert/i;
+  const out: Record<string, string> = {};
+  for (const k of Array.from(allowed)) {
+    const v = String(copy?.[k] ?? "").trim();
+    if (!v || v.length < 3 || BAD.test(v)) {
+      out[k] = defaults[k] || "";
+    } else {
+      out[k] = v.slice(0, 300);
+    }
+  }
+  return out;
+}
