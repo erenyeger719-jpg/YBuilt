@@ -463,8 +463,8 @@ app.use(ipGate());
     }
   });
 
-  // TEMP test route for Sentry server (gated)
-  if (process.env.ENABLE_TEST_ROUTES === 'true') {
+  // TEMP test route for Sentry server (on in dev; gated in prod)
+  if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_TEST_ROUTES === 'true') {
     app.get('/api/boom', () => {
       throw new Error('boom');
     });
