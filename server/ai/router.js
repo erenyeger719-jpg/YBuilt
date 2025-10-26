@@ -243,8 +243,7 @@ router.post("/act", async (req, res) => {
         const dark = !!spec?.brand?.dark;
         const title = String(spec?.summary || "Preview");
         const copy = action.args?.copy || spec?.copy || {};
-        const brand =
-          action.args?.brand || spec?.brandColor ? { primary: spec.brandColor } : action.args?.brand || {};
+        const brand = action.args?.brand || (spec?.brandColor ? { primary: spec.brandColor } : {});
 
         const r = await fetch(`${baseUrl(req)}/api/previews/compose`, {
           method: "POST",
