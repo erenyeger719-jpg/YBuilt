@@ -1,59 +1,41 @@
-import { logger } from './logging.js';
+import type { Request, Response, NextFunction } from 'express';
+import * as Sentry from '@sentry/node';
 
-export class HttpError extends Error {
-  constructor(statusCode, message, details) {
-    super(message);
-    this.name = 'HttpError';
-    this.statusCode = statusCode;
-    this.details = details;
-  }
-}
-
-async function notifyWebhook(payload) {
-  const url = process.env.ALERT_WEBHOOK_URL || '';
-  if (!url) return;
-  try {
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
+export function notFoundHandler(req: Request, res: Response) {
+  const rid = (res.getHeader('X-Request-ID') || req.headers['x-request-id'] || '') + '';
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({
+      ok: false,
+      error: 'not_found',
+      message: 'No such API route.',
+      rid,
     });
-  } catch {}
-}
-
-export function errorHandler(err, req, res, _next) {
-  const statusCode = err instanceof HttpError ? err.statusCode : 500;
-  const isDev = process.env.NODE_ENV !== 'production';
-  const rid = (res.getHeader('X-Request-ID') || req.headers['x-request-id'] || '') + '';
-  const msg = err?.message || (statusCode >= 500 ? 'Something went wrong.' : 'Request error.');
-
-  logger.error(
-    { rid, error: err?.message, stack: isDev ? err?.stack : undefined, statusCode, path: req.path, method: req.method },
-    'Request error'
+  }
+  res.status(404).send(
+    `404 — Not found\n\nThis page doesn’t exist.\nRequest ID: ${rid}\n`
   );
-
-  if (statusCode >= 500) {
-    notifyWebhook({ kind: 'server_error', rid, path: req.path, method: req.method, statusCode, message: err?.message || 'error', ts: Date.now() });
-  }
-
-  const payload = {
-    ok: false,
-    error: statusCode >= 500 ? 'server_error' : 'request_error',
-    message: isDev ? msg : (statusCode >= 500 ? 'Something went wrong.' : 'Request error.'),
-    rid,
-  };
-  if (err instanceof HttpError && err.details) payload.details = err.details;
-  if (isDev && err?.stack) payload.stack = err.stack;
-
-  if (req.path.startsWith('/api/')) {
-    res.status(statusCode).json(payload);
-  } else {
-    res.status(statusCode).type('text/plain').send(statusCode >= 500 ? '500 — Something went wrong.' : 'Request error.');
-  }
 }
 
-export function notFoundHandler(req, res, next) {
-  if (!req.path.startsWith('/api/')) return next(new HttpError(404, `Not found: ${req.method} ${req.path}`));
+export function errorHandler(err: any, req: Request, res: Response, _next: NextFunction) {
   const rid = (res.getHeader('X-Request-ID') || req.headers['x-request-id'] || '') + '';
-  return res.status(404).json({ ok: false, error: 'not_found', message: 'No such API route.', rid });
+  const status = Number(err?.status || err?.statusCode || 500);
+  const isApi = req.path.startsWith('/api');
+  const msg = status >= 500
+    ? 'Something went wrong on our side.'
+    : (String(err?.message || 'Bad request.'));
+
+  try { Sentry.captureException?.(err); } catch {}
+
+  if (isApi) {
+    return res.status(status).json({
+      ok: false,
+      error: status >= 500 ? 'server_error' : 'client_error',
+      message: msg,
+      rid,
+    });
+  }
+
+  res.status(status).send(
+    `${status >= 500 ? '500 — Server error' : `${status} — Error`}\n\n${msg}\nRequest ID: ${rid}\n`
+  );
 }

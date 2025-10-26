@@ -1,6 +1,5 @@
 // server/index.ts
 import './env.js';
-import 'dotenv/config';
 import express, { type Request, type Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -34,6 +33,36 @@ Sentry.init({
   environment: process.env.NODE_ENV,
   release: process.env.RENDER_GIT_COMMIT || 'local',
   tracesSampleRate: 0.1,
+  // Send a lightweight webhook when Sentry sees an error (Slack/Discord supported)
+  beforeSend(event, hint) {
+    try {
+      const url = process.env.SENTRY_ALERT_WEBHOOK || process.env.ALERT_WEBHOOK || '';
+      const level = (event.level || 'error').toLowerCase();
+      if (!url || (level !== 'error' && level !== 'fatal')) return event;
+
+      const msg =
+        event.message ||
+        (hint && (hint.originalException?.message || String(hint.originalException))) ||
+        'Unhandled error';
+
+      const payload = {
+        text: `🚨 Sentry ${level.toUpperCase()} — ${msg}\nenv=${process.env.NODE_ENV} release=${
+          process.env.RENDER_GIT_COMMIT || 'local'
+        }`, // Slack
+        content: `🚨 Sentry ${level.toUpperCase()} — ${msg}\nenv=${process.env.NODE_ENV} release=${
+          process.env.RENDER_GIT_COMMIT || 'local'
+        }`, // Discord
+      };
+
+      // Fire-and-forget; don’t block event delivery
+      fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    } catch {}
+    return event;
+  },
 });
 
 logger.info(`[SENTRY] server DSN present: ${Boolean(process.env.SENTRY_DSN)}`);
