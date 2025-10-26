@@ -278,7 +278,7 @@ router.post("/act", async (req, res) => {
         try {
           rememberLastGood(req.body?.sessionId || "anon", {
             sections: prep.sections,
-            copy: prep.copy,
+            copy: copyWithDefaults, // store default-filled copy
             brand: prep.brand,
           });
           pushSignal(req.body?.sessionId || "anon", {
@@ -383,7 +383,7 @@ router.post("/one", async (req, res) => {
 
     return res.json({
       ok: true,
-      spec: { ...spec, brandColor },
+      spec: { ...spec, brandColor, copy }, // include filled copy for chip edits
       plan: actions,
       ran: usedAction,
       result,

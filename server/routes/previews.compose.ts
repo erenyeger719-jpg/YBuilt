@@ -7,6 +7,15 @@ const CACHE = new Map<string, { slug: string; url: string }>();
 
 const router = Router();
 
+// order-insensitive stable stringify for objects (and deterministic for arrays)
+function stableStringify(o: any): string {
+  if (Array.isArray(o)) return '[' + o.map(stableStringify).join(',') + ']';
+  if (o && typeof o === 'object') {
+    return '{' + Object.keys(o).sort().map(k => JSON.stringify(k) + ':' + stableStringify(o[k])).join(',') + '}';
+  }
+  return JSON.stringify(o);
+}
+
 // lazy import to match your existing usage pattern
 const requireMod: any = (await import('module')).createRequire(import.meta.url);
 const { safeJoinTeam } = requireMod('./_teamPaths');
@@ -74,10 +83,10 @@ router.post('/compose', async (req, res) => {
 
     if (!sections.length) return res.status(400).json({ ok:false, error:'no_sections' });
 
-    // Deduplicate identical composes
+    // Deduplicate identical composes (order-insensitive hashing for objects)
     const keyBrand = safeColor(brand);
     const payloadKey = createHash('sha1')
-      .update(JSON.stringify({ sections, title, dark, copy, brand: keyBrand }))
+      .update(stableStringify({ sections, title, dark, copy, brand: keyBrand }))
       .digest('hex');
 
     const hit = CACHE.get(payloadKey);
