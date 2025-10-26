@@ -120,6 +120,34 @@ function dslKey(payload) {
   return sha1(stableStringify(payload));
 }
 
+// Apply chip locally (no LLM)
+function applyChipLocal(spec = {}, chip = "") {
+  const s = { ...spec, brand: { ...(spec.brand || {}) } };
+
+  if (/Switch to light/i.test(chip)) s.brand.dark = false;
+  if (/Use dark mode/i.test(chip))  s.brand.dark = true;
+
+  if (/More minimal/i.test(chip) || /Keep it minimal/i.test(chip)) s.brand.tone = "minimal";
+  if (/More playful/i.test(chip))   s.brand.tone = "playful";
+
+  if (/Add 3-card features/i.test(chip)) {
+    const cur = new Set((s.layout?.sections || []).map(String));
+    cur.add("features-3col");
+    s.layout = { sections: Array.from(cur) };
+  }
+  if (/Use 2-column features/i.test(chip)) {
+    s.layout = { sections: (s.layout?.sections || []).filter(id => id !== "features-3col") };
+  }
+
+  if (/Use email signup CTA/i.test(chip)) {
+    s.copy = { ...(s.copy || {}), CTA_LABEL: "Get started", CTA_HEAD: "Ready when you are" };
+  }
+  if (/Use waitlist/i.test(chip)) {
+    s.copy = { ...(s.copy || {}), CTA_LABEL: "Join the waitlist", CTA_HEAD: "Be first in line" };
+  }
+  return s;
+}
+
 // ---------- /review ----------
 const LAST_REVIEW_SIG = new Map(); // sessionId -> last sha1(codeTrim)
 
@@ -534,32 +562,88 @@ router.post("/instant", async (req, res) => {
   }
 });
 
+// ---------- clarify → apply → compose (zero-LLM) ----------
+router.post("/clarify/compose", async (req, res) => {
+  try {
+    const { prompt = "", sessionId = "anon", spec: specIn = {} } = req.body || {};
+
+    // Base spec: use existing sections/mode if present, else no-LLM guess
+    let base = { ...specIn, brand: { ...(specIn.brand || {}) } };
+    if (!Array.isArray(base?.layout?.sections) || !base.layout.sections.length) {
+      const fit = pickFromPlaybook(prompt) || quickGuessIntent(prompt) || {
+        intent: {
+          sections: ["hero-basic", "cta-simple"],
+          color_scheme: /(^|\s)dark(\s|$)/i.test(String(prompt)) ? "dark" : "light",
+          vibe: "minimal",
+        },
+      };
+      base.layout = { sections: fit.intent.sections };
+      if (base.brand.dark == null) base.brand.dark = fit.intent.color_scheme === "dark";
+      if (!base.brand.tone) base.brand.tone = fit.intent.vibe === "minimal" ? "minimal" : "serious";
+    }
+
+    // Get clarifier chips and apply them locally
+    const chips = clarifyChips({ prompt, spec: base });
+    let s = base;
+    for (const c of chips) s = applyChipLocal(s, c);
+
+    // Compose using the existing budgeted pipeline
+    const copy = s.copy || cheapCopy(prompt, {
+      vibe: s.brand?.tone || "minimal",
+      color_scheme: s.brand?.dark ? "dark" : "light",
+      sections: s.layout?.sections || ["hero-basic", "cta-simple"],
+    });
+    const brandColor = guessBrand({
+      vibe: s.brand?.tone || "minimal",
+      color_scheme: s.brand?.dark ? "dark" : "light",
+      sections: s.layout?.sections || ["hero-basic", "cta-simple"],
+    });
+
+    // retrieve → compose
+    const retrieve = { kind: "retrieve", args: { sections: s.layout.sections } };
+    const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, spec: s, action: retrieve }),
+    });
+    const actData = await actResR.json();
+
+    let url = null;
+    let result = actData?.result;
+    if (result?.kind === "retrieve" && Array.isArray(result.sections)) {
+      const composeAction = {
+        kind: "compose",
+        cost_est: 0,
+        gain_est: 20,
+        args: { sections: result.sections, copy, brand: { primary: brandColor } },
+      };
+      const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId, spec: { ...s, brandColor, copy }, action: composeAction }),
+      });
+      const composeData = await composeR.json();
+      url = composeData?.result?.url || composeData?.result?.path || null;
+      result = composeData?.result;
+    }
+
+    pushSignal(sessionId, { ts: Date.now(), kind: "clarify_compose", data: { chips } });
+    return res.json({ ok: true, url, result, spec: { ...s, copy, brandColor }, chips });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "clarify_compose_failed" });
+  }
+});
+
 // ---------- chips ----------
 router.post("/chips/apply", (req, res) => {
   const { sessionId = "anon", spec = {}, chip = "" } = req.body || {};
-  const s = { ...spec, brand: { ...(spec.brand || {}) } };
-
-  if (/Switch to light/i.test(chip)) s.brand.dark = false;
-  if (/Use dark mode/i.test(chip))  s.brand.dark = true;
-  if (/More minimal/i.test(chip))   s.brand.tone = "minimal";
-  if (/More playful/i.test(chip))   s.brand.tone = "playful";
-  if (/Add 3-card features/i.test(chip)) {
-    const cur = new Set((s.layout?.sections || []).map(String));
-    cur.add("features-3col");
-    s.layout = { sections: Array.from(cur) };
+  try {
+    const s = applyChipLocal(spec, chip);
+    pushSignal(sessionId, { ts: Date.now(), kind: "chip_apply", data: { chip } });
+    return res.json({ ok: true, spec: s });
+  } catch {
+    return res.status(500).json({ ok: false, error: "chip_apply_failed" });
   }
-  if (/Use 2-column features/i.test(chip)) {
-    s.layout = { sections: (s.layout?.sections || []).filter(id => id !== "features-3col") };
-  }
-  if (/Use email signup CTA/i.test(chip)) {
-    s.copy = { ...(s.copy || {}), CTA_LABEL: "Get started", CTA_HEAD: "Ready when you are" };
-  }
-  if (/Use waitlist/i.test(chip)) {
-    s.copy = { ...(s.copy || {}), CTA_LABEL: "Join the waitlist", CTA_HEAD: "Be first in line" };
-  }
-
-  try { pushSignal(sessionId, { ts: Date.now(), kind: "chip_apply", data: { chip } }); } catch {}
-  return res.json({ ok: true, spec: s });
 });
 
 export default router;
