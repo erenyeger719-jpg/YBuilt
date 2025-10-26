@@ -32,11 +32,12 @@ export function cheapCopy(prompt = "", intent: Intent = {}): Record<string, stri
     F3_SUB:     pickPhrase("F3_SUB", intent),
   };
 
-  // tiny, deterministic seasoning from prompt (first nouny words)
-  const hint = String(prompt).split(/\s+/).slice(0, 3).join(" ");
-  if (hint) {
-    base.HERO_TITLE = base.HERO_TITLE || hint;
-    base.HERO_SUB = base.HERO_SUB?.replace("pages", hint) || base.HERO_SUB;
+  // tiny, deterministic seasoning from prompt (nouny words, no stopwords)
+  const words = (String(prompt).toLowerCase().match(/[a-z0-9]+/g) || [])
+    .filter((w) => !["for", "to", "the", "a", "an", "and", "or", "with", "of", "on", "in"].includes(w));
+  const topic = words.slice(0, 2).join(" "); // e.g. "saas landing"
+  if (topic) {
+    base.HERO_SUB = (base.HERO_SUB || "").replace("pages", topic); // "Craft high-quality saas landing with measurable outcomes."
   }
 
   // strip any falsy leftovers (composer already cleans placeholders)
