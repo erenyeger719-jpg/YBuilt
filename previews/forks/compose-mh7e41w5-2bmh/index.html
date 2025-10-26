@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Demo</title>
+<style>
+  :root { --bg:#0b0b0f; --fg:#e8e8ee; --brand:#7c3aed; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 56px 20px; }
+  .btn { display:inline-block; background:var(--brand); color:white; padding:10px 16px; border-radius:10px; text-decoration:none; }
+  .grid { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:16px; }
+  .card { background: rgba(125,125,150,0.08); border:1px solid rgba(125,125,150,0.15); padding:16px; border-radius:12px; }
+  .hero .sub { opacity:0.8; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<section class="hero">
+  <div class="wrap">
+    <h1>Build faster with YBuilt</h1>
+    <p class="sub">Clean sections, live preview, zero fuss.</p>
+    <a class="btn" href="#get-started">Get started</a>
+  </div>
+</section>
+
+
+<section class="features">
+  <div class="wrap grid">
+    <div class="card"><h3>Fast</h3><p>Idea → live URL in minutes.</p></div>
+    <div class="card"><h3>Safe</h3><p>Sandboxed runs with strict policy.</p></div>
+    <div class="card"><h3>Visible</h3><p>Unified logs and streaming events.</p></div>
+  </div>
+</section>
+
+
+<section class="cta" id="get-started">
+  <div class="wrap">
+    <h2>Ship your first page now</h2>
+    <a class="btn" href="#">Create preview</a>
+  </div>
+</section>
+
+</body>
+</html>

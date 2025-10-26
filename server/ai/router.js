@@ -3,6 +3,7 @@ import express from "express";
 // import TS helpers (tsx will handle .ts)
 import { buildSpec } from "../intent/brief.ts";
 import { nextActions } from "../intent/planner.ts";
+import { runWithBudget } from "../intent/budget.ts";
 
 // Choose model by task + tier. Swap here when you add providers.
 export function pickModel(task, tier = "balanced") {
@@ -142,24 +143,156 @@ Rules:
 });
 
 /** Build/merge a working spec + suggest chips */
-router.post('/brief', async (req, res) => {
+router.post("/brief", async (req, res) => {
   try {
     const { prompt, spec: lastSpec } = req.body || {};
     const out = buildSpec({ prompt, lastSpec });
     return res.json({ ok: true, ...out });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: 'brief_failed' });
+    return res.status(500).json({ ok: false, error: "brief_failed" });
   }
 });
 
 /** Plan next steps (ask / retrieve / patch) */
-router.post('/plan', async (req, res) => {
+router.post("/plan", async (req, res) => {
   try {
     const { spec, signals } = req.body || {};
     const actions = nextActions(spec, signals);
     return res.json({ ok: true, actions });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: 'plan_failed' });
+    return res.status(500).json({ ok: false, error: "plan_failed" });
+  }
+});
+
+// Helper: local base URL (works in dev/prod)
+function localBase() {
+  return `http://127.0.0.1:${process.env.PORT || "5050"}`;
+}
+
+/**
+ * POST /api/ai/act
+ * Body: { sessionId?: string, spec: {...}, action: {kind, args, cost_est?, gain_est?} }
+ * Runs exactly one action under a tiny budget gate.
+ */
+router.post("/act", async (req, res) => {
+  try {
+    const { sessionId = "anon", spec = {}, action = {} } = req.body || {};
+    if (!action || !action.kind) {
+      return res.status(400).json({ ok: false, error: "missing_action" });
+    }
+
+    const out = await runWithBudget(sessionId, action, async (_tier) => {
+      // tier is here if you want model switching later
+      if (action.kind === "retrieve") {
+        const sections = Array.isArray(action.args?.sections)
+          ? action.args.sections
+          : spec?.layout?.sections || [];
+        return { kind: "retrieve", sections };
+      }
+
+      if (action.kind === "ask") {
+        // reuse brief’s chip generator by calling buildSpec with last spec only
+        const { chips } = buildSpec({ lastSpec: spec });
+        return { kind: "ask", chips };
+      }
+
+      if (action.kind === "patch") {
+        const theme = action.args?.theme;
+        const next = { ...spec };
+        if (theme === "dark" || theme === "light") {
+          next.brand = next.brand || {};
+          next.brand.dark = theme === "dark";
+        }
+        return { kind: "patch", spec: next };
+      }
+
+      if (action.kind === "compose") {
+        const sections = Array.isArray(action.args?.sections)
+          ? action.args.sections
+          : spec?.layout?.sections || [];
+        if (!sections.length) return { error: "no_sections" };
+        const dark = !!spec?.brand?.dark;
+        const title = String(spec?.summary || "Preview");
+
+        const r = await fetch(`${localBase()}/api/previews/compose`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sections, dark, title }),
+        });
+        if (!r.ok) {
+          return { error: `compose_http_${r.status}` };
+        }
+        const data = await r.json();
+        return { kind: "compose", ...data };
+      }
+
+      return { error: `unknown_action:${action.kind}` };
+    });
+
+    return res.json({ ok: true, result: out });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "act_failed" });
+  }
+});
+
+/**
+ * POST /api/ai/one
+ * Body: { prompt: string, sessionId?: string }
+ * Flow: prompt -> brief -> plan -> run best action
+ * If retrieve succeeds, it auto-composes and returns a URL.
+ */
+router.post("/one", async (req, res) => {
+  try {
+    const { prompt = "", sessionId = "anon" } = req.body || {};
+    // 1) Build spec + chips
+    const { spec } = buildSpec({ prompt });
+
+    // 2) Plan
+    const actions = nextActions(spec, {});
+    if (!actions.length) {
+      return res.json({ ok: true, spec, actions: [], note: "nothing_to_do" });
+    }
+
+    // 3) Run the top-ranked action
+    const top = actions[0];
+    const actResR = await fetch(`${localBase()}/api/ai/act`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, spec, action: top }),
+    });
+    const actData = await actResR.json();
+
+    let url = null;
+    let usedAction = top;
+
+    // If we retrieved sections, compose immediately
+    if (actData?.result?.kind === "retrieve" && Array.isArray(actData.result.sections)) {
+      const composeAction = {
+        kind: "compose",
+        cost_est: 3,
+        gain_est: 20,
+        args: { sections: actData.result.sections },
+      };
+      const composeR = await fetch(`${localBase()}/api/ai/act`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId, spec, action: composeAction }),
+      });
+      const composeData = await composeR.json();
+      url = composeData?.result?.url || composeData?.result?.path || null;
+      usedAction = composeAction;
+    }
+
+    return res.json({
+      ok: true,
+      spec,
+      plan: actions,
+      ran: usedAction,
+      result: actData?.result,
+      url,
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "one_failed" });
   }
 });
 
