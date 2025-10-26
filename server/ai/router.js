@@ -4,6 +4,7 @@ import express from "express";
 import { buildSpec } from "../intent/brief.ts";
 import { nextActions } from "../intent/planner.ts";
 import { runWithBudget } from "../intent/budget.ts";
+import { filterIntent } from "../intent/filter.ts";
 
 // Choose model by task + tier. Swap here when you add providers.
 export function pickModel(task, tier = "balanced") {
@@ -31,6 +32,13 @@ export function pickModel(task, tier = "balanced") {
   };
   const tierMap = map[tier] || map.balanced;
   return tierMap[task] || tierMap.coder;
+}
+
+// Route cost by certainty
+export function pickTierByConfidence(c = 0.6) {
+  if (c >= 0.8) return "fast";
+  if (c >= 0.6) return "balanced";
+  return "best";
 }
 
 const router = express.Router();
@@ -164,10 +172,16 @@ router.post("/plan", async (req, res) => {
   }
 });
 
-// Helper: local base URL (works in dev/prod)
-function localBase() {
-  return `http://127.0.0.1:${process.env.PORT || "5050"}`;
-}
+// below /plan
+router.post("/filter", async (req, res) => {
+  try {
+    const { prompt = "" } = req.body || {};
+    const out = await filterIntent(prompt);
+    return res.json({ ok: true, ...out });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "filter_failed" });
+  }
+});
 
 /**
  * POST /api/ai/act
@@ -214,7 +228,7 @@ router.post("/act", async (req, res) => {
         const dark = !!spec?.brand?.dark;
         const title = String(spec?.summary || "Preview");
 
-        const r = await fetch(`${localBase()}/api/previews/compose`, {
+        const r = await fetch(`${baseUrl(req)}/api/previews/compose`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ sections, dark, title }),
@@ -235,6 +249,11 @@ router.post("/act", async (req, res) => {
   }
 });
 
+// Replace localBase with a host-aware helper
+function baseUrl(req) {
+  return process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+}
+
 /**
  * POST /api/ai/one
  * Body: { prompt: string, sessionId?: string }
@@ -244,18 +263,39 @@ router.post("/act", async (req, res) => {
 router.post("/one", async (req, res) => {
   try {
     const { prompt = "", sessionId = "anon" } = req.body || {};
-    // 1) Build spec + chips
-    const { spec } = buildSpec({ prompt });
+
+    // 1) Mind-read filter + brief → spec
+    const { intent, confidence, chips } = await filterIntent(prompt);
+    const tier = pickTierByConfidence(confidence);
+    const { spec } = buildSpec({
+      prompt,
+      lastSpec: {
+        summary: prompt,
+        brand: {
+          tone:
+            intent.vibe === "playful"
+              ? "playful"
+              : intent.vibe === "minimal"
+              ? "minimal"
+              : "serious",
+          dark: intent.color_scheme === "dark",
+        },
+        layout: { sections: intent.sections },
+        confidence,
+        tier, // optional hint for downstream
+      },
+    });
 
     // 2) Plan
-    const actions = nextActions(spec, {});
+    const actions = nextActions(spec, { chips });
+
     if (!actions.length) {
       return res.json({ ok: true, spec, actions: [], note: "nothing_to_do" });
     }
 
-    // 3) Run the top-ranked action
+    // 3) Run top action
     const top = actions[0];
-    const actResR = await fetch(`${localBase()}/api/ai/act`, {
+    const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sessionId, spec, action: top }),
@@ -264,16 +304,17 @@ router.post("/one", async (req, res) => {
 
     let url = null;
     let usedAction = top;
+    let result = actData?.result;
 
     // If we retrieved sections, compose immediately
-    if (actData?.result?.kind === "retrieve" && Array.isArray(actData.result.sections)) {
+    if (result?.kind === "retrieve" && Array.isArray(result.sections)) {
       const composeAction = {
         kind: "compose",
         cost_est: 3,
         gain_est: 20,
-        args: { sections: actData.result.sections },
+        args: { sections: result.sections },
       };
-      const composeR = await fetch(`${localBase()}/api/ai/act`, {
+      const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId, spec, action: composeAction }),
@@ -281,16 +322,10 @@ router.post("/one", async (req, res) => {
       const composeData = await composeR.json();
       url = composeData?.result?.url || composeData?.result?.path || null;
       usedAction = composeAction;
+      result = composeData?.result;
     }
 
-    return res.json({
-      ok: true,
-      spec,
-      plan: actions,
-      ran: usedAction,
-      result: actData?.result,
-      url,
-    });
+    return res.json({ ok: true, spec, plan: actions, ran: usedAction, result, url });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "one_failed" });
   }
