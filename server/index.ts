@@ -469,6 +469,9 @@ app.use(ipGate());
   const { default: deployRouter } = await import('./routes/deploy.js').catch(() => ({
     default: undefined as any,
   }));
+  const { default: deployDockerRouter } = await import('./routes/deploy.docker.ts').catch(() => ({
+    default: undefined as any,
+  }));
   const { default: tasksRouter } = await import('./routes/tasks.js').catch(() => ({
     default: undefined as any,
   }));
@@ -524,6 +527,8 @@ app.use(ipGate());
   if (previewsRouter) app.use('/api/previews', express.json(), previewsRouter);
   if (exportRouter) app.use('/api/previews', express.json(), exportRouter);
   if (deployRouter) app.use('/api/deploy', express.json({ limit: '5mb' }), deployRouter);
+  if (deployDockerRouter)
+    app.use('/api/deploy', express.json({ limit: '64kb' }), deployDockerRouter);
   if (tasksRouter) app.use('/api/tasks', express.json(), tasksRouter);
   if (scaffoldRouter) app.use('/api/scaffold', express.json(), scaffoldRouter);
   if (importRouter) app.use('/api/import', express.json({ limit: '2mb' }), importRouter);
