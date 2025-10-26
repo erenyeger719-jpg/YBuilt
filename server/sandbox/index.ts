@@ -1,38 +1,196 @@
-import type { ExecRequest, ExecResult } from "../execute/types.ts";
-import { runLocalSandbox } from "./local.ts";
+// server/sandbox/index.ts
+import { spawn } from "child_process";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import type { ExecRequest, ExecFile } from "../execute/types.ts";
 
-const MAX = Math.max(1, parseInt(process.env.RUNNER_MAX_CONCURRENCY || "1", 10));
-let active = 0;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+type RunResult = {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  exitCode?: number;
+  durationMs: number;
+  reason?: string;
+};
 
-async function acquire() {
-  while (active >= MAX) await sleep(25);
-  active++;
+const RUNNER_IMPL = (process.env.RUNNER_IMPL || "docker").toLowerCase();
+const RUNNER_BIN = process.env.RUNNER_BIN || "docker"; // or "podman"
+const RUNNER_CPUS = process.env.RUNNER_CPUS || "1";
+const RUNNER_MEMORY = process.env.RUNNER_MEMORY || "512m";
+const RUNNER_PIDS = process.env.RUNNER_PIDS || "128";
+const RUNNER_PLATFORM = process.env.RUNNER_PLATFORM || ""; // e.g. "linux/arm64"
+const NODE_IMAGE = process.env.NODE_IMAGE || "node:20-alpine";
+const PY_IMAGE = process.env.PY_IMAGE || "python:3.11-alpine";
+
+// Per-language ALLOW lists (block everything else, incl. npm/pip)
+const NODE_ALLOW = (process.env.NODE_ALLOW || "path,url,buffer,util,events,crypto")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const PY_ALLOW = (process.env.PY_ALLOW || "math,random,re,json,datetime,statistics")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+// --- tiny utils ---
+function safePath(p: string) {
+  return /^[a-z0-9/_\-.]+$/i.test(p) && !p.includes("..");
 }
-function release() {
-  active = Math.max(0, active - 1);
+function mkTmpDir(prefix = "ybuilt-"): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
-
-export async function runSandbox(req: ExecRequest): Promise<ExecResult> {
-  // extra safety: respect flag here too
-  if (process.env.ENABLE_SANDBOX !== "true") {
-    return { ok: false, reason: "disabled", durationMs: 0 };
-  }
-
-  await acquire();
+function rmDir(dir: string) {
   try {
-    const impl = (process.env.RUNNER_IMPL || "local").toLowerCase();
-    if (impl === "docker") {
-      try {
-        const { runDockerSandbox } = await import("./docker.ts");
-        return runDockerSandbox(req);
-      } catch {
-        return { ok: false, reason: "docker_unavailable", durationMs: 0 };
-      }
-    }
-    // default stub/local runner
-    return runLocalSandbox(req);
-  } finally {
-    release();
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {}
+}
+function writeFiles(root: string, files: ExecFile[] = []) {
+  for (const f of files) {
+    const fp = path.join(root, f.path);
+    if (!safePath(f.path)) throw new Error("bad file path");
+    fs.mkdirSync(path.dirname(fp), { recursive: true });
+    fs.writeFileSync(fp, f.content, "utf8");
   }
+}
+
+// --- policy preludes ---
+function nodePrelude(allow: string[]) {
+  // Lock require() to allowlist + disallow relative paths & external packages
+  return `
+const __ALLOW = new Set(${JSON.stringify(allow)});
+const Module = require('module');
+const __origRequire = Module.prototype.require;
+Module.prototype.require = function(name){
+  name = String(name || '');
+  if (name.startsWith('node:')) name = name.slice(5);
+  if (name.startsWith('.') || name.startsWith('/') ) {
+    throw new Error('Module "'+ name +'" is blocked by policy');
+  }
+  if (__ALLOW.has(name)) return __origRequire.apply(this, arguments);
+  throw new Error('Module "'+ name +'" is blocked by policy');
+};
+`.trimStart();
+}
+
+function pythonPrelude(allow: string[]) {
+  // Guard imports to allowlist
+  return `
+import builtins as __bi
+__ALLOW = set(${JSON.stringify(allow)})
+__real_import = __bi.__import__
+def __guarded_import(name, *args, **kwargs):
+    root = (name or "").split(".")[0]
+    if root in __ALLOW:
+        return __real_import(name, *args, **kwargs)
+    raise ImportError(f"import of {name} is blocked by policy")
+__bi.__import__ = __guarded_import
+`.trimStart();
+}
+
+// --- docker args (strict) ---
+function dockerArgs(image: string, mountDir: string) {
+  const args = [
+    "run",
+    "--rm",
+    "--network",
+    "none",
+    "--cpus", RUNNER_CPUS,
+    "--memory", RUNNER_MEMORY,
+    "--pids-limit", RUNNER_PIDS,
+    "--cap-drop", "ALL",
+    "--security-opt", "no-new-privileges",
+    "--read-only",
+    "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=64m",
+    "-u", "1000:1000",
+    "-w", "/workspace",
+    "-v", `${mountDir}:/workspace:ro`,
+  ];
+  if (RUNNER_PLATFORM) args.unshift("--platform", RUNNER_PLATFORM);
+  args.push(image);
+  return args;
+}
+
+// --- core runner ---
+export async function runSandbox(req: ExecRequest): Promise<RunResult> {
+  const t0 = Date.now();
+
+  // shape guard (route already validated; keep light)
+  const lang = req.lang === "python" ? "python" : "node";
+  const timeoutMs = Math.max(100, Math.min(Number(req.timeoutMs ?? 1500), 10_000));
+  const args = Array.isArray(req.args) ? req.args.slice(0, 16) : [];
+  const files = Array.isArray(req.files) ? req.files : [];
+
+  const dir = mkTmpDir();
+  try {
+    // write files
+    writeFiles(dir, files);
+
+    // prepend policy prelude
+    let entry: string;
+    if (lang === "node") {
+      entry = path.join(dir, "main.js");
+      fs.writeFileSync(entry, nodePrelude(NODE_ALLOW) + "\n" + String(req.code || ""), "utf8");
+    } else {
+      entry = path.join(dir, "main.py");
+      fs.writeFileSync(entry, pythonPrelude(PY_ALLOW) + "\n" + String(req.code || ""), "utf8");
+    }
+
+    if (RUNNER_IMPL !== "docker") {
+      // Fallback local (no network flags here—keep for dev only)
+      const cmd = lang === "node" ? "node" : "python";
+      return await spawnRun(cmd, [entry, ...args], { cwd: dir, timeoutMs });
+    }
+
+    // Docker (strict)
+    const image = lang === "node" ? NODE_IMAGE : PY_IMAGE;
+    const base = dockerArgs(image, dir);
+    const cmd = lang === "node"
+      ? ["node", "/workspace/main.js", ...args]
+      : ["python", "/workspace/main.py", ...args];
+
+    return await spawnRun(RUNNER_BIN, [...base, ...cmd], { cwd: dir, timeoutMs });
+  } finally {
+    rmDir(dir);
+  }
+}
+
+function spawnRun(cmd: string, argv: string[], opts: { cwd: string; timeoutMs: number }): Promise<RunResult> {
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    const t0 = Date.now();
+
+    const child = spawn(cmd, argv, {
+      cwd: opts.cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env }, // inherits, fine (no secrets mounted in container)
+    });
+
+    let killed = false;
+    const timer = setTimeout(() => {
+      killed = true;
+      try { child.kill("SIGKILL"); } catch {}
+    }, opts.timeoutMs);
+
+    child.stdout.on("data", (c) => (stdout += c.toString()));
+    child.stderr.on("data", (c) => (stderr += c.toString()));
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      const durationMs = Date.now() - t0;
+      if (killed) {
+        return resolve({ ok: false, stdout, stderr, exitCode: code ?? undefined, durationMs, reason: "timeout" });
+      }
+      const ok = code === 0 && !stderr;
+      resolve({ ok, stdout, stderr, exitCode: code ?? undefined, durationMs, reason: ok ? undefined : "nonzero_exit" });
+    });
+
+    child.on("error", (err: any) => {
+      clearTimeout(timer);
+      const durationMs = Date.now() - t0;
+      resolve({ ok: false, stdout, stderr: String(err?.message || err), durationMs, reason: "spawn_error" });
+    });
+  });
 }

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Demo Landing • ybuilt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg: #0b0b0b; --fg: #f6f6f6; --muted: #a1a1aa; --accent: #7c3aed; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 50% -20%, rgba(124,58,237,.25), transparent 60%),
+        var(--bg);
+      color: var(--fg);
+    }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 32px; }
+    .badge { display:inline-flex; gap:8px; align-items:center; padding:6px 10px; border-radius:999px; background:#111827; color:#c7d2fe; font-size:12px; }
+    .hero { display:grid; grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: center; margin-top: 40px; }
+    .title { font-size: clamp(36px, 6vw, 64px); line-height: 1.05; letter-spacing: -.02em; font-weight: 800; margin: 0 0 12px; }
+    .lead { font-size: 18px; color: var(--muted); max-width: 60ch; margin: 0; }
+    .cta { margin-top: 20px; display:flex; gap:12px; flex-wrap: wrap; }
+    .btn { display:inline-flex; align-items:center; gap:10px; padding:12px 16px; border-radius:12px; text-decoration:none; font-weight:600; }
+    .btn:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; }
+    .btn.primary { background: var(--accent); color: white; }
+    .btn.ghost { border:1px solid #27272a; color: var(--fg); }
+    .card { background:#0f0f12; border:1px solid #1f1f23; border-radius:16px; padding:20px; }
+    .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; margin-top:28px; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px; background:#111113; border:1px solid #26262a; padding:12px; border-radius:10px; color:#e5e7eb; }
+    .subtle { color: var(--muted); }
+    footer { margin: 56px 0 8px; color: #71717a; font-size: 13px; display:flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    @media (max-width: 900px){
+      .hero{ grid-template-columns: 1fr; }
+      .grid{ grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="badge" aria-label="Instant Preview is shareable">⚡ Instant Preview • shareable</div>
+
+    <section class="hero" aria-labelledby="hero-title">
+      <div>
+        <h1 id="hero-title" class="title">Ship a good-looking page in minutes</h1>
+        <p class="lead">Fork this starter, tweak copy, swap a logo. Your preview stays live at a clean URL you can share.</p>
+        <div class="cta">
+          <a class="btn primary" href="/templates?fork=demo-landing">Use this template →</a>
+          <a class="btn ghost" href="#features">See what’s inside</a>
+        </div>
+      </div>
+
+      <div class="card" aria-label="Getting started">
+        <div class="code" role="img" aria-label="Command line snippet">
+          $ npx ybuilt create landing<br/>
+          $ npm run dev
+        </div>
+        <p class="subtle" style="margin:8px 0 0">
+          Scaffolds a modern landing with sections, CTA, and responsive layout.
+        </p>
+      </div>
+    </section>
+
+    <section id="features" style="margin-top:48px" aria-labelledby="features-title">
+      <h2 id="features-title" style="font-size:22px;margin:0 0 8px">What you get</h2>
+      <div class="grid" role="list">
+        <div class="card" role="listitem">
+          <strong>Clean layout</strong><br/>
+          <span class="subtle">Hero, features, CTA, footer.</span>
+        </div>
+        <div class="card" role="listitem">
+          <strong>Accessible</strong><br/>
+          <span class="subtle">Contrast, semantics, keyboard-friendly.</span>
+        </div>
+        <div class="card" role="listitem">
+          <strong>Drop-in styling</strong><br/>
+          <span class="subtle">Utility CSS you can keep or replace.</span>
+        </div>
+      </div>
+
+      <div class="cta" style="margin-top:24px">
+        <a class="btn primary" href="/templates?fork=demo-landing" aria-label="Use this template">Use this template →</a>
+        <a class="btn ghost" href="#hero-title">Back to top</a>
+      </div>
+    </section>
+
+    <footer>
+      <span>© <span id="year"></span> ybuilt demo.</span>
+      <a href="/templates?fork=demo-landing" class="subtle">Use this template →</a>
+    </footer>
+  </div>
+
+  <script>
+    // tiny nicety for the footer year
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
