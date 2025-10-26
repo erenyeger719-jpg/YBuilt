@@ -24,7 +24,30 @@ export function errorHandler(err: any, req: Request, res: Response, _next: NextF
     ? 'Something went wrong on our side.'
     : (String(err?.message || 'Bad request.'));
 
+  // Sentry (if DSN is set)
   try { Sentry.captureException?.(err); } catch {}
+
+  // 🔔 Fallback alert to Slack/Discord via webhook (works even if Sentry DSN is empty)
+  try {
+    const url = process.env.SENTRY_ALERT_WEBHOOK || process.env.ALERT_WEBHOOK || '';
+    if (url && status >= 500) {
+      const payload = {
+        text:
+          `🚨 Server ${status} — ${msg}\n` +
+          `path=${req.path} rid=${rid}\n` +
+          `env=${process.env.NODE_ENV} release=${process.env.RENDER_GIT_COMMIT || 'local'}`,
+        content:
+          `🚨 Server ${status} — ${msg}\n` +
+          `path=${req.path} rid=${rid}\n` +
+          `env=${process.env.NODE_ENV} release=${process.env.RENDER_GIT_COMMIT || 'local'}`,
+      };
+      fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+  } catch {}
 
   if (isApi) {
     return res.status(status).json({
