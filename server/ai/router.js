@@ -9,6 +9,7 @@ import { pushSignal, summarize, boostConfidence } from "../intent/signals.ts";
 import { verifyAndPrepare, rememberLastGood, lastGoodFor, defaultsForSections, hardenCopy } from "../intent/dsl.ts";
 import { cacheGet, cacheSet, normalizeKey } from "../intent/cache.ts";
 import { pickFromPlaybook } from "../intent/playbook.ts";
+import { clarifyChips } from "../intent/clarify.ts";
 import crypto from "crypto";
 
 export function pickModel(task, tier = "balanced") {
@@ -230,6 +231,17 @@ router.post("/filter", async (req, res) => {
     return res.json({ ok: true, ...out });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "filter_failed" });
+  }
+});
+
+// POST /api/ai/clarify  { prompt?: string, spec?: {...} }
+router.post("/clarify", (req, res) => {
+  try {
+    const { prompt = "", spec = {} } = req.body || {};
+    const chips = clarifyChips({ prompt, spec });
+    return res.json({ ok: true, chips });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "clarify_failed" });
   }
 });
 
