@@ -1,6 +1,8 @@
 // server/intent/localLabels.ts
 const OLLAMA = process.env.OLLAMA_URL || 'http://localhost:11434';
 const MODEL = process.env.LOCAL_LLM || 'phi3:mini'; // or "qwen2:1.5b-instruct"
+const TIMEOUT = Number(process.env.LABEL_TIMEOUT_MS || 2500);
+const BACKUP_MODEL = process.env.LOCAL_LLM_BACKUP || '';
 
 type Intent = {
   audience?: string;
@@ -25,10 +27,10 @@ async function withTimeout<T>(p: Promise<T>, ms = 2500): Promise<T> {
   ]);
 }
 
-export async function localLabels(prompt = ''): Promise<{ intent: Intent; confidence: number }|null> {
-  // Ollama /api/generate (non-stream)
+// helper to ask a specific model
+async function askModel(model: string, prompt: string) {
   const body = {
-    model: MODEL,
+    model,
     prompt: `
 Return ONLY JSON with keys:
 {"audience":"","goal":"","industry":"","vibe":"","color_scheme":"","sections":["hero-basic","cta-simple"]}
@@ -44,18 +46,23 @@ PROMPT: ${prompt}
     stream: false,
   };
 
+  const r = await withTimeout(
+    fetch(`${OLLAMA}/api/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+    TIMEOUT
+  );
+  if (!r.ok) return null;
+  const data: any = await r.json();
+  return extractJSON(String(data?.response || ''));
+}
+
+export async function localLabels(prompt = ''): Promise<{ intent: Intent; confidence: number }|null> {
   try {
-    const r = await withTimeout(
-      fetch(`${OLLAMA}/api/generate`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-      2500
-    );
-    if (!r.ok) return null;
-    const data: any = await r.json();
-    const parsed = extractJSON(String(data?.response || ''));
+    let parsed: any = await askModel(MODEL, prompt);
+    if (!parsed && BACKUP_MODEL) parsed = await askModel(BACKUP_MODEL, prompt);
     if (!parsed) return null;
 
     const intent: Intent = {
@@ -68,6 +75,6 @@ PROMPT: ${prompt}
     };
     return { intent, confidence: 0.75 };
   } catch {
-    return null; // gracefully fall back to rules
+    return null;
   }
 }

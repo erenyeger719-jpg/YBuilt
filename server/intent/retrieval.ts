@@ -6,6 +6,9 @@ const OLLAMA = process.env.OLLAMA_URL || 'http://localhost:11434';
 const EMBED = process.env.LOCAL_EMBED || 'nomic-embed-text'; // or "bge-small-en-v1.5"
 const DB_FILE = path.resolve('.cache', 'retrieval.jsonl');
 
+const MIN_SIM = Number(process.env.RETRIEVAL_MIN_SIM || 0.82);           // cosine similarity threshold
+const MIN_JACCARD = Number(process.env.RETRIEVAL_MIN_JACCARD || 0.35);   // token overlap fallback
+
 type Doc = {
   id: string;
   prompt: string;
@@ -83,7 +86,7 @@ export async function nearest(prompt: string): Promise<Doc|null> {
       const s = cos(v, d.vec as number[]);
       if (s > score) { score = s; best = d; }
     }
-    return score >= 0.82 ? best : null;
+    return score >= MIN_SIM ? best : null;
   }
 
   // Fallback: token overlap (works without embeddings)
@@ -93,5 +96,5 @@ export async function nearest(prompt: string): Promise<Doc|null> {
     const s = jaccard(toks, tokenize(d.prompt));
     if (s > score) { score = s; best = d; }
   }
-  return score >= 0.35 ? best : null;
+  return score >= MIN_JACCARD ? best : null;
 }
