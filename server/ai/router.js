@@ -1,5 +1,8 @@
 // server/ai/router.js
 import express from "express";
+// import TS helpers (tsx will handle .ts)
+import { buildSpec } from "../intent/brief.ts";
+import { nextActions } from "../intent/planner.ts";
 
 // Choose model by task + tier. Swap here when you add providers.
 export function pickModel(task, tier = "balanced") {
@@ -84,7 +87,9 @@ Rules:
     const { provider, model } = pickModel("critic", tier);
     if (provider !== "openai") {
       // For now we only implement OpenAI here.
-      return res.status(500).json({ ok: false, error: `Provider ${provider} not configured in /ai/review` });
+      return res
+        .status(500)
+        .json({ ok: false, error: `Provider ${provider} not configured in /ai/review` });
     }
 
     // Call OpenAI via REST (Node 18+ has global fetch)
@@ -133,6 +138,28 @@ Rules:
     return res.json({ ok: true, review: { issues: cleaned } });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e?.message || "review failed" });
+  }
+});
+
+/** Build/merge a working spec + suggest chips */
+router.post('/brief', async (req, res) => {
+  try {
+    const { prompt, spec: lastSpec } = req.body || {};
+    const out = buildSpec({ prompt, lastSpec });
+    return res.json({ ok: true, ...out });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'brief_failed' });
+  }
+});
+
+/** Plan next steps (ask / retrieve / patch) */
+router.post('/plan', async (req, res) => {
+  try {
+    const { spec, signals } = req.body || {};
+    const actions = nextActions(spec, signals);
+    return res.json({ ok: true, actions });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'plan_failed' });
   }
 });
 

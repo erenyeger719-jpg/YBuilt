@@ -529,6 +529,10 @@ app.use(ipGate());
   const { default: paletteRouter } = await import('./routes/palette.js').catch(() => ({
     default: undefined as any,
   }));
+  // NEW: Previews compose router (TS)
+  const { default: previewsCompose } = await import('./routes/previews.compose.ts').catch(() => ({
+    default: undefined as any,
+  }));
 
   // CJS dynamic-import interop (comments + qna)
   const commentsMod: any = await import('./routes/comments.js')
@@ -555,6 +559,7 @@ app.use(ipGate());
 
   if (previewsRouter) app.use('/api/previews', express.json(), previewsRouter);
   if (exportRouter) app.use('/api/previews', express.json(), exportRouter);
+  if (previewsCompose) app.use('/api/previews', express.json({ limit: '256kb' }), previewsCompose);
   if (deployRouter) app.use('/api/deploy', express.json({ limit: '5mb' }), deployRouter);
   if (deployDockerRouter)
     app.use('/api/deploy', express.json({ limit: '64kb' }), deployDockerRouter);
