@@ -1,54 +1,44 @@
 // server/intent/copy.ts
+import { pickPhrase } from "./phrases.ts";
+
 type Intent = {
-  audience: string; goal: string; industry: string; vibe: string;
-  color_scheme: string; density: string; complexity: string; sections: string[];
+  goal?: "waitlist" | "demo" | "purchase" | "contact";
+  vibe?: "minimal" | "playful" | "serious";
+  color_scheme?: "dark" | "light" | "";
+  sections?: string[];
 };
 
-export function guessBrand(intent: Intent) {
-  // vibe/industry → primary color
-  if (intent.color_scheme === 'dark') return '#7c3aed';
-  if (intent.vibe === 'minimal') return '#111827';
-  if (intent.vibe === 'bold') return '#ef4444';
-  if (intent.industry === 'ecommerce') return '#0ea5e9';
-  if (intent.industry === 'health') return '#10b981';
-  return '#6d28d9';
+export function guessBrand(intent: Intent = {}): string {
+  // minimal heuristics; safe hex only
+  if (intent.color_scheme === "dark") {
+    return intent.vibe === "playful" ? "#a855f7" : "#6d28d9"; // purple family
+  }
+  if (intent.vibe === "serious") return "#2563eb"; // blue
+  if (intent.vibe === "playful") return "#f59e0b"; // amber
+  return "#6d28d9";
 }
 
-export function cheapCopy(prompt: string, intent: Intent) {
-  const goal = intent.goal || 'signup';
-  const heroTitle =
-    intent.industry === 'saas' ? 'Build faster. Ship calmer.' :
-    intent.industry === 'ecommerce' ? 'Show what you sell. Convert more.' :
-    intent.industry === 'portfolio' ? 'Work that speaks for itself.' :
-    'Make the thing people want.';
-
-  const heroSub =
-    intent.audience === 'developers'
-      ? 'Instant sections, live preview, and sane defaults for devs.'
-      : intent.audience === 'founders'
-      ? 'From idea to link in minutes—skip the fuss.'
-      : 'Clean blocks, real-time preview, zero drama.';
-
-  const cta =
-    goal === 'waitlist' ? 'Join the waitlist' :
-    goal === 'demo' ? 'Book a demo' :
-    goal === 'purchase' ? 'Buy now' :
-    goal === 'contact' ? 'Contact us' :
-    'Get started';
-
-  const f = [
-    ['Fast', 'Idea → live URL in minutes.'],
-    ['Safe', 'Sandboxed runs with strict limits.'],
-    ['Visible', 'Unified logs and live events.'],
-  ];
-
-  return {
-    HERO_TITLE: heroTitle,
-    HERO_SUB: heroSub,
-    CTA_LABEL: cta,
-    CTA_HEAD: goal === 'waitlist' ? 'Be first in line' : 'Ready when you are',
-    F1_TITLE: f[0][0], F1_BODY: f[0][1],
-    F2_TITLE: f[1][0], F2_BODY: f[1][1],
-    F3_TITLE: f[2][0], F3_BODY: f[2][1],
+export function cheapCopy(prompt = "", intent: Intent = {}): Record<string, string> {
+  const base = {
+    HERO_TITLE: pickPhrase("HERO_TITLE", intent),
+    HERO_SUB:   pickPhrase("HERO_SUB", intent),
+    CTA_LABEL:  pickPhrase("CTA_LABEL", intent),
+    CTA_HEAD:   pickPhrase("CTA_HEAD", intent),
+    F1_TITLE:   pickPhrase("F1_TITLE", intent),
+    F1_SUB:     pickPhrase("F1_SUB", intent),
+    F2_TITLE:   pickPhrase("F2_TITLE", intent),
+    F2_SUB:     pickPhrase("F2_SUB", intent),
+    F3_TITLE:   pickPhrase("F3_TITLE", intent),
+    F3_SUB:     pickPhrase("F3_SUB", intent),
   };
+
+  // tiny, deterministic seasoning from prompt (first nouny words)
+  const hint = String(prompt).split(/\s+/).slice(0, 3).join(" ");
+  if (hint) {
+    base.HERO_TITLE = base.HERO_TITLE || hint;
+    base.HERO_SUB = base.HERO_SUB?.replace("pages", hint) || base.HERO_SUB;
+  }
+
+  // strip any falsy leftovers (composer already cleans placeholders)
+  return Object.fromEntries(Object.entries(base).filter(([, v]) => v));
 }

@@ -2,7 +2,7 @@
 import { normalizeKey } from "./cache.ts";
 
 type SpecLike = {
-  brand?: { dark?: boolean; tone?: string };
+  brand?: { dark?: boolean; tone?: string; tier?: string };
   layout?: { sections?: string[] };
 };
 
@@ -29,6 +29,18 @@ export function clarifyChips({ prompt = "", spec = {} as SpecLike }) {
   // CTA → pick one based on prompt (defaults to email signup)
   if (has("waitlist")) chips.push("Use waitlist");
   else chips.push("Use email signup CTA");
+
+  // ---- Style tier chips & premium nudge ----
+  const tier = String((spec as any)?.brand?.tier || "").toLowerCase();
+
+  // If prompt hints at a specific style, surface a direct switch chip
+  if (has("premium") && tier !== "premium") chips.unshift("Use premium style");
+  if (has("brutalist") && tier !== "brutalist") chips.push("Use brutalist style");
+  if (has("playful") && tier !== "playful") chips.push("Use playful style");
+  if (has("minimal") && tier !== "minimal") chips.push("Use minimal style");
+
+  // Nudge to premium when unclear (or currently minimal)
+  if (!tier || tier === "minimal") chips.unshift("Use premium style");
 
   // Compact: unique + first 3
   return Array.from(new Set(chips)).slice(0, 3);

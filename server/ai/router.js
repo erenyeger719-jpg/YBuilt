@@ -6,28 +6,36 @@ import { runWithBudget } from "../intent/budget.ts";
 import { filterIntent } from "../intent/filter.ts";
 import { cheapCopy, guessBrand } from "../intent/copy.ts";
 import { pushSignal, summarize, boostConfidence } from "../intent/signals.ts";
-import { verifyAndPrepare, rememberLastGood, lastGoodFor, defaultsForSections, hardenCopy } from "../intent/dsl.ts";
+import {
+  verifyAndPrepare,
+  rememberLastGood,
+  lastGoodFor,
+  defaultsForSections,
+  hardenCopy,
+} from "../intent/dsl.ts";
 import { cacheGet, cacheSet, normalizeKey } from "../intent/cache.ts";
 import { pickFromPlaybook } from "../intent/playbook.ts";
 import { clarifyChips } from "../intent/clarify.ts";
+import { localLabels } from "../intent/localLabels.ts";
+import { addExample, nearest } from "../intent/retrieval.ts";
 import crypto from "crypto";
 
 export function pickModel(task, tier = "balanced") {
   const map = {
     fast: {
       planner: { provider: "openai", model: "gpt-4o-mini" },
-      coder:   { provider: "openai", model: "gpt-4o-mini" },
-      critic:  { provider: "openai", model: "gpt-4o-mini" },
+      coder: { provider: "openai", model: "gpt-4o-mini" },
+      critic: { provider: "openai", model: "gpt-4o-mini" },
     },
     balanced: {
       planner: { provider: "openai", model: "gpt-4o-mini" },
-      coder:   { provider: "openai", model: "gpt-4o" },
-      critic:  { provider: "openai", model: "gpt-4o-mini" },
+      coder: { provider: "openai", model: "gpt-4o" },
+      critic: { provider: "openai", model: "gpt-4o-mini" },
     },
     best: {
       planner: { provider: "openai", model: "gpt-4o" },
-      coder:   { provider: "openai", model: "gpt-4o" },
-      critic:  { provider: "openai", model: "gpt-4o" },
+      coder: { provider: "openai", model: "gpt-4o" },
+      critic: { provider: "openai", model: "gpt-4o" },
     },
   };
   const tierMap = map[tier] || map.balanced;
@@ -76,8 +84,22 @@ function quickGuessIntent(prompt) {
 
   const has = (w) => p.includes(w);
   const intent = {
-    audience: has("dev") ? "developers" : has("founder") ? "founders" : has("shopper") ? "shoppers" : "",
-    goal: has("waitlist") ? "waitlist" : has("demo") ? "demo" : has("buy") || has("purchase") ? "purchase" : has("contact") ? "contact" : "",
+    audience: has("dev")
+      ? "developers"
+      : has("founder")
+      ? "founders"
+      : has("shopper")
+      ? "shoppers"
+      : "",
+    goal: has("waitlist")
+      ? "waitlist"
+      : has("demo")
+      ? "demo"
+      : has("buy") || has("purchase")
+      ? "purchase"
+      : has("contact")
+      ? "contact"
+      : "",
     industry: has("saas") ? "saas" : has("ecommerce") ? "ecommerce" : has("portfolio") ? "portfolio" : "",
     vibe: has("minimal") ? "minimal" : has("bold") ? "bold" : has("playful") ? "playful" : has("serious") ? "serious" : "",
     color_scheme: has("dark") ? "dark" : has("light") ? "light" : "",
@@ -90,13 +112,11 @@ function quickGuessIntent(prompt) {
   const coverage = filled / 7; // rough
   const chips = [
     intent.color_scheme !== "light" ? "Switch to light" : "Use dark mode",
-    has("minimal") ? "More content" : "Keep it minimal",
+    has("minimal") ? "More playful" : "More minimal", // ensures chips actually map to spec changes
     intent.goal === "waitlist" ? "Use email signup CTA" : "Use waitlist",
   ];
 
-  return coverage >= 0.5
-    ? { intent, confidence: 0.7, chips }
-    : null;
+  return coverage >= 0.5 ? { intent, confidence: 0.7, chips } : null;
 }
 
 // Stable stringify (order-insensitive for objects)
@@ -125,10 +145,16 @@ function applyChipLocal(spec = {}, chip = "") {
   const s = { ...spec, brand: { ...(spec.brand || {}) } };
 
   if (/Switch to light/i.test(chip)) s.brand.dark = false;
-  if (/Use dark mode/i.test(chip))  s.brand.dark = true;
+  if (/Use dark mode/i.test(chip)) s.brand.dark = true;
 
   if (/More minimal/i.test(chip) || /Keep it minimal/i.test(chip)) s.brand.tone = "minimal";
-  if (/More playful/i.test(chip))   s.brand.tone = "playful";
+  if (/More playful/i.test(chip)) s.brand.tone = "playful";
+
+  // style tier chips
+  if (/Use premium style/i.test(chip)) s.brand.tier = "premium";
+  if (/Use minimal style/i.test(chip)) s.brand.tier = "minimal";
+  if (/Use playful style/i.test(chip)) s.brand.tier = "playful";
+  if (/Use brutalist style/i.test(chip)) s.brand.tier = "brutalist";
 
   if (/Add 3-card features/i.test(chip)) {
     const cur = new Set((s.layout?.sections || []).map(String));
@@ -136,7 +162,7 @@ function applyChipLocal(spec = {}, chip = "") {
     s.layout = { sections: Array.from(cur) };
   }
   if (/Use 2-column features/i.test(chip)) {
-    s.layout = { sections: (s.layout?.sections || []).filter(id => id !== "features-3col") };
+    s.layout = { sections: (s.layout?.sections || []).filter((id) => id !== "features-3col") };
   }
 
   if (/Use email signup CTA/i.test(chip)) {
@@ -154,8 +180,10 @@ const LAST_REVIEW_SIG = new Map(); // sessionId -> last sha1(codeTrim)
 router.post("/review", async (req, res) => {
   try {
     let { code = "", tier = "balanced", sessionId = "anon" } = req.body || {};
-    if (!code || typeof code !== "string") return res.status(400).json({ ok: false, error: "Missing code" });
-    if (!process.env.OPENAI_API_KEY) return res.status(500).json({ ok: false, error: "OPENAI_API_KEY not set" });
+    if (!code || typeof code !== "string")
+      return res.status(400).json({ ok: false, error: "Missing code" });
+    if (!process.env.OPENAI_API_KEY)
+      return res.status(500).json({ ok: false, error: "OPENAI_API_KEY not set" });
 
     // Trim gigantic inputs (cost guard)
     const codeTrim = String(code).slice(0, 60_000);
@@ -179,7 +207,9 @@ Rules:
 
     const { provider, model } = pickModel("critic", tier);
     if (provider !== "openai") {
-      return res.status(500).json({ ok: false, error: `Provider ${provider} not configured in /ai/review` });
+      return res
+        .status(500)
+        .json({ ok: false, error: `Provider ${provider} not configured in /ai/review` });
     }
 
     const payload = {
@@ -194,18 +224,26 @@ Rules:
     };
 
     // Timeout + JSON-mode fetch
-    const data = await fetchJSONWithTimeout("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+    const data = await fetchJSONWithTimeout(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    }, Number(process.env.OPENAI_TIMEOUT_MS || 20000));
+      Number(process.env.OPENAI_TIMEOUT_MS || 20000)
+    );
 
     const raw = data?.choices?.[0]?.message?.content || "{}";
     let json;
-    try { json = JSON.parse(raw); } catch { json = JSON.parse(extractJSON(raw)); }
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      json = JSON.parse(extractJSON(raw));
+    }
 
     const issues = Array.isArray(json.issues) ? json.issues : [];
     const cleaned = issues.map((it) => ({
@@ -289,7 +327,8 @@ router.get("/signals/:sessionId", (req, res) => {
 router.post("/act", async (req, res) => {
   try {
     const { sessionId = "anon", spec = {}, action = {} } = req.body || {};
-    if (!action || !action.kind) return res.status(400).json({ ok: false, error: "missing_action" });
+    if (!action || !action.kind)
+      return res.status(400).json({ ok: false, error: "missing_action" });
 
     const out = await runWithBudget(sessionId, action, async (_tier) => {
       if (action.kind === "retrieve") {
@@ -318,7 +357,7 @@ router.post("/act", async (req, res) => {
         const sectionsIn = Array.isArray(action.args?.sections)
           ? action.args.sections
           : spec?.layout?.sections || [];
-        const dark = !!(spec?.brand?.dark);
+        const dark = !!spec?.brand?.dark;
         const title = String(spec?.summary || "Preview");
 
         const proposed = {
@@ -334,13 +373,20 @@ router.post("/act", async (req, res) => {
         }
 
         // build prepped copy with defaults and hygiene
-        const copyWithDefaults = hardenCopy(
-          prep.sections,
-          { ...defaultsForSections(prep.sections), ...prep.copy }
-        );
+        const copyWithDefaults = hardenCopy(prep.sections, {
+          ...defaultsForSections(prep.sections),
+          ...prep.copy,
+        });
 
         // short-circuit if same DSL as last compose for session
-        const payloadForKey = { sections: prep.sections, dark, title, copy: copyWithDefaults, brand: prep.brand };
+        const payloadForKey = {
+          sections: prep.sections,
+          dark,
+          title,
+          copy: copyWithDefaults,
+          brand: prep.brand,
+          tier: spec?.brand?.tier || "premium",
+        };
         const keyNow = dslKey(payloadForKey);
         const last = LAST_COMPOSE.get(req.body?.sessionId || "anon");
         if (last && last.key === keyNow && last.url) {
@@ -356,11 +402,30 @@ router.post("/act", async (req, res) => {
         const data = await r.json();
 
         // remember successful compose for instant reuse
-        LAST_COMPOSE.set(req.body?.sessionId || "anon", { key: keyNow, url: data?.url || data?.path || null });
+        LAST_COMPOSE.set(req.body?.sessionId || "anon", {
+          key: keyNow,
+          url: data?.url || data?.path || null,
+        });
 
         try {
-          rememberLastGood(req.body?.sessionId || "anon", { sections: prep.sections, copy: copyWithDefaults, brand: prep.brand });
-          pushSignal(req.body?.sessionId || "anon", { ts: Date.now(), kind: "compose_success", data: { url: data?.url } });
+          rememberLastGood(req.body?.sessionId || "anon", {
+            sections: prep.sections,
+            copy: copyWithDefaults,
+            brand: prep.brand,
+          });
+          pushSignal(req.body?.sessionId || "anon", {
+            ts: Date.now(),
+            kind: "compose_success",
+            data: { url: data?.url },
+          });
+          // store successful example for retrieval reuse
+          try {
+            await addExample(
+              String(req.body?.sessionId || "anon"),
+              String(spec?.summary || ""),
+              { sections: prep.sections, copy: copyWithDefaults, brand: prep.brand }
+            );
+          } catch {}
         } catch {}
 
         return { kind: "compose", ...data };
@@ -384,12 +449,34 @@ router.post("/one", async (req, res) => {
     // 0) Playbook first (no-model)
     let fit = pickFromPlaybook(prompt);
 
-    // 1) Cache / quick guess / model
+    // 1) Cache / quick guess / local model / cloud
     if (!fit) {
       fit = cacheGet(key);
       if (!fit) {
-        const guess = (typeof quickGuessIntent === "function") ? quickGuessIntent(prompt) : null;
-        fit = guess || (await filterIntent(prompt));
+        const guess = typeof quickGuessIntent === "function" ? quickGuessIntent(prompt) : null;
+        if (guess) {
+          fit = guess;
+        } else {
+          const lab = await localLabels(prompt); // free local model
+          if (lab?.intent) {
+            fit = {
+              intent: {
+                ...lab.intent,
+                sections: lab.intent.sections?.length ? lab.intent.sections : ["hero-basic", "cta-simple"],
+              },
+              confidence: lab.confidence || 0.7,
+              chips: clarifyChips({
+                prompt,
+                spec: {
+                  brand: { dark: lab.intent.color_scheme === "dark" },
+                  layout: { sections: lab.intent.sections || ["hero-basic", "cta-simple"] },
+                },
+              }),
+            };
+          } else {
+            fit = await filterIntent(prompt); // cloud fallback as last resort
+          }
+        }
         cacheSet(key, fit);
       }
     }
@@ -411,9 +498,24 @@ router.post("/one", async (req, res) => {
       },
     });
 
-    const copy = fit.copy || cheapCopy(prompt, fit.intent);
-    const brandColor = fit.brandColor || guessBrand(fit.intent);
+    let copy = fit.copy || cheapCopy(prompt, fit.intent);
+    let brandColor = fit.brandColor || guessBrand(fit.intent);
     const actions = nextActions(spec, { chips });
+
+    // Try to reuse a shipped spec (retrieval) before composing
+    try {
+      const reuse = await nearest(prompt);
+      if (reuse) {
+        const reusedSections =
+          Array.isArray(reuse.sections) && reuse.sections.length
+            ? reuse.sections
+            : spec?.layout?.sections || [];
+        spec.layout = { sections: reusedSections };
+        const mergedCopy = { ...(reuse.copy || {}), ...(copy || {}) };
+        copy = mergedCopy;
+        if (!brandColor && reuse?.brand?.primary) brandColor = reuse.brand.primary;
+      }
+    } catch {}
 
     if (!actions.length) return res.json({ ok: true, spec, actions: [], note: "nothing_to_do" });
 
@@ -439,7 +541,11 @@ router.post("/one", async (req, res) => {
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId, spec: { ...spec, brandColor, copy }, action: composeAction }),
+        body: JSON.stringify({
+          sessionId,
+          spec: { ...spec, brandColor, copy },
+          action: composeAction,
+        }),
       });
       const composeData = await composeR.json();
       url = composeData?.result?.url || composeData?.result?.path || null;
@@ -498,12 +604,7 @@ router.post("/instant", async (req, res) => {
       lastSpec: {
         summary: prompt,
         brand: {
-          tone:
-            intent.vibe === "playful"
-              ? "playful"
-              : intent.vibe === "minimal"
-              ? "minimal"
-              : "serious",
+          tone: intent.vibe === "playful" ? "playful" : intent.vibe === "minimal" ? "minimal" : "serious",
           dark: intent.color_scheme === "dark",
         },
         layout: { sections: intent.sections },
@@ -570,13 +671,15 @@ router.post("/clarify/compose", async (req, res) => {
     // Base spec: use existing sections/mode if present, else no-LLM guess
     let base = { ...specIn, brand: { ...(specIn.brand || {}) } };
     if (!Array.isArray(base?.layout?.sections) || !base.layout.sections.length) {
-      const fit = pickFromPlaybook(prompt) || quickGuessIntent(prompt) || {
-        intent: {
-          sections: ["hero-basic", "cta-simple"],
-          color_scheme: /(^|\s)dark(\s|$)/i.test(String(prompt)) ? "dark" : "light",
-          vibe: "minimal",
-        },
-      };
+      const fit =
+        pickFromPlaybook(prompt) ||
+        quickGuessIntent(prompt) || {
+          intent: {
+            sections: ["hero-basic", "cta-simple"],
+            color_scheme: /(^|\s)dark(\s|$)/i.test(String(prompt)) ? "dark" : "light",
+            vibe: "minimal",
+          },
+        };
       base.layout = { sections: fit.intent.sections };
       if (base.brand.dark == null) base.brand.dark = fit.intent.color_scheme === "dark";
       if (!base.brand.tone) base.brand.tone = fit.intent.vibe === "minimal" ? "minimal" : "serious";
@@ -588,11 +691,13 @@ router.post("/clarify/compose", async (req, res) => {
     for (const c of chips) s = applyChipLocal(s, c);
 
     // Compose using the existing budgeted pipeline
-    const copy = s.copy || cheapCopy(prompt, {
-      vibe: s.brand?.tone || "minimal",
-      color_scheme: s.brand?.dark ? "dark" : "light",
-      sections: s.layout?.sections || ["hero-basic", "cta-simple"],
-    });
+    const copy =
+      s.copy ||
+      cheapCopy(prompt, {
+        vibe: s.brand?.tone || "minimal",
+        color_scheme: s.brand?.dark ? "dark" : "light",
+        sections: s.layout?.sections || ["hero-basic", "cta-simple"],
+      });
     const brandColor = guessBrand({
       vibe: s.brand?.tone || "minimal",
       color_scheme: s.brand?.dark ? "dark" : "light",
@@ -620,7 +725,11 @@ router.post("/clarify/compose", async (req, res) => {
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId, spec: { ...s, brandColor, copy }, action: composeAction }),
+        body: JSON.stringify({
+          sessionId,
+          spec: { ...s, brandColor, copy },
+          action: composeAction,
+        }),
       });
       const composeData = await composeR.json();
       url = composeData?.result?.url || composeData?.result?.path || null;

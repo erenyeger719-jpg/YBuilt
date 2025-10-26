@@ -160,8 +160,7 @@ app.use(ipGate());
   logger.info(`[PREVIEWS] Serving static previews from ${PREVIEWS_DIR}`);
 
   // Serve team-scoped forks: /previews/forks/<slug>/...
-  const requireMod = (await import('module')).createRequire(import.meta.url);
-  const { safeJoinTeam } = requireMod('./routes/_teamPaths');
+  const { safeJoinTeam } = await import('./_teamPaths.ts');
   app.use('/previews/forks', (req, res, next) => {
     const teamId =
       (req as any).cookies?.teamId || (req.headers as any)['x-team-id'] || null;
@@ -173,6 +172,12 @@ app.use(ipGate());
     }
     return (express.static(base, { extensions: ['html'] }) as any)(req, res, next);
   });
+
+  // Serve published (persisted) forks from public folder as a fallback
+  app.use(
+    '/previews/forks',
+    express.static(path.resolve('public/previews/forks'), { extensions: ['html'] }),
+  );
 
   // Observability + rate limiting
   app.use(requestIdMiddleware);
@@ -529,8 +534,8 @@ app.use(ipGate());
   const { default: paletteRouter } = await import('./routes/palette.js').catch(() => ({
     default: undefined as any,
   }));
-  // NEW: Previews compose router (TS)
-  const { default: previewsCompose } = await import('./routes/previews.compose.ts').catch(() => ({
+  // NEW: Previews composer (TS, replaces old previews.compose route)
+  const { default: previewsComposer } = await import('./previews/router.ts').catch(() => ({
     default: undefined as any,
   }));
 
@@ -559,7 +564,7 @@ app.use(ipGate());
 
   if (previewsRouter) app.use('/api/previews', express.json(), previewsRouter);
   if (exportRouter) app.use('/api/previews', express.json(), exportRouter);
-  if (previewsCompose) app.use('/api/previews', express.json({ limit: '256kb' }), previewsCompose);
+  if (previewsComposer) app.use('/api/previews', express.json({ limit: '256kb' }), previewsComposer);
   if (deployRouter) app.use('/api/deploy', express.json({ limit: '5mb' }), deployRouter);
   if (deployDockerRouter)
     app.use('/api/deploy', express.json({ limit: '64kb' }), deployDockerRouter);
