@@ -5,6 +5,8 @@ import { buildSpec } from "../intent/brief.ts";
 import { nextActions } from "../intent/planner.ts";
 import { runWithBudget } from "../intent/budget.ts";
 import { filterIntent } from "../intent/filter.ts";
+import { cheapCopy, guessBrand } from "../intent/copy.ts";
+import { pushSignal, summarize, boostConfidence } from "../intent/signals.ts";
 
 // Choose model by task + tier. Swap here when you add providers.
 export function pickModel(task, tier = "balanced") {
@@ -183,6 +185,18 @@ router.post("/filter", async (req, res) => {
   }
 });
 
+// signals endpoints
+router.post("/signals", (req, res) => {
+  const { sessionId = "anon", kind = "", data = {} } = req.body || {};
+  if (!kind) return res.status(400).json({ ok: false, error: "missing_kind" });
+  pushSignal(sessionId, { ts: Date.now(), kind, data });
+  return res.json({ ok: true });
+});
+
+router.get("/signals/:sessionId", (req, res) => {
+  return res.json({ ok: true, summary: summarize(req.params.sessionId || "anon") });
+});
+
 /**
  * POST /api/ai/act
  * Body: { sessionId?: string, spec: {...}, action: {kind, args, cost_est?, gain_est?} }
@@ -220,6 +234,7 @@ router.post("/act", async (req, res) => {
         return { kind: "patch", spec: next };
       }
 
+      // compose branch with copy/brand forwarding + signal
       if (action.kind === "compose") {
         const sections = Array.isArray(action.args?.sections)
           ? action.args.sections
@@ -227,16 +242,25 @@ router.post("/act", async (req, res) => {
         if (!sections.length) return { error: "no_sections" };
         const dark = !!spec?.brand?.dark;
         const title = String(spec?.summary || "Preview");
+        const copy = action.args?.copy || spec?.copy || {};
+        const brand =
+          action.args?.brand || spec?.brandColor ? { primary: spec.brandColor } : action.args?.brand || {};
 
         const r = await fetch(`${baseUrl(req)}/api/previews/compose`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sections, dark, title }),
+          body: JSON.stringify({ sections, dark, title, copy, brand }),
         });
-        if (!r.ok) {
-          return { error: `compose_http_${r.status}` };
-        }
+        if (!r.ok) return { error: `compose_http_${r.status}` };
         const data = await r.json();
+        // record success signal
+        try {
+          pushSignal(req.body?.sessionId || "anon", {
+            ts: Date.now(),
+            kind: "compose_success",
+            data: { url: data?.url },
+          });
+        } catch {}
         return { kind: "compose", ...data };
       }
 
@@ -264,9 +288,12 @@ router.post("/one", async (req, res) => {
   try {
     const { prompt = "", sessionId = "anon" } = req.body || {};
 
-    // 1) Mind-read filter + brief → spec
-    const { intent, confidence, chips } = await filterIntent(prompt);
-    const tier = pickTierByConfidence(confidence);
+    // 1) Mind-read + signals → confidence
+    const { intent, confidence: c0, chips } = await filterIntent(prompt);
+    const summary = summarize(sessionId);
+    const confidence = boostConfidence(c0, summary);
+
+    // 2) Build spec with inferred tone/dark + boosted confidence
     const { spec } = buildSpec({
       prompt,
       lastSpec: {
@@ -282,18 +309,21 @@ router.post("/one", async (req, res) => {
         },
         layout: { sections: intent.sections },
         confidence,
-        tier, // optional hint for downstream
       },
     });
 
-    // 2) Plan
+    // 3) Cheap copy + brand
+    const copy = cheapCopy(prompt, intent);
+    const brandColor = guessBrand(intent);
+
+    // 4) Plan
     const actions = nextActions(spec, { chips });
 
+    // 5) Run best action, then auto-compose (with copy + brand) if retrieve
     if (!actions.length) {
       return res.json({ ok: true, spec, actions: [], note: "nothing_to_do" });
     }
 
-    // 3) Run top action
     const top = actions[0];
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
@@ -306,18 +336,17 @@ router.post("/one", async (req, res) => {
     let usedAction = top;
     let result = actData?.result;
 
-    // If we retrieved sections, compose immediately
     if (result?.kind === "retrieve" && Array.isArray(result.sections)) {
       const composeAction = {
         kind: "compose",
         cost_est: 3,
         gain_est: 20,
-        args: { sections: result.sections },
+        args: { sections: result.sections, copy, brand: { primary: brandColor } },
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId, spec, action: composeAction }),
+        body: JSON.stringify({ sessionId, spec: { ...spec, brandColor }, action: composeAction }),
       });
       const composeData = await composeR.json();
       url = composeData?.result?.url || composeData?.result?.path || null;
@@ -325,7 +354,16 @@ router.post("/one", async (req, res) => {
       result = composeData?.result;
     }
 
-    return res.json({ ok: true, spec, plan: actions, ran: usedAction, result, url });
+    return res.json({
+      ok: true,
+      spec: { ...spec, brandColor },
+      plan: actions,
+      ran: usedAction,
+      result,
+      url,
+      chips,
+      signals: summary,
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "one_failed" });
   }

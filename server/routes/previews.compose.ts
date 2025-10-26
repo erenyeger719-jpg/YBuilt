@@ -9,19 +9,25 @@ const requireMod: any = (await import('module')).createRequire(import.meta.url);
 const { safeJoinTeam } = requireMod('./_teamPaths');
 const { persistFork } = await import('../previews.storage.ts');
 
+function esc(s: string) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 // tiny base HTML
-function wrapHTML({ title, dark, body }: { title: string; dark: boolean; body: string }) {
+function wrapHTML({ title, dark, brand, body }: { title: string; dark: boolean; brand: string; body: string }) {
   const bg = dark ? '#0b0b0f' : '#ffffff';
   const fg = dark ? '#e8e8ee' : '#111111';
-  const brand = dark ? '#7c3aed' : '#6d28d9';
+  const brandColor = brand || (dark ? '#7c3aed' : '#6d28d9');
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>${title}</title>
+<title>${esc(title)}</title>
 <style>
-  :root { --bg:${bg}; --fg:${fg}; --brand:${brand}; }
+  :root { --bg:${bg}; --fg:${fg}; --brand:${brandColor}; }
   html,body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
   .wrap { max-width: 1100px; margin: 0 auto; padding: 56px 20px; }
   .btn { display:inline-block; background:var(--brand); color:white; padding:10px 16px; border-radius:10px; text-decoration:none; }
@@ -37,11 +43,24 @@ ${body}
 </html>`;
 }
 
+function applyCopy(html: string, copy: Record<string,string>) {
+  let out = html;
+  for (const [k,v] of Object.entries(copy || {})) {
+    const token = new RegExp(`\\{{2}${k}\\}{2}`, 'g'); // {{KEY}}
+    out = out.replace(token, esc(v));
+  }
+  // clean any leftover tokens
+  out = out.replace(/\{\{[A-Z0-9_]+\}\}/g, '');
+  return out;
+}
+
 router.post('/compose', async (req, res) => {
   try {
     const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
     const title = String(req.body?.title || 'Preview');
     const dark = Boolean(req.body?.dark || false);
+    const copy = (req.body?.copy || {}) as Record<string,string>;
+    const brand = String(req.body?.brand?.primary || '');
 
     if (!sections.length) return res.status(400).json({ ok:false, error:'no_sections' });
 
@@ -54,11 +73,12 @@ router.post('/compose', async (req, res) => {
       if (!fs.existsSync(file)) {
         return res.status(400).json({ ok:false, error:`missing_section:${id}` });
       }
-      htmlPieces.push(fs.readFileSync(file, 'utf8'));
+      const raw = fs.readFileSync(file, 'utf8');
+      htmlPieces.push(applyCopy(raw, copy));
     }
 
     const body = htmlPieces.join('\n\n');
-    const indexHtml = wrapHTML({ title, dark, body });
+    const indexHtml = wrapHTML({ title, dark, brand, body });
 
     // write to a team-scoped fork directory (reuses your existing storage)
     const teamId = (req as any).cookies?.teamId || (req.headers as any)['x-team-id'] || null;
