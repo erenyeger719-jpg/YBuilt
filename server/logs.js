@@ -1,195 +1,132 @@
 // server/logs.js
-import { EventEmitter } from "events";
+import { EventEmitter } from 'events';
 
 export const logsBus = new EventEmitter();
+logsBus.setMaxListeners(0);
 
-/* ----------------------------- tiny utils ----------------------------- */
-function durationMs(startNs) {
-  const diff = process.hrtime.bigint() - startNs;
-  return Math.round(Number(diff) / 1e6);
-}
-function pickRequestId(req, res) {
-  const fromHeader =
-    (typeof res.getHeader === "function" &&
-      (res.getHeader("x-request-id") || res.getHeader("X-Request-ID"))) ||
-    req.headers?.["x-request-id"];
-  return (
-    (req.id && String(req.id)) ||
-    (req.requestId && String(req.requestId)) ||
-    (fromHeader && String(fromHeader)) ||
-    ""
-  );
+// level order for comparisons (warn+ etc.)
+const LEVELS = ['debug', 'info', 'warn', 'error'];
+function normLevel(l) {
+  const x = String(l || '').toLowerCase();
+  return LEVELS.includes(x) ? x : 'info';
 }
 
-/* ----------------------------- history buffer ----------------------------- */
-const HISTORY_CAP = 500;
-const _history = [];
-function pushHistory(row) {
-  _history.push(row);
-  if (_history.length > HISTORY_CAP) _history.shift();
-}
-export function recentLogs(n = 100) {
-  return _history.slice(-Math.max(0, n));
-}
-export function findByRequestId(id) {
-  const needle = String(id || "");
-  if (!needle) return [];
-  return _history.filter(
-    (r) => r?.rid === needle || r?.reqId === needle || r?.requestId === needle
-  );
-}
+/** Normalize any row into one stable shape */
+export function normalizeLog(row = {}) {
+  const ts = typeof row.ts === 'number' ? row.ts : Date.now();
+  const level = normLevel(row.level);
+  const source = String(row.source || 'server');
+  const type = String(row.type || 'log');
 
-/* ----------------------------- canonical shape ----------------------------- */
-function toEvent(row) {
-  // Normalize to a single shape
-  return {
-    ts: row.ts ?? Date.now(),
-    level: row.level || "info",           // info|warn|error
-    type: row.type || row.kind || "log",  // request|http:done|client-error|client-request|client|exec|log
-    source: row.source || (row.kind === "client" ? "client" : "server"),
-    rid: row.rid || row.reqId || row.requestId || "",
-    method: row.method || "",
-    path: row.path || "",
-    status: typeof row.status === "number" ? row.status : undefined,
-    ms: typeof row.ms === "number" ? row.ms : undefined,
-    message: row.message,
-    stack: row.stack,
-    ip: row.ip,
-    ua: row.ua,
-    extras: row.extras, // optional bucket for odd fields
+  const ev = {
+    ts,
+    level,                // "debug" | "info" | "warn" | "error"
+    source,               // "http" | "exec" | "build" | "palette" | "server" | ...
+    type,                 // "request" | "sandbox" | "build" | "command" | "log"
+    rid: String(row.rid || ''),
+
+    // HTTP-ish fields
+    method: row.method ? String(row.method) : '',
+    path: row.path ? String(row.path) : '',
+    status: typeof row.status === 'number' ? row.status : undefined,
+    ms: typeof row.ms === 'number' ? row.ms : undefined,
+
+    // Text fields
+    message: row.message ? String(row.message) : '',
+    stack: row.stack ? String(row.stack) : undefined,
+
+    // Meta (not always present)
+    ip: row.ip ? String(row.ip) : undefined,
+    ua: row.ua ? String(row.ua) : undefined,
+    extras: row.extras ?? undefined,
   };
+
+  return ev;
 }
 
-/** Broadcast + store a canonical event */
-export function logEvent(io, row) {
-  const ev = toEvent(row);
-  pushHistory(ev);
-  // Fan-out: one canonical event + old back-compat events
-  const ns = io?.of?.("/logs");
-  if (ns) {
-    ns.emit("log:event", ev);
-    if (ev.source === "server") ns.emit("log:server", ev);
-    else ns.emit("log:client", ev);
-
-    // per-request room
-    if (ev.rid) {
-      ns.to(`req:${ev.rid}`).emit("log:event", ev);
-      if (ev.source === "server") ns.to(`req:${ev.rid}`).emit("log:server", ev);
-      else ns.to(`req:${ev.rid}`).emit("log:client", ev);
+function passesFilters(ev, filt) {
+  // level filter: "warn" (exact), or "warn+" (min)
+  if (filt.level) {
+    const want = String(filt.level).toLowerCase();
+    if (want.endsWith('+')) {
+      const base = want.slice(0, -1);
+      if (!LEVELS.includes(base)) return false;
+      if (LEVELS.indexOf(ev.level) < LEVELS.indexOf(base)) return false;
+    } else if (LEVELS.includes(want)) {
+      if (ev.level !== want) return false;
     }
   }
-  // process bus for any local listeners
-  logsBus.emit("log", ev);
+
+  // source filter: comma-separated list
+  if (filt.source) {
+    const set = new Set(String(filt.source).split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+    if (set.size && !set.has(ev.source.toLowerCase())) return false;
+  }
+
+  // rid filter: exact match
+  if (filt.rid) {
+    if (String(ev.rid || '') !== String(filt.rid)) return false;
+  }
+
+  return true;
 }
 
-/* ----------------------------- request wiring ----------------------------- */
-export function wireRequestLogs(app, io) {
-  app.use((req, res, next) => {
-    const startNs = process.hrtime.bigint();
-    const startWall = Date.now();
+/** Socket.IO namespace for live logs with simple filters */
+export function wireLogsNamespace(io) {
+  const nsp = io.of('/logs');
+  nsp.on('connection', (socket) => {
+    const filt = {
+      level: socket.handshake.query.level || '',   // e.g. "warn+" or "info"
+      source: socket.handshake.query.source || '', // e.g. "http,exec"
+      rid: socket.handshake.query.rid || '',       // exact rid
+    };
 
-    res.on("finish", () => {
-      const rid = pickRequestId(req, res);
-      const payload = {
-        ts: Date.now(),
-        source: "server",
-        type: "request",
-        level:
-          res.statusCode >= 500 ? "error" :
-          res.statusCode >= 400 ? "warn"  : "info",
-        rid,
-        method: req.method,
-        path: req.originalUrl || req.url,
-        status: res.statusCode,
-        ms: durationMs(startNs),
-        ip: req.ip,
-        ua: req.headers["user-agent"] || "",
-      };
+    // greet once with active filters
+    socket.emit('hello', { ok: true, filters: filt });
 
-      logEvent(io, payload);
+    const handler = (row) => {
+      const ev = normalizeLog(row);
+      if (!passesFilters(ev, filt)) return;
+      socket.emit('log', ev);
+    };
 
-      // Also emit http:done as a distinct type (kept for tools expecting it)
-      const httpDone = {
-        ts: Date.now(),
-        source: "server",
-        type: "http:done",
-        level: payload.level,
-        rid,
-        method: payload.method,
-        path: payload.path,
-        status: payload.status,
-        ms: Math.max(0, Date.now() - startWall),
-      };
-      logEvent(io, httpDone);
-    });
-
-    next();
+    logsBus.on('log', handler);
+    socket.on('disconnect', () => logsBus.off('log', handler));
   });
 }
 
-/* ----------------------------- namespace wiring ----------------------------- */
-export function wireLogsNamespace(io) {
-  const ns = io.of("/logs");
+/** Express request → log row (emits to logsBus) */
+export function wireRequestLogs(app /* , io not required */) {
+  app.use((req, res, next) => {
+    const start = Date.now();
+    const ip = req.ip;
+    const ua = req.get('user-agent') || '';
 
-  ns.on("connection", (socket) => {
-    // Backfill last 100 in canonical shape
-    try {
-      socket.emit("history", recentLogs(100));
-    } catch {}
+    res.on('finish', () => {
+      const ms = Date.now() - start;
+      const rid = (res.getHeader('X-Request-ID') || req.headers['x-request-id'] || '') + '';
+      const status = res.statusCode;
+      const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
 
-    // Follow a specific request id (two aliases)
-    socket.on("join-req", (reqId) => {
-      if (reqId) socket.join(`req:${reqId}`);
-    });
-    socket.on("join-rid", (rid) => {
-      if (rid) socket.join(`req:${rid}`);
-    });
-
-    // Client → server request rows
-    socket.on("client:req", (p = {}) => {
-      const rid = p.rid || "";
-      logEvent(io, {
+      logsBus.emit('log', {
         ts: Date.now(),
-        source: "client",
-        type: "client-request",
-        level: "info",
+        level,
+        source: 'http',
+        type: 'request',
         rid,
-        method: p.method,
-        path: p.path,
-        status: p.status,
-        ms: p.ms,
-        message: p.error ? String(p.error) : undefined,
+        method: req.method,
+        path: req.originalUrl || req.url || '',
+        status,
+        ms,
+        message: `${req.method} ${req.originalUrl || req.url} → ${status}`,
+        ip,
+        ua,
+        extras: {
+          resBytes: Number(res.getHeader('content-length') || 0) || undefined,
+        },
       });
     });
 
-    // Client errors
-    socket.on("client:error", (p = {}) => {
-      const rid = p.rid || p.reqId || "";
-      logEvent(io, {
-        ts: Date.now(),
-        source: "client",
-        type: p.type || "client-error",
-        level: "error",
-        rid,
-        message: p.message || "",
-        stack: p.stack || "",
-        path: p.path || "",
-      });
-    });
-
-    // Client console bridge (legacy)
-    socket.on("client:log", (p = {}) => {
-      const rid = p?.rid || p?.reqId || "";
-      logEvent(io, {
-        ts: Date.now(),
-        source: "client",
-        type: "client",
-        level: p.level || "error",
-        message: p.message || "",
-        stack: p.stack || "",
-        path: p.path || "",
-        rid,
-      });
-    });
+    next();
   });
 }

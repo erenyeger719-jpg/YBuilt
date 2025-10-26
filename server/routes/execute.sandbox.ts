@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { runSandbox } from "../sandbox/index.ts";
 import type { ExecRequest, ExecFile } from "../execute/types.ts";
+import { logsBus } from "../logs.js";
 
 const router = Router();
 
@@ -87,6 +88,29 @@ router.post("/run", async (req: Request, res: Response) => {
         ms: out.durationMs,
         exitCode: out.exitCode ?? null,
         bytes: { code: body.code.length, files: (body.files || []).length },
+      });
+    } catch {}
+
+    // NEW: JSONL audit line (picked up by logs.sink.jsonl)
+    try {
+      const rid = (res.getHeader("X-Request-ID") as string) || "";
+      logsBus.emit("log", {
+        level: "info",
+        source: "exec",
+        type: "sandbox",
+        rid,
+        method: req.method,
+        path: req.path,
+        status: out.ok ? 200 : 400,
+        ms: out.durationMs,
+        message: `exec ${body.lang} ${out.ok ? "ok" : out.reason || "fail"}`,
+        extras: {
+          lang: body.lang,
+          ok: out.ok,
+          reason: out.reason || null,
+          exitCode: out.exitCode ?? null,
+          sizes: { code: body.code.length, files: (body.files || []).length },
+        },
       });
     } catch {}
 

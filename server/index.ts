@@ -1,4 +1,5 @@
 // server/index.ts
+import './env.js';
 import 'dotenv/config';
 import express, { type Request, type Response } from 'express';
 import helmet from 'helmet';
