@@ -37,6 +37,12 @@ import { buildGrid } from "../design/grid.ts";
 import { evaluateDesign } from "../design/score.ts";
 import { motionVars } from "../design/motion.ts";
 import { sanitizeFacts } from "../intent/citelock.ts";
+import { searchBestTokens } from "../design/search.ts";
+import { recordShip, markConversion, kpiSummary, lastShipFor } from "../metrics/outcome.ts";
+import { pickVariant, recordSectionOutcome } from "../sections/bandits.ts";
+import { buildProof } from "../intent/citelock.pro.ts";
+import { checkPerfBudget, downgradeSections } from "../perf/budgets.ts";
+import { buildSEO } from "../seo/og.ts";
 import crypto from "crypto";
 
 // --- SUP ALGO: tiny metrics stores ---
@@ -523,11 +529,17 @@ router.post("/act", async (req, res) => {
         const sectionsIn = Array.isArray(action.args?.sections)
           ? action.args.sections
           : spec?.layout?.sections || [];
+
+        // Bandit: pick section variants per audience (safe no-op if none)
+        const intentFromSpec = spec?.intent || {};
+        const audienceKey = String(spec?.audience || intentFromSpec?.audience || "all");
+        const banditSections = sectionsIn.map((id) => pickVariant(id, audienceKey));
+
         const dark = !!spec?.brand?.dark;
         const title = String(spec?.summary || "Preview");
 
         const proposed = {
-          sections: sectionsIn,
+          sections: banditSections,
           copy: action.args?.copy || spec?.copy || {},
           brand: action.args?.brand || (spec?.brandColor ? { primary: spec.brandColor } : {}),
         };
@@ -558,14 +570,24 @@ router.post("/act", async (req, res) => {
           Object.assign(copyWithDefaults, copyPatch);
         } catch {}
 
+        // Keep designer context accessible for later KPI record
+        let tokens;
+        let toneIn;
+        let darkIn;
+
         // --- DESIGNER AI: tokens + grid + checks ---
         try {
           const primaryIn = spec?.brandColor || spec?.brand?.primary || "#6d28d9";
-          const toneIn = spec?.brand?.tone || "serious";
-          const darkIn = !!spec?.brand?.dark;
+          toneIn = spec?.brand?.tone || "serious";
+          darkIn = !!spec?.brand?.dark;
 
-          // 1) Tokens & grid
-          let tokens = tokenMixer({ primary: primaryIn, dark: darkIn, tone: toneIn });
+          // 1) Tokens & grid (search best first)
+          const { best: bestTokens } = searchBestTokens({
+            primary: primaryIn,
+            dark: darkIn,
+            tone: toneIn,
+          });
+          tokens = bestTokens;
           const grid = buildGrid({ density: toneIn === "minimal" ? "minimal" : "normal" });
 
           // 2) Evaluate
@@ -603,9 +625,42 @@ router.post("/act", async (req, res) => {
 
         // attach motion tokens too (pure CSS vars, zero-LLM)
         try {
-          const toneIn = spec?.brand?.tone || "serious";
-          const motion = motionVars(toneIn);
+          const toneForMotion = spec?.brand?.tone || "serious";
+          const motion = motionVars(toneForMotion);
           prep.brand = { ...(prep.brand || {}), motion: motion.cssVars };
+        } catch {}
+
+        // Perf governor (lite): downgrade if over cap, then signal
+        try {
+          const pg = checkPerfBudget(prep.sections);
+          if (!pg.ok) {
+            const before = prep.sections.slice();
+            prep.sections = downgradeSections(prep.sections);
+            pushSignal(req.body?.sessionId || "anon", {
+              ts: Date.now(),
+              kind: "perf_downgrade",
+              data: { before, after: prep.sections, overBy: pg.overBy },
+            });
+          }
+        } catch {}
+
+        // OG / social meta from tokens + copy
+        try {
+          const meta = buildSEO({
+            title,
+            description: copyWithDefaults?.HERO_SUBHEAD || copyWithDefaults?.TAGLINE || "",
+            brand: prep.brand,
+            url: null,
+          });
+          prep.brand = { ...(prep.brand || {}), meta }; // harmless if composer ignores it
+        } catch {}
+
+        // CiteLock-Pro (local evidence) — annotate copy and keep a proof map
+        let proofData = null;
+        try {
+          const pr = buildProof(copyWithDefaults);
+          Object.assign(copyWithDefaults, pr.copyPatch);
+          proofData = pr.proof;
         } catch {}
 
         // CiteLock-lite: neutralize risky claims unless there's a source
@@ -673,6 +728,61 @@ router.post("/act", async (req, res) => {
           } catch {}
         } catch {}
 
+        // Record ship KPI snapshot (best-effort, resilient if tokens are missing)
+        try {
+          const ev2 = tokens ? evaluateDesign(tokens) : { a11yPass: null, visualScore: null };
+          const primaryForBrand =
+            (tokens && tokens.palette && tokens.palette.primary) ||
+            spec?.brandColor ||
+            spec?.brand?.primary ||
+            null;
+
+          recordShip({
+            ts: Date.now(),
+            pageId: keyNow,
+            url: data?.url || null,
+            sections: prep.sections,
+            brand: { primary: primaryForBrand, tone: toneIn, dark: darkIn },
+            scores: {
+              visual: ev2.visualScore ?? null,
+              a11y: ev2.a11yPass ?? null,
+              bytes: null,
+            },
+            sessionId: String(req.body?.sessionId || "anon"),
+          });
+        } catch {}
+
+        // Persist a tiny Proof Card (best-effort) with counts and proof_ok
+        try {
+          const proofDir = ".cache/proof";
+          fs.mkdirSync(proofDir, { recursive: true });
+          const evPC = tokens ? evaluateDesign(tokens) : { a11yPass: null, visualScore: null };
+          const counts = {};
+          if (proofData) {
+            for (const v of Object.values(proofData)) {
+              counts[v.status] = (counts[v.status] || 0) + 1;
+            }
+          }
+          const proof_ok = !Object.values(proofData || {}).some((p) => p.status === "redacted");
+
+          fs.writeFileSync(
+            `${proofDir}/${keyNow}.json`,
+            JSON.stringify(
+              {
+                pageId: keyNow,
+                url: data?.url || null,
+                a11y: evPC.a11yPass,
+                visual: evPC.visualScore,
+                facts: proofData || {},
+                fact_counts: counts,
+                proof_ok,
+              },
+              null,
+              2
+            )
+          );
+        } catch {}
+
         // edits_to_ship: count chip applies since last ship
         try {
           const sid = String(req.body?.sessionId || "anon");
@@ -680,7 +790,8 @@ router.post("/act", async (req, res) => {
           recordEditsMetric(edits);
         } catch {}
 
-        return { kind: "compose", ...data };
+        // return pageId so client can hit KPIs/Proof directly
+        return { kind: "compose", pageId: keyNow, ...data };
       }
 
       return { error: `unknown_action:${action.kind}` };
@@ -1165,6 +1276,42 @@ router.get("/metrics", (req, res) => {
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "metrics_failed" });
+  }
+});
+
+// --- KPI hooks ---
+router.post("/kpi/convert", (req, res) => {
+  try {
+    const { pageId = "" } = req.body || {};
+    if (!pageId) return res.status(400).json({ ok: false, error: "missing_pageId" });
+    markConversion(String(pageId));
+    try {
+      const last = lastShipFor(String(pageId));
+      if (last) recordSectionOutcome(last.sections || [], "all", true);
+    } catch {}
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "convert_failed" });
+  }
+});
+
+router.get("/kpi", (_req, res) => {
+  try {
+    return res.json({ ok: true, ...kpiSummary() });
+  } catch {
+    return res.status(500).json({ ok: false, error: "kpi_failed" });
+  }
+});
+
+// --- Proof Card reader ---
+router.get("/proof/:pageId", (req, res) => {
+  try {
+    const p = `.cache/proof/${String(req.params.pageId)}.json`;
+    if (!fs.existsSync(p)) return res.status(404).json({ ok: false, error: "not_found" });
+    const j = JSON.parse(fs.readFileSync(p, "utf8"));
+    return res.json({ ok: true, proof: j });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "proof_failed" });
   }
 });
 
