@@ -27,7 +27,7 @@ import {
   pickExpertFor,
   recordExpertOutcome,
 } from "../intent/router.brain.ts";
-import { expertByKey, expertsForTask } from "../intent/experts.ts";
+import { expertsForTask } from "../intent/experts.ts";
 import { queueShadowEval } from "../intent/shadowEval.ts";
 import { runBuilder } from "../intent/builder.ts";
 import { generateMedia } from "../media/pool.ts";
@@ -48,6 +48,7 @@ import { tokenBiasFor, recordTokenWin, recordTokenSeen, retrainTasteNet, maybeNi
 import { quickLayoutSanity, quickPerfEst, matrixPerfEst } from "../qa/layout.sanity.ts";
 import { checkCopyReadability } from "../qa/readability.guard.ts";
 import { addEvidence, rebuildEvidenceIndex, searchEvidence as _searchEvidence } from "../intent/evidence.ts";
+import { runSnapshots } from "../qa/snapshots.ts";
 import crypto from "crypto";
 
 // Nightly TasteNet retrain (best-effort, no-op if not due)
@@ -631,7 +632,7 @@ router.post("/act", async (req, res) => {
         // Personalize sections slightly based on audience (non-creepy, bounded)
         const sectionsPersonal = segmentSwapSections(sectionsIn, audienceKey);
 
-        // Optional: seed bandit pool with sibling variants when provided
+      // Optional: seed bandit pool with sibling variants when provided
         try {
           const hints = action.args?.variantHints;
           if (hints && typeof hints === "object") {
@@ -808,7 +809,8 @@ router.post("/act", async (req, res) => {
         // 🟡 Uncertainty Loopback (auto-chip on low proof/readability)
         try {
           const redactedCount = Object.values(proofData || {}).filter(p => p.status === "redacted").length;
-          const readabilityLow = false; // flip to true if your readability score falls below threshold
+          const r0 = checkCopyReadability(copyWithDefaults);
+          const readabilityLow = (r0?.score ?? 100) < 60; // tweak threshold if you want
           const needSoften = redactedCount > 0 || readabilityLow;
 
           if (needSoften) {
@@ -822,17 +824,15 @@ router.post("/act", async (req, res) => {
           }
 
           // If goal is empty, prefer an email signup CTA
-          try {
-            if (!intentFromSpec.goal) {
-              const softCTA = applyChipLocal(
-                { brand: prep.brand, layout: { sections: prep.sections }, copy: copyWithDefaults },
-                "Use email signup CTA"
-              );
-              prep.brand = softCTA.brand;
-              prep.sections = softCTA.layout.sections;
-              Object.assign(copyWithDefaults, softCTA.copy || {});
-            }
-          } catch {}
+          if (!intentFromSpec.goal) {
+            const softCTA = applyChipLocal(
+              { brand: prep.brand, layout: { sections: prep.sections }, copy: copyWithDefaults },
+              "Use email signup CTA"
+            );
+            prep.brand = softCTA.brand;
+            prep.sections = softCTA.layout.sections;
+            Object.assign(copyWithDefaults, softCTA.copy || {});
+          }
         } catch {}
 
         // ProofGate-Lite: soft warning + stronger neutralization for critical fields
@@ -969,6 +969,31 @@ router.post("/act", async (req, res) => {
                 });
               } catch {}
             }
+          }
+        } catch {}
+
+        // Device snapshot sanity (optional, non-blocking)
+        try {
+          if (process.env.QA_DEVICE_SNAPSHOTS === "1" && (data?.url || data?.path)) {
+            const pageUrl = data?.url || data?.path;
+            const abs = /^https?:\/\//i.test(pageUrl) ? pageUrl : `${baseUrl(req)}${pageUrl}`;
+            (async () => {
+              try {
+                const snap = await runSnapshots(abs, keyNow);
+                pushSignal(String(req.body?.sessionId || "anon"), {
+                  ts: Date.now(),
+                  kind: "device_snapshot",
+                  data: { issues: snap.issues.slice(0, 6) }
+                });
+                if (snap.issues.length) {
+                  pushSignal(String(req.body?.sessionId || "anon"), {
+                    ts: Date.now(),
+                    kind: "layout_warn",
+                    data: { source: "snapshots", issues: snap.issues.slice(0, 6) }
+                  });
+                }
+              } catch {}
+            })();
           }
         } catch {}
 

@@ -13,8 +13,11 @@ const { persistFork } = await import('../previews.storage.ts');
 
 function esc(s: string) {
   return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 function safeColor(input: string, fallback = '#6d28d9') {
   const s = String(input || '').trim();
@@ -39,9 +42,12 @@ function tokensForTier(tier: Tier, dark: boolean, brand: string) {
     gradFrom: brandHex,
     gradTo: dark ? '#2f1b7c' : '#8b5cf6',
   };
-  if (tier === 'minimal') return { ...base, radius: '10px', shadow: 'none', gap: '16px', space: '44px', btnPad: '10px 16px', border: '1px solid rgba(125,125,150,0.12)' };
-  if (tier === 'playful') return { ...base, radius: '18px', shadow: dark ? '0 16px 36px rgba(0,0,0,0.45)' : '0 14px 34px rgba(0,0,0,0.2)', gap: '22px', space: '60px' };
-  if (tier === 'brutalist') return { ...base, radius: '0px', shadow: 'none', gap: '18px', space: '48px', border: dark ? '2px solid #fff' : '2px solid #111' };
+  if (tier === 'minimal')
+    return { ...base, radius: '10px', shadow: 'none', gap: '16px', space: '44px', btnPad: '10px 16px', border: '1px solid rgba(125,125,150,0.12)' };
+  if (tier === 'playful')
+    return { ...base, radius: '18px', shadow: dark ? '0 16px 36px rgba(0,0,0,0.45)' : '0 14px 34px rgba(0,0,0,0.2)', gap: '22px', space: '60px' };
+  if (tier === 'brutalist')
+    return { ...base, radius: '0px', shadow: 'none', gap: '18px', space: '48px', border: dark ? '2px solid #fff' : '2px solid #111' };
   return base; // premium default
 }
 function cssVars(t: ReturnType<typeof tokensForTier>, dark: boolean) {
@@ -55,8 +61,18 @@ function cssVars(t: ReturnType<typeof tokensForTier>, dark: boolean) {
   --border:${t.border}; --card-bg:${t.cardBg};
   --grad-from:${t.gradFrom}; --grad-to:${t.gradTo};
 }`;}
-function wrapHTML({ title, dark, brand, tier, body }:{
-  title:string; dark:boolean; brand:string; tier:Tier; body:string;
+function wrapHTML({
+  title,
+  dark,
+  brand,
+  tier,
+  body,
+}: {
+  title: string;
+  dark: boolean;
+  brand: string;
+  tier: Tier;
+  body: string;
 }) {
   const tk = tokensForTier(tier || 'premium', dark, brand);
   const vars = cssVars(tk, dark);
@@ -78,76 +94,94 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:ui
 @media (max-width:800px){.grid{grid-template-columns:1fr}}
 </style></head><body>
 ${body}
-</body></html>`;}
-function applyCopy(html: string, copy: Record<string,string>) {
+</body></html>`;
+}
+function applyCopy(html: string, copy: Record<string, string>) {
   let out = html;
-  for (const [k,v] of Object.entries(copy||{})) {
-    out = out.replace(new RegExp(`\\{{2}${k}\\}{2}`,'g'), esc(v));
+  for (const [k, v] of Object.entries(copy || {})) {
+    out = out.replace(new RegExp(`\\{{2}${k}\\}{2}`, 'g'), esc(v));
   }
-  out = out.replace(/\{\{[A-Z0-9_]+\}\}/g,'');      // remove leftovers
-  out = out.replace(/\sstyle="[^"]*"/g,'');         // strip inline styles
+  out = out.replace(/\{\{[A-Z0-9_]+\}\}/g, ''); // remove leftovers
+  out = out.replace(/\sstyle="[^"]*"/g, ''); // strip inline styles
   return out;
 }
 // tiny QA/autofix: ensure <h1>, add aria-label on .btn links
 function qaAndAutofix(indexHtml: string) {
   let html = indexHtml;
-  if (!/<h1[\s>]/i.test(html)) html = html.replace(/<h2(\s|>)/i,'<h1$1').replace(/<\/h2>/i,'</h1>');
-  html = html.replace(/<a([^>]*class="[^"]*btn[^"]*"[^>]*)>([^<]+)<\/a>/gi,(m,attrs,text)=>{
+  if (!/<h1[\s>]/i.test(html)) html = html.replace(/<h2(\s|>)/i, '<h1$1').replace(/<\/h2>/i, '</h1>');
+  html = html.replace(/<a([^>]*class="[^"]*btn[^"]*"[^>]*)>([^<]+)<\/a>/gi, (m, attrs, text) => {
     if (/aria-label=/.test(attrs)) return m;
-    const aria = ` aria-label="${esc(String(text||'').trim().replace(/\s+/g,' '))}"`;
+    const aria = ` aria-label="${esc(String(text || '').trim().replace(/\s+/g, ' '))}"`;
     return `<a${attrs}${aria}>${text}</a>`;
   });
   return html;
 }
-function stableStringify(o:any):string{
-  if (Array.isArray(o)) return '['+o.map(stableStringify).join(',')+']';
-  if (o && typeof o==='object') return '{'+Object.keys(o).sort().map(k=>JSON.stringify(k)+':'+stableStringify(o[k])).join(',')+'}';
+function stableStringify(o: any): string {
+  if (Array.isArray(o)) return '[' + o.map(stableStringify).join(',') + ']';
+  if (o && typeof o === 'object') return '{' + Object.keys(o).sort().map((k) => JSON.stringify(k) + ':' + stableStringify(o[k])).join(',') + '}';
   return JSON.stringify(o);
 }
 
-router.post('/compose', async (req,res)=>{
-  try{
-    const sections = Array.isArray(req.body?.sections)? req.body.sections : [];
+router.post('/compose', async (req, res) => {
+  try {
+    const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
     const title = String(req.body?.title || 'Preview');
-    const dark  = !!req.body?.dark;
-    const copy  = (req.body?.copy || {}) as Record<string,string>;
+    const dark = !!req.body?.dark;
+    const copy = (req.body?.copy || {}) as Record<string, string>;
     const brand = String(req.body?.brand?.primary || '');
-    const tier: Tier = (String(req.body?.tier || 'premium') as Tier);
-    if (!sections.length) return res.status(400).json({ ok:false, error:'no_sections' });
+    const tier: Tier = String(req.body?.tier || 'premium') as Tier;
+    if (!sections.length) return res.status(400).json({ ok: false, error: 'no_sections' });
 
     const keyBrand = safeColor(brand);
-    const payloadKey = createHash('sha1').update(stableStringify({ sections, title, dark, copy, brand:keyBrand, tier })).digest('hex');
+    const stripJS = !!(req.body as any)?.stripJS; // include in cache key
+    const payloadKey = createHash('sha1')
+      .update(stableStringify({ sections, title, dark, copy, brand: keyBrand, tier, stripJS }))
+      .digest('hex');
     const hit = CACHE.get(payloadKey);
-    if (hit) return res.json({ ok:true, path:`/previews/forks/${hit.slug}/`, url: hit.url || `/previews/forks/${hit.slug}/` });
+    if (hit) return res.json({ ok: true, path: `/previews/forks/${hit.slug}/`, url: hit.url || `/previews/forks/${hit.slug}/` });
 
     const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || 'previews');
     const partsDir = path.join(PREVIEWS_DIR, 'sections');
 
-    const htmlPieces:string[] = [];
+    const htmlPieces: string[] = [];
     for (const id of sections) {
-      const file = path.join(partsDir, `${id}.html`);
-      if (!fs.existsSync(file)) return res.status(400).json({ ok:false, error:`missing_section:${id}` });
-      htmlPieces.push(applyCopy(fs.readFileSync(file,'utf8'), copy));
+      let file = path.join(partsDir, `${id}.html`);
+      if (!fs.existsSync(file)) {
+        const baseId = String(id).split('@')[0];
+        file = path.join(partsDir, `${baseId}.html`);
+      }
+      if (!fs.existsSync(file)) return res.status(400).json({ ok: false, error: `missing_section:${id}` });
+      htmlPieces.push(applyCopy(fs.readFileSync(file, 'utf8'), copy));
     }
 
     const body = htmlPieces.join('\n\n');
     const base = wrapHTML({ title, dark, brand, tier, body });
-    const indexHtml = qaAndAutofix(base);
+    let html = qaAndAutofix(base);
+
+    // --- JS stripping (optional) ---
+    if (stripJS) {
+      // remove all script tags
+      html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+      // remove inline event handlers like onclick=, onload=, etc.
+      html = html.replace(/\s+on[a-z]+\s*=\s*"(?:[^"\\]|\\.)*"/gi, '');
+      html = html.replace(/\s+on[a-z]+\s*=\s*'(?:[^'\\]|\\.)*'/gi, '');
+    }
+    // -------------------------------
 
     const teamId = (req as any).cookies?.teamId || (req.headers as any)['x-team-id'] || null;
     const forksDir = safeJoinTeam(teamId, '/previews/forks');
     await fs.promises.mkdir(forksDir, { recursive: true });
 
-    const slug = `compose-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
+    const slug = `compose-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const destDir = path.join(forksDir, slug);
-    await fs.promises.mkdir(destDir,{recursive:true});
-    await fs.promises.writeFile(path.join(destDir,'index.html'), indexHtml, 'utf8');
+    await fs.promises.mkdir(destDir, { recursive: true });
+    await fs.promises.writeFile(path.join(destDir, 'index.html'), html, 'utf8');
 
     const persisted = await persistFork({ slug, dir: destDir });
     CACHE.set(payloadKey, { slug, url: persisted.url || '' });
-    return res.json({ ok:true, path:`/previews/forks/${slug}/`, url: persisted.url || `/previews/forks/${slug}/` });
-  } catch(e){
-    return res.status(500).json({ ok:false, error:'compose_failed' });
+    return res.json({ ok: true, path: `/previews/forks/${slug}/`, url: persisted.url || `/previews/forks/${slug}/` });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'compose_failed' });
   }
 });
 
