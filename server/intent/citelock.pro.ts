@@ -1,59 +1,60 @@
 // server/intent/citelock.pro.ts
-import fs from "fs";
-import path from "path";
+import { searchEvidence, entails } from "./evidence.ts";
 
-type Proof = Record<string, { status: "ok" | "evidenced" | "redacted"; ref?: string }>;
+type ProofStatus = "evidenced" | "redacted" | "unknown";
+type ProofRow = { field: string; claim: string; status: ProofStatus; score?: number; source?: {url?:string; title?:string}; snippet?: string; reason?: string };
+type ProofMap = Record<string, ProofRow>;
 
-const SUS = /\b(#1|No\.?\s?1|top|best|leading|largest)\b|\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?(?:%|percent|x|k|m|b)\b|\b(since|est\.?)\s*20\d{2}\b/i;
+const CRITICAL_FIELDS = ["HEADLINE","HERO_SUBHEAD","TAGLINE"];
+const FACTY_PREFIXES = ["STAT_", "FACT_", "PROOF_", "NUM_", "METRIC_"];
 
-function tokenize(s: string) { return String(s).toLowerCase().match(/[a-z0-9.%]+/g) || []; }
-
-function loadCorpus(dir = ".data/refs") {
-  const docs: { file: string; text: string }[] = [];
-  try {
-    if (!fs.existsSync(dir)) return docs;
-    for (const f of fs.readdirSync(dir)) {
-      if (!/\.(md|txt|json)$/i.test(f)) continue;
-      const p = path.join(dir, f);
-      const text = fs.readFileSync(p, "utf8").slice(0, 100_000);
-      docs.push({ file: p, text });
-    }
-  } catch {}
-  return docs;
+function looksFactual(s: any){
+  if (typeof s !== "string") return false;
+  if (CRITICAL_FIELDS.some(f=>s.includes(f))) return true;
+  // heuristic: numbers / % / x multipliers / superlatives
+  return /\b\d|%|x\b/i.test(s) || /\b(best|leading|largest|#1|top)\b/i.test(s);
 }
 
-function scoreOverlap(qTokens: string[], doc: { file: string; text: string }) {
-  const set = new Set(tokenize(doc.text));
-  let hits = 0;
-  for (const t of qTokens) if (set.has(t)) hits++;
-  return hits;
+function soften(s: string){
+  return s
+    .replace(/\s*\(ref:\s*[^)]+\)\s*$/i, "")
+    .replace(/\b(#1|No\.?\s?1|top|best|leading|largest)\b/gi, "trusted")
+    .replace(/\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?(%|percent)\b/gi, "many")
+    .replace(/\b\d+(?:\.\d+)?\s*x\b/gi, "multi-fold");
 }
 
-export function buildProof(copy: Record<string, string> = {}) {
-  const corpus = loadCorpus();
-  const proof: Proof = {};
-  const patch: Record<string, string> = {};
+function isFactKey(k: string){
+  return CRITICAL_FIELDS.includes(k) || FACTY_PREFIXES.some(p=> k.startsWith(p));
+}
 
-  for (const [k, v] of Object.entries(copy)) {
-    if (typeof v !== "string") continue;
-    if (!SUS.test(v)) { proof[k] = { status: "ok" }; continue; }
+export function buildProof(copy: Record<string, any>){
+  const proof: ProofMap = {};
+  const copyPatch: Record<string, string> = {};
 
-    let best: { file: string; score: number } | null = null;
-    const q = tokenize(v).filter((t) => t.length > 2);
-    for (const d of corpus) {
-      const s = scoreOverlap(q, d);
-      if (s > (best?.score || 0)) best = { file: d.file, score: s };
+  for (const [k, v] of Object.entries(copy || {})) {
+    if (!isFactKey(k) && !looksFactual(v)) continue;
+    const claim = String(v || "").trim();
+    if (!claim) continue;
+
+    const hits = searchEvidence(claim, 5);
+    const top = hits[0];
+
+    if (top) {
+      const ent = entails(claim, top.text);
+      if (ent.ok) {
+        // keep claim; add small proof strip (non-breaking)
+        const ref = top.source?.title ? top.source.title : (top.source?.url || "source");
+        copyPatch[k] = `${claim.replace(/\s*\(ref:\s*[^)]+\)\s*$/i,"")} (ref: ${ref})`;
+        proof[k] = { field: k, claim, status: "evidenced", score: ent.score, source: top.source, snippet: top.text, reason: ent.reason };
+        continue;
+      }
     }
 
-    if (best && best.score >= 4) {
-      const ref = `ref:${path.basename(best.file)}`;
-      proof[k] = { status: "evidenced", ref };
-      // Add a tiny "(ref: ...)" so sanitizeFacts will skip this line
-      patch[k] = `${v} (ref: ${path.basename(best.file)})`;
-    } else {
-      proof[k] = { status: "redacted" };
-      // Leave redaction to sanitizeFacts downstream
-    }
+    // Not entailed → redact/soften, mark status
+    const softened = soften(claim);
+    if (softened !== claim) copyPatch[k] = softened;
+    proof[k] = { field: k, claim, status: hits.length ? "redacted" : "unknown", score: hits[0]?.score, source: hits[0]?.source, snippet: hits[0]?.text, reason: hits.length ? "not_entailed" : "no_evidence" };
   }
-  return { proof, copyPatch: patch };
+
+  return { copyPatch, proof };
 }

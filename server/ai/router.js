@@ -37,13 +37,21 @@ import { buildGrid } from "../design/grid.ts";
 import { evaluateDesign } from "../design/score.ts";
 import { motionVars } from "../design/motion.ts";
 import { sanitizeFacts } from "../intent/citelock.ts";
-import { searchBestTokens } from "../design/search.ts";
+import { searchBestTokensCached as searchBestTokens } from "../design/search.memo.ts";
 import { recordShip, markConversion, kpiSummary, lastShipFor } from "../metrics/outcome.ts";
-import { pickVariant, recordSectionOutcome } from "../sections/bandits.ts";
+import { pickVariant, recordSectionOutcome, seedVariants } from "../sections/bandits.ts";
 import { buildProof } from "../intent/citelock.pro.ts";
-import { checkPerfBudget, downgradeSections } from "../perf/budgets.ts";
+import { checkPerfBudget, downgradeSections, shouldStripJS } from "../perf/budgets.ts";
 import { buildSEO } from "../seo/og.ts";
+import { suggestFromDNA, recordDNA, learnFromChip } from "../brand/dna.ts";
+import { tokenBiasFor, recordTokenWin, recordTokenSeen, retrainTasteNet, maybeNightlyRetrain } from "../design/outcome.priors.ts";
+import { quickLayoutSanity, quickPerfEst, matrixPerfEst } from "../qa/layout.sanity.ts";
+import { checkCopyReadability } from "../qa/readability.guard.ts";
+import { addEvidence, rebuildEvidenceIndex, searchEvidence as _searchEvidence } from "../intent/evidence.ts";
 import crypto from "crypto";
+
+// Nightly TasteNet retrain (best-effort, no-op if not due)
+try { maybeNightlyRetrain(); } catch {}
 
 // --- SUP ALGO: tiny metrics stores ---
 const CACHE_DIR = ".cache";
@@ -70,6 +78,19 @@ const FILE_RETR = ".cache/retrieval.hits.json"; // {tries:number, hits:number}
 const FILE_TTU = ".cache/time_to_url.json"; // {ema_ms:number, n:number}
 const FILE_EDITS_SESS = ".cache/edits.sessions.json"; // { [sessionId]: number }
 const FILE_EDITS_METR = ".cache/edits.metrics.json"; // {ema:number, n:number}
+
+// --- Economic flywheel: cents/tokens per URL ---
+const FILE_URLCOST = ".cache/url.costs.json";
+function recordUrlCost(pageId, addCents = 0, addTokens = 0) {
+  if (!pageId) return;
+  const s = loadJSON(FILE_URLCOST, {});
+  const cur = s[pageId] || { cents: 0, tokens: 0, ts: Date.now() };
+  cur.cents = Number((cur.cents + (addCents || 0)).toFixed(4));
+  cur.tokens = (cur.tokens || 0) + (addTokens || 0);
+  cur.ts = Date.now();
+  s[pageId] = cur;
+  saveJSON(FILE_URLCOST, s);
+}
 
 function retrMark(hit) {
   const s = loadJSON(FILE_RETR, { tries: 0, hits: 0 });
@@ -104,6 +125,14 @@ function recordEditsMetric(k) {
   m.n = (m.n || 0) + 1;
   saveJSON(FILE_EDITS_METR, m);
 }
+
+// Variant hints to seed bandits (discovery)
+const VARIANT_HINTS = {
+  "hero-basic": ["hero-basic", "hero-basic@b"],
+  "features-3col": ["features-3col", "features-3col@alt"],
+  "pricing-simple": ["pricing-simple", "pricing-simple@a"],
+  "faq-accordion": ["faq-accordion", "faq-accordion@dense"],
+};
 
 export function pickModel(task, tier = "balanced") {
   const map = {
@@ -163,6 +192,17 @@ async function fetchJSONWithTimeout(url, opts, timeoutMs = 20000) {
   }
 }
 
+async function fetchTextWithTimeout(url, timeoutMs = 8000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
+    return await r.text();
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 // near-consensus helpers for review
 function issuesKeyset(issues = []) {
   return new Set(
@@ -178,6 +218,20 @@ function jaccard(aSet, bSet) {
   for (const v of a) if (b.has(v)) inter++;
   const union = a.size + b.size - inter || 1;
   return inter / union;
+}
+
+// Personalization without creep: 1–2 section swaps max
+function segmentSwapSections(ids = [], audience = "all") {
+  const set = new Set((ids || []).map(String));
+  if (audience === "developers") {
+    set.add("features-3col");         // add 3-card features
+    set.delete("pricing-simple");     // keep page quieter
+  } else if (audience === "founders") {
+    set.add("pricing-simple");        // show pricing early
+  } else if (audience === "shoppers") {
+    set.add("features-3col");
+  }
+  return Array.from(set);
 }
 
 // Very cheap intent guesser for common phrases (skips a model call a lot)
@@ -495,6 +549,46 @@ router.post("/media", async (req, res) => {
   }
 });
 
+// --- Evidence admin (CiteLock-Pro) ---
+router.post("/evidence/add", (req, res) => {
+  try {
+    const { id, url, title, text = "" } = req.body || {};
+    if (!text) return res.status(400).json({ ok: false, error: "missing_text" });
+    const out = addEvidence({ id, url, title, text });
+    return res.json({ ok: true, ...out });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "evidence_add_failed" });
+  }
+});
+
+router.post("/evidence/reindex", (_req, res) => {
+  try {
+    return res.json({ ok: true, ...rebuildEvidenceIndex() });
+  } catch {
+    return res.status(500).json({ ok: false, error: "evidence_reindex_failed" });
+  }
+});
+
+// optional: quick search for debugging
+router.get("/evidence/search", (req, res) => {
+  try {
+    const q = String(req.query.q || "");
+    return res.json({ ok: true, q, hits: _searchEvidence(q, 5) });
+  } catch {
+    return res.status(500).json({ ok: false, error: "evidence_search_failed" });
+  }
+});
+
+// --- TasteNet-lite admin ---
+router.post("/taste/retrain", (_req, res) => {
+  try {
+    const out = retrainTasteNet(1, 3);
+    return res.json({ ok: true, ...out });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "taste_retrain_failed" });
+  }
+});
+
 // ---------- act ----------
 router.post("/act", async (req, res) => {
   try {
@@ -530,10 +624,27 @@ router.post("/act", async (req, res) => {
           ? action.args.sections
           : spec?.layout?.sections || [];
 
-        // Bandit: pick section variants per audience (safe no-op if none)
+        // Bandit audience key derived from intent/spec
         const intentFromSpec = spec?.intent || {};
         const audienceKey = String(spec?.audience || intentFromSpec?.audience || "all");
-        const banditSections = sectionsIn.map((id) => pickVariant(id, audienceKey));
+
+        // Personalize sections slightly based on audience (non-creepy, bounded)
+        const sectionsPersonal = segmentSwapSections(sectionsIn, audienceKey);
+
+        // Optional: seed bandit pool with sibling variants when provided
+        try {
+          const hints = action.args?.variantHints;
+          if (hints && typeof hints === "object") {
+            for (const id of sectionsIn) {
+              const base = String(id).split("@")[0];
+              const siblings = Array.isArray(hints[base]) ? hints[base] : [];
+              if (siblings.length) seedVariants(base, audienceKey, siblings);
+            }
+          }
+        } catch {}
+
+        // Bandit: pick section variants per audience (safe no-op if none)
+        const banditSections = sectionsPersonal.map((id) => pickVariant(id, audienceKey));
 
         const dark = !!spec?.brand?.dark;
         const title = String(spec?.summary || "Preview");
@@ -577,15 +688,29 @@ router.post("/act", async (req, res) => {
 
         // --- DESIGNER AI: tokens + grid + checks ---
         try {
-          const primaryIn = spec?.brandColor || spec?.brand?.primary || "#6d28d9";
-          toneIn = spec?.brand?.tone || "serious";
-          darkIn = !!spec?.brand?.dark;
+          const bias = tokenBiasFor(String(req.body?.sessionId || "anon"));
+
+          const primaryIn =
+            spec?.brandColor ||
+            spec?.brand?.primary ||
+            bias.primary ||
+            "#6d28d9";
+
+          toneIn =
+            spec?.brand?.tone ||
+            bias.tone ||
+            "serious";
+
+          darkIn =
+            (spec?.brand?.dark ?? (typeof bias.dark === "boolean" ? bias.dark : false));
 
           // 1) Tokens & grid (search best first)
           const { best: bestTokens } = searchBestTokens({
             primary: primaryIn,
             dark: darkIn,
             tone: toneIn,
+            goal: intentFromSpec.goal || "",
+            industry: intentFromSpec.industry || "",
           });
           tokens = bestTokens;
           const grid = buildGrid({ density: toneIn === "minimal" ? "minimal" : "normal" });
@@ -664,9 +789,11 @@ router.post("/act", async (req, res) => {
         } catch {}
 
         // CiteLock-lite: neutralize risky claims unless there's a source
+        let flags = [];
         try {
-          const { copyPatch: factPatch, flags } = sanitizeFacts(copyWithDefaults);
+          const { copyPatch: factPatch, flags: _flags } = sanitizeFacts(copyWithDefaults);
           Object.assign(copyWithDefaults, factPatch);
+          flags = _flags || [];
           if (flags.length) {
             try {
               pushSignal(req.body?.sessionId || "anon", {
@@ -678,6 +805,102 @@ router.post("/act", async (req, res) => {
           }
         } catch {}
 
+        // 🟡 Uncertainty Loopback (auto-chip on low proof/readability)
+        try {
+          const redactedCount = Object.values(proofData || {}).filter(p => p.status === "redacted").length;
+          const readabilityLow = false; // flip to true if your readability score falls below threshold
+          const needSoften = redactedCount > 0 || readabilityLow;
+
+          if (needSoften) {
+            const soft = applyChipLocal(
+              { brand: prep.brand, layout: { sections: prep.sections }, copy: copyWithDefaults },
+              "More minimal"
+            );
+            prep.brand = soft.brand;
+            prep.sections = soft.layout.sections;
+            Object.assign(copyWithDefaults, soft.copy || {});
+          }
+
+          // If goal is empty, prefer an email signup CTA
+          try {
+            if (!intentFromSpec.goal) {
+              const softCTA = applyChipLocal(
+                { brand: prep.brand, layout: { sections: prep.sections }, copy: copyWithDefaults },
+                "Use email signup CTA"
+              );
+              prep.brand = softCTA.brand;
+              prep.sections = softCTA.layout.sections;
+              Object.assign(copyWithDefaults, softCTA.copy || {});
+            }
+          } catch {}
+        } catch {}
+
+        // ProofGate-Lite: soft warning + stronger neutralization for critical fields
+        try {
+          const redactedCount = Object.values(proofData || {}).filter((p) => p.status === "redacted").length;
+          const evidencedCount = Object.values(proofData || {}).filter((p) => p.status === "evidenced").length;
+          const flaggedCount = (flags || []).length; // from sanitizeFacts
+
+          // 1) emit a soft signal so UI can badge it
+          if (redactedCount || flaggedCount) {
+            pushSignal(String(req.body?.sessionId || "anon"), {
+              ts: Date.now(),
+              kind: "proof_warn",
+              data: { redactedCount, evidencedCount, flaggedCount },
+            });
+          }
+
+          // 2) stronger neutralization for headline/subhead/tagline when any redaction happened
+          if (redactedCount > 0) {
+            const CRIT = ["HEADLINE", "HERO_SUBHEAD", "TAGLINE"];
+            for (const k of CRIT) {
+              const val = copyWithDefaults[k];
+              if (typeof val !== "string") continue;
+              let nv = val;
+
+              // strip "(ref: ...)" unless actually evidenced for that field
+              if (proofData?.[k]?.status !== "evidenced") {
+                nv = nv.replace(/\s*\(ref:\s*[^)]+\)\s*$/i, "");
+              }
+
+              // extra softening on superlatives and naked %/x
+              nv = nv
+                .replace(/\b(#1|No\.?\s?1|top|best|leading|largest)\b/gi, "trusted")
+                .replace(/\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?(%|percent)\b/gi, "many")
+                .replace(/\b\d+(?:\.\d+)?\s*x\b/gi, "multi-fold");
+
+              copyWithDefaults[k] = nv;
+            }
+          }
+
+          // 3) expose per-field proof map for UI (non-breaking)
+          const fieldCounts = {};
+          if (proofData) {
+            for (const v of Object.values(proofData)) {
+              fieldCounts[v.status] = (fieldCounts[v.status] || 0) + 1;
+            }
+          }
+          prep.brand = {
+            ...(prep.brand || {}),
+            proof: { fields: proofData || {}, counts: fieldCounts },
+          };
+        } catch {}
+
+        // Readability guard (non-blocking) — run after ProofGate-Lite
+        try {
+          const r = checkCopyReadability(copyWithDefaults);
+          if (r.issues.length) {
+            pushSignal(String(req.body?.sessionId || "anon"), {
+              ts: Date.now(),
+              kind: "readability_warn",
+              data: { score: r.score, issues: r.issues.slice(0, 6) },
+            });
+          }
+        } catch {}
+
+        // Decide whether to strip all <script> tags in composer
+        const stripJS = shouldStripJS(prep.sections);
+
         // short-circuit if same DSL as last compose for session
         const payloadForKey = {
           sections: prep.sections,
@@ -686,6 +909,7 @@ router.post("/act", async (req, res) => {
           copy: copyWithDefaults,
           brand: prep.brand,
           tier: spec?.brand?.tier || "premium",
+          stripJS, // pass through to composer
         };
         const keyNow = dslKey(payloadForKey);
         const last = LAST_COMPOSE.get(req.body?.sessionId || "anon");
@@ -707,6 +931,47 @@ router.post("/act", async (req, res) => {
           url: data?.url || data?.path || null,
         });
 
+        // holders for performance signals
+        let perfEst = null;      // worst-case for gating/logging
+        let perfMatrix = null;   // full matrix for Proof Card
+
+        // quick device sanity ping (non-blocking)
+        try {
+          const pageUrl = data?.url || data?.path || null;
+          if (pageUrl) {
+            const abs = /^https?:\/\//i.test(pageUrl) ? pageUrl : `${baseUrl(req)}${pageUrl}`;
+            const html = await fetchTextWithTimeout(abs, 8000);
+            if (html) {
+              const sanity = quickLayoutSanity(html);
+              if (sanity.issues.length) {
+                pushSignal(String(req.body?.sessionId || "anon"), {
+                  ts: Date.now(),
+                  kind: "layout_warn",
+                  data: { score: sanity.score, issues: sanity.issues.slice(0, 6) },
+                });
+              }
+              try {
+                const basePerf = quickPerfEst(html);
+                perfMatrix = matrixPerfEst(html);
+                perfEst = perfMatrix?.worst || basePerf;
+
+                // quick worst-case estimate
+                pushSignal(String(req.body?.sessionId || "anon"), {
+                  ts: Date.now(),
+                  kind: "perf_est",
+                  data: { cls_est: perfEst.cls_est, lcp_est_ms: perfEst.lcp_est_ms }
+                });
+                // full matrix detail
+                pushSignal(String(req.body?.sessionId || "anon"), {
+                  ts: Date.now(),
+                  kind: "perf_matrix",
+                  data: perfMatrix
+                });
+              } catch {}
+            }
+          }
+        } catch {}
+
         try {
           rememberLastGood(req.body?.sessionId || "anon", {
             sections: prep.sections,
@@ -726,6 +991,13 @@ router.post("/act", async (req, res) => {
               brand: prep.brand,
             });
           } catch {}
+          // Learn from ships (brand DNA)
+          try {
+            recordDNA(String(req.body?.sessionId || "anon"), {
+              brand: { primary: prep.brand?.primary, tone: spec?.brand?.tone, dark: !!spec?.brand?.dark },
+              sections: prep.sections,
+            });
+          } catch {}
         } catch {}
 
         // Record ship KPI snapshot (best-effort, resilient if tokens are missing)
@@ -736,6 +1008,15 @@ router.post("/act", async (req, res) => {
             spec?.brandColor ||
             spec?.brand?.primary ||
             null;
+
+          // NEW: log a neutral "seen" with metrics for TasteNet gating (worst-case perf)
+          try {
+            recordTokenSeen({
+              brand: { primary: primaryForBrand, tone: toneIn, dark: darkIn },
+              sessionId: String(req.body?.sessionId || "anon"),
+              metrics: { a11y: !!ev2.a11yPass, cls: perfEst?.cls_est, lcp_ms: perfEst?.lcp_est_ms },
+            });
+          } catch {}
 
           recordShip({
             ts: Date.now(),
@@ -776,6 +1057,10 @@ router.post("/act", async (req, res) => {
                 facts: proofData || {},
                 fact_counts: counts,
                 proof_ok,
+                cls_est: perfEst?.cls_est ?? null,
+                lcp_est_ms: perfEst?.lcp_est_ms ?? null,
+                // NEW: persist full matrix
+                perf_matrix: perfMatrix || null
               },
               null,
               2
@@ -879,6 +1164,19 @@ router.post("/one", async (req, res) => {
       }
     }
 
+    // Apply priors from brand DNA (soft influence)
+    const prior = suggestFromDNA(sessionId) || {};
+    if (!fit.intent) fit.intent = {};
+    if (prior.brand?.tone && !fit.intent.vibe) fit.intent.vibe = prior.brand.tone;
+    if (typeof prior.brand?.dark === "boolean" && !fit.intent.color_scheme) {
+      fit.intent.color_scheme = prior.brand.dark ? "dark" : "light";
+    }
+    if (Array.isArray(prior.sections) && prior.sections.length) {
+      const cur = new Set(fit.intent.sections || []);
+      for (const s of prior.sections) cur.add(s);
+      fit.intent.sections = Array.from(cur);
+    }
+
     const { intent, confidence: c0, chips } = fit;
     const summarySignals = summarize(sessionId);
     const confidence = boostConfidence(c0, summarySignals);
@@ -897,7 +1195,7 @@ router.post("/one", async (req, res) => {
     });
 
     let copy = fit.copy || cheapCopy(prompt, fit.intent);
-    let brandColor = fit.brandColor || guessBrand(fit.intent);
+    let brandColor = prior?.brand?.primary || fit.brandColor || guessBrand(fit.intent);
     // Slot Synthesis v1 — fill any missing copy keys deterministically
     {
       const filled = fillSlots({ prompt, spec, copy });
@@ -941,7 +1239,12 @@ router.post("/one", async (req, res) => {
         kind: "compose",
         cost_est: 3,
         gain_est: 20,
-        args: { sections: result.sections, copy, brand: { primary: brandColor } },
+        args: {
+          sections: result.sections,
+          copy,
+          brand: { primary: brandColor },
+          variantHints: VARIANT_HINTS,
+        },
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
@@ -956,6 +1259,16 @@ router.post("/one", async (req, res) => {
       url = composeData?.result?.url || composeData?.result?.path || null;
       usedAction = composeAction;
       result = composeData?.result;
+
+      // Economic flywheel: attribute estimated labeler cost to this URL
+      try {
+        const pageId = composeData?.result?.pageId;
+        if (pageId) {
+          const estCents = cloudUsed ? 0.03 : 0;
+          const estTokens = cloudUsed ? 1200 : 0;
+          recordUrlCost(pageId, estCents, estTokens);
+        }
+      } catch {}
     }
 
     // enqueue a shadow evaluation with what we actually shipped
@@ -1024,6 +1337,19 @@ router.post("/instant", async (req, res) => {
       fit = { intent, confidence: 0.6, chips };
     }
 
+    // Apply priors from brand DNA (soft influence)
+    const prior = suggestFromDNA(sessionId) || {};
+    if (!fit.intent) fit.intent = {};
+    if (prior.brand?.tone && !fit.intent.vibe) fit.intent.vibe = prior.brand.tone;
+    if (typeof prior.brand?.dark === "boolean" && !fit.intent.color_scheme) {
+      fit.intent.color_scheme = prior.brand.dark ? "dark" : "light";
+    }
+    if (Array.isArray(prior.sections) && prior.sections.length) {
+      const cur = new Set(fit.intent.sections || []);
+      for (const s of prior.sections) cur.add(s);
+      fit.intent.sections = Array.from(cur);
+    }
+
     const { intent, chips = [] } = fit;
     const summarySignals = summarize(sessionId);
     const confidence = boostConfidence(fit.confidence || 0.6, summarySignals);
@@ -1049,7 +1375,7 @@ router.post("/instant", async (req, res) => {
 
     // Deterministic copy/brand (no model)
     let copy = fit.copy || cheapCopy(prompt, intent);
-    const brandColor = fit.brandColor || guessBrand(intent);
+    const brandColor = prior?.brand?.primary || fit.brandColor || guessBrand(intent);
     {
       const filled = fillSlots({ prompt, spec, copy });
       copy = filled.copy;
@@ -1072,7 +1398,12 @@ router.post("/instant", async (req, res) => {
         kind: "compose",
         cost_est: 0,
         gain_est: 20,
-        args: { sections: result.sections, copy, brand: { primary: brandColor } },
+        args: {
+          sections: result.sections,
+          copy,
+          brand: { primary: brandColor },
+          variantHints: VARIANT_HINTS,
+        },
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
@@ -1163,7 +1494,12 @@ router.post("/clarify/compose", async (req, res) => {
         kind: "compose",
         cost_est: 0,
         gain_est: 20,
-        args: { sections: result.sections, copy, brand: { primary: brandColor } },
+        args: {
+          sections: result.sections,
+          copy,
+          brand: { primary: brandColor },
+          variantHints: VARIANT_HINTS,
+        },
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
@@ -1195,6 +1531,9 @@ router.post("/chips/apply", (req, res) => {
     } catch {}
     const s = applyChipLocal(spec, chip);
     pushSignal(sessionId, { ts: Date.now(), kind: "chip_apply", data: { chip } });
+    try {
+      learnFromChip(String(sessionId), String(chip || ""));
+    } catch {}
     return res.json({ ok: true, spec: s });
   } catch {
     return res.status(500).json({ ok: false, error: "chip_apply_failed" });
@@ -1264,6 +1603,29 @@ router.get("/metrics", (req, res) => {
       }
     } catch {}
 
+    // url cost summary
+    const costDbPath = pathResolve(".cache/url.costs.json");
+    let total_cents = 0,
+      total_tokens = 0,
+      pages_costed = 0;
+    try {
+      if (fs.existsSync(costDbPath)) {
+        const m = JSON.parse(fs.readFileSync(costDbPath, "utf8"));
+        for (const v of Object.values(m)) {
+          total_cents += Number(v.cents || 0);
+          total_tokens += Number(v.tokens || 0);
+          pages_costed += 1;
+        }
+      }
+    } catch {}
+
+    // taste top keys (if trained)
+    let taste_top = null;
+    try {
+      const t = JSON.parse(fs.readFileSync(pathResolve(".cache/taste.priors.json"), "utf8"));
+      taste_top = Array.isArray(t?.top) ? t.top.slice(0, 5) : null;
+    } catch {}
+
     return res.json({
       ok: true,
       counts: { rules: nRules, local: nLocal, cloud: nCloud, total },
@@ -1273,6 +1635,12 @@ router.get("/metrics", (req, res) => {
       edits_to_ship_est: edits_est,
       retrieval_db: retrievalLines,
       shadow_agreement_pct, // <— added
+      url_costs: {
+        pages: pages_costed,
+        cents_total: Number(total_cents.toFixed(4)),
+        tokens_total: total_tokens,
+      },
+      taste_top, // may be null if not trained yet
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "metrics_failed" });
@@ -1288,6 +1656,14 @@ router.post("/kpi/convert", (req, res) => {
     try {
       const last = lastShipFor(String(pageId));
       if (last) recordSectionOutcome(last.sections || [], "all", true);
+      try {
+        if (last?.brand) {
+          recordTokenWin({
+            brand: { primary: last.brand.primary, tone: last.brand.tone, dark: last.brand.dark },
+            sessionId: String(last.sessionId || "anon"),
+          });
+        }
+      } catch {}
     } catch {}
     return res.json({ ok: true });
   } catch (e) {

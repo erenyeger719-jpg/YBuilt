@@ -27,3 +27,10 @@ export function downgradeSections(sections: string[]) {
   };
   return sections.map((s) => down[s] || s);
 }
+
+// Decide if we should strip JS for this page composition.
+// Allowlist any sections that *require* JS to function.
+export function shouldStripJS(sections: string[]) {
+  const allow = new Set(["faq-accordion"]); // allowlist if needed
+  return !sections.some((s) => allow.has(String(s).split("@")[0]));
+}
