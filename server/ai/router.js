@@ -32,6 +32,11 @@ import { queueShadowEval } from "../intent/shadowEval.ts";
 import { runBuilder } from "../intent/builder.ts";
 import { generateMedia } from "../media/pool.ts";
 import { synthesizeAssets } from "../intent/assets.ts";
+import { tokenMixer } from "../design/tokens.ts";
+import { buildGrid } from "../design/grid.ts";
+import { evaluateDesign } from "../design/score.ts";
+import { motionVars } from "../design/motion.ts";
+import { sanitizeFacts } from "../intent/citelock.ts";
 import crypto from "crypto";
 
 // --- SUP ALGO: tiny metrics stores ---
@@ -551,6 +556,71 @@ router.post("/act", async (req, res) => {
             },
           });
           Object.assign(copyWithDefaults, copyPatch);
+        } catch {}
+
+        // --- DESIGNER AI: tokens + grid + checks ---
+        try {
+          const primaryIn = spec?.brandColor || spec?.brand?.primary || "#6d28d9";
+          const toneIn = spec?.brand?.tone || "serious";
+          const darkIn = !!spec?.brand?.dark;
+
+          // 1) Tokens & grid
+          let tokens = tokenMixer({ primary: primaryIn, dark: darkIn, tone: toneIn });
+          const grid = buildGrid({ density: toneIn === "minimal" ? "minimal" : "normal" });
+
+          // 2) Evaluate
+          let eval1 = evaluateDesign(tokens);
+
+          // 3) One self-fix if a11y fails: darken on-primary or bump base size
+          if (!eval1.a11yPass) {
+            const saferTone = toneIn === "playful" ? "minimal" : toneIn;
+            tokens = tokenMixer({ primary: primaryIn, dark: darkIn, tone: saferTone });
+            if (tokens.type?.basePx < 18) {
+              tokens = tokenMixer({ primary: primaryIn, dark: darkIn, tone: "minimal" });
+            }
+            eval1 = evaluateDesign(tokens);
+          }
+
+          // attach to brand (composer can read css vars; harmless if ignored)
+          prep.brand = {
+            ...(prep.brand || {}),
+            primary: tokens.palette.primary,
+            tokens: tokens.cssVars,
+            grid: grid.cssVars,
+          };
+
+          // Optional soft gate: if visual score still low, add a gentle signal
+          if (eval1.visualScore < 65) {
+            try {
+              pushSignal(req.body?.sessionId || "anon", {
+                ts: Date.now(),
+                kind: "design_warn",
+                data: { visual: eval1.visualScore },
+              });
+            } catch {}
+          }
+        } catch {}
+
+        // attach motion tokens too (pure CSS vars, zero-LLM)
+        try {
+          const toneIn = spec?.brand?.tone || "serious";
+          const motion = motionVars(toneIn);
+          prep.brand = { ...(prep.brand || {}), motion: motion.cssVars };
+        } catch {}
+
+        // CiteLock-lite: neutralize risky claims unless there's a source
+        try {
+          const { copyPatch: factPatch, flags } = sanitizeFacts(copyWithDefaults);
+          Object.assign(copyWithDefaults, factPatch);
+          if (flags.length) {
+            try {
+              pushSignal(req.body?.sessionId || "anon", {
+                ts: Date.now(),
+                kind: "fact_sanitized",
+                data: { fields: flags.slice(0, 6) },
+              });
+            } catch {}
+          }
         } catch {}
 
         // short-circuit if same DSL as last compose for session
