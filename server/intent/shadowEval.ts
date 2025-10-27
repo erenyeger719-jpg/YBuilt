@@ -3,87 +3,95 @@ import fs from "fs";
 import path from "path";
 import { localLabels } from "./localLabels.ts";
 
-const DIR = path.resolve(".cache");
-const FILE_LOG = path.join(DIR, "shadow.eval.jsonl");
-const FILE_METRICS = path.join(DIR, "shadow.metrics.json");
+const METRICS = path.resolve(".cache", "shadow.metrics.json");
+const SAMPLES = path.resolve(".cache", "shadow.samples.jsonl");
 
-function ensure() {
-  if (!fs.existsSync(DIR)) fs.mkdirSync(DIR, { recursive: true });
-  if (!fs.existsSync(FILE_METRICS)) {
-    fs.writeFileSync(FILE_METRICS, JSON.stringify({ n: 0, ema_score: null, pass: 0 }, null, 2));
+function ensureDir() {
+  try {
+    const dir = path.dirname(METRICS);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  } catch {}
+}
+function loadJSON<T = any>(p: string, def: T): T {
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch {
+    return def;
   }
 }
-
-function jaccard(a: Set<string>, b: Set<string>) {
-  let inter = 0;
-  for (const x of a) if (b.has(x)) inter++;
-  const union = a.size + b.size - inter || 1;
-  return inter / union;
+function saveJSON(p: string, obj: any) {
+  try {
+    ensureDir();
+    fs.writeFileSync(p, JSON.stringify(obj, null, 2));
+  } catch {}
 }
-
 function ema(prev: number | null, x: number, a = 0.25) {
   return prev == null ? x : (1 - a) * prev + a * x;
 }
+function jaccard(a: string[], b: string[]) {
+  const A = new Set(a.map(String));
+  const B = new Set(b.map(String));
+  let inter = 0;
+  for (const v of A) if (B.has(v)) inter++;
+  const union = A.size + B.size - inter || 1;
+  return inter / union;
+}
 
-type Input = { prompt: string; spec: any; sessionId?: string };
+type ShadowPayload = { prompt: string; spec: any; sessionId?: string };
 
-export async function queueShadowEval(input: Input) {
-  // fire-and-forget; never block request
-  setImmediate(async () => {
+/**
+ * Non-blocking “shadow” evaluation:
+ * - runs local labeler on the prompt
+ * - compares with shipped spec (sections/mode/tone)
+ * - records aggregate metrics only
+ */
+export function queueShadowEval({ prompt = "", spec = {}, sessionId = "anon" }: ShadowPayload) {
+  setTimeout(async () => {
     try {
-      ensure();
-      const { prompt, spec, sessionId = "anon" } = input;
-      const lab = await localLabels(prompt).catch(() => null);
+      const lab = await localLabels(prompt);
+      const pred = lab?.intent || {};
 
-      const wantSections = new Set(String(lab?.intent?.sections || []).split(",").filter(Boolean));
-      // If localLabels returns array, normalize properly:
-      if (Array.isArray(lab?.intent?.sections)) {
-        wantSections.clear();
-        for (const s of lab!.intent!.sections) wantSections.add(String(s));
-      }
+      const shippedSections: string[] = Array.isArray(spec?.layout?.sections)
+        ? spec.layout.sections.map(String)
+        : [];
+      const predictedSections: string[] = Array.isArray(pred.sections) ? pred.sections.map(String) : [];
 
-      const gotSections = new Set<string>();
-      for (const s of spec?.layout?.sections || []) gotSections.add(String(s));
+      const secScore = jaccard(shippedSections, predictedSections);
+      const shipMode = spec?.brand?.dark ? "dark" : "light";
+      const modeScore = Number(shipMode === (pred.color_scheme || ""));
+      const shipTone = String(spec?.brand?.tone || "");
+      const predTone = String(pred.vibe || "");
+      // map non-minimal vibes to "serious" to keep it simple/robust
+      const normPredTone = predTone === "minimal" || predTone === "playful" ? predTone : "serious";
+      const toneScore = shipTone ? Number(shipTone === normPredTone) : 0;
 
-      const secJ = jaccard(wantSections, gotSections);
+      // weighted blend, thresholds are conservative
+      const score = 0.6 * secScore + 0.25 * modeScore + 0.15 * toneScore;
+      const pass = score >= 0.6;
 
-      const wantTone =
-        lab?.intent?.vibe === "playful"
-          ? "playful"
-          : lab?.intent?.vibe === "minimal"
-          ? "minimal"
-          : lab?.intent?.vibe === "serious"
-          ? "serious"
-          : "";
-      const gotTone = String(spec?.brand?.tone || "");
-      const toneOK = wantTone && gotTone ? (wantTone === gotTone ? 1 : 0) : 0;
+      const m = loadJSON(METRICS, { n: 0, pass: 0, ema_score: null as number | null });
+      m.n = (m.n || 0) + 1;
+      m.pass = (m.pass || 0) + (pass ? 1 : 0);
+      m.ema_score = ema(m.ema_score, score);
+      saveJSON(METRICS, m);
 
-      const wantDark = lab?.intent?.color_scheme === "dark";
-      const gotDark = !!spec?.brand?.dark;
-      const darkOK = Number(wantDark === gotDark);
-
-      // Weighted agreement score
-      const score = 0.6 * secJ + 0.2 * toneOK + 0.2 * darkOK;
-      const pass = Number(score >= 0.7);
-
-      // append JSONL (best-effort)
+      // sample log (best effort)
       try {
-        const logLine = JSON.stringify(
-          { ts: Date.now(), sessionId, score, secJ, toneOK, darkOK, want: lab?.intent, got: { sections: [...gotSections], tone: gotTone, dark: gotDark } }
-        );
-        fs.appendFileSync(FILE_LOG, logLine + "\n");
+        ensureDir();
+        const rec = {
+          ts: Date.now(),
+          sessionId,
+          score: Number(score.toFixed(3)),
+          pass,
+          shippedSections,
+          predictedSections,
+          shipMode,
+          predMode: pred.color_scheme || "",
+          shipTone,
+          predTone: normPredTone,
+        };
+        fs.appendFileSync(SAMPLES, JSON.stringify(rec) + "\n");
       } catch {}
-
-      // update metrics (ema + pass rate)
-      try {
-        const m = JSON.parse(fs.readFileSync(FILE_METRICS, "utf8"));
-        const n = (m.n || 0) + 1;
-        const ema_score = ema(m.ema_score == null ? null : Number(m.ema_score), score);
-        const pass_total = (m.pass || 0) + pass;
-        fs.writeFileSync(FILE_METRICS, JSON.stringify({ n, ema_score, pass: pass_total }, null, 2));
-      } catch {}
-    } catch {
-      // swallow — shadow eval must never explode caller
-    }
-  });
+    } catch {}
+  }, 0);
 }

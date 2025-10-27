@@ -6,6 +6,7 @@ import { nextActions } from "../intent/planner.ts";
 import { runWithBudget } from "../intent/budget.ts";
 import { filterIntent } from "../intent/filter.ts";
 import { cheapCopy, guessBrand } from "../intent/copy.ts";
+import { fillSlots } from "../intent/slots.ts";
 import { pushSignal, summarize, boostConfidence } from "../intent/signals.ts";
 import {
   verifyAndPrepare,
@@ -19,9 +20,18 @@ import { pickFromPlaybook } from "../intent/playbook.ts";
 import { clarifyChips } from "../intent/clarify.ts";
 import { localLabels } from "../intent/localLabels.ts";
 import { addExample, nearest } from "../intent/retrieval.ts";
-import { decideLabelPath, outcomeLabelPath, allowCloud, pickExpertFor, recordExpertOutcome } from "../intent/router.brain.ts";
+import {
+  decideLabelPath,
+  outcomeLabelPath,
+  allowCloud,
+  pickExpertFor,
+  recordExpertOutcome,
+} from "../intent/router.brain.ts";
 import { expertByKey, expertsForTask } from "../intent/experts.ts";
 import { queueShadowEval } from "../intent/shadowEval.ts";
+import { runBuilder } from "../intent/builder.ts";
+import { generateMedia } from "../media/pool.ts";
+import { synthesizeAssets } from "../intent/assets.ts";
 import crypto from "crypto";
 
 // --- SUP ALGO: tiny metrics stores ---
@@ -434,6 +444,46 @@ router.get("/signals/:sessionId", (req, res) => {
   return res.json({ ok: true, summary: summarize(req.params.sessionId || "anon") });
 });
 
+// ---------- build (ship + test) ----------
+router.post("/build", async (req, res) => {
+  try {
+    const { prompt = "", sessionId = "anon", autofix = false } = req.body || {};
+    if (!prompt) return res.status(400).json({ ok: false, error: "missing_prompt" });
+    const base = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+    const out = await runBuilder({ prompt, sessionId, baseUrl: base, autofix });
+    return res.json(out);
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "build_failed" });
+  }
+});
+
+// ---------- media (vector-first) ----------
+router.post("/media", async (req, res) => {
+  try {
+    const {
+      kind = "illustration",
+      prompt = "",
+      brand = {},
+      prefer = "vector",
+      width,
+      height,
+      sessionId = "anon",
+    } = req.body || {};
+    const { asset, cached } = await generateMedia({
+      kind,
+      prompt,
+      brand,
+      prefer,
+      width,
+      height,
+      sessionId,
+    });
+    return res.json({ ok: true, asset, cached });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "media_failed" });
+  }
+});
+
 // ---------- act ----------
 router.post("/act", async (req, res) => {
   try {
@@ -488,6 +538,20 @@ router.post("/act", async (req, res) => {
           ...defaultsForSections(prep.sections),
           ...prep.copy,
         });
+
+        // ⬇️ NEW: synthesize vector assets, merge into copy (non-destructive)
+        try {
+          const { copyPatch } = await synthesizeAssets({
+            spec: {
+              summary: spec?.summary,
+              brand: { ...(spec?.brand || {}), primary: spec?.brandColor || spec?.brand?.primary },
+              brandColor: spec?.brandColor,
+              layout: { sections: prep.sections },
+              copy: copyWithDefaults,
+            },
+          });
+          Object.assign(copyWithDefaults, copyPatch);
+        } catch {}
 
         // short-circuit if same DSL as last compose for session
         const payloadForKey = {
@@ -653,6 +717,12 @@ router.post("/one", async (req, res) => {
 
     let copy = fit.copy || cheapCopy(prompt, fit.intent);
     let brandColor = fit.brandColor || guessBrand(fit.intent);
+    // Slot Synthesis v1 — fill any missing copy keys deterministically
+    {
+      const filled = fillSlots({ prompt, spec, copy });
+      copy = filled.copy;
+      // optional: filled.filled contains which keys were added
+    }
     const actions = nextActions(spec, { chips });
 
     // Try to reuse a shipped spec (retrieval) before composing
@@ -783,7 +853,12 @@ router.post("/instant", async (req, res) => {
       lastSpec: {
         summary: prompt,
         brand: {
-          tone: intent.vibe === "playful" ? "playful" : intent.vibe === "minimal" ? "minimal" : "serious",
+          tone:
+            intent.vibe === "playful"
+              ? "playful"
+              : intent.vibe === "minimal"
+              ? "minimal"
+              : "serious",
           dark: intent.color_scheme === "dark",
         },
         layout: { sections: intent.sections },
@@ -792,8 +867,12 @@ router.post("/instant", async (req, res) => {
     });
 
     // Deterministic copy/brand (no model)
-    const copy = fit.copy || cheapCopy(prompt, intent);
+    let copy = fit.copy || cheapCopy(prompt, intent);
     const brandColor = fit.brandColor || guessBrand(intent);
+    {
+      const filled = fillSlots({ prompt, spec, copy });
+      copy = filled.copy;
+    }
 
     // Always retrieve → compose
     const retrieve = { kind: "retrieve", args: { sections: intent.sections } };
@@ -870,13 +949,17 @@ router.post("/clarify/compose", async (req, res) => {
     for (const c of chips) s = applyChipLocal(s, c);
 
     // Compose using the existing budgeted pipeline
-    const copy =
+    let copy =
       s.copy ||
       cheapCopy(prompt, {
         vibe: s.brand?.tone || "minimal",
         color_scheme: s.brand?.dark ? "dark" : "light",
         sections: s.layout?.sections || ["hero-basic", "cta-simple"],
       });
+    {
+      const filled = fillSlots({ prompt, spec: s, copy });
+      copy = filled.copy;
+    }
     const brandColor = guessBrand({
       vibe: s.brand?.tone || "minimal",
       color_scheme: s.brand?.dark ? "dark" : "light",
