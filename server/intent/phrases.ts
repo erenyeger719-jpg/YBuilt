@@ -2,6 +2,7 @@
 type IntentLite = {
   goal?: "waitlist" | "demo" | "purchase" | "contact";
   vibe?: "minimal" | "playful" | "serious";
+  industry?: "saas" | "ecommerce" | "portfolio";
 };
 
 const BANK: Record<string, Record<string, string[]>> = {
@@ -103,11 +104,34 @@ function vibeKey(v: string | undefined) {
   return (v === "playful" || v === "serious") ? v : "minimal";
 }
 
+// subtle wording nudges per industry (no new slots needed)
+function applyIndustry(text: string, industry?: IntentLite["industry"]) {
+  if (!text) return text;
+  switch (industry) {
+    case "ecommerce":
+      return text
+        .replace(/pages?/gi, "product pages")
+        .replace(/teams?/gi, "stores")
+        .replace(/publish/gi, "go live");
+    case "portfolio":
+      return text
+        .replace(/pages?/gi, "project pages")
+        .replace(/teams?/gi, "clients")
+        .replace(/ship/gi, "show");
+    case "saas":
+      return text
+        .replace(/pages?/gi, "docs & landing pages")
+        .replace(/launch/gi, "deploy");
+    default:
+      return text;
+  }
+}
+
 export function pickPhrase(slot: keyof typeof BANK, intent: IntentLite = {}) {
   const v = vibeKey(intent.vibe);
   const list = BANK[slot]?.[v] || [];
   if (!list.length) return "";
   // stable but varied pick: goal influences index
   const idx = Math.abs(((intent.goal || "waitlist").charCodeAt(0) || 1) % list.length);
-  return list[idx];
+  return applyIndustry(list[idx], intent.industry);
 }
