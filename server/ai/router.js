@@ -22,6 +22,66 @@ import { addExample, nearest } from "../intent/retrieval.ts";
 import { decideLabelPath, outcomeLabelPath, allowCloud } from "../intent/router.brain.ts";
 import crypto from "crypto";
 
+// --- SUP ALGO: tiny metrics stores ---
+const CACHE_DIR = ".cache";
+function ensureCache() {
+  try {
+    if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
+  } catch {}
+}
+function loadJSON(p, def) {
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch {
+    return def;
+  }
+}
+function saveJSON(p, obj) {
+  try {
+    ensureCache();
+    fs.writeFileSync(p, JSON.stringify(obj, null, 2));
+  } catch {}
+}
+
+const FILE_RETR = ".cache/retrieval.hits.json"; // {tries:number, hits:number}
+const FILE_TTU = ".cache/time_to_url.json"; // {ema_ms:number, n:number}
+const FILE_EDITS_SESS = ".cache/edits.sessions.json"; // { [sessionId]: number }
+const FILE_EDITS_METR = ".cache/edits.metrics.json"; // {ema:number, n:number}
+
+function retrMark(hit) {
+  const s = loadJSON(FILE_RETR, { tries: 0, hits: 0 });
+  s.tries += 1;
+  if (hit) s.hits += 1;
+  saveJSON(FILE_RETR, s);
+}
+function ema(prev, x, a = 0.25) {
+  return prev == null ? x : (1 - a) * prev + a * x;
+}
+function recordTTU(ms) {
+  const s = loadJSON(FILE_TTU, { ema_ms: null, n: 0 });
+  s.ema_ms = ema(s.ema_ms, ms);
+  s.n = (s.n || 0) + 1;
+  saveJSON(FILE_TTU, s);
+}
+function editsInc(sessionId) {
+  const s = loadJSON(FILE_EDITS_SESS, {});
+  s[sessionId] = (s[sessionId] || 0) + 1;
+  saveJSON(FILE_EDITS_SESS, s);
+}
+function editsTakeAndReset(sessionId) {
+  const s = loadJSON(FILE_EDITS_SESS, {});
+  const k = s[sessionId] || 0;
+  s[sessionId] = 0;
+  saveJSON(FILE_EDITS_SESS, s);
+  return k;
+}
+function recordEditsMetric(k) {
+  const m = loadJSON(FILE_EDITS_METR, { ema: null, n: 0 });
+  m.ema = ema(m.ema, k);
+  m.n = (m.n || 0) + 1;
+  saveJSON(FILE_EDITS_METR, m);
+}
+
 export function pickModel(task, tier = "balanced") {
   const map = {
     fast: {
@@ -422,12 +482,19 @@ router.post("/act", async (req, res) => {
           });
           // store successful example for retrieval reuse
           try {
-            await addExample(
-              String(req.body?.sessionId || "anon"),
-              String(spec?.summary || ""),
-              { sections: prep.sections, copy: copyWithDefaults, brand: prep.brand }
-            );
+            await addExample(String(req.body?.sessionId || "anon"), String(spec?.summary || ""), {
+              sections: prep.sections,
+              copy: copyWithDefaults,
+              brand: prep.brand,
+            });
           } catch {}
+        } catch {}
+
+        // edits_to_ship: count chip applies since last ship
+        try {
+          const sid = String(req.body?.sessionId || "anon");
+          const edits = editsTakeAndReset(sid);
+          recordEditsMetric(edits);
         } catch {}
 
         return { kind: "compose", ...data };
@@ -445,6 +512,7 @@ router.post("/act", async (req, res) => {
 // ---------- one ----------
 router.post("/one", async (req, res) => {
   try {
+    const t0 = Date.now(); // full request -> URL timer
     const { prompt = "", sessionId = "anon" } = req.body || {};
     const key = normalizeKey(prompt);
 
@@ -541,6 +609,7 @@ router.post("/one", async (req, res) => {
     // Try to reuse a shipped spec (retrieval) before composing
     try {
       const reuse = await nearest(prompt);
+      retrMark(Boolean(reuse));
       if (reuse) {
         const reusedSections =
           Array.isArray(reuse.sections) && reuse.sections.length
@@ -610,6 +679,11 @@ router.post("/one", async (req, res) => {
         cents: cloudUsed ? 0.03 : 0,
         shipped,
       });
+    } catch {}
+
+    // record full request -> URL time
+    try {
+      recordTTU(Date.now() - t0);
     } catch {}
 
     return res.json(payload);
@@ -797,6 +871,9 @@ router.post("/clarify/compose", async (req, res) => {
 router.post("/chips/apply", (req, res) => {
   const { sessionId = "anon", spec = {}, chip = "" } = req.body || {};
   try {
+    try {
+      editsInc(String(sessionId));
+    } catch {}
     const s = applyChipLocal(spec, chip);
     pushSignal(sessionId, { ts: Date.now(), kind: "chip_apply", data: { chip } });
     return res.json({ ok: true, spec: s });
@@ -830,7 +907,9 @@ router.post("/seed", async (req, res) => {
 router.get("/metrics", (req, res) => {
   try {
     const statsPath = pathResolve(".cache/router.stats.json");
-    const retrPath = pathResolve(".cache/retrieval.jsonl");
+    const retrPath = FILE_RETR;
+    const ttuPath = FILE_TTU;
+    const editsPath = FILE_EDITS_METR;
 
     const stats = fs.existsSync(statsPath) ? JSON.parse(fs.readFileSync(statsPath, "utf8")) : {};
     const nRules = stats?.rules?.n || 0;
@@ -838,22 +917,31 @@ router.get("/metrics", (req, res) => {
     const nCloud = stats?.cloud?.n || 0;
     const total = Math.max(1, nRules + nLocal + nCloud);
 
-    const ema = (arm) => stats?.[arm]?.ema_ms ?? null;
-    const ttu_ms = Math.round(
-      ((ema("rules") || 0) * nRules + (ema("local") || 0) * nLocal + (ema("cloud") || 0) * nCloud) / total
-    );
+    const cloud_pct = Math.round((nCloud / total) * 100);
 
-    const retrievalLines = fs.existsSync(retrPath)
-      ? fs.readFileSync(retrPath, "utf8").split(/\r?\n/).filter(Boolean).length
+    const retr = loadJSON(retrPath, { tries: 0, hits: 0 });
+    const hit_rate = retr.tries ? Math.round((retr.hits / retr.tries) * 100) : 0;
+
+    const ttu = loadJSON(ttuPath, { ema_ms: null });
+    const ttu_ms = ttu.ema_ms != null ? Math.round(ttu.ema_ms) : null;
+
+    const edits = loadJSON(editsPath, { ema: null });
+    const edits_est = edits.ema != null ? Number(edits.ema.toFixed(2)) : null;
+
+    // Retrieval DB size (lines) stays as a quick sanity
+    const retrDbPath = pathResolve(".cache/retrieval.jsonl");
+    const retrievalLines = fs.existsSync(retrDbPath)
+      ? fs.readFileSync(retrDbPath, "utf8").split(/\r?\n/).filter(Boolean).length
       : 0;
 
     return res.json({
       ok: true,
       counts: { rules: nRules, local: nLocal, cloud: nCloud, total },
-      cloud_pct: Math.round((nCloud / total) * 100),
-      time_to_url_ms_est: ttu_ms || null,
+      cloud_pct,
+      time_to_url_ms_est: ttu_ms,
+      retrieval_hit_rate_pct: hit_rate,
+      edits_to_ship_est: edits_est,
       retrieval_db: retrievalLines,
-      // edits_to_ship needs UI events; once you emit `publish` & `edit` signals, you can compute median.
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "metrics_failed" });
