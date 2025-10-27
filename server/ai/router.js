@@ -19,7 +19,9 @@ import { pickFromPlaybook } from "../intent/playbook.ts";
 import { clarifyChips } from "../intent/clarify.ts";
 import { localLabels } from "../intent/localLabels.ts";
 import { addExample, nearest } from "../intent/retrieval.ts";
-import { decideLabelPath, outcomeLabelPath, allowCloud } from "../intent/router.brain.ts";
+import { decideLabelPath, outcomeLabelPath, allowCloud, pickExpertFor, recordExpertOutcome } from "../intent/router.brain.ts";
+import { expertByKey, expertsForTask } from "../intent/experts.ts";
+import { queueShadowEval } from "../intent/shadowEval.ts";
 import crypto from "crypto";
 
 // --- SUP ALGO: tiny metrics stores ---
@@ -138,6 +140,23 @@ async function fetchJSONWithTimeout(url, opts, timeoutMs = 20000) {
   } finally {
     clearTimeout(id);
   }
+}
+
+// near-consensus helpers for review
+function issuesKeyset(issues = []) {
+  return new Set(
+    issues.map((i) =>
+      `${String(i.type || "")}|${i?.ops?.[0]?.file || ""}|${i?.ops?.[0]?.find || ""}`.slice(0, 200)
+    )
+  );
+}
+function jaccard(aSet, bSet) {
+  const a = new Set(aSet),
+    b = new Set(bSet);
+  let inter = 0;
+  for (const v of a) if (b.has(v)) inter++;
+  const union = a.size + b.size - inter || 1;
+  return inter / union;
 }
 
 // Very cheap intent guesser for common phrases (skips a model call a lot)
@@ -267,48 +286,78 @@ Rules:
 
     const user = `CODE BUNDLE:\n${codeTrim}\n---\nTIER: ${tier}`;
 
-    const { provider, model } = pickModel("critic", tier);
-    if (provider !== "openai") {
-      return res
-        .status(500)
-        .json({ ok: false, error: `Provider ${provider} not configured in /ai/review` });
-    }
+    async function runCritic(exp) {
+      const t0 = Date.now();
+      const payload = {
+        model: exp.model,
+        temperature: 0,
+        max_tokens: Number(process.env.OPENAI_REVIEW_MAXTOKENS || 600),
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      };
 
-    const payload = {
-      model: model || process.env.OPENAI_MODEL || "gpt-4o-mini",
-      temperature: 0,
-      max_tokens: Number(process.env.OPENAI_REVIEW_MAXTOKENS || 600),
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    };
-
-    // Timeout + JSON-mode fetch
-    const data = await fetchJSONWithTimeout(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
+      const data = await fetchJSONWithTimeout(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      },
-      Number(process.env.OPENAI_TIMEOUT_MS || 20000)
-    );
+        Number(process.env.OPENAI_TIMEOUT_MS || 20000)
+      );
 
-    const raw = data?.choices?.[0]?.message?.content || "{}";
-    let json;
-    try {
-      json = JSON.parse(raw);
-    } catch {
-      json = JSON.parse(extractJSON(raw));
+      const raw = data?.choices?.[0]?.message?.content || "{}";
+      let json;
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        json = JSON.parse(extractJSON(raw));
+      }
+      const ms = Date.now() - t0;
+      try {
+        recordExpertOutcome(exp.key, {
+          success: true,
+          ms,
+          cents: exp.cost_cents,
+          tokens: exp.tokens_est,
+        });
+      } catch {}
+      return Array.isArray(json.issues) ? json.issues : [];
     }
 
-    const issues = Array.isArray(json.issues) ? json.issues : [];
-    const cleaned = issues.map((it) => ({
+    // Two cheap critics → compare → maybe escalate
+    const cheapA = pickExpertFor("critic", { maxCents: 0.05 });
+    let cheapB = pickExpertFor("critic", { maxCents: 0.05 });
+    if (cheapA && cheapB && cheapA.key === cheapB.key) {
+      try {
+        const pool = expertsForTask("critic", 0.05);
+        cheapB = pool.find((e) => e.key !== cheapA.key) || cheapB;
+      } catch {}
+    }
+    if (!cheapA || !cheapB)
+      return res.status(500).json({ ok: false, error: "no_critic_available" });
+
+    const issuesA = await runCritic(cheapA);
+    const issuesB = await runCritic(cheapB);
+
+    const sim = jaccard(issuesKeyset(issuesA), issuesKeyset(issuesB));
+    let issues = issuesA;
+
+    // If the two cheap passes disagree, escalate once to best critic
+    if (sim < 0.7) {
+      const best = pickExpertFor("critic"); // no maxCents → can choose best
+      if (best) {
+        issues = await runCritic(best);
+      }
+    }
+
+    const cleaned = (issues || []).map((it) => ({
       type: String(it.type || "other").slice(0, 40),
       msg: String(it.msg || "").slice(0, 500),
       fix: it.fix ? String(it.fix).slice(0, 4000) : undefined,
@@ -327,7 +376,7 @@ Rules:
     LAST_REVIEW_SIG.set(sessionId, sig);
     return res.json({ ok: true, review: { issues: cleaned } });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e?.message || "review failed" });
+    return res.status(500).json({ ok: false, error: e?.message || "review_failed" });
   }
 });
 
@@ -658,6 +707,12 @@ router.post("/one", async (req, res) => {
       result = composeData?.result;
     }
 
+    // enqueue a shadow evaluation with what we actually shipped
+    try {
+      const finalSpec = { ...spec, brandColor, copy }; // what you ship
+      queueShadowEval({ prompt, spec: finalSpec, sessionId });
+    } catch {}
+
     const payload = {
       ok: true,
       spec: { ...spec, brandColor, copy },
@@ -934,6 +989,17 @@ router.get("/metrics", (req, res) => {
       ? fs.readFileSync(retrDbPath, "utf8").split(/\r?\n/).filter(Boolean).length
       : 0;
 
+    // shadow eval metric
+    const shadowPath = pathResolve(".cache/shadow.metrics.json");
+    let shadow_agreement_pct = null;
+    try {
+      if (fs.existsSync(shadowPath)) {
+        const sm = JSON.parse(fs.readFileSync(shadowPath, "utf8"));
+        const pct = sm.n ? Math.round(((sm.pass || 0) / sm.n) * 100) : null;
+        shadow_agreement_pct = pct;
+      }
+    } catch {}
+
     return res.json({
       ok: true,
       counts: { rules: nRules, local: nLocal, cloud: nCloud, total },
@@ -942,6 +1008,7 @@ router.get("/metrics", (req, res) => {
       retrieval_hit_rate_pct: hit_rate,
       edits_to_ship_est: edits_est,
       retrieval_db: retrievalLines,
+      shadow_agreement_pct, // <— added
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "metrics_failed" });
