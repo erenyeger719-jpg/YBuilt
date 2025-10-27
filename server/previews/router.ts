@@ -25,6 +25,11 @@ function safeColor(input: string, fallback = '#6d28d9') {
   return m ? (s.startsWith('#') ? s : `#${s}`) : fallback;
 }
 
+// rtl detection for thread locale → HTML dir
+function isRTL(locale: string) {
+  return /^(ar|he|fa|ur)\b/i.test(String(locale || '').toLowerCase());
+}
+
 // ------- style tiers (premium default) -------
 type Tier = 'premium' | 'minimal' | 'playful' | 'brutalist';
 function tokensForTier(tier: Tier, dark: boolean, brand: string) {
@@ -67,17 +72,20 @@ function wrapHTML({
   brand,
   tier,
   body,
+  locale = 'en',
 }: {
   title: string;
   dark: boolean;
   brand: string;
   tier: Tier;
   body: string;
+  locale?: string;
 }) {
   const tk = tokensForTier(tier || 'premium', dark, brand);
   const vars = cssVars(tk, dark);
+  const dir = isRTL(locale) ? 'rtl' : 'ltr';
   return `<!doctype html>
-<html lang="en"><head>
+<html lang="${esc(locale)}" dir="${dir}"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="color-scheme" content="dark light"/>
 <title>${esc(title)}</title>
@@ -130,12 +138,13 @@ router.post('/compose', async (req, res) => {
     const copy = (req.body?.copy || {}) as Record<string, string>;
     const brand = String(req.body?.brand?.primary || '');
     const tier: Tier = String(req.body?.tier || 'premium') as Tier;
+    const locale = String(req.body?.locale || 'en');
     if (!sections.length) return res.status(400).json({ ok: false, error: 'no_sections' });
 
     const keyBrand = safeColor(brand);
     const stripJS = !!(req.body as any)?.stripJS; // include in cache key
     const payloadKey = createHash('sha1')
-      .update(stableStringify({ sections, title, dark, copy, brand: keyBrand, tier, stripJS }))
+      .update(stableStringify({ sections, title, dark, copy, brand: keyBrand, tier, stripJS, locale }))
       .digest('hex');
     const hit = CACHE.get(payloadKey);
     if (hit) return res.json({ ok: true, path: `/previews/forks/${hit.slug}/`, url: hit.url || `/previews/forks/${hit.slug}/` });
@@ -155,7 +164,7 @@ router.post('/compose', async (req, res) => {
     }
 
     const body = htmlPieces.join('\n\n');
-    const base = wrapHTML({ title, dark, brand, tier, body });
+    const base = wrapHTML({ title, dark, brand, tier, body, locale });
     let html = qaAndAutofix(base);
 
     // --- JS stripping (optional) ---

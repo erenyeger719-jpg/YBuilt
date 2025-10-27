@@ -48,6 +48,8 @@ import { tokenBiasFor, recordTokenWin, recordTokenSeen, retrainTasteNet, maybeNi
 import { quickLayoutSanity, quickPerfEst, matrixPerfEst } from "../qa/layout.sanity.ts";
 import { checkCopyReadability } from "../qa/readability.guard.ts";
 import { addEvidence, rebuildEvidenceIndex, searchEvidence as _searchEvidence } from "../intent/evidence.ts";
+import { localizeCopy } from "../intent/phrases.ts";
+import { normalizeLocale } from "../intent/locales.ts";
 import { runSnapshots } from "../qa/snapshots.ts";
 import crypto from "crypto";
 
@@ -632,7 +634,7 @@ router.post("/act", async (req, res) => {
         // Personalize sections slightly based on audience (non-creepy, bounded)
         const sectionsPersonal = segmentSwapSections(sectionsIn, audienceKey);
 
-      // Optional: seed bandit pool with sibling variants when provided
+        // Optional: seed bandit pool with sibling variants when provided
         try {
           const hints = action.args?.variantHints;
           if (hints && typeof hints === "object") {
@@ -663,10 +665,15 @@ router.post("/act", async (req, res) => {
         }
 
         // build prepped copy with defaults and hygiene
-        const copyWithDefaults = hardenCopy(prep.sections, {
+        let copyWithDefaults = hardenCopy(prep.sections, {
           ...defaultsForSections(prep.sections),
           ...prep.copy,
         });
+
+        // ⬇️ Add this block
+        const locale = normalizeLocale(spec?.brand?.locale || req.body?.locale || "en");
+        copyWithDefaults = localizeCopy(copyWithDefaults, locale);
+        // ⬆️
 
         // ⬇️ NEW: synthesize vector assets, merge into copy (non-destructive)
         try {
@@ -910,6 +917,7 @@ router.post("/act", async (req, res) => {
           brand: prep.brand,
           tier: spec?.brand?.tier || "premium",
           stripJS, // pass through to composer
+          locale,  // include locale in cache key and payload
         };
         const keyNow = dslKey(payloadForKey);
         const last = LAST_COMPOSE.get(req.body?.sessionId || "anon");
