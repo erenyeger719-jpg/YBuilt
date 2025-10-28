@@ -2,7 +2,7 @@
 // Deterministic OG/Social bundle (no external deps).
 // - Generates an SVG OG image under /public/og/*.svg
 // - Returns OG meta { title, description, image }
-// - Exports multiple aliases to satisfy older import names from router.ts
+// - Exposes many aliases (buildSEO, buildOg, ensureOG, ogMeta, …) for router back-compat.
 
 import fs from "fs";
 import path from "path";
@@ -16,11 +16,13 @@ type Spec = {
 };
 
 function slugify(s: string) {
-  return String(s || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "page";
+  return (
+    String(s || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "page"
+  );
 }
 function hash(...parts: string[]) {
   const h = crypto.createHash("sha1");
@@ -31,10 +33,13 @@ function hash(...parts: string[]) {
 function pickBg(brand: Brand = {}) {
   const p = (brand.primary || "#6d28d9").trim();
   const dark = !!brand.dark;
-  // very subtle shading to keep text readable in both modes
   const bg = dark ? "#0b0b10" : "#f6f6fb";
   const fg = dark ? "#e8e8ff" : "#0b0b10";
   return { bg, fg, accent: p };
+}
+
+function escapeXml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" } as any)[c]);
 }
 
 function ogSvg({ title, subtitle, brand }: { title: string; subtitle: string; brand: Brand }) {
@@ -50,7 +55,7 @@ function ogSvg({ title, subtitle, brand }: { title: string; subtitle: string; br
     </linearGradient>
   </defs>
   <rect width="1200" height="630" fill="${bg}"/>
-  <rect x="30" y="30" width="1140" height="570" rx="24" fill="url(#g)" />
+  <rect x="30" y="30" width="1140" height="570" rx="24" fill="url(#g)"/>
   <circle cx="1080" cy="120" r="80" fill="${accent}" fill-opacity="0.08"/>
   <circle cx="180" cy="520" r="120" fill="${accent}" fill-opacity="0.05"/>
 
@@ -70,12 +75,6 @@ function ogSvg({ title, subtitle, brand }: { title: string; subtitle: string; br
 </svg>`;
 }
 
-function escapeXml(s: string) {
-  return s.replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" } as any)[c]
-  );
-}
-
 function ensureDir(p: string) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 }
@@ -84,18 +83,11 @@ function ensureDir(p: string) {
 export function ensureOg(spec: Spec = {}) {
   const brand = spec.brand || {};
   const copy = spec.copy || {};
-  const title =
-    (copy.OG_TITLE as string) ||
-    (copy.HEADLINE as string) ||
-    "Build Something People Want";
-  const description =
-    (copy.OG_DESC as string) ||
-    (copy.TAGLINE as string) ||
-    "Launch faster. Look credible. No fluff.";
+  const title = (copy.OG_TITLE as string) || (copy.HEADLINE as string) || "Build Something People Want";
+  const description = (copy.OG_DESC as string) || (copy.TAGLINE as string) || "Launch faster. Look credible. No fluff.";
 
   const slug = slugify(title);
   const id = hash(title, description, brand.primary || "", String(brand.dark));
-  const relDir = "public/og";
   const relPath = `og/${slug}-${id}.svg`;
   const absDir = path.resolve("public/og");
   const absPath = path.resolve("public", relPath);
@@ -106,13 +98,8 @@ export function ensureOg(spec: Spec = {}) {
       const svg = ogSvg({ title, subtitle: description, brand });
       fs.writeFileSync(absPath, svg, "utf8");
     } catch {
-      // fallback on error
-      ensureDir(path.resolve("public/og"));
-      fs.writeFileSync(
-        absPath,
-        ogSvg({ title: "Ybuilt", subtitle: "Preview", brand }),
-        "utf8"
-      );
+      ensureDir(absDir);
+      fs.writeFileSync(absPath, ogSvg({ title: "Ybuilt", subtitle: "Preview", brand }), "utf8");
     }
   }
 
@@ -121,7 +108,6 @@ export function ensureOg(spec: Spec = {}) {
     title,
     description,
     image,
-    // convenience for callers that want a simple patch
     copyPatch: {
       OG_TITLE: title,
       OG_DESC: description,
@@ -130,27 +116,39 @@ export function ensureOg(spec: Spec = {}) {
   };
 }
 
-// Alias set (common historical names that routers use)
+// Aliases for back-compat with various routers
 export const ensureOG = ensureOg;
 export function buildOg(spec: Spec = {}) { return ensureOg(spec); }
 export const buildOG = buildOg;
-export function prepareOg(spec: Spec = {}) { return ensureOg(spec); }
-export function ogForSpec(spec: Spec = {}) { return ensureOg(spec); }
-export function attachOg(spec: Spec = {}) { return ensureOg(spec); }
-export function writeOg(spec: Spec = {}) { return ensureOg(spec); }
+
+// NEW: routers sometimes import buildSEO / buildSeo / ensureSEO
+export function buildSEO(spec: Spec = {}) { return ensureOg(spec); }
+export const buildSeo = buildSEO;
+export const ensureSEO = ensureOg;
+
+// Lightweight meta-only helper
 export function ogMeta(spec: Spec = {}) {
   const { title, description, image } = ensureOg(spec);
   return { title, description, image };
 }
+
+// More historical names people forget to remove 🙃
+export function prepareOg(spec: Spec = {}) { return ensureOg(spec); }
+export function ogForSpec(spec: Spec = {}) { return ensureOg(spec); }
+export function attachOg(spec: Spec = {}) { return ensureOg(spec); }
+export function writeOg(spec: Spec = {}) { return ensureOg(spec); }
 
 export default {
   ensureOg,
   ensureOG,
   buildOg,
   buildOG,
+  buildSEO,
+  buildSeo,
+  ensureSEO,
+  ogMeta,
   prepareOg,
   ogForSpec,
   attachOg,
   writeOg,
-  ogMeta,
 };
