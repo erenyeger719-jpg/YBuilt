@@ -94,6 +94,19 @@ const EXTRA_PACKS: Array<Pick<Pack, "id" | "sections" | "tags">> = [
   { id: "beta-waitlist-v1",  tags: ["beta","waitlist"],          sections: ["hero-basic","faq-accordion","cta-simple"] },
 ];
 
+// ---- User inventory (runtime ingest) ----
+function pathResolve(p: string) { return path.resolve(p); }
+function readUserPacks(): any[] {
+  try {
+    const P = pathResolve(".cache/packs.user.json");
+    if (!fs.existsSync(P)) return [];
+    const j = JSON.parse(fs.readFileSync(P, "utf8"));
+    return Array.isArray(j?.packs) ? j.packs : [];
+  } catch {
+    return [];
+  }
+}
+
 // ---- Helpers ----
 function jaccard(a: string[], b: string[]) {
   const A = new Set(a.map(String));
@@ -179,8 +192,8 @@ export function listPacksRanked(): Array<Pack & { score: number; seen: number; w
   const m = load();
   decayIfDue(m);
 
-  // Merge curated catalog with extra inventory (derive names for extras)
-  const mergedBase: Pack[] = [
+  // Built-ins: curated catalog + extras (derive names for extras)
+  const builtins: Pack[] = [
     ...CATALOG,
     ...EXTRA_PACKS.map((p) => ({
       id: p.id,
@@ -190,11 +203,31 @@ export function listPacksRanked(): Array<Pack & { score: number; seen: number; w
     })),
   ];
 
+  // User packs: read from .cache/packs.user.json
+  const userRaw = readUserPacks();
+  const userNorm: Pack[] = (Array.isArray(userRaw) ? userRaw : [])
+    .map((p: any, idx: number) => {
+      const id = String(p?.id ?? p?.key ?? `user-${idx}`);
+      const name = String(p?.name ?? humanizeId(id));
+      const sections = Array.isArray(p?.sections) ? p.sections.map(String) : [];
+      const tags = Array.isArray(p?.tags) ? p.tags.map(String) : undefined;
+      return { id, name, sections, tags };
+    })
+    .filter((p) => p.sections.length > 0);
+
+  // Merge + de-dupe by id
+  const byId = new Map<string, Pack>();
+  for (const p of [...builtins, ...userNorm]) {
+    if (!byId.has(p.id)) byId.set(p.id, p);
+  }
+  const mergedBase = Array.from(byId.values());
+
   // ensure every pack has a metrics row
   for (const p of mergedBase) {
     if (!m.packs[p.id]) m.packs[p.id] = { seen: 0, wins: 0 };
   }
 
+  // Rank with existing scoring (CTR lower bound + momentum + freshness)
   const rows = mergedBase.map((p) => {
     const pm = m.packs[p.id] || { seen: 0, wins: 0 };
     const seen = pm.seen;

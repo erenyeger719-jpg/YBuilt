@@ -8,5 +8,25 @@
     "primary": "#311262",
     "tone": "minimal",
     "dark": true
+  },
+  "b1": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "primary": "#6d28d9",
+    "tone": "minimal",
+    "dark": true
+  },
+  "p1": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "primary": "#6d28d9",
+    "tone": "minimal",
+    "dark": true
   }
 }
