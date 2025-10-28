@@ -1,7 +1,7 @@
 // server/design/search.wide.ts
 // Deterministic "wide" token search around a given primary/tone/dark.
-// Now with an HSL ring (hue/sat/light jitters) + eval memo to boost breadth
-// while staying stable and cheap.
+// Now with extended HSL ring (±34°, ±48° escapes) + compact memoized scoring.
+// Accessiblity dominates; visual score second; proximity third.
 
 import { tokenMixer } from "./tokens.ts";
 import { evaluateDesign } from "./score.ts";
@@ -108,9 +108,11 @@ function stableHash(s: string) {
   return h >>> 0;
 }
 
-// Generate a small, deterministic palette neighborhood around a primary color.
+// Generate a deterministic palette neighborhood around a primary color.
 function expandPrimaryPalette(primary: string) {
   const base = (primary || "#6d28d9").trim();
+
+  // Base ladder (tints/shades) — compact
   const set = new Set<string>([
     base,
     tint(base, 0.08),
@@ -121,28 +123,56 @@ function expandPrimaryPalette(primary: string) {
     shade(base, 0.24),
   ]);
 
-  // HSL ring: ±8° hue, ±6% sat, ±6% light; keep compact
+  // Base ring (small moves)
   const H = [-8, -4, 4, 8];
-  const S = [-6, 6];
-  const L = [-6, 6];
+  const S = [-6, 0, 6];
+  const L = [-6, 0, 6];
+
+  // Escape ring (larger hue exploration) — NEW
+  const H_ESC = [-48, -34, 34, 48];
+  const S_ESC = [-10, 0, 10];
+  const L_ESC = [-10, 0, 10];
 
   // deterministic permutation based on color hash
   const h = stableHash(base);
-  const hIdx = (i: number, n: number) => (i + (h % n)) % n;
+  const permIdx = (i: number, n: number) => (i + (h % n)) % n;
 
-  const Hp = H.map((_, i) => H[hIdx(i, H.length)]);
-  const Sp = S.map((_, i) => S[hIdx(i, S.length)]);
-  const Lp = L.map((_, i) => L[hIdx(i, L.length)]);
+  const Hp = H.map((_, i) => H[permIdx(i, H.length)]);
+  const Sp = S.map((_, i) => S[permIdx(i, S.length)]);
+  const Lp = L.map((_, i) => L[permIdx(i, L.length)]);
 
-  // cap total ring variants to ~16 to keep compute tight
+  const He = H_ESC.map((_, i) => H_ESC[permIdx(i, H_ESC.length)]);
+  const Se = S_ESC.map((_, i) => S_ESC[permIdx(i, S_ESC.length)]);
+  const Le = L_ESC.map((_, i) => L_ESC[permIdx(i, L_ESC.length)]);
+
+  // Cap to keep compute tight: base (~27) + escape (~36) ≈ 63 + ladder(6) ~ 70 → cap ~40.
+  const CAP = 40;
+
+  // Interleave base ring first (safer), then escapes
+  outerBase:
   for (let i = 0; i < Hp.length; i++) {
     for (let j = 0; j < Sp.length; j++) {
       for (let k = 0; k < Lp.length; k++) {
-        if (set.size >= 1 + 6 + 16) break;
         set.add(shiftHsl(base, Hp[i], Sp[j], Lp[k]));
+        if (set.size >= CAP) break outerBase;
       }
     }
   }
+
+  outerEsc:
+  for (let i = 0; i < He.length; i++) {
+    for (let j = 0; j < Se.length; j++) {
+      for (let k = 0; k < Le.length; k++) {
+        set.add(shiftHsl(base, He[i], Se[j], Le[k]));
+        if (set.size >= CAP) break outerEsc;
+      }
+    }
+  }
+
+  // Add a few neutral escape anchors (stable)
+  set.add("#6d28d9"); // violet baseline
+  set.add("#0ea5e9"); // sky baseline
+  set.add("#10b981"); // emerald baseline
 
   return Array.from(set);
 }
@@ -208,7 +238,7 @@ export function wideTokenSearch(opts: Opts): Result {
     return { idx, candidate: c, a11y: s.a11y, score: s.score, rank };
   });
 
-  // Fallback if, for any reason, we produced no candidates (paranoid guard)
+  // Fallback guard (paranoid)
   if (scored.length === 0) {
     const fallback: Candidate = { primary: primaryIn, tone: toneIn, dark: darkIn };
     const s = scoreCandidate(fallback);
