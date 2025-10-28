@@ -78,6 +78,22 @@ const CATALOG: Pack[] = [
   { id: "p-landing-max", name: "Hero + Features + Pricing + FAQ + CTA", sections: ["hero-basic", "features-3col", "pricing-simple", "faq-accordion", "cta-simple"], tags: ["full", "long"] },
 ];
 
+// ---- Extra inventory (wider marketplace) ----
+const EXTRA_PACKS: Array<Pick<Pack, "id" | "sections" | "tags">> = [
+  { id: "saas-waitlist-v1",  tags: ["saas","waitlist","minimal"], sections: ["hero-basic","features-3col","cta-simple"] },
+  { id: "saas-pricing-v1",   tags: ["saas","pricing"],           sections: ["hero-basic","pricing-simple","faq-accordion","cta-simple"] },
+  { id: "portfolio-v1",      tags: ["portfolio","minimal"],      sections: ["hero-basic","features-3col","cta-simple"] },
+  { id: "ecom-launch-v1",    tags: ["ecommerce","launch"],       sections: ["hero-basic","features-3col","cta-simple"] },
+  { id: "agency-v1",         tags: ["agency"],                   sections: ["hero-basic","features-3col","faq-accordion","cta-simple"] },
+  { id: "edu-course-v1",     tags: ["education"],                sections: ["hero-basic","features-3col","cta-simple"] },
+  { id: "app-demo-v1",       tags: ["saas","demo"],              sections: ["hero-basic","features-3col","cta-simple"] },
+  { id: "support-v1",        tags: ["support"],                  sections: ["hero-basic","faq-accordion","cta-simple"] },
+  { id: "docs-landing-v1",   tags: ["docs"],                     sections: ["hero-basic","faq-accordion","cta-simple"] },
+  { id: "founders-v1",       tags: ["saas","founders"],          sections: ["hero-basic","features-3col","pricing-simple","cta-simple"] },
+  { id: "product-hunt-v1",   tags: ["launch","saas"],            sections: ["hero-basic","features-3col","cta-simple"] },
+  { id: "beta-waitlist-v1",  tags: ["beta","waitlist"],          sections: ["hero-basic","faq-accordion","cta-simple"] },
+];
+
 // ---- Helpers ----
 function jaccard(a: string[], b: string[]) {
   const A = new Set(a.map(String));
@@ -109,6 +125,13 @@ function decayIfDue(m: Metrics) {
     m.packs[k].wins = Math.max(0, Math.floor(m.packs[k].wins * 0.95));
   }
   m._meta = { ...(m._meta || {}), lastDecayTs: now };
+}
+
+// Humanize an id → name fallback (e.g., "saas-waitlist-v1" → "Saas Waitlist V1")
+function humanizeId(id: string): string {
+  return String(id)
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
 // Find best matching catalog pack for a concrete section list
@@ -156,12 +179,23 @@ export function listPacksRanked(): Array<Pack & { score: number; seen: number; w
   const m = load();
   decayIfDue(m);
 
-  // ensure every catalog pack has a metrics row
-  for (const p of CATALOG) {
+  // Merge curated catalog with extra inventory (derive names for extras)
+  const mergedBase: Pack[] = [
+    ...CATALOG,
+    ...EXTRA_PACKS.map((p) => ({
+      id: p.id,
+      name: humanizeId(p.id),
+      sections: p.sections,
+      tags: p.tags,
+    })),
+  ];
+
+  // ensure every pack has a metrics row
+  for (const p of mergedBase) {
     if (!m.packs[p.id]) m.packs[p.id] = { seen: 0, wins: 0 };
   }
 
-  const rows = CATALOG.map((p) => {
+  const rows = mergedBase.map((p) => {
     const pm = m.packs[p.id] || { seen: 0, wins: 0 };
     const seen = pm.seen;
     const wins = pm.wins;

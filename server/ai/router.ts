@@ -608,6 +608,27 @@ router.post("/vector/mine", (_req, res) => {
   catch { return res.status(500).json({ ok: false, error: "vector_mine_failed" }); }
 });
 
+// --- Vector corpus seeder (fast local network effect) ---
+router.post("/vectors/seed", async (req, res) => {
+  try {
+    const {
+      count = 32,
+      tags = ["saas", "ecommerce", "portfolio", "education", "agency"],
+      brand = {},
+    } = (req.body || {}) as any;
+
+    let total = 0;
+    const per = Math.max(1, Math.ceil(count / tags.length));
+    for (const t of tags) {
+      const { assets } = await synthesizeAssets({ brand, tags: [t], count: per } as any);
+      total += Array.isArray(assets) ? assets.length : 0;
+    }
+    return res.json({ ok: true, seeded: true, approx_assets: total, tags, per_tag: per });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "vectors_seed_failed" });
+  }
+});
+
 // --- section packs (marketplace contract) ---
 router.get("/sections/packs", (req, res) => {
   try {
@@ -1234,7 +1255,7 @@ router.post("/act", async (req, res) => {
 router.post("/one", async (req, res) => {
   try {
     const t0 = Date.now(); // full request -> URL timer
-    const { prompt = "", sessionId = "anon" } = (req.body || {}) as any;
+    const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
     const key = normalizeKey(prompt);
 
     // [BANDIT] vars for logging outcome
@@ -1390,6 +1411,7 @@ router.post("/one", async (req, res) => {
           copy,
           brand: { primary: brandColor },
           variantHints: VARIANT_HINTS,
+          breadth, // ← NEW
         },
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
@@ -1465,7 +1487,7 @@ router.post("/one", async (req, res) => {
 // ---------- instant (zero-LLM compose) ----------
 router.post("/instant", async (req, res) => {
   try {
-    const { prompt = "", sessionId = "anon" } = (req.body || {}) as any;
+    const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
 
     // 0) No-model intent: playbook → quick guess → safe defaults
     let fit = pickFromPlaybook(prompt) || quickGuessIntent(prompt);
@@ -1549,7 +1571,7 @@ router.post("/instant", async (req, res) => {
     } catch {}
 
     // Always retrieve → compose
-    const retrieve = { kind: "retrieve", args: { sections: intent.sections } };
+    const retrieve = { kind: "retrieve", args: { sections: intent.sections, breadth } };
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
       headers: {
