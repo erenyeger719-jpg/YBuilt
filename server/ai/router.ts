@@ -75,6 +75,7 @@ import {
 import { maybeNightlyMine as maybeVectorMine, runVectorMiner } from "../media/vector.miner.ts";
 import crypto from "crypto";
 import path from "path";
+import { runArmy } from "./army.ts";
 
 // Nightly TasteNet retrain (best-effort, no-op if not due)
 try {
@@ -567,6 +568,20 @@ router.post("/build", async (req, res) => {
   }
 });
 
+// ---------- army (20-plan orchestrator) ----------
+router.post("/army", async (req, res) => {
+  try {
+    const { prompt = "", sessionId = "anon", concurrency = 4 } = (req.body || {}) as any;
+    if (!prompt) return res.status(400).json({ ok: false, error: "missing_prompt" });
+
+    const base = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+    const out = await runArmy({ prompt, sessionId, baseUrl: base, concurrency });
+    return res.json({ ok: true, ...out });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: "army_failed" });
+  }
+});
+
 // ---------- media (vector-first) ----------
 router.post("/media", async (req, res) => {
   try {
@@ -1048,6 +1063,7 @@ router.post("/act", async (req, res) => {
           if (!pg.ok) {
             const before = prep.sections.slice();
             prep.sections = downgradeSections(prep.sections);
+            pushSignal((req.body as any)?.sessionId || "anon") as any;
             pushSignal((req.body as any)?.sessionId || "anon", {
               ts: Date.now(),
               kind: "perf_downgrade",

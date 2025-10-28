@@ -3104,6 +3104,7 @@
       "url": "/vectors/analytics-1.svg",
       "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/analytics-1.svg",
       "tags": [
+        "people",
         "analytics"
       ],
       "industry": [],
@@ -3117,6 +3118,7 @@
       "url": "/vectors/security-2.svg",
       "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/security-2.svg",
       "tags": [
+        "people",
         "security"
       ],
       "industry": [],
@@ -3130,6 +3132,7 @@
       "url": "/vectors/speed-3.svg",
       "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/speed-3.svg",
       "tags": [
+        "people",
         "speed"
       ],
       "industry": [],
@@ -3143,13 +3146,10 @@
       "url": "/vectors/cloud-4.svg",
       "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/cloud-4.svg",
       "tags": [
-        "saas",
-        "conversion",
+        "people",
         "cloud"
       ],
-      "industry": [
-        "saas"
-      ],
+      "industry": [],
       "vibe": [
         "minimal"
       ],
@@ -3160,12 +3160,10 @@
       "url": "/vectors/code-5.svg",
       "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/code-5.svg",
       "tags": [
-        "saas",
+        "people",
         "code"
       ],
-      "industry": [
-        "saas"
-      ],
+      "industry": [],
       "vibe": [
         "minimal"
       ],
@@ -3176,12 +3174,10 @@
       "url": "/vectors/ai-6.svg",
       "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/ai-6.svg",
       "tags": [
-        "saas",
+        "people",
         "ai"
       ],
-      "industry": [
-        "saas"
-      ],
+      "industry": [],
       "vibe": [
         "minimal"
       ],
@@ -3192,11 +3188,9 @@
       "url": "/vectors/people-7.svg",
       "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/people-7.svg",
       "tags": [
-        "saas"
+        "people"
       ],
-      "industry": [
-        "saas"
-      ],
+      "industry": [],
       "vibe": [
         "minimal"
       ],
@@ -3207,8 +3201,21 @@
       "url": "/vectors/support-8.svg",
       "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/support-8.svg",
       "tags": [
-        "saas",
+        "people",
         "support"
+      ],
+      "industry": [],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761651924419
+    },
+    "b8da2f640b3c8eac2f7280ead0f028e0e7d3f7d7": {
+      "id": "b8da2f640b3c8eac2f7280ead0f028e0e7d3f7d7",
+      "url": "/og/bold-dark-saas-landing-claiming-1-and-500-1f94f2c1d55f.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/og/bold-dark-saas-landing-claiming-1-and-500-1f94f2c1d55f.svg",
+      "tags": [
+        "people"
       ],
       "industry": [
         "saas"
@@ -3216,7 +3223,87 @@
       "vibe": [
         "minimal"
       ],
-      "addedTs": 1761651924419
+      "addedTs": 1761655167207
+    },
+    "717b85e5899cb76132b51c7bdcacc5624e25e65f": {
+      "id": "717b85e5899cb76132b51c7bdcacc5624e25e65f",
+      "url": "/og/build-something-people-want-59caf2709fff.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/og/build-something-people-want-59caf2709fff.svg",
+      "tags": [
+        "people"
+      ],
+      "industry": [],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761655167207
+    },
+    "4d64a18f64f488329bd15f6d9712728848a98d2a": {
+      "id": "4d64a18f64f488329bd15f6d9712728848a98d2a",
+      "url": "/og/build-something-people-want-5e2e4e1626e1.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/og/build-something-people-want-5e2e4e1626e1.svg",
+      "tags": [
+        "people"
+      ],
+      "industry": [],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761655167207
+    },
+    "359f73a2cbc4a40a58703c0bf580c8b78284706e": {
+      "id": "359f73a2cbc4a40a58703c0bf580c8b78284706e",
+      "url": "/og/build-something-people-want-76503a660ea2.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/og/build-something-people-want-76503a660ea2.svg",
+      "tags": [
+        "people"
+      ],
+      "industry": [],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761655167207
+    },
+    "94face788012663926fbbbe232664b70cca96490": {
+      "id": "94face788012663926fbbbe232664b70cca96490",
+      "url": "/og/build-something-people-want-965806675207.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/og/build-something-people-want-965806675207.svg",
+      "tags": [
+        "people"
+      ],
+      "industry": [],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761655167207
+    },
+    "4618be70680139bad8be3a5cf92a0086236b5ff1": {
+      "id": "4618be70680139bad8be3a5cf92a0086236b5ff1",
+      "url": "/og/build-something-people-want-dfd77b628a35.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/og/build-something-people-want-dfd77b628a35.svg",
+      "tags": [
+        "people"
+      ],
+      "industry": [],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761655167207
+    },
+    "bbd1e9a48df59a1732f545c0a65ca8676d51d4e5": {
+      "id": "bbd1e9a48df59a1732f545c0a65ca8676d51d4e5",
+      "url": "/og/minimal-dark-saas-waitlist-for-founders-0f5a5e406a0c.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/og/minimal-dark-saas-waitlist-for-founders-0f5a5e406a0c.svg",
+      "tags": [
+        "people"
+      ],
+      "industry": [
+        "saas"
+      ],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761655167207
     }
   },
   "index": {
@@ -3457,7 +3544,22 @@
       "c51633d73caf334557b494ca76953bb1b207746c",
       "bfad181aad9c4d2ad19b97840880f12c2584bfbf",
       "94355bda5c8e526a04af9dfe2117ef80f563dbcd",
-      "0b7093561a0ae167757708178fc0b4ea7904b172"
+      "0b7093561a0ae167757708178fc0b4ea7904b172",
+      "b8da2f640b3c8eac2f7280ead0f028e0e7d3f7d7",
+      "717b85e5899cb76132b51c7bdcacc5624e25e65f",
+      "4d64a18f64f488329bd15f6d9712728848a98d2a",
+      "359f73a2cbc4a40a58703c0bf580c8b78284706e",
+      "94face788012663926fbbbe232664b70cca96490",
+      "4618be70680139bad8be3a5cf92a0086236b5ff1",
+      "bbd1e9a48df59a1732f545c0a65ca8676d51d4e5",
+      "e3418957b7b4661155f656341b52d4c9721ce636",
+      "35f53344032486c7224917b77ba89c2b8cee68a9",
+      "2c27e0042e3fb50146be0f20e62c3a4ba5938cad",
+      "0709fe77716ea8706c0358096361c0c86b9548c2",
+      "a8336129fbcf58922ff4b07b0886bf6ffdf4f41d",
+      "00b86d2c330feca6832901b0b5476d267c35c98a",
+      "6abd9243ad73fe0191cc158bd19acefed13b8c9d",
+      "62625c26db8bc17a47ac1931fd97315d240edf9c"
     ],
     "minimal": [
       "406f0c51b9293ebcce2ff7c7d255307632279f78",
@@ -3704,7 +3806,14 @@
       "0709fe77716ea8706c0358096361c0c86b9548c2",
       "e3418957b7b4661155f656341b52d4c9721ce636",
       "a8336129fbcf58922ff4b07b0886bf6ffdf4f41d",
-      "62625c26db8bc17a47ac1931fd97315d240edf9c"
+      "62625c26db8bc17a47ac1931fd97315d240edf9c",
+      "b8da2f640b3c8eac2f7280ead0f028e0e7d3f7d7",
+      "717b85e5899cb76132b51c7bdcacc5624e25e65f",
+      "4d64a18f64f488329bd15f6d9712728848a98d2a",
+      "359f73a2cbc4a40a58703c0bf580c8b78284706e",
+      "94face788012663926fbbbe232664b70cca96490",
+      "4618be70680139bad8be3a5cf92a0086236b5ff1",
+      "bbd1e9a48df59a1732f545c0a65ca8676d51d4e5"
     ],
     "ai": [
       "69e25ce969fef4f702fdb5d6d1c10f5acdf96e93",
@@ -3742,7 +3851,9 @@
       "0709fe77716ea8706c0358096361c0c86b9548c2",
       "e3418957b7b4661155f656341b52d4c9721ce636",
       "a8336129fbcf58922ff4b07b0886bf6ffdf4f41d",
-      "62625c26db8bc17a47ac1931fd97315d240edf9c"
+      "62625c26db8bc17a47ac1931fd97315d240edf9c",
+      "b8da2f640b3c8eac2f7280ead0f028e0e7d3f7d7",
+      "bbd1e9a48df59a1732f545c0a65ca8676d51d4e5"
     ],
     "conversion": [
       "2c27e0042e3fb50146be0f20e62c3a4ba5938cad"
@@ -3885,6 +3996,6 @@
     ]
   },
   "_meta": {
-    "lastMineTs": 1761649837991
+    "lastMineTs": 1761655177163
   }
 }
