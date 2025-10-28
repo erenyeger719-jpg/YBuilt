@@ -142,7 +142,7 @@ router.post('/compose', async (req, res) => {
     if (!sections.length) return res.status(400).json({ ok: false, error: 'no_sections' });
 
     const keyBrand = safeColor(brand);
-    const stripJS = !!(req.body as any)?.stripJS; // include in cache key
+    const stripJS = !!(req.body as any)?.stripJS;
     const payloadKey = createHash('sha1')
       .update(stableStringify({ sections, title, dark, copy, brand: keyBrand, tier, stripJS, locale }))
       .digest('hex');
@@ -160,22 +160,29 @@ router.post('/compose', async (req, res) => {
         file = path.join(partsDir, `${baseId}.html`);
       }
       if (!fs.existsSync(file)) return res.status(400).json({ ok: false, error: `missing_section:${id}` });
-      htmlPieces.push(applyCopy(fs.readFileSync(file, 'utf8'), copy));
+      const raw = fs.readFileSync(file, 'utf8');
+      htmlPieces.push(raw);
     }
 
-    const body = htmlPieces.join('\n\n');
+    // Whitelist copy keys present in templates (reset /g between pieces)
+    const placeholderRe = /\{\{([A-Z0-9_]+)\}\}/g;
+    const allowed = new Set<string>();
+    for (const piece of htmlPieces) {
+      placeholderRe.lastIndex = 0; // important: reset cursor for each new string
+      let m: RegExpExecArray | null;
+      while ((m = placeholderRe.exec(piece))) allowed.add(m[1]);
+    }
+    const filteredCopy = Object.fromEntries(Object.entries(copy).filter(([k]) => allowed.has(k)));
+
+    const body = htmlPieces.map((p) => applyCopy(p, filteredCopy)).join('\n\n');
     const base = wrapHTML({ title, dark, brand, tier, body, locale });
     let html = qaAndAutofix(base);
 
-    // --- JS stripping (optional) ---
     if (stripJS) {
-      // remove all script tags
       html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
-      // remove inline event handlers like onclick=, onload=, etc.
       html = html.replace(/\s+on[a-z]+\s*=\s*"(?:[^"\\]|\\.)*"/gi, '');
       html = html.replace(/\s+on[a-z]+\s*=\s*'(?:[^'\\]|\\.)*'/gi, '');
     }
-    // -------------------------------
 
     const teamId = (req as any).cookies?.teamId || (req.headers as any)['x-team-id'] || null;
     const forksDir = safeJoinTeam(teamId, '/previews/forks');

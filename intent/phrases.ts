@@ -1,69 +1,52 @@
-// intent/phrases.ts
-import { normalizeLocale, type Locale } from "./locales.ts";
+// server/intent/phrases.ts
+import { normalizeLocale } from "./locales.ts";
 
-// Minimal deterministic phrases used across sections.
-// Extend anytime; unknown keys are left untouched.
-const BANK: Record<Locale, Record<string,string>> = {
+const BANK = {
   en: {
-    HEADLINE: "Build once. Ship everywhere.",
-    HERO_SUBHEAD: "Fast, accessible pages with zero guesswork.",
-    TAGLINE: "Quiet design. Loud results.",
-    CTA_LABEL: "Get started",
-    CTA_HEAD: "Ready when you are",
-  },
-  es: {
-    HEADLINE: "Crea una vez. Lanza en todas partes.",
-    HERO_SUBHEAD: "Páginas rápidas y accesibles, sin adivinanzas.",
-    TAGLINE: "Diseño calmado. Resultados claros.",
-    CTA_LABEL: "Comenzar",
-    CTA_HEAD: "Listos cuando tú",
-  },
-  fr: {
-    HEADLINE: "Construire une fois. Déployer partout.",
-    HERO_SUBHEAD: "Pages rapides et accessibles, sans tâtonner.",
-    TAGLINE: "Design calme. Résultats nets.",
-    CTA_LABEL: "Commencer",
-    CTA_HEAD: "Prêt quand vous l’êtes",
-  },
-  de: {
-    HEADLINE: "Einmal bauen. Überall ausliefern.",
-    HERO_SUBHEAD: "Schnelle, barrierefreie Seiten ohne Ratespiel.",
-    TAGLINE: "Ruhiges Design. Klare Ergebnisse.",
-    CTA_LABEL: "Loslegen",
-    CTA_HEAD: "Bereit, wenn du es bist",
+    "Get started": "Get started",
+    "Join the waitlist": "Join the waitlist",
+    "Ready when you are": "Ready when you are",
+    "Be first in line": "Be first in line",
+    "Learn more": "Learn more",
+    "Buy now": "Buy now",
+    "Contact us": "Contact us",
   },
   hi: {
-    HEADLINE: "एक बार बनाएं. हर जगह लॉन्च करें।",
-    HERO_SUBHEAD: "तेज़ और सुलभ पेज—बिना अनुमान के।",
-    TAGLINE: "शांत डिज़ाइन, साफ़ नतीजे।",
-    CTA_LABEL: "शुरू करें",
-    CTA_HEAD: "जब आप तैयार",
+    "Get started": "शुरू करें",
+    "Join the waitlist": "वेटलिस्ट में जुड़ें",
+    "Ready when you are": "जब आप तैयार हों",
+    "Be first in line": "सबसे पहले बने",
+    "Learn more": "और जानें",
+    "Buy now": "अभी खरीदें",
+    "Contact us": "हमसे संपर्क करें",
   },
-  ar: {
-    HEADLINE: "ابنِ مرة. وانشر في كل مكان.",
-    HERO_SUBHEAD: "صفحات سريعة وسهلة الوصول بلا تخمين.",
-    TAGLINE: "تصميم هادئ. نتائج واضحة.",
-    CTA_LABEL: "ابدأ الآن",
-    CTA_HEAD: "جاهزون حين تكون",
+  es: {
+    "Get started": "Empezar",
+    "Join the waitlist": "Únete a la lista",
+    "Ready when you are": "Cuando tú digas",
+    "Be first in line": "Sé el primero",
+    "Learn more": "Saber más",
+    "Buy now": "Comprar ahora",
+    "Contact us": "Contáctanos",
   },
-  ja: {
-    HEADLINE: "一度作れば、どこへでも出せる。",
-    HERO_SUBHEAD: "速くてアクセシブル。迷いのないページ。",
-    TAGLINE: "静かなデザイン。はっきりした成果。",
-    CTA_LABEL: "はじめる",
-    CTA_HEAD: "準備ができたら",
-  },
-};
+} as const;
 
-const PRIORITY_KEYS = ["HEADLINE","HERO_SUBHEAD","TAGLINE","CTA_LABEL","CTA_HEAD"];
+type Copy = Record<string, string>;
 
-export function localizeCopy(copy: Record<string,string>, localeIn?: string) {
-  const lc = normalizeLocale(localeIn);
-  const bank = BANK[lc] || BANK.en;
-  const out = { ...copy };
+export function localizeCopy(copy: Copy, locale: string): Copy {
+  const lang = (normalizeLocale(locale) || "en").slice(0, 2) as keyof typeof BANK;
+  const dict = BANK[lang] || BANK.en;
+  const out: Copy = { ...copy };
 
-  for (const k of PRIORITY_KEYS) {
-    if (bank[k]) out[k] = bank[k];        // override deterministically
+  // Translate only known short phrases; everything else stays verbatim.
+  for (const k of Object.keys(out)) {
+    const v = String(out[k] ?? "");
+    if (v in dict) out[k] = dict[v as keyof typeof dict];
   }
+
+  // Sensible defaults if missing
+  if (!out.CTA_LABEL) out.CTA_LABEL = dict["Get started"];
+  if (!out.CTA_HEAD) out.CTA_HEAD = dict["Ready when you are"];
+
   return out;
 }

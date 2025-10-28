@@ -26,9 +26,10 @@ import {
   allowCloud,
   pickExpertFor,
   recordExpertOutcome,
+  recordConversionForPage,
 } from "../intent/router.brain.ts";
 import { expertsForTask } from "../intent/experts.ts";
-import { queueShadowEval } from "../intent/shadowEval.ts";
+import { queueShadowEval, rewardShadow } from "../intent/shadowEval.ts";
 import { runBuilder } from "../intent/builder.ts";
 import { generateMedia } from "../media/pool.ts";
 import { synthesizeAssets } from "../intent/assets.ts";
@@ -50,8 +51,14 @@ import { checkCopyReadability } from "../qa/readability.guard.ts";
 import { addEvidence, rebuildEvidenceIndex, searchEvidence as _searchEvidence } from "../intent/evidence.ts";
 import { localizeCopy } from "../intent/phrases.ts";
 import { normalizeLocale } from "../intent/locales.ts";
+import { editSearch } from "../qa/edit.search.ts";
+import { wideTokenSearch } from "../design/search.wide.ts";
 import { runSnapshots } from "../qa/snapshots.ts";
+import { runDeviceGate } from "../qa/device.gate.ts";
+import { suggestVectorAssets, rememberVectorAssets } from "../media/vector.lib.ts";
+import { listPacks } from "../sections/packs.ts";
 import crypto from "crypto";
+import path from "path";
 
 // Nightly TasteNet retrain (best-effort, no-op if not due)
 try { maybeNightlyRetrain(); } catch {}
@@ -592,6 +599,12 @@ router.post("/taste/retrain", (_req, res) => {
   }
 });
 
+// --- section packs (marketplace contract) ---
+router.get("/sections/packs", (_req, res) => {
+  try { return res.json({ ok: true, packs: listPacks() }); }
+  catch { return res.status(500).json({ ok: false, error: "packs_failed" }); }
+});
+
 // ---------- act ----------
 router.post("/act", async (req, res) => {
   try {
@@ -670,10 +683,37 @@ router.post("/act", async (req, res) => {
           ...prep.copy,
         });
 
-        // ⬇️ Add this block
-        const locale = normalizeLocale(spec?.brand?.locale || req.body?.locale || "en");
+        // ⬇️ locale: prefer header > body > brand > en
+        const acceptLang = String(req.headers["accept-language"] || "");
+        const headerLocale = acceptLang.split(",")[0].split(";")[0] || "";
+        const locale = normalizeLocale(spec?.brand?.locale || req.body?.locale || headerLocale || "en");
         copyWithDefaults = localizeCopy(copyWithDefaults, locale);
         // ⬆️
+
+        // Failure-aware edit search (deterministic, no-LLM)
+        try {
+          const s0 = { brand: { ...(spec?.brand || {}) }, layout: { sections: prep.sections.slice() } };
+          const { better, spec: sBest, applied } = await editSearch({ spec: s0, copy: copyWithDefaults });
+          if (better) {
+            prep.sections = sBest.layout.sections;
+            prep.brand = { ...(prep.brand || {}), ...sBest.brand };
+            if (applied?.length) {
+              pushSignal(String(req.body?.sessionId || "anon"), {
+                ts: Date.now(),
+                kind: "edit_search_apply",
+                data: { chips: applied.slice(0, 4) },
+              });
+            }
+          }
+        } catch {}
+
+        // Prefill vector assets from library (non-destructive)
+        try {
+          const sugg = suggestVectorAssets({ brand: prep.brand, limit: 3 });
+          for (const [k, v] of Object.entries(sugg.copyPatch || {})) {
+            if (!copyWithDefaults[k]) copyWithDefaults[k] = String(v);
+          }
+        } catch {}
 
         // ⬇️ NEW: synthesize vector assets, merge into copy (non-destructive)
         try {
@@ -687,6 +727,9 @@ router.post("/act", async (req, res) => {
             },
           });
           Object.assign(copyWithDefaults, copyPatch);
+
+          // remember shipped vector assets for future suggestions
+          try { rememberVectorAssets({ copy: copyWithDefaults, brand: prep.brand }); } catch {}
         } catch {}
 
         // Keep designer context accessible for later KPI record
@@ -713,14 +756,19 @@ router.post("/act", async (req, res) => {
             (spec?.brand?.dark ?? (typeof bias.dark === "boolean" ? bias.dark : false));
 
           // 1) Tokens & grid (search best first)
-          const { best: bestTokens } = searchBestTokens({
+          let st = searchBestTokens({
             primary: primaryIn,
             dark: darkIn,
             tone: toneIn,
             goal: intentFromSpec.goal || "",
             industry: intentFromSpec.industry || "",
           });
-          tokens = bestTokens;
+          tokens = st?.best;
+          if (!tokens) {
+            const w = wideTokenSearch({ primary: primaryIn, dark: darkIn, tone: toneIn });
+            tokens = w.tokens;
+          }
+
           const grid = buildGrid({ density: toneIn === "minimal" ? "minimal" : "normal" });
 
           // 2) Evaluate
@@ -804,7 +852,7 @@ router.post("/act", async (req, res) => {
           flags = _flags || [];
           if (flags.length) {
             try {
-              pushSignal(req.body?.sessionId || "anon", {
+              pushSignal(String(req.body?.sessionId || "anon"), {
                 ts: Date.now(),
                 kind: "fact_sanitized",
                 data: { fields: flags.slice(0, 6) },
@@ -980,6 +1028,27 @@ router.post("/act", async (req, res) => {
           }
         } catch {}
 
+        // Device Gate — 2 viewports × 2 throttles; optional strict block
+        try {
+          if (process.env.DEVICE_GATE === "on" || process.env.DEVICE_GATE === "strict") {
+            const pageUrl = data?.url || data?.path || null;
+            if (pageUrl) {
+              const abs = /^https?:\/\//i.test(pageUrl) ? pageUrl : `${baseUrl(req)}${pageUrl}`;
+              const gate = await runDeviceGate(abs, keyNow);
+              // Emit a signal for UI and logs
+              pushSignal(String(req.body?.sessionId || "anon"), {
+                ts: Date.now(),
+                kind: "device_gate",
+                data: { pass: gate.pass, worst_cls: gate.worst_cls, total_clipped: gate.total_clipped }
+              });
+              // Strict mode: fail hard if budgets not met
+              if (!gate.pass && process.env.DEVICE_GATE === "strict") {
+                return { kind: "compose", error: "device_gate_fail", gate };
+              }
+            }
+          }
+        } catch {}
+
         // Device snapshot sanity (optional, non-blocking)
         try {
           if (process.env.QA_DEVICE_SNAPSHOTS === "1" && (data?.url || data?.path)) {
@@ -1132,6 +1201,7 @@ router.post("/one", async (req, res) => {
     let labelPath = "rules"; // "rules" | "local" | "cloud"
     let cloudUsed = false;
     const startedAt = Date.now();
+    let pageId = null;
 
     // 0) Playbook first (no-model)
     let fit = pickFromPlaybook(prompt);
@@ -1258,7 +1328,10 @@ router.post("/one", async (req, res) => {
     const top = actions[0];
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "accept-language": String(req.headers["accept-language"] || "")
+      },
       body: JSON.stringify({ sessionId, spec, action: top }),
     });
     const actData = await actResR.json();
@@ -1281,7 +1354,10 @@ router.post("/one", async (req, res) => {
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "accept-language": String(req.headers["accept-language"] || "")
+        },
         body: JSON.stringify({
           sessionId,
           spec: { ...spec, brandColor, copy },
@@ -1290,16 +1366,17 @@ router.post("/one", async (req, res) => {
       });
       const composeData = await composeR.json();
       url = composeData?.result?.url || composeData?.result?.path || null;
+      pageId = composeData?.result?.pageId || null;
       usedAction = composeAction;
       result = composeData?.result;
 
       // Economic flywheel: attribute estimated labeler cost to this URL
       try {
-        const pageId = composeData?.result?.pageId;
-        if (pageId) {
+        const pid = composeData?.result?.pageId;
+        if (pid) {
           const estCents = cloudUsed ? 0.03 : 0;
           const estTokens = cloudUsed ? 1200 : 0;
-          recordUrlCost(pageId, estCents, estTokens);
+          recordUrlCost(pid, estCents, estTokens);
         }
       } catch {}
     }
@@ -1330,6 +1407,7 @@ router.post("/one", async (req, res) => {
         tokens: cloudUsed ? 1200 : 0,
         cents: cloudUsed ? 0.03 : 0,
         shipped,
+        pageId,
       });
     } catch {}
 
@@ -1418,7 +1496,10 @@ router.post("/instant", async (req, res) => {
     const retrieve = { kind: "retrieve", args: { sections: intent.sections } };
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "accept-language": String(req.headers["accept-language"] || "")
+      },
       body: JSON.stringify({ sessionId, spec, action: retrieve }),
     });
     const actData = await actResR.json();
@@ -1440,7 +1521,10 @@ router.post("/instant", async (req, res) => {
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "accept-language": String(req.headers["accept-language"] || "")
+        },
         body: JSON.stringify({
           sessionId,
           spec: { ...spec, brandColor, copy },
@@ -1515,7 +1599,10 @@ router.post("/clarify/compose", async (req, res) => {
     const retrieve = { kind: "retrieve", args: { sections: s.layout.sections } };
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "accept-language": String(req.headers["accept-language"] || "")
+      },
       body: JSON.stringify({ sessionId, spec: s, action: retrieve }),
     });
     const actData = await actResR.json();
@@ -1536,7 +1623,10 @@ router.post("/clarify/compose", async (req, res) => {
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "accept-language": String(req.headers["accept-language"] || "")
+        },
         body: JSON.stringify({
           sessionId,
           spec: { ...s, brandColor, copy },
@@ -1603,9 +1693,10 @@ router.get("/metrics", (req, res) => {
     const editsPath = FILE_EDITS_METR;
 
     const stats = fs.existsSync(statsPath) ? JSON.parse(fs.readFileSync(statsPath, "utf8")) : {};
-    const nRules = stats?.rules?.n || 0;
-    const nLocal = stats?.local?.n || 0;
-    const nCloud = stats?.cloud?.n || 0;
+    const paths = stats?.paths || {};
+    const nRules = paths?.rules?.n || 0;
+    const nLocal = paths?.local?.n || 0;
+    const nCloud = paths?.cloud?.n || 0;
     const total = Math.max(1, nRules + nLocal + nCloud);
 
     const cloud_pct = Math.round((nCloud / total) * 100);
@@ -1698,6 +1789,11 @@ router.post("/kpi/convert", (req, res) => {
         }
       } catch {}
     } catch {}
+    try { recordConversionForPage(String(pageId)); } catch {}
+
+    // ⬇️ NEW: attribute real-world reward to shadow evaluator
+    try { rewardShadow(String(pageId)); } catch {}
+
     return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "convert_failed" });
@@ -1725,11 +1821,7 @@ router.get("/proof/:pageId", (req, res) => {
 });
 
 function pathResolve(p) {
-  try {
-    return require("path").resolve(p);
-  } catch {
-    return p;
-  }
+  return path.resolve(p);
 }
 
 export default router;
