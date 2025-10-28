@@ -1,0 +1,18 @@
+{
+  "all|hero-basic": {
+    "hero-basic": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761649845717
+    },
+    "hero-basic@b": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761649845717
+    }
+  }
+}

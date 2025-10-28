@@ -1,0 +1,15 @@
+{
+  "global": {},
+  "perSession": {},
+  "seenGlobal": {
+    "#5921b2|minimal|true": 1
+  },
+  "seenPerSession": {
+    "vec1": {
+      "#5921b2|minimal|true": 1
+    }
+  },
+  "_meta": {
+    "lastDecayTs": 1761649851234
+  }
+}

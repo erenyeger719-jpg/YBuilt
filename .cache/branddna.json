@@ -1,0 +1,11 @@
+{
+  "vec1": {
+    "n": 1,
+    "sections": {
+      "cta-simple": 1
+    },
+    "primary": "#5921b2",
+    "tone": "minimal",
+    "dark": true
+  }
+}

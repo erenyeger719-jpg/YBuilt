@@ -1,4 +1,4 @@
-// server/ai/router.js
+// server/ai/router.ts
 import express from "express";
 import fs from "fs";
 import { buildSpec } from "../intent/brief.ts";
@@ -1530,6 +1530,22 @@ router.post("/instant", async (req, res) => {
       const filled = fillSlots({ prompt, spec, copy });
       copy = filled.copy;
     }
+
+    // ⬇️ PATCH: merge OG + vector asset copy patches, then persist on spec
+    try {
+      const brand = spec.brand || {};
+      const og = buildSEO({ brand, copy });
+      if (og?.copyPatch) Object.assign(copy, og.copyPatch);
+
+      const vec = await synthesizeAssets({
+        brand,
+        count: 4,
+        tags: ["saas", "conversion"],
+      });
+      if (vec?.copyPatch) Object.assign(copy, vec.copyPatch);
+
+      spec.copy = copy;
+    } catch {}
 
     // Always retrieve → compose
     const retrieve = { kind: "retrieve", args: { sections: intent.sections } };
