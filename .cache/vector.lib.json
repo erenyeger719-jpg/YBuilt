@@ -3154,6 +3154,69 @@
         "minimal"
       ],
       "addedTs": 1761650389064
+    },
+    "0709fe77716ea8706c0358096361c0c86b9548c2": {
+      "id": "0709fe77716ea8706c0358096361c0c86b9548c2",
+      "url": "/vectors/code-5.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/code-5.svg",
+      "tags": [
+        "saas",
+        "code"
+      ],
+      "industry": [
+        "saas"
+      ],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761651924419
+    },
+    "e3418957b7b4661155f656341b52d4c9721ce636": {
+      "id": "e3418957b7b4661155f656341b52d4c9721ce636",
+      "url": "/vectors/ai-6.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/ai-6.svg",
+      "tags": [
+        "saas",
+        "ai"
+      ],
+      "industry": [
+        "saas"
+      ],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761651924419
+    },
+    "a8336129fbcf58922ff4b07b0886bf6ffdf4f41d": {
+      "id": "a8336129fbcf58922ff4b07b0886bf6ffdf4f41d",
+      "url": "/vectors/people-7.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/people-7.svg",
+      "tags": [
+        "saas"
+      ],
+      "industry": [
+        "saas"
+      ],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761651924419
+    },
+    "62625c26db8bc17a47ac1931fd97315d240edf9c": {
+      "id": "62625c26db8bc17a47ac1931fd97315d240edf9c",
+      "url": "/vectors/support-8.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/support-8.svg",
+      "tags": [
+        "saas",
+        "support"
+      ],
+      "industry": [
+        "saas"
+      ],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761651924419
     }
   },
   "index": {
@@ -3637,10 +3700,15 @@
       "35f53344032486c7224917b77ba89c2b8cee68a9",
       "00b86d2c330feca6832901b0b5476d267c35c98a",
       "6abd9243ad73fe0191cc158bd19acefed13b8c9d",
-      "2c27e0042e3fb50146be0f20e62c3a4ba5938cad"
+      "2c27e0042e3fb50146be0f20e62c3a4ba5938cad",
+      "0709fe77716ea8706c0358096361c0c86b9548c2",
+      "e3418957b7b4661155f656341b52d4c9721ce636",
+      "a8336129fbcf58922ff4b07b0886bf6ffdf4f41d",
+      "62625c26db8bc17a47ac1931fd97315d240edf9c"
     ],
     "ai": [
-      "69e25ce969fef4f702fdb5d6d1c10f5acdf96e93"
+      "69e25ce969fef4f702fdb5d6d1c10f5acdf96e93",
+      "e3418957b7b4661155f656341b52d4c9721ce636"
     ],
     "cloud": [
       "f3d9adfcf76490f1c66161375d946e51a2a48156",
@@ -3670,17 +3738,29 @@
       "6abd9243ad73fe0191cc158bd19acefed13b8c9d"
     ],
     "saas": [
-      "2c27e0042e3fb50146be0f20e62c3a4ba5938cad"
+      "2c27e0042e3fb50146be0f20e62c3a4ba5938cad",
+      "0709fe77716ea8706c0358096361c0c86b9548c2",
+      "e3418957b7b4661155f656341b52d4c9721ce636",
+      "a8336129fbcf58922ff4b07b0886bf6ffdf4f41d",
+      "62625c26db8bc17a47ac1931fd97315d240edf9c"
     ],
     "conversion": [
       "2c27e0042e3fb50146be0f20e62c3a4ba5938cad"
+    ],
+    "code": [
+      "0709fe77716ea8706c0358096361c0c86b9548c2"
+    ],
+    "support": [
+      "62625c26db8bc17a47ac1931fd97315d240edf9c"
     ]
   },
   "usage": {
     "406f0c51b9293ebcce2ff7c7d255307632279f78": 3,
     "d7767530865e1b35ac708f8192ffe7cb3aeb8f4c": 3,
     "c99162032c9c3b6f7d0c7ede1a8c467e6422b074": 1,
-    "2c27e0042e3fb50146be0f20e62c3a4ba5938cad": 2
+    "2c27e0042e3fb50146be0f20e62c3a4ba5938cad": 3,
+    "0709fe77716ea8706c0358096361c0c86b9548c2": 1,
+    "e3418957b7b4661155f656341b52d4c9721ce636": 1
   },
   "synonyms": {
     "analytics": [

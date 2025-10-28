@@ -808,18 +808,25 @@ router.post("/act", async (req, res) => {
           darkIn =
             ((spec as any)?.brand?.dark ?? (typeof (bias as any).dark === "boolean" ? (bias as any).dark : false));
 
-          // 1) Tokens & grid (search best first)
-          let st = searchBestTokens({
-            primary: primaryIn,
-            dark: darkIn as boolean,
-            tone: toneIn as string,
-            goal: (intentFromSpec as any).goal || "",
-            industry: (intentFromSpec as any).industry || "",
-          });
-          tokens = st?.best;
-          if (!tokens) {
+          // 1) Tokens & grid — honor breadth
+          const breadthIn = String((action as any)?.args?.breadth || "").toLowerCase();
+          const wantWide = breadthIn === "wide" || breadthIn === "max";
+          if (wantWide) {
             const w = wideTokenSearch({ primary: primaryIn, dark: darkIn as boolean, tone: toneIn as string });
             tokens = (w as any).tokens;
+          } else {
+            const st = searchBestTokens({
+              primary: primaryIn,
+              dark: darkIn as boolean,
+              tone: toneIn as string,
+              goal: (intentFromSpec as any).goal || "",
+              industry: (intentFromSpec as any).industry || "",
+            });
+            tokens = st?.best;
+            if (!tokens) {
+              const w = wideTokenSearch({ primary: primaryIn, dark: darkIn as boolean, tone: toneIn as string });
+              tokens = (w as any).tokens;
+            }
           }
 
           const grid = buildGrid({ density: toneIn === "minimal" ? "minimal" : "normal" });
@@ -956,6 +963,17 @@ router.post("/act", async (req, res) => {
               kind: "proof_warn",
               data: { redactedCount, evidencedCount, flaggedCount },
             });
+          }
+
+          // STRICT gate (env): block shipping if critical fields are redacted or facts are flagged
+          if (process.env.PROOF_STRICT === "1") {
+            const CRIT = new Set(["HEADLINE", "HERO_SUBHEAD", "TAGLINE"]);
+            const badCrit = Object.entries(proofData || {}).some(
+              ([k, v]: any) => CRIT.has(String(k)) && (v as any)?.status === "redacted"
+            );
+            if (badCrit || flaggedCount > 0) {
+              return { kind: "compose", error: "proof_gate_fail", redactedCount, flaggedCount };
+            }
           }
 
           // 2) stronger neutralization for headline/subhead/tagline when any redaction happened
@@ -1595,6 +1613,7 @@ router.post("/instant", async (req, res) => {
           copy,
           brand: { primary: brandColor },
           variantHints: VARIANT_HINTS,
+          breadth, // NEW
         },
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
