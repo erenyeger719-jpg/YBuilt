@@ -1,162 +1,173 @@
 // server/media/vector.lib.ts
+// Vector library: tiny synonym-aware suggester + usage memory.
+// Stores to .cache/vector.lib.json and prefers existing library assets before synth.
+// API used by router: suggestVectorAssets(), rememberVectorAssets()
+
 import fs from "fs";
 import path from "path";
 
+type Asset = {
+  id: string;
+  url: string | null;        // null if not web-served (kept for future)
+  file?: string;             // absolute path, for debug
+  tags: string[];            // core tags (e.g., analytics, security)
+  vibe?: string[];           // style cues: minimal, outline, playful
+  industry?: string[];       // saas, ecommerce, portfolio, edu, agency
+  addedTs?: number;
+};
+
+type LibDB = {
+  assets: Record<string, Asset>;
+  index: Record<string, string[]>;  // tag -> assetIds
+  usage: Record<string, number>;    // assetId -> count
+  synonyms: Record<string, string[]>;
+  _meta?: { lastMineTs?: number };
+};
+
 const FILE = path.resolve(".cache/vector.lib.json");
 
-type Brand = { primary?: string; tone?: string; dark?: boolean };
-type Entry = { url: string; brand: Brand; ts: number; uses: number };
-
-function load(): Record<string, Entry> {
-  try { return JSON.parse(fs.readFileSync(FILE, "utf8")); }
-  catch { return {}; }
+function load(): LibDB {
+  try {
+    return JSON.parse(fs.readFileSync(FILE, "utf8"));
+  } catch {
+    return {
+      assets: {},
+      index: {},
+      usage: {},
+      synonyms: DEFAULT_SYNONYMS,
+      _meta: {},
+    };
+  }
 }
-function save(db: Record<string, Entry>) {
+function save(db: LibDB) {
   try {
     fs.mkdirSync(path.dirname(FILE), { recursive: true });
     fs.writeFileSync(FILE, JSON.stringify(db, null, 2));
   } catch {}
 }
 
-function keyFor(url: string) { return String(url).slice(0, 1024); }
-function looksVector(v: string) {
-  const s = String(v || "");
-  return s.startsWith("<svg") || /\.svg(\?|$)/i.test(s) || s.startsWith("data:image/svg+xml");
+const DEFAULT_SYNONYMS: Record<string, string[]> = {
+  analytics: ["chart", "charts", "graph", "graphs", "dashboard", "metrics", "plot"],
+  security:  ["shield", "lock", "locks", "padlock", "secure", "privacy", "guard", "safe"],
+  speed:     ["rocket", "bolt", "fast", "performance", "lightning"],
+  cloud:     ["cloud", "server", "servers", "network"],
+  ai:        ["brain", "neural", "spark", "circuit"],
+  code:      ["brackets", "terminal", "console", "dev", "developer"],
+  design:    ["brush", "pen", "palette", "layout", "grid"],
+  payment:   ["card", "rupee", "money", "wallet", "checkout", "invoice"],
+  people:    ["team", "user", "users", "avatar", "group", "community"],
+  education: ["book", "books", "learn", "learning", "graduation", "cap", "edu"],
+  support:   ["chat", "message", "help", "lifebuoy", "support"],
+  ecommerce: ["bag", "cart", "store", "shop", "ecom"],
+  portfolio: ["work", "case", "gallery", "folio"],
+  agency:    ["brief", "proposal", "client", "agency"],
+  // vibes (style cues)
+  minimal:   ["line", "outline", "mono", "simple"],
+  playful:   ["blob", "rounded", "fun", "color"],
+  serious:   ["sharp", "solid", "mono"],
+};
+
+function unique<T>(arr: T[]) { return Array.from(new Set(arr)); }
+
+function expandTagsWithSynonyms(db: LibDB, tags: string[]): string[] {
+  const out = new Set<string>();
+  for (const tRaw of tags) {
+    const t = String(tRaw || "").toLowerCase().trim();
+    if (!t) continue;
+    out.add(t);
+    const syn = db.synonyms[t];
+    if (Array.isArray(syn)) for (const s of syn) out.add(String(s).toLowerCase());
+  }
+  return Array.from(out);
 }
 
-// --- Tiny built-in seed set (SVGs are intentionally small) ---
-const SEED_SVGS: Array<{ url: string; brand: Brand }> = [
-  {
-    url: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none"><rect x="6" y="10" width="36" height="24" rx="4" stroke="currentColor" stroke-width="2"/><path d="M10 28h28" stroke="currentColor" stroke-width="2"/><circle cx="34" cy="22" r="2" fill="currentColor"/></svg>`,
-    brand: { tone: "minimal", dark: false, primary: "#6d28d9" },
-  },
-  {
-    url: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="14" stroke="currentColor" stroke-width="2"/><path d="M24 10v8M24 30v8M10 24h8M30 24h8" stroke="currentColor" stroke-width="2"/></svg>`,
-    brand: { tone: "serious", dark: false, primary: "#0ea5e9" },
-  },
-  {
-    url: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none"><path d="M8 32l16-16 16 16" stroke="currentColor" stroke-width="2" fill="none"/><rect x="6" y="14" width="36" height="22" rx="4" stroke="currentColor" stroke-width="2"/></svg>`,
-    brand: { tone: "minimal", dark: true, primary: "#a78bfa" },
-  },
-  {
-    url: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none"><rect x="10" y="10" width="28" height="28" rx="6" stroke="currentColor" stroke-width="2"/><path d="M16 24h16" stroke="currentColor" stroke-width="2"/></svg>`,
-    brand: { tone: "serious", dark: true, primary: "#10b981" },
-  },
-  {
-    url: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none"><path d="M12 30c4-8 20-8 24 0" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="20" r="2" fill="currentColor"/><circle cx="30" cy="20" r="2" fill="currentColor"/></svg>`,
-    brand: { tone: "playful", dark: false, primary: "#ef4444" },
-  },
-  {
-    url: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 48 48" fill="none"><path d="M8 30l8-12 8 10 8-8 8 12" stroke="currentColor" stroke-width="2" fill="none"/></svg>`,
-    brand: { tone: "playful", dark: true, primary: "#f59e0b" },
-  },
-];
+function deriveQueryFromBrand(brand: any): { tags: string[] } {
+  const tone = String(brand?.tone || "").toLowerCase();
+  const dark = !!brand?.dark;
+  // Start with tone + generic web payload
+  const base = ["web", "saas"];
+  if (tone === "minimal") base.push("minimal", "outline");
+  else if (tone === "playful") base.push("playful", "blob");
+  else base.push("serious");
+  if (dark) base.push("dark"); // not strictly needed, but harmless filter
+  return { tags: base };
+}
 
-// Bootstrap seeds on first use
-(function bootstrapSeeds() {
-  try {
-    const db = load();
-    const count = Object.keys(db).length;
-    if (count >= 6) return;
-    for (const s of SEED_SVGS) {
-      const id = keyFor(s.url);
-      if (!db[id]) db[id] = { url: s.url, brand: s.brand, ts: Date.now(), uses: 0 };
-    }
-    save(db);
-  } catch {}
-})();
+function scoreAsset(a: Asset, qTags: Set<string>, usage: number): number {
+  // Simple scoring: direct tag hits (2x), synonym/prox hits (1x via expand),
+  // vibe/industry partials (0.5x), plus a small usage boost.
+  let s = 0;
+  for (const t of a.tags || []) if (qTags.has(t)) s += 2;
+  for (const v of (a.vibe || [])) if (qTags.has(v)) s += 0.5;
+  for (const ind of (a.industry || [])) if (qTags.has(ind)) s += 0.5;
+  s += Math.log1p(usage) * 0.2;
+  // Newer additions get a nudge
+  if (a.addedTs) s += Math.min(1, (Date.now() - a.addedTs) / (90 * 24 * 3600_000)) * 0;
+  return s;
+}
 
-export function rememberVectorAssets(input: { copy: Record<string, string>, brand?: Brand }) {
-  const copy = input?.copy || {};
-  const brand = input?.brand || {};
+function topNByScore<T>(rows: T[], scoreOf: (t: T) => number, n: number): T[] {
+  return rows
+    .map((r) => [r, scoreOf(r)] as const)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([r]) => r);
+}
+
+// Public: suggest vector assets → copy patch (non-destructive)
+export function suggestVectorAssets({ brand = {}, limit = 3 }: { brand?: any; limit?: number }) {
   const db = load();
+  const qBase = deriveQueryFromBrand(brand);
+  const qExpanded = expandTagsWithSynonyms(db, qBase.tags);
+  const qSet = new Set(qExpanded);
 
-  for (const k of Object.keys(copy)) {
-    const val = String(copy[k] ?? "");
-    if (!val) continue;
-    if (looksVector(val)) {
-      const id = keyFor(val);
-      const cur = db[id] || { url: val, brand: { primary: brand.primary, tone: brand.tone, dark: brand.dark }, ts: Date.now(), uses: 0 };
-      cur.uses += 1;
-      cur.ts = Date.now();
-      db[id] = cur;
-    }
-  }
-  save(db);
+  const assets = Object.values(db.assets || {});
+  if (!assets.length) return { copyPatch: {} as Record<string, string> };
+
+  const scored = topNByScore(
+    assets,
+    (a) => scoreAsset(a, qSet, db.usage[a.id] || 0),
+    Math.max(1, Math.min(8, limit || 3))
+  );
+
+  // Map to copy keys expected by composer (safe if caller ignores)
+  const urls = scored.map((a) => a.url).filter(Boolean) as string[];
+  const copyPatch: Record<string, string> = {};
+  if (urls[0]) copyPatch.HERO_ILLUSTRATION_URL = urls[0];
+  if (urls[1]) copyPatch.FEATURES_ICON_1_URL = urls[1];
+  if (urls[2]) copyPatch.FEATURES_ICON_2_URL = urls[2];
+
+  return { copyPatch, assets: scored };
 }
 
-// Simple popularity + brand-compat selection
-export function suggestVectorAssets(input: { brand?: Brand; limit?: number }) {
-  const brand = input?.brand || {};
-  const limit = Math.max(1, Math.min(8, Number(input?.limit || 3)));
+// Public: remember shipped vectors (tiny learning)
+export function rememberVectorAssets({ copy = {}, brand = {} }: { copy?: Record<string, any>; brand?: any }) {
   const db = load();
-  const items = Object.values(db);
+  const urls: string[] = [];
 
-  const score = (e: Entry) => {
-    let s = e.uses;
-    if (typeof brand.dark === "boolean" && e.brand && typeof e.brand.dark === "boolean" && e.brand.dark === brand.dark) s += 2;
-    if (brand.tone && e.brand?.tone === brand.tone) s += 1;
-    // naive primary proximity: first 2 hex chars match
-    if (brand.primary && e.brand?.primary && String(brand.primary).slice(1,3) === String(e.brand.primary).slice(1,3)) s += 1;
-    return s;
-  };
-
-  items.sort((a, b) => score(b) - score(a));
-
-  const picks = items.slice(0, limit).map(e => e.url);
-
-  const patch: Record<string, string> = {};
-  if (picks[0]) patch.ILLUSTRATION_HERO = picks[0];
-  if (picks[1]) patch.ICON_PRIMARY = picks[1];
-  if (picks[2]) patch.ICON_SECONDARY = picks[2];
-
-  return { copyPatch: patch, from: "vector.lib", picks, total: items.length };
-}
-
-/** --------- Simple “miner” (reads retrieval DB and feeds the library) ---------- */
-function todayKey() {
-  const d = new Date();
-  return `${d.getUTCFullYear()}-${(d.getUTCMonth()+1).toString().padStart(2,"0")}-${d.getUTCDate().toString().padStart(2,"0")}`;
-}
-export function mineRetrievalDB(limit = 1000) {
-  try {
-    const RETR_PATH = path.resolve(".cache/retrieval.jsonl");
-    const META_PATH = path.resolve(".cache/vector.miner.meta.json");
-    if (!fs.existsSync(RETR_PATH)) return { ok: true, scanned: 0, added: 0, note: "no_db" };
-
-    const meta = (() => { try { return JSON.parse(fs.readFileSync(META_PATH, "utf8")); } catch { return { lines_done: 0, last_run_day: "" }; } })();
-    const raw = fs.readFileSync(RETR_PATH, "utf8").split(/\r?\n/).filter(Boolean);
-    const start = Math.max(0, Math.min(meta.lines_done || 0, raw.length));
-    const end = Math.min(raw.length, start + Math.max(1, limit));
-
-    let scanned = 0, added = 0;
-    for (let i = start; i < end; i++) {
-      scanned++;
-      try {
-        const j = JSON.parse(raw[i]);
-        const payload = j?.data || j?.example || j || {};
-        const copy = payload.copy || null;
-        const brand = payload.brand || null;
-        if (copy && brand) { rememberVectorAssets({ copy, brand }); added++; }
-      } catch { /* skip */ }
-    }
-
-    meta.lines_done = end;
-    meta.last_run_day = todayKey();
-    try { fs.mkdirSync(path.dirname(META_PATH), { recursive: true }); fs.writeFileSync(META_PATH, JSON.stringify(meta, null, 2)); } catch {}
-    return { ok: true, scanned, added };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message || "miner_failed" };
+  // collect any *_URL fields
+  for (const [k, v] of Object.entries(copy || {})) {
+    if (!/_URL$/i.test(k)) continue;
+    const s = String(v || "").trim();
+    if (s) urls.push(s);
   }
-}
-export function maybeNightlyMine() {
-  try {
-    const META_PATH = path.resolve(".cache/vector.miner.meta.json");
-    const meta = (() => { try { return JSON.parse(fs.readFileSync(META_PATH, "utf8")); } catch { return { lines_done: 0, last_run_day: "" }; } })();
-    const today = todayKey();
-    if (meta.last_run_day === today) return { ok: true, skipped: true };
-    return mineRetrievalDB(1000);
-  } catch (e) {
-    return { ok: false, error: (e as Error).message || "nightly_failed" };
+  if (!urls.length) return { remembered: 0 };
+
+  let bump = 0;
+  const byUrl: Record<string, string> = {};
+  for (const a of Object.values(db.assets || {})) {
+    if (a.url) byUrl[a.url] = a.id;
   }
+  for (const u of unique(urls)) {
+    const id = byUrl[u];
+    if (!id) continue;
+    db.usage[id] = (db.usage[id] || 0) + 1;
+    bump++;
+  }
+  if (bump) save(db);
+  return { remembered: bump };
 }
+
+// Internal helpers for miner to reuse (kept here to avoid duplication)
+export function __vectorLib_load() { return load(); }
+export function __vectorLib_save(db: LibDB) { return save(db); }
