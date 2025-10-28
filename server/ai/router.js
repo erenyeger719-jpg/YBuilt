@@ -56,12 +56,14 @@ import { wideTokenSearch } from "../design/search.wide.ts";
 import { runSnapshots } from "../qa/snapshots.ts";
 import { runDeviceGate } from "../qa/device.gate.ts";
 import { suggestVectorAssets, rememberVectorAssets } from "../media/vector.lib.ts";
-import { listPacks } from "../sections/packs.ts";
+import { listPacksRanked, recordPackSeenForPage, recordPackWinForPage } from "../sections/packs.ts";
+import { maybeNightlyMine as maybeVectorMine, runVectorMiner } from "../media/vector.miner.ts";
 import crypto from "crypto";
 import path from "path";
 
 // Nightly TasteNet retrain (best-effort, no-op if not due)
 try { maybeNightlyRetrain(); } catch {}
+try { maybeVectorMine(); } catch {}
 
 // --- SUP ALGO: tiny metrics stores ---
 const CACHE_DIR = ".cache";
@@ -599,10 +601,28 @@ router.post("/taste/retrain", (_req, res) => {
   }
 });
 
+// --- Vector miner debug ---
+router.post("/vector/mine", (_req, res) => {
+  try { return res.json({ ok: true, ...runVectorMiner(1000) }); }
+  catch { return res.status(500).json({ ok: false, error: "vector_mine_failed" }); }
+});
+
 // --- section packs (marketplace contract) ---
-router.get("/sections/packs", (_req, res) => {
-  try { return res.json({ ok: true, packs: listPacks() }); }
-  catch { return res.status(500).json({ ok: false, error: "packs_failed" }); }
+router.get("/sections/packs", (req, res) => {
+  try {
+    const all = listPacksRanked();
+    const raw = String((req.query.tags ?? req.query.tag ?? "") || "").trim();
+    const tags = raw ? raw.split(",").map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+    const lim = Math.max(1, Math.min(50, parseInt(String(req.query.limit || "12"), 10) || 12));
+
+    let rows = all;
+    if (tags.length) {
+      rows = all.filter(p => (p.tags || []).some(t => tags.includes(String(t).toLowerCase())));
+    }
+    return res.json({ ok: true, packs: rows.slice(0, lim) });
+  } catch {
+    return res.status(500).json({ ok: false, error: "packs_failed" });
+  }
 });
 
 // ---------- act ----------
@@ -639,6 +659,17 @@ router.post("/act", async (req, res) => {
         const sectionsIn = Array.isArray(action.args?.sections)
           ? action.args.sections
           : spec?.layout?.sections || [];
+
+        // Auto-pack fallback: if no sections, choose best-ranked pack
+        try {
+          if (!sectionsIn.length) {
+            const ranked = listPacksRanked();
+            if (Array.isArray(ranked) && ranked.length) {
+              const best = ranked[0];
+              action.args = { ...(action.args || {}), sections: best.sections };
+            }
+          }
+        } catch {}
 
         // Bandit audience key derived from intent/spec
         const intentFromSpec = spec?.intent || {};
@@ -944,6 +975,11 @@ router.post("/act", async (req, res) => {
         // Readability guard (non-blocking) — run after ProofGate-Lite
         try {
           const r = checkCopyReadability(copyWithDefaults);
+          // apply safe auto-fixes
+          if (r.copyPatch && Object.keys(r.copyPatch).length) {
+            Object.assign(copyWithDefaults, r.copyPatch);
+          }
+          // still surface issues to the UI
           if (r.issues.length) {
             pushSignal(String(req.body?.sessionId || "anon"), {
               ts: Date.now(),
@@ -986,6 +1022,9 @@ router.post("/act", async (req, res) => {
           key: keyNow,
           url: data?.url || data?.path || null,
         });
+
+        // NEW: attribute pack seen for this page
+        try { recordPackSeenForPage(keyNow, prep.sections); } catch {}
 
         // holders for performance signals
         let perfEst = null;      // worst-case for gating/logging
@@ -1746,7 +1785,7 @@ router.get("/metrics", (req, res) => {
     // taste top keys (if trained)
     let taste_top = null;
     try {
-      const t = JSON.parse(fs.readFileSync(pathResolve(".cache/taste.priors.json"), "utf8"));
+      const t = JSON.parse(fs.readFileSync(pathResolve(".cache/token.priors.json"), "utf8"));
       taste_top = Array.isArray(t?.top) ? t.top.slice(0, 5) : null;
     } catch {}
 
@@ -1777,6 +1816,7 @@ router.post("/kpi/convert", (req, res) => {
     const { pageId = "" } = req.body || {};
     if (!pageId) return res.status(400).json({ ok: false, error: "missing_pageId" });
     markConversion(String(pageId));
+    try { recordPackWinForPage(String(pageId)); } catch {}
     try {
       const last = lastShipFor(String(pageId));
       if (last) recordSectionOutcome(last.sections || [], "all", true);
