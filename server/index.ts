@@ -20,6 +20,7 @@ import buildsRouter from './routes/builds.ts';
 import { wireBuildsNamespace } from './builds.ts';
 import logsApiRouter from './routes/logs.ts'; // note the .ts
 import { persistFork } from './previews.storage.ts';
+import aiRouter from './ai/router.ts'; // ← ensure AI router is statically imported
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -522,10 +523,8 @@ app.use(ipGate());
   const { default: aiOrchestrator } = await import('./routes/ai.orchestrator.js').catch(() => ({
     default: undefined as any,
   }));
-  // NEW: AI review router (server/ai/router.js)
-  const { default: aiRouter } = await import('./ai/router.js').catch(() => ({
-    default: undefined as any,
-  }));
+  // (aiRouter is now statically imported at top)
+
   // NEW: Abuse router (rate-limit/abuse signals)
   const { default: abuseRouter } = await import('./routes/abuse.js').catch(() => ({
     default: undefined as any,
@@ -575,7 +574,7 @@ app.use(ipGate());
 
   // Mount AI routers UNDER THE SAME PREFIX. Order matters:
   // - Mount aiRouter (with /review) first so it takes precedence over any duplicate paths.
-  if (aiRouter) app.use('/api/ai', express.json({ limit: '1mb' }), aiRouter);
+  app.use('/api/ai', aiRouter); // ← ensure mounted
   if (aiOrchestrator) app.use('/api/ai', aiOrchestrator); // planner/scaffold endpoints
 
   // NEW: Abuse endpoints
