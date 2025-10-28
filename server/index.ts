@@ -549,6 +549,11 @@ app.use(ipGate());
   // Optional routes: teams
   const teamsMod: any = await import('./routes/teams.js').catch(() => ({} as any));
 
+  // 🔗 NEW: Vector router (lazy import)
+  const { default: vectorRouter } = await import('./routes/vector.ts').catch(() => ({
+    default: undefined as any,
+  }));
+
   // Mount deploy queue router (in addition to deploy API)
   app.use('/api/deploy', deployQueue);
 
@@ -574,8 +579,9 @@ app.use(ipGate());
 
   // Mount AI routers UNDER THE SAME PREFIX. Order matters:
   // - Mount aiRouter (with /review) first so it takes precedence over any duplicate paths.
-  app.use('/api/ai', aiRouter); // ← ensure mounted
-  if (aiOrchestrator) app.use('/api/ai', aiOrchestrator); // planner/scaffold endpoints
+  app.use('/api/ai', aiRouter);                // existing
+  if (aiOrchestrator) app.use('/api/ai', aiOrchestrator);
+  if (vectorRouter) app.use('/api/ai', vectorRouter); // ← add this
 
   // NEW: Abuse endpoints
   if (abuseRouter) app.use('/api/abuse', express.json({ limit: '32kb' }), abuseRouter);
