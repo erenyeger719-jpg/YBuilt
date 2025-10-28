@@ -623,10 +623,13 @@ app.use(ipGate());
     });
   });
 
+  // ✅ Serve /public for things like /vectors/*.svg
+  app.use(express.static(path.resolve('public'), { extensions: ['html'] }));
+
   // Mount /dev static (before Vite/static)
   app.use('/dev', express.static(path.resolve('public/dev'), { extensions: ['html'] }));
 
-  // Static vs Vite dev (AFTER API)
+  // Static vs Vite dev (AFTER API + public)
   if (process.env.NODE_ENV === 'production') {
     serveStatic(app);
   } else {
