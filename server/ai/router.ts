@@ -55,7 +55,8 @@ import { editSearch } from "../qa/edit.search.ts";
 import { wideTokenSearch } from "../design/search.wide.ts";
 import { runSnapshots } from "../qa/snapshots.ts";
 import { runDeviceGate } from "../qa/device.gate.ts";
-import { suggestVectorAssets, rememberVectorAssets } from "../media/vector.lib.ts";
+// A. swapped import to use the shim
+import { suggestVectorAssets, rememberVectorAssets } from "../intent/assets.ts";
 import { listPacksRanked, recordPackSeenForPage, recordPackWinForPage } from "../sections/packs.ts";
 import { maybeNightlyMine as maybeVectorMine, runVectorMiner } from "../media/vector.miner.ts";
 import crypto from "crypto";
@@ -72,14 +73,14 @@ function ensureCache() {
     if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
   } catch {}
 }
-function loadJSON(p, def) {
+function loadJSON(p: string, def: any) {
   try {
     return JSON.parse(fs.readFileSync(p, "utf8"));
   } catch {
     return def;
   }
 }
-function saveJSON(p, obj) {
+function saveJSON(p: string, obj: any) {
   try {
     ensureCache();
     fs.writeFileSync(p, JSON.stringify(obj, null, 2));
@@ -93,7 +94,7 @@ const FILE_EDITS_METR = ".cache/edits.metrics.json"; // {ema:number, n:number}
 
 // --- Economic flywheel: cents/tokens per URL ---
 const FILE_URLCOST = ".cache/url.costs.json";
-function recordUrlCost(pageId, addCents = 0, addTokens = 0) {
+function recordUrlCost(pageId: string, addCents = 0, addTokens = 0) {
   if (!pageId) return;
   const s = loadJSON(FILE_URLCOST, {});
   const cur = s[pageId] || { cents: 0, tokens: 0, ts: Date.now() };
@@ -104,34 +105,34 @@ function recordUrlCost(pageId, addCents = 0, addTokens = 0) {
   saveJSON(FILE_URLCOST, s);
 }
 
-function retrMark(hit) {
+function retrMark(hit: boolean) {
   const s = loadJSON(FILE_RETR, { tries: 0, hits: 0 });
   s.tries += 1;
   if (hit) s.hits += 1;
   saveJSON(FILE_RETR, s);
 }
-function ema(prev, x, a = 0.25) {
+function ema(prev: number | null, x: number, a = 0.25) {
   return prev == null ? x : (1 - a) * prev + a * x;
 }
-function recordTTU(ms) {
+function recordTTU(ms: number) {
   const s = loadJSON(FILE_TTU, { ema_ms: null, n: 0 });
   s.ema_ms = ema(s.ema_ms, ms);
   s.n = (s.n || 0) + 1;
   saveJSON(FILE_TTU, s);
 }
-function editsInc(sessionId) {
+function editsInc(sessionId: string) {
   const s = loadJSON(FILE_EDITS_SESS, {});
   s[sessionId] = (s[sessionId] || 0) + 1;
   saveJSON(FILE_EDITS_SESS, s);
 }
-function editsTakeAndReset(sessionId) {
+function editsTakeAndReset(sessionId: string) {
   const s = loadJSON(FILE_EDITS_SESS, {});
   const k = s[sessionId] || 0;
   s[sessionId] = 0;
   saveJSON(FILE_EDITS_SESS, s);
   return k;
 }
-function recordEditsMetric(k) {
+function recordEditsMetric(k: number) {
   const m = loadJSON(FILE_EDITS_METR, { ema: null, n: 0 });
   m.ema = ema(m.ema, k);
   m.n = (m.n || 0) + 1;
@@ -139,14 +140,14 @@ function recordEditsMetric(k) {
 }
 
 // Variant hints to seed bandits (discovery)
-const VARIANT_HINTS = {
+const VARIANT_HINTS: Record<string, string[]> = {
   "hero-basic": ["hero-basic", "hero-basic@b"],
   "features-3col": ["features-3col", "features-3col@alt"],
   "pricing-simple": ["pricing-simple", "pricing-simple@a"],
   "faq-accordion": ["faq-accordion", "faq-accordion@dense"],
 };
 
-export function pickModel(task, tier = "balanced") {
+export function pickModel(task: "planner" | "coder" | "critic", tier = "balanced") {
   const map = {
     fast: {
       planner: { provider: "openai", model: "gpt-4o-mini" },
@@ -163,8 +164,8 @@ export function pickModel(task, tier = "balanced") {
       coder: { provider: "openai", model: "gpt-4o" },
       critic: { provider: "openai", model: "gpt-4o" },
     },
-  };
-  const tierMap = map[tier] || map.balanced;
+  } as const;
+  const tierMap = (map as any)[tier] || (map as any).balanced;
   return tierMap[task] || tierMap.coder;
 }
 export function pickTierByConfidence(c = 0.6) {
@@ -175,7 +176,7 @@ export function pickTierByConfidence(c = 0.6) {
 
 const router = express.Router();
 
-function extractJSON(s) {
+function extractJSON(s: string) {
   const start = s.indexOf("{");
   const end = s.lastIndexOf("}");
   if (start === -1 || end === -1 || end <= start) throw new Error("No JSON in response");
@@ -183,28 +184,28 @@ function extractJSON(s) {
 }
 
 // ---------- helpers ----------
-function baseUrl(req) {
+function baseUrl(req: express.Request) {
   return process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
 }
 
-function sha1(s) {
+function sha1(s: string) {
   return crypto.createHash("sha1").update(String(s)).digest("hex");
 }
 
-async function fetchJSONWithTimeout(url, opts, timeoutMs = 20000) {
+async function fetchJSONWithTimeout(url: string, opts?: RequestInit, timeoutMs = 20000) {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const r = await fetch(url, { ...(opts || {}), signal: ctrl.signal });
     const txt = await r.text();
-    if (!r.ok) throw new Error(txt || `HTTP_${r.status}`);
+    if (!r.ok) throw new Error(txt || `HTTP_${(r as any).status}`);
     return JSON.parse(txt);
   } finally {
     clearTimeout(id);
   }
 }
 
-async function fetchTextWithTimeout(url, timeoutMs = 8000) {
+async function fetchTextWithTimeout(url: string, timeoutMs = 8000) {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -216,16 +217,16 @@ async function fetchTextWithTimeout(url, timeoutMs = 8000) {
 }
 
 // near-consensus helpers for review
-function issuesKeyset(issues = []) {
+function issuesKeyset(issues: any[] = []) {
   return new Set(
     issues.map((i) =>
       `${String(i.type || "")}|${i?.ops?.[0]?.file || ""}|${i?.ops?.[0]?.find || ""}`.slice(0, 200)
     )
   );
 }
-function jaccard(aSet, bSet) {
-  const a = new Set(aSet),
-    b = new Set(bSet);
+function jaccard(aSet: Set<string> | any, bSet: Set<string> | any) {
+  const a = new Set(aSet as any),
+    b = new Set(bSet as any);
   let inter = 0;
   for (const v of a) if (b.has(v)) inter++;
   const union = a.size + b.size - inter || 1;
@@ -233,7 +234,7 @@ function jaccard(aSet, bSet) {
 }
 
 // Personalization without creep: 1–2 section swaps max
-function segmentSwapSections(ids = [], audience = "all") {
+function segmentSwapSections(ids: string[] = [], audience = "all") {
   const set = new Set((ids || []).map(String));
   if (audience === "developers") {
     set.add("features-3col");         // add 3-card features
@@ -247,10 +248,10 @@ function segmentSwapSections(ids = [], audience = "all") {
 }
 
 // Very cheap intent guesser for common phrases (skips a model call a lot)
-function quickGuessIntent(prompt) {
+function quickGuessIntent(prompt: string) {
   const p = String(prompt || "").toLowerCase();
 
-  const has = (w) => p.includes(w);
+  const has = (w: string) => p.includes(w);
   const intent = {
     audience: has("dev")
       ? "developers"
@@ -276,7 +277,7 @@ function quickGuessIntent(prompt) {
     sections: ["hero-basic", "cta-simple"].concat(has("feature") ? ["features-3col"] : []),
   };
 
-  const filled = Object.values({ ...intent, sections: null }).filter(Boolean).length;
+  const filled = Object.values({ ...intent, sections: null as any }).filter(Boolean).length;
   const coverage = filled / 7; // rough
   const chips = [
     intent.color_scheme !== "light" ? "Switch to light" : "Use dark mode",
@@ -288,7 +289,7 @@ function quickGuessIntent(prompt) {
 }
 
 // Stable stringify (order-insensitive for objects)
-function stableStringify(o) {
+function stableStringify(o: any): string {
   if (Array.isArray(o)) return "[" + o.map(stableStringify).join(",") + "]";
   if (o && typeof o === "object") {
     return (
@@ -303,13 +304,13 @@ function stableStringify(o) {
   return JSON.stringify(o);
 }
 
-const LAST_COMPOSE = new Map(); // sessionId -> { key, url }
-function dslKey(payload) {
+const LAST_COMPOSE = new Map<string, { key: string; url: string | null }>(); // sessionId -> { key, url }
+function dslKey(payload: any) {
   return sha1(stableStringify(payload));
 }
 
 // Apply chip locally (no LLM)
-function applyChipLocal(spec = {}, chip = "") {
+function applyChipLocal(spec: any = {}, chip = "") {
   const s = { ...spec, brand: { ...(spec.brand || {}) } };
 
   if (/Switch to light/i.test(chip)) s.brand.dark = false;
@@ -343,11 +344,11 @@ function applyChipLocal(spec = {}, chip = "") {
 }
 
 // ---------- /review ----------
-const LAST_REVIEW_SIG = new Map(); // sessionId -> last sha1(codeTrim)
+const LAST_REVIEW_SIG = new Map<string, string>(); // sessionId -> last sha1(codeTrim)
 
 router.post("/review", async (req, res) => {
   try {
-    let { code = "", tier = "balanced", sessionId = "anon" } = req.body || {};
+    let { code = "", tier = "balanced", sessionId = "anon" } = (req.body || {}) as any;
     if (!code || typeof code !== "string")
       return res.status(400).json({ ok: false, error: "Missing code" });
     if (!process.env.OPENAI_API_KEY)
@@ -373,7 +374,7 @@ Rules:
 
     const user = `CODE BUNDLE:\n${codeTrim}\n---\nTIER: ${tier}`;
 
-    async function runCritic(exp) {
+    async function runCritic(exp: any) {
       const t0 = Date.now();
       const payload = {
         model: exp.model,
@@ -444,14 +445,14 @@ Rules:
       }
     }
 
-    const cleaned = (issues || []).map((it) => ({
+    const cleaned = (issues || []).map((it: any) => ({
       type: String(it.type || "other").slice(0, 40),
       msg: String(it.msg || "").slice(0, 500),
       fix: it.fix ? String(it.fix).slice(0, 4000) : undefined,
       ops: Array.isArray(it.ops)
         ? it.ops
-            .filter((op) => ["index.html", "styles.css", "app.js"].includes(String(op.file)))
-            .map((op) => ({
+            .filter((op: any) => ["index.html", "styles.css", "app.js"].includes(String(op.file)))
+            .map((op: any) => ({
               file: String(op.file),
               find: String(op.find ?? ""),
               replace: String(op.replace ?? ""),
@@ -462,7 +463,7 @@ Rules:
 
     LAST_REVIEW_SIG.set(sessionId, sig);
     return res.json({ ok: true, review: { issues: cleaned } });
-  } catch (e) {
+  } catch (e: any) {
     return res.status(500).json({ ok: false, error: e?.message || "review_failed" });
   }
 });
@@ -470,7 +471,7 @@ Rules:
 // ---------- brief / plan / filter ----------
 router.post("/brief", async (req, res) => {
   try {
-    const { prompt, spec: lastSpec } = req.body || {};
+    const { prompt, spec: lastSpec } = (req.body || {}) as any;
     const out = buildSpec({ prompt, lastSpec });
     return res.json({ ok: true, ...out });
   } catch (e) {
@@ -480,7 +481,7 @@ router.post("/brief", async (req, res) => {
 
 router.post("/plan", async (req, res) => {
   try {
-    const { spec, signals } = req.body || {};
+    const { spec, signals } = (req.body || {}) as any;
     const actions = nextActions(spec, signals);
     return res.json({ ok: true, actions });
   } catch (e) {
@@ -490,7 +491,7 @@ router.post("/plan", async (req, res) => {
 
 router.post("/filter", async (req, res) => {
   try {
-    const { prompt = "" } = req.body || {};
+    const { prompt = "" } = (req.body || {}) as any;
     const out = await filterIntent(prompt);
     return res.json({ ok: true, ...out });
   } catch (e) {
@@ -501,7 +502,7 @@ router.post("/filter", async (req, res) => {
 // POST /api/ai/clarify  { prompt?: string, spec?: {...} }
 router.post("/clarify", (req, res) => {
   try {
-    const { prompt = "", spec = {} } = req.body || {};
+    const { prompt = "", spec = {} } = (req.body || {}) as any;
     const chips = clarifyChips({ prompt, spec });
     return res.json({ ok: true, chips });
   } catch (e) {
@@ -511,7 +512,7 @@ router.post("/clarify", (req, res) => {
 
 // ---------- signals ----------
 router.post("/signals", (req, res) => {
-  const { sessionId = "anon", kind = "", data = {} } = req.body || {};
+  const { sessionId = "anon", kind = "", data = {} } = (req.body || {}) as any;
   if (!kind) return res.status(400).json({ ok: false, error: "missing_kind" });
   pushSignal(sessionId, { ts: Date.now(), kind, data });
   return res.json({ ok: true });
@@ -524,7 +525,7 @@ router.get("/signals/:sessionId", (req, res) => {
 // ---------- build (ship + test) ----------
 router.post("/build", async (req, res) => {
   try {
-    const { prompt = "", sessionId = "anon", autofix = false } = req.body || {};
+    const { prompt = "", sessionId = "anon", autofix = false } = (req.body || {}) as any;
     if (!prompt) return res.status(400).json({ ok: false, error: "missing_prompt" });
     const base = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
     const out = await runBuilder({ prompt, sessionId, baseUrl: base, autofix });
@@ -545,7 +546,7 @@ router.post("/media", async (req, res) => {
       width,
       height,
       sessionId = "anon",
-    } = req.body || {};
+    } = (req.body || {}) as any;
     const { asset, cached } = await generateMedia({
       kind,
       prompt,
@@ -564,7 +565,7 @@ router.post("/media", async (req, res) => {
 // --- Evidence admin (CiteLock-Pro) ---
 router.post("/evidence/add", (req, res) => {
   try {
-    const { id, url, title, text = "" } = req.body || {};
+    const { id, url, title, text = "" } = (req.body || {}) as any;
     if (!text) return res.status(400).json({ ok: false, error: "missing_text" });
     const out = addEvidence({ id, url, title, text });
     return res.json({ ok: true, ...out });
@@ -628,7 +629,7 @@ router.get("/sections/packs", (req, res) => {
 // ---------- act ----------
 router.post("/act", async (req, res) => {
   try {
-    const { sessionId = "anon", spec = {}, action = {} } = req.body || {};
+    const { sessionId = "anon", spec = {}, action = {} } = (req.body || {}) as any;
     if (!action || !action.kind)
       return res.status(400).json({ ok: false, error: "missing_action" });
 
@@ -672,8 +673,8 @@ router.post("/act", async (req, res) => {
         } catch {}
 
         // Bandit audience key derived from intent/spec
-        const intentFromSpec = spec?.intent || {};
-        const audienceKey = String(spec?.audience || intentFromSpec?.audience || "all");
+        const intentFromSpec = (spec as any)?.intent || {};
+        const audienceKey = String((spec as any)?.audience || intentFromSpec?.audience || "all");
 
         // Personalize sections slightly based on audience (non-creepy, bounded)
         const sectionsPersonal = segmentSwapSections(sectionsIn, audienceKey);
@@ -691,25 +692,25 @@ router.post("/act", async (req, res) => {
         } catch {}
 
         // Bandit: pick section variants per audience (safe no-op if none)
-        const banditSections = sectionsPersonal.map((id) => pickVariant(id, audienceKey));
+        const banditSections = sectionsPersonal.map((id: string) => pickVariant(id, audienceKey));
 
-        const dark = !!spec?.brand?.dark;
-        const title = String(spec?.summary || "Preview");
+        const dark = !!(spec as any)?.brand?.dark;
+        const title = String((spec as any)?.summary || "Preview");
 
         const proposed = {
           sections: banditSections,
-          copy: action.args?.copy || spec?.copy || {},
-          brand: action.args?.brand || (spec?.brandColor ? { primary: spec.brandColor } : {}),
+          copy: action.args?.copy || (spec as any)?.copy || {},
+          brand: action.args?.brand || ((spec as any)?.brandColor ? { primary: (spec as any).brandColor } : {}),
         };
 
         let prep = verifyAndPrepare(proposed);
         if (!prep.sections.length) {
-          const prev = lastGoodFor(req.body?.sessionId || "anon");
+          const prev = lastGoodFor((req.body as any)?.sessionId || "anon");
           if (prev) prep = verifyAndPrepare(prev);
         }
 
         // build prepped copy with defaults and hygiene
-        let copyWithDefaults = hardenCopy(prep.sections, {
+        let copyWithDefaults: Record<string, any> = hardenCopy(prep.sections, {
           ...defaultsForSections(prep.sections),
           ...prep.copy,
         });
@@ -717,19 +718,19 @@ router.post("/act", async (req, res) => {
         // ⬇️ locale: prefer header > body > brand > en
         const acceptLang = String(req.headers["accept-language"] || "");
         const headerLocale = acceptLang.split(",")[0].split(";")[0] || "";
-        const locale = normalizeLocale(spec?.brand?.locale || req.body?.locale || headerLocale || "en");
+        const locale = normalizeLocale((spec as any)?.brand?.locale || (req.body as any)?.locale || headerLocale || "en");
         copyWithDefaults = localizeCopy(copyWithDefaults, locale);
         // ⬆️
 
         // Failure-aware edit search (deterministic, no-LLM)
         try {
-          const s0 = { brand: { ...(spec?.brand || {}) }, layout: { sections: prep.sections.slice() } };
-          const { better, spec: sBest, applied } = await editSearch({ spec: s0, copy: copyWithDefaults });
+          const s0 = { brand: { ...((spec as any)?.brand || {}) }, layout: { sections: prep.sections.slice() } };
+          const { better, spec: sBest, applied } = await editSearch({ spec: s0 as any, copy: copyWithDefaults });
           if (better) {
-            prep.sections = sBest.layout.sections;
-            prep.brand = { ...(prep.brand || {}), ...sBest.brand };
+            (prep as any).sections = sBest.layout.sections;
+            (prep as any).brand = { ...(prep as any).brand, ...sBest.brand };
             if (applied?.length) {
-              pushSignal(String(req.body?.sessionId || "anon"), {
+              pushSignal(String((req.body as any)?.sessionId || "anon"), {
                 ts: Date.now(),
                 kind: "edit_search_apply",
                 data: { chips: applied.slice(0, 4) },
@@ -740,64 +741,64 @@ router.post("/act", async (req, res) => {
 
         // Prefill vector assets from library (non-destructive)
         try {
-          const sugg = suggestVectorAssets({ brand: prep.brand, limit: 3 });
-          for (const [k, v] of Object.entries(sugg.copyPatch || {})) {
+          const sugg = suggestVectorAssets({ brand: (prep as any).brand, limit: 3 } as any);
+          for (const [k, v] of Object.entries((sugg as any).copyPatch || {})) {
             if (!copyWithDefaults[k]) copyWithDefaults[k] = String(v);
           }
         } catch {}
 
         // ⬇️ NEW: synthesize vector assets, merge into copy (non-destructive)
         try {
+          // B. fixed synth call to pass brand directly via shim
           const { copyPatch } = await synthesizeAssets({
-            spec: {
-              summary: spec?.summary,
-              brand: { ...(spec?.brand || {}), primary: spec?.brandColor || spec?.brand?.primary },
-              brandColor: spec?.brandColor,
-              layout: { sections: prep.sections },
-              copy: copyWithDefaults,
+            brand: {
+              ...(prep.brand || {}),
+              primary: (prep.brand as any)?.primary || (spec as any)?.brandColor || (spec as any)?.brand?.primary
             },
-          });
+            tags: ["saas", "conversion"],
+            count: 4,
+          } as any);
           Object.assign(copyWithDefaults, copyPatch);
 
           // remember shipped vector assets for future suggestions
-          try { rememberVectorAssets({ copy: copyWithDefaults, brand: prep.brand }); } catch {}
+          try { rememberVectorAssets({ copy: copyWithDefaults, brand: (prep as any).brand } as any); } catch {}
         } catch {}
 
         // Keep designer context accessible for later KPI record
-        let tokens;
-        let toneIn;
-        let darkIn;
+        let tokens: any;
+        let toneIn: string | undefined;
+        let darkIn: boolean | undefined;
 
         // --- DESIGNER AI: tokens + grid + checks ---
         try {
-          const bias = tokenBiasFor(String(req.body?.sessionId || "anon"));
+          const bias = tokenBiasFor(String((req.body as any)?.sessionId || "anon"));
 
           const primaryIn =
-            spec?.brandColor ||
-            spec?.brand?.primary ||
-            bias.primary ||
+            (spec as any)?.brandColor ||
+            (spec as any)?.brand?.primary ||
+            (bias as any).primary ||
             "#6d28d9";
 
           toneIn =
-            spec?.brand?.tone ||
-            bias.tone ||
+            (spec as any)?.brand?.tone ||
+            (bias as any).tone ||
             "serious";
 
           darkIn =
-            (spec?.brand?.dark ?? (typeof bias.dark === "boolean" ? bias.dark : false));
+            ((spec as any)?.brand?.dark ?? (typeof (bias as any).dark === "boolean" ? (bias as any).dark : false));
 
           // 1) Tokens & grid (search best first)
           let st = searchBestTokens({
             primary: primaryIn,
-            dark: darkIn,
-            tone: toneIn,
-            goal: intentFromSpec.goal || "",
-            industry: intentFromSpec.industry || "",
+            dark: darkIn as boolean,
+            tone: toneIn as string,
+            goal: (intentFromSpec as any).goal || "",
+            industry: (intentFromSpec as any).industry || "",
           });
           tokens = st?.best;
           if (!tokens) {
-            const w = wideTokenSearch({ primary: primaryIn, dark: darkIn, tone: toneIn });
-            tokens = w.tokens;
+            const w = wideTokenSearch({ primary: primaryIn, dark: darkIn as boolean, tone: toneIn as string });
+            tokens = (w as any).tokens;
           }
 
           const grid = buildGrid({ density: toneIn === "minimal" ? "minimal" : "normal" });
@@ -807,29 +808,29 @@ router.post("/act", async (req, res) => {
 
           // 3) One self-fix if a11y fails: darken on-primary or bump base size
           if (!eval1.a11yPass) {
-            const saferTone = toneIn === "playful" ? "minimal" : toneIn;
-            tokens = tokenMixer({ primary: primaryIn, dark: darkIn, tone: saferTone });
-            if (tokens.type?.basePx < 18) {
-              tokens = tokenMixer({ primary: primaryIn, dark: darkIn, tone: "minimal" });
+            const saferTone = toneIn === "playful" ? "minimal" : (toneIn as string);
+            tokens = tokenMixer({ primary: primaryIn, dark: darkIn as boolean, tone: saferTone });
+            if ((tokens as any).type?.basePx < 18) {
+              tokens = tokenMixer({ primary: primaryIn, dark: darkIn as boolean, tone: "minimal" });
             }
             eval1 = evaluateDesign(tokens);
           }
 
           // attach to brand (composer can read css vars; harmless if ignored)
-          prep.brand = {
-            ...(prep.brand || {}),
-            primary: tokens.palette.primary,
-            tokens: tokens.cssVars,
-            grid: grid.cssVars,
+          (prep as any).brand = {
+            ...(prep as any).brand,
+            primary: (tokens as any).palette.primary,
+            tokens: (tokens as any).cssVars,
+            grid: (grid as any).cssVars,
           };
 
           // Optional soft gate: if visual score still low, add a gentle signal
-          if (eval1.visualScore < 65) {
+          if ((eval1 as any).visualScore < 65) {
             try {
-              pushSignal(req.body?.sessionId || "anon", {
+              pushSignal((req.body as any)?.sessionId || "anon", {
                 ts: Date.now(),
                 kind: "design_warn",
-                data: { visual: eval1.visualScore },
+                data: { visual: (eval1 as any).visualScore },
               });
             } catch {}
           }
@@ -837,9 +838,9 @@ router.post("/act", async (req, res) => {
 
         // attach motion tokens too (pure CSS vars, zero-LLM)
         try {
-          const toneForMotion = spec?.brand?.tone || "serious";
+          const toneForMotion = (spec as any)?.brand?.tone || "serious";
           const motion = motionVars(toneForMotion);
-          prep.brand = { ...(prep.brand || {}), motion: motion.cssVars };
+          (prep as any).brand = { ...(prep as any).brand, motion: (motion as any).cssVars };
         } catch {}
 
         // Perf governor (lite): downgrade if over cap, then signal
@@ -848,10 +849,10 @@ router.post("/act", async (req, res) => {
           if (!pg.ok) {
             const before = prep.sections.slice();
             prep.sections = downgradeSections(prep.sections);
-            pushSignal(req.body?.sessionId || "anon", {
+            pushSignal((req.body as any)?.sessionId || "anon", {
               ts: Date.now(),
               kind: "perf_downgrade",
-              data: { before, after: prep.sections, overBy: pg.overBy },
+              data: { before, after: prep.sections, overBy: (pg as any).overBy },
             });
           }
         } catch {}
@@ -860,30 +861,30 @@ router.post("/act", async (req, res) => {
         try {
           const meta = buildSEO({
             title,
-            description: copyWithDefaults?.HERO_SUBHEAD || copyWithDefaults?.TAGLINE || "",
-            brand: prep.brand,
+            description: (copyWithDefaults as any)?.HERO_SUBHEAD || (copyWithDefaults as any)?.TAGLINE || "",
+            brand: (prep as any).brand,
             url: null,
           });
-          prep.brand = { ...(prep.brand || {}), meta }; // harmless if composer ignores it
+          (prep as any).brand = { ...(prep as any).brand, meta }; // harmless if composer ignores it
         } catch {}
 
         // CiteLock-Pro (local evidence) — annotate copy and keep a proof map
-        let proofData = null;
+        let proofData: any = null;
         try {
           const pr = buildProof(copyWithDefaults);
-          Object.assign(copyWithDefaults, pr.copyPatch);
-          proofData = pr.proof;
+          Object.assign(copyWithDefaults, (pr as any).copyPatch);
+          proofData = (pr as any).proof;
         } catch {}
 
         // CiteLock-lite: neutralize risky claims unless there's a source
-        let flags = [];
+        let flags: any[] = [];
         try {
-          const { copyPatch: factPatch, flags: _flags } = sanitizeFacts(copyWithDefaults);
+          const { copyPatch: factPatch, flags: _flags } = sanitizeFacts(copyWithDefaults) as any;
           Object.assign(copyWithDefaults, factPatch);
           flags = _flags || [];
           if (flags.length) {
             try {
-              pushSignal(String(req.body?.sessionId || "anon"), {
+              pushSignal(String((req.body as any)?.sessionId || "anon"), {
                 ts: Date.now(),
                 kind: "fact_sanitized",
                 data: { fields: flags.slice(0, 6) },
@@ -894,42 +895,42 @@ router.post("/act", async (req, res) => {
 
         // 🟡 Uncertainty Loopback (auto-chip on low proof/readability)
         try {
-          const redactedCount = Object.values(proofData || {}).filter(p => p.status === "redacted").length;
-          const r0 = checkCopyReadability(copyWithDefaults);
-          const readabilityLow = (r0?.score ?? 100) < 60; // tweak threshold if you want
+          const redactedCount = Object.values(proofData || {}).filter((p: any) => p.status === "redacted").length;
+          const r0 = checkCopyReadability(copyWithDefaults) as any;
+          const readabilityLow = ((r0?.score ?? 100) as number) < 60; // tweak threshold if you want
           const needSoften = redactedCount > 0 || readabilityLow;
 
           if (needSoften) {
             const soft = applyChipLocal(
-              { brand: prep.brand, layout: { sections: prep.sections }, copy: copyWithDefaults },
+              { brand: (prep as any).brand, layout: { sections: prep.sections }, copy: copyWithDefaults },
               "More minimal"
             );
-            prep.brand = soft.brand;
-            prep.sections = soft.layout.sections;
-            Object.assign(copyWithDefaults, soft.copy || {});
+            (prep as any).brand = (soft as any).brand;
+            (prep as any).sections = (soft as any).layout.sections;
+            Object.assign(copyWithDefaults, (soft as any).copy || {});
           }
 
           // If goal is empty, prefer an email signup CTA
           if (!intentFromSpec.goal) {
             const softCTA = applyChipLocal(
-              { brand: prep.brand, layout: { sections: prep.sections }, copy: copyWithDefaults },
+              { brand: (prep as any).brand, layout: { sections: prep.sections }, copy: copyWithDefaults },
               "Use email signup CTA"
             );
-            prep.brand = softCTA.brand;
-            prep.sections = softCTA.layout.sections;
-            Object.assign(copyWithDefaults, softCTA.copy || {});
+            (prep as any).brand = (softCTA as any).brand;
+            (prep as any).sections = (softCTA as any).layout.sections;
+            Object.assign(copyWithDefaults, (softCTA as any).copy || {});
           }
         } catch {}
 
         // ProofGate-Lite: soft warning + stronger neutralization for critical fields
         try {
-          const redactedCount = Object.values(proofData || {}).filter((p) => p.status === "redacted").length;
-          const evidencedCount = Object.values(proofData || {}).filter((p) => p.status === "evidenced").length;
+          const redactedCount = Object.values(proofData || {}).filter((p: any) => p.status === "redacted").length;
+          const evidencedCount = Object.values(proofData || {}).filter((p: any) => p.status === "evidenced").length;
           const flaggedCount = (flags || []).length; // from sanitizeFacts
 
           // 1) emit a soft signal so UI can badge it
           if (redactedCount || flaggedCount) {
-            pushSignal(String(req.body?.sessionId || "anon"), {
+            pushSignal(String((req.body as any)?.sessionId || "anon"), {
               ts: Date.now(),
               kind: "proof_warn",
               data: { redactedCount, evidencedCount, flaggedCount },
@@ -940,12 +941,12 @@ router.post("/act", async (req, res) => {
           if (redactedCount > 0) {
             const CRIT = ["HEADLINE", "HERO_SUBHEAD", "TAGLINE"];
             for (const k of CRIT) {
-              const val = copyWithDefaults[k];
+              const val = (copyWithDefaults as any)[k];
               if (typeof val !== "string") continue;
               let nv = val;
 
               // strip "(ref: ...)" unless actually evidenced for that field
-              if (proofData?.[k]?.status !== "evidenced") {
+              if ((proofData as any)?.[k]?.status !== "evidenced") {
                 nv = nv.replace(/\s*\(ref:\s*[^)]+\)\s*$/i, "");
               }
 
@@ -955,33 +956,33 @@ router.post("/act", async (req, res) => {
                 .replace(/\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?(%|percent)\b/gi, "many")
                 .replace(/\b\d+(?:\.\d+)?\s*x\b/gi, "multi-fold");
 
-              copyWithDefaults[k] = nv;
+              (copyWithDefaults as any)[k] = nv;
             }
           }
 
           // 3) expose per-field proof map for UI (non-breaking)
-          const fieldCounts = {};
+          const fieldCounts: Record<string, number> = {};
           if (proofData) {
-            for (const v of Object.values(proofData)) {
-              fieldCounts[v.status] = (fieldCounts[v.status] || 0) + 1;
+            for (const v of Object.values(proofData) as any[]) {
+              fieldCounts[(v as any).status] = (fieldCounts[(v as any).status] || 0) + 1;
             }
           }
-          prep.brand = {
-            ...(prep.brand || {}),
+          (prep as any).brand = {
+            ...(prep as any).brand,
             proof: { fields: proofData || {}, counts: fieldCounts },
           };
         } catch {}
 
         // Readability guard (non-blocking) — run after ProofGate-Lite
         try {
-          const r = checkCopyReadability(copyWithDefaults);
+          const r: any = checkCopyReadability(copyWithDefaults);
           // apply safe auto-fixes
           if (r.copyPatch && Object.keys(r.copyPatch).length) {
             Object.assign(copyWithDefaults, r.copyPatch);
           }
           // still surface issues to the UI
           if (r.issues.length) {
-            pushSignal(String(req.body?.sessionId || "anon"), {
+            pushSignal(String((req.body as any)?.sessionId || "anon"), {
               ts: Date.now(),
               kind: "readability_warn",
               data: { score: r.score, issues: r.issues.slice(0, 6) },
@@ -998,13 +999,13 @@ router.post("/act", async (req, res) => {
           dark,
           title,
           copy: copyWithDefaults,
-          brand: prep.brand,
-          tier: spec?.brand?.tier || "premium",
+          brand: (prep as any).brand,
+          tier: (spec as any)?.brand?.tier || "premium",
           stripJS, // pass through to composer
           locale,  // include locale in cache key and payload
         };
         const keyNow = dslKey(payloadForKey);
-        const last = LAST_COMPOSE.get(req.body?.sessionId || "anon");
+        const last = LAST_COMPOSE.get(((req.body as any)?.sessionId || "anon") as string);
         if (last && last.key === keyNow && last.url) {
           return { kind: "compose", path: last.url, url: last.url };
         }
@@ -1014,50 +1015,50 @@ router.post("/act", async (req, res) => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify(payloadForKey),
         });
-        if (!r.ok) return { error: `compose_http_${r.status}` };
+        if (!r.ok) return { error: `compose_http_${(r as any).status}` };
         const data = await r.json();
 
         // remember successful compose for instant reuse
-        LAST_COMPOSE.set(req.body?.sessionId || "anon", {
+        LAST_COMPOSE.set(((req.body as any)?.sessionId || "anon") as string, {
           key: keyNow,
-          url: data?.url || data?.path || null,
+          url: (data as any)?.url || (data as any)?.path || null,
         });
 
         // NEW: attribute pack seen for this page
         try { recordPackSeenForPage(keyNow, prep.sections); } catch {}
 
         // holders for performance signals
-        let perfEst = null;      // worst-case for gating/logging
-        let perfMatrix = null;   // full matrix for Proof Card
+        let perfEst: any = null;      // worst-case for gating/logging
+        let perfMatrix: any = null;   // full matrix for Proof Card
 
         // quick device sanity ping (non-blocking)
         try {
-          const pageUrl = data?.url || data?.path || null;
+          const pageUrl = (data as any)?.url || (data as any)?.path || null;
           if (pageUrl) {
             const abs = /^https?:\/\//i.test(pageUrl) ? pageUrl : `${baseUrl(req)}${pageUrl}`;
             const html = await fetchTextWithTimeout(abs, 8000);
             if (html) {
               const sanity = quickLayoutSanity(html);
-              if (sanity.issues.length) {
-                pushSignal(String(req.body?.sessionId || "anon"), {
+              if ((sanity as any).issues.length) {
+                pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
                   ts: Date.now(),
                   kind: "layout_warn",
-                  data: { score: sanity.score, issues: sanity.issues.slice(0, 6) },
+                  data: { score: (sanity as any).score, issues: (sanity as any).issues.slice(0, 6) },
                 });
               }
               try {
                 const basePerf = quickPerfEst(html);
                 perfMatrix = matrixPerfEst(html);
-                perfEst = perfMatrix?.worst || basePerf;
+                perfEst = (perfMatrix as any)?.worst || basePerf;
 
                 // quick worst-case estimate
-                pushSignal(String(req.body?.sessionId || "anon"), {
+                pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
                   ts: Date.now(),
                   kind: "perf_est",
-                  data: { cls_est: perfEst.cls_est, lcp_est_ms: perfEst.lcp_est_ms }
+                  data: { cls_est: (perfEst as any).cls_est, lcp_est_ms: (perfEst as any).lcp_est_ms }
                 });
                 // full matrix detail
-                pushSignal(String(req.body?.sessionId || "anon"), {
+                pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
                   ts: Date.now(),
                   kind: "perf_matrix",
                   data: perfMatrix
@@ -1070,12 +1071,12 @@ router.post("/act", async (req, res) => {
         // Device Gate — 2 viewports × 2 throttles; optional strict block
         try {
           if (process.env.DEVICE_GATE === "on" || process.env.DEVICE_GATE === "strict") {
-            const pageUrl = data?.url || data?.path || null;
+            const pageUrl = (data as any)?.url || (data as any)?.path || null;
             if (pageUrl) {
               const abs = /^https?:\/\//i.test(pageUrl) ? pageUrl : `${baseUrl(req)}${pageUrl}`;
-              const gate = await runDeviceGate(abs, keyNow);
+              const gate = await runDeviceGate(abs, keyNow) as any;
               // Emit a signal for UI and logs
-              pushSignal(String(req.body?.sessionId || "anon"), {
+              pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
                 ts: Date.now(),
                 kind: "device_gate",
                 data: { pass: gate.pass, worst_cls: gate.worst_cls, total_clipped: gate.total_clipped }
@@ -1090,19 +1091,19 @@ router.post("/act", async (req, res) => {
 
         // Device snapshot sanity (optional, non-blocking)
         try {
-          if (process.env.QA_DEVICE_SNAPSHOTS === "1" && (data?.url || data?.path)) {
-            const pageUrl = data?.url || data?.path;
+          if (process.env.QA_DEVICE_SNAPSHOTS === "1" && ((data as any)?.url || (data as any)?.path)) {
+            const pageUrl = (data as any)?.url || (data as any)?.path;
             const abs = /^https?:\/\//i.test(pageUrl) ? pageUrl : `${baseUrl(req)}${pageUrl}`;
             (async () => {
               try {
-                const snap = await runSnapshots(abs, keyNow);
-                pushSignal(String(req.body?.sessionId || "anon"), {
+                const snap = await runSnapshots(abs, keyNow) as any;
+                pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
                   ts: Date.now(),
                   kind: "device_snapshot",
                   data: { issues: snap.issues.slice(0, 6) }
                 });
                 if (snap.issues.length) {
-                  pushSignal(String(req.body?.sessionId || "anon"), {
+                  pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
                     ts: Date.now(),
                     kind: "layout_warn",
                     data: { source: "snapshots", issues: snap.issues.slice(0, 6) }
@@ -1114,28 +1115,28 @@ router.post("/act", async (req, res) => {
         } catch {}
 
         try {
-          rememberLastGood(req.body?.sessionId || "anon", {
+          rememberLastGood(((req.body as any)?.sessionId || "anon") as string, {
             sections: prep.sections,
             copy: copyWithDefaults,
-            brand: prep.brand,
+            brand: (prep as any).brand,
           });
-          pushSignal(req.body?.sessionId || "anon", {
+          pushSignal(((req.body as any)?.sessionId || "anon") as string, {
             ts: Date.now(),
             kind: "compose_success",
-            data: { url: data?.url },
+            data: { url: (data as any)?.url },
           });
           // store successful example for retrieval reuse
           try {
-            await addExample(String(req.body?.sessionId || "anon"), String(spec?.summary || ""), {
+            await addExample(String(((req.body as any)?.sessionId || "anon") as string), String((spec as any)?.summary || ""), {
               sections: prep.sections,
               copy: copyWithDefaults,
-              brand: prep.brand,
+              brand: (prep as any).brand,
             });
           } catch {}
           // Learn from ships (brand DNA)
           try {
-            recordDNA(String(req.body?.sessionId || "anon"), {
-              brand: { primary: prep.brand?.primary, tone: spec?.brand?.tone, dark: !!spec?.brand?.dark },
+            recordDNA(String(((req.body as any)?.sessionId || "anon") as string), {
+              brand: { primary: (prep as any).brand?.primary, tone: (spec as any)?.brand?.tone, dark: !!(spec as any)?.brand?.dark },
               sections: prep.sections,
             });
           } catch {}
@@ -1143,63 +1144,63 @@ router.post("/act", async (req, res) => {
 
         // Record ship KPI snapshot (best-effort, resilient if tokens are missing)
         try {
-          const ev2 = tokens ? evaluateDesign(tokens) : { a11yPass: null, visualScore: null };
+          const ev2 = tokens ? evaluateDesign(tokens) : { a11yPass: null, visualScore: null } as any;
           const primaryForBrand =
-            (tokens && tokens.palette && tokens.palette.primary) ||
-            spec?.brandColor ||
-            spec?.brand?.primary ||
+            (tokens && (tokens as any).palette && (tokens as any).palette.primary) ||
+            (spec as any)?.brandColor ||
+            (spec as any)?.brand?.primary ||
             null;
 
           // NEW: log a neutral "seen" with metrics for TasteNet gating (worst-case perf)
           try {
             recordTokenSeen({
               brand: { primary: primaryForBrand, tone: toneIn, dark: darkIn },
-              sessionId: String(req.body?.sessionId || "anon"),
-              metrics: { a11y: !!ev2.a11yPass, cls: perfEst?.cls_est, lcp_ms: perfEst?.lcp_est_ms },
-            });
+              sessionId: String(((req.body as any)?.sessionId || "anon") as string),
+              metrics: { a11y: !!(ev2 as any).a11yPass, cls: (perfEst as any)?.cls_est, lcp_ms: (perfEst as any)?.lcp_est_ms },
+            } as any);
           } catch {}
 
           recordShip({
             ts: Date.now(),
             pageId: keyNow,
-            url: data?.url || null,
+            url: (data as any)?.url || null,
             sections: prep.sections,
             brand: { primary: primaryForBrand, tone: toneIn, dark: darkIn },
             scores: {
-              visual: ev2.visualScore ?? null,
-              a11y: ev2.a11yPass ?? null,
+              visual: (ev2 as any).visualScore ?? null,
+              a11y: (ev2 as any).a11yPass ?? null,
               bytes: null,
             },
-            sessionId: String(req.body?.sessionId || "anon"),
-          });
+            sessionId: String(((req.body as any)?.sessionId || "anon") as string),
+          } as any);
         } catch {}
 
         // Persist a tiny Proof Card (best-effort) with counts and proof_ok
         try {
           const proofDir = ".cache/proof";
           fs.mkdirSync(proofDir, { recursive: true });
-          const evPC = tokens ? evaluateDesign(tokens) : { a11yPass: null, visualScore: null };
-          const counts = {};
+          const evPC = tokens ? evaluateDesign(tokens) : { a11yPass: null, visualScore: null } as any;
+          const counts: Record<string, number> = {};
           if (proofData) {
-            for (const v of Object.values(proofData)) {
-              counts[v.status] = (counts[v.status] || 0) + 1;
+            for (const v of Object.values(proofData) as any[]) {
+              counts[(v as any).status] = (counts[(v as any).status] || 0) + 1;
             }
           }
-          const proof_ok = !Object.values(proofData || {}).some((p) => p.status === "redacted");
+          const proof_ok = !Object.values(proofData || {}).some((p: any) => p.status === "redacted");
 
           fs.writeFileSync(
             `${proofDir}/${keyNow}.json`,
             JSON.stringify(
               {
                 pageId: keyNow,
-                url: data?.url || null,
-                a11y: evPC.a11yPass,
-                visual: evPC.visualScore,
+                url: (data as any)?.url || null,
+                a11y: (evPC as any).a11yPass,
+                visual: (evPC as any).visualScore,
                 facts: proofData || {},
                 fact_counts: counts,
                 proof_ok,
-                cls_est: perfEst?.cls_est ?? null,
-                lcp_est_ms: perfEst?.lcp_est_ms ?? null,
+                cls_est: (perfEst as any)?.cls_est ?? null,
+                lcp_est_ms: (perfEst as any)?.lcp_est_ms ?? null,
                 // NEW: persist full matrix
                 perf_matrix: perfMatrix || null
               },
@@ -1211,16 +1212,16 @@ router.post("/act", async (req, res) => {
 
         // edits_to_ship: count chip applies since last ship
         try {
-          const sid = String(req.body?.sessionId || "anon");
+          const sid = String(((req.body as any)?.sessionId || "anon") as string);
           const edits = editsTakeAndReset(sid);
           recordEditsMetric(edits);
         } catch {}
 
         // return pageId so client can hit KPIs/Proof directly
-        return { kind: "compose", pageId: keyNow, ...data };
+        return { kind: "compose", pageId: keyNow, ...(data as any) };
       }
 
-      return { error: `unknown_action:${action.kind}` };
+      return { error: `unknown_action:${(action as any).kind}` };
     });
 
     return res.json({ ok: true, result: out });
@@ -1233,14 +1234,14 @@ router.post("/act", async (req, res) => {
 router.post("/one", async (req, res) => {
   try {
     const t0 = Date.now(); // full request -> URL timer
-    const { prompt = "", sessionId = "anon" } = req.body || {};
+    const { prompt = "", sessionId = "anon" } = (req.body || {}) as any;
     const key = normalizeKey(prompt);
 
     // [BANDIT] vars for logging outcome
-    let labelPath = "rules"; // "rules" | "local" | "cloud"
+    let labelPath: "rules" | "local" | "cloud" = "rules";
     let cloudUsed = false;
     const startedAt = Date.now();
-    let pageId = null;
+    let pageId: string | null = null;
 
     // 0) Playbook first (no-model)
     let fit = pickFromPlaybook(prompt);
@@ -1252,25 +1253,25 @@ router.post("/one", async (req, res) => {
         // quick cheap heuristic still first
         const guess = typeof quickGuessIntent === "function" ? quickGuessIntent(prompt) : null;
         if (guess) {
-          fit = guess;
+          fit = guess as any;
           labelPath = "rules";
         } else {
           // [BANDIT] pick labeler path (local vs cloud)
-          labelPath = decideLabelPath();
+          labelPath = decideLabelPath() as any;
           if (labelPath === "local") {
             const lab = await localLabels(prompt); // free
-            if (lab?.intent) {
+            if ((lab as any)?.intent) {
               fit = {
                 intent: {
-                  ...lab.intent,
-                  sections: lab.intent.sections?.length ? lab.intent.sections : ["hero-basic", "cta-simple"],
+                  ...(lab as any).intent,
+                  sections: (lab as any).intent.sections?.length ? (lab as any).intent.sections : ["hero-basic", "cta-simple"],
                 },
-                confidence: lab.confidence || 0.7,
+                confidence: (lab as any).confidence || 0.7,
                 chips: clarifyChips({
                   prompt,
                   spec: {
-                    brand: { dark: lab.intent.color_scheme === "dark" },
-                    layout: { sections: lab.intent.sections || ["hero-basic", "cta-simple"] },
+                    brand: { dark: (lab as any).intent.color_scheme === "dark" },
+                    layout: { sections: (lab as any).intent.sections || ["hero-basic", "cta-simple"] },
                   },
                 }),
               };
@@ -1308,18 +1309,18 @@ router.post("/one", async (req, res) => {
 
     // Apply priors from brand DNA (soft influence)
     const prior = suggestFromDNA(sessionId) || {};
-    if (!fit.intent) fit.intent = {};
-    if (prior.brand?.tone && !fit.intent.vibe) fit.intent.vibe = prior.brand.tone;
-    if (typeof prior.brand?.dark === "boolean" && !fit.intent.color_scheme) {
-      fit.intent.color_scheme = prior.brand.dark ? "dark" : "light";
+    if (!(fit as any).intent) (fit as any).intent = {};
+    if ((prior as any).brand?.tone && !(fit as any).intent.vibe) (fit as any).intent.vibe = (prior as any).brand.tone;
+    if (typeof (prior as any).brand?.dark === "boolean" && !(fit as any).intent.color_scheme) {
+      (fit as any).intent.color_scheme = (prior as any).brand.dark ? "dark" : "light";
     }
-    if (Array.isArray(prior.sections) && prior.sections.length) {
-      const cur = new Set(fit.intent.sections || []);
-      for (const s of prior.sections) cur.add(s);
-      fit.intent.sections = Array.from(cur);
+    if (Array.isArray((prior as any).sections) && (prior as any).sections.length) {
+      const cur = new Set(((fit as any).intent.sections || []) as string[]);
+      for (const s of (prior as any).sections) cur.add(s);
+      (fit as any).intent.sections = Array.from(cur);
     }
 
-    const { intent, confidence: c0, chips } = fit;
+    const { intent, confidence: c0, chips } = fit as any;
     const summarySignals = summarize(sessionId);
     const confidence = boostConfidence(c0, summarySignals);
 
@@ -1336,12 +1337,12 @@ router.post("/one", async (req, res) => {
       },
     });
 
-    let copy = fit.copy || cheapCopy(prompt, fit.intent);
-    let brandColor = prior?.brand?.primary || fit.brandColor || guessBrand(fit.intent);
+    let copy = (fit as any).copy || cheapCopy(prompt, (fit as any).intent);
+    let brandColor = (prior as any)?.brand?.primary || (fit as any).brandColor || guessBrand((fit as any).intent);
     // Slot Synthesis v1 — fill any missing copy keys deterministically
     {
       const filled = fillSlots({ prompt, spec, copy });
-      copy = filled.copy;
+      copy = (filled as any).copy;
       // optional: filled.filled contains which keys were added
     }
     const actions = nextActions(spec, { chips });
@@ -1352,13 +1353,13 @@ router.post("/one", async (req, res) => {
       retrMark(Boolean(reuse));
       if (reuse) {
         const reusedSections =
-          Array.isArray(reuse.sections) && reuse.sections.length
-            ? reuse.sections
-            : spec?.layout?.sections || [];
-        spec.layout = { sections: reusedSections };
-        const mergedCopy = { ...(reuse.copy || {}), ...(copy || {}) };
+          Array.isArray((reuse as any).sections) && (reuse as any).sections.length
+            ? (reuse as any).sections
+            : (spec as any)?.layout?.sections || [];
+        (spec as any).layout = { sections: reusedSections };
+        const mergedCopy = { ...((reuse as any).copy || {}), ...(copy || {}) };
         copy = mergedCopy;
-        if (!brandColor && reuse?.brand?.primary) brandColor = reuse.brand.primary;
+        if (!brandColor && (reuse as any)?.brand?.primary) brandColor = (reuse as any).brand.primary;
       }
     } catch {}
 
@@ -1375,17 +1376,17 @@ router.post("/one", async (req, res) => {
     });
     const actData = await actResR.json();
 
-    let url = null;
-    let usedAction = top;
-    let result = actData?.result;
+    let url: string | null = null;
+    let usedAction = top as any;
+    let result = (actData as any)?.result;
 
-    if (result?.kind === "retrieve" && Array.isArray(result.sections)) {
+    if ((result as any)?.kind === "retrieve" && Array.isArray((result as any).sections)) {
       const composeAction = {
         kind: "compose",
         cost_est: 3,
         gain_est: 20,
         args: {
-          sections: result.sections,
+          sections: (result as any).sections,
           copy,
           brand: { primary: brandColor },
           variantHints: VARIANT_HINTS,
@@ -1404,14 +1405,14 @@ router.post("/one", async (req, res) => {
         }),
       });
       const composeData = await composeR.json();
-      url = composeData?.result?.url || composeData?.result?.path || null;
-      pageId = composeData?.result?.pageId || null;
+      url = (composeData as any)?.result?.url || (composeData as any)?.result?.path || null;
+      pageId = (composeData as any)?.result?.pageId || null;
       usedAction = composeAction;
-      result = composeData?.result;
+      result = (composeData as any)?.result;
 
       // Economic flywheel: attribute estimated labeler cost to this URL
       try {
-        const pid = composeData?.result?.pageId;
+        const pid = (composeData as any)?.result?.pageId;
         if (pid) {
           const estCents = cloudUsed ? 0.03 : 0;
           const estTokens = cloudUsed ? 1200 : 0;
@@ -1464,7 +1465,7 @@ router.post("/one", async (req, res) => {
 // ---------- instant (zero-LLM compose) ----------
 router.post("/instant", async (req, res) => {
   try {
-    const { prompt = "", sessionId = "anon" } = req.body || {};
+    const { prompt = "", sessionId = "anon" } = (req.body || {}) as any;
 
     // 0) No-model intent: playbook → quick guess → safe defaults
     let fit = pickFromPlaybook(prompt) || quickGuessIntent(prompt);
@@ -1484,25 +1485,25 @@ router.post("/instant", async (req, res) => {
         prompt,
         spec: { brand: { dark }, layout: { sections: intent.sections } },
       });
-      fit = { intent, confidence: 0.6, chips };
+      fit = { intent, confidence: 0.6, chips } as any;
     }
 
     // Apply priors from brand DNA (soft influence)
     const prior = suggestFromDNA(sessionId) || {};
-    if (!fit.intent) fit.intent = {};
-    if (prior.brand?.tone && !fit.intent.vibe) fit.intent.vibe = prior.brand.tone;
-    if (typeof prior.brand?.dark === "boolean" && !fit.intent.color_scheme) {
-      fit.intent.color_scheme = prior.brand.dark ? "dark" : "light";
+    if (!(fit as any).intent) (fit as any).intent = {};
+    if ((prior as any).brand?.tone && !(fit as any).intent.vibe) (fit as any).intent.vibe = (prior as any).brand.tone;
+    if (typeof (prior as any).brand?.dark === "boolean" && !(fit as any).intent.color_scheme) {
+      (fit as any).intent.color_scheme = (prior as any).brand.dark ? "dark" : "light";
     }
-    if (Array.isArray(prior.sections) && prior.sections.length) {
-      const cur = new Set(fit.intent.sections || []);
-      for (const s of prior.sections) cur.add(s);
-      fit.intent.sections = Array.from(cur);
+    if (Array.isArray((prior as any).sections) && (prior as any).sections.length) {
+      const cur = new Set(((fit as any).intent.sections || []) as string[]);
+      for (const s of (prior as any).sections) cur.add(s);
+      (fit as any).intent.sections = Array.from(cur);
     }
 
-    const { intent, chips = [] } = fit;
+    const { intent, chips = [] } = fit as any;
     const summarySignals = summarize(sessionId);
-    const confidence = boostConfidence(fit.confidence || 0.6, summarySignals);
+    const confidence = boostConfidence((fit as any).confidence || 0.6, summarySignals);
 
     // Deterministic spec (no model)
     const { spec } = buildSpec({
@@ -1524,27 +1525,27 @@ router.post("/instant", async (req, res) => {
     });
 
     // Deterministic copy/brand (no model)
-    let copy = fit.copy || cheapCopy(prompt, intent);
-    const brandColor = prior?.brand?.primary || fit.brandColor || guessBrand(intent);
+    let copy = (fit as any).copy || cheapCopy(prompt, intent);
+    const brandColor = (prior as any)?.brand?.primary || (fit as any).brandColor || guessBrand(intent);
     {
       const filled = fillSlots({ prompt, spec, copy });
-      copy = filled.copy;
+      copy = (filled as any).copy;
     }
 
     // ⬇️ PATCH: merge OG + vector asset copy patches, then persist on spec
     try {
-      const brand = spec.brand || {};
-      const og = buildSEO({ brand, copy });
-      if (og?.copyPatch) Object.assign(copy, og.copyPatch);
+      const brand = (spec as any).brand || {};
+      const og = buildSEO({ brand, copy } as any);
+      if ((og as any)?.copyPatch) Object.assign(copy, (og as any).copyPatch);
 
       const vec = await synthesizeAssets({
         brand,
         count: 4,
         tags: ["saas", "conversion"],
-      });
-      if (vec?.copyPatch) Object.assign(copy, vec.copyPatch);
+      } as any);
+      if ((vec as any)?.copyPatch) Object.assign(copy, (vec as any).copyPatch);
 
-      spec.copy = copy;
+      (spec as any).copy = copy;
     } catch {}
 
     // Always retrieve → compose
@@ -1559,16 +1560,16 @@ router.post("/instant", async (req, res) => {
     });
     const actData = await actResR.json();
 
-    let url = null;
-    let result = actData?.result;
+    let url: string | null = null;
+    let result = (actData as any)?.result;
 
-    if (result?.kind === "retrieve" && Array.isArray(result.sections)) {
+    if ((result as any)?.kind === "retrieve" && Array.isArray((result as any).sections)) {
       const composeAction = {
         kind: "compose",
         cost_est: 0,
         gain_est: 20,
         args: {
-          sections: result.sections,
+          sections: (result as any).sections,
           copy,
           brand: { primary: brandColor },
           variantHints: VARIANT_HINTS,
@@ -1587,8 +1588,8 @@ router.post("/instant", async (req, res) => {
         }),
       });
       const composeData = await composeR.json();
-      url = composeData?.result?.url || composeData?.result?.path || null;
-      result = composeData?.result;
+      url = (composeData as any)?.result?.url || (composeData as any)?.result?.path || null;
+      result = (composeData as any)?.result;
     }
 
     return res.json({
@@ -1597,7 +1598,7 @@ router.post("/instant", async (req, res) => {
       spec: { ...spec, brandColor, copy },
       url,
       result,
-      chips: chips.length ? chips : clarifyChips({ prompt, spec }),
+      chips: (chips as any).length ? chips : clarifyChips({ prompt, spec }),
       signals: summarySignals,
     });
   } catch (e) {
@@ -1608,11 +1609,11 @@ router.post("/instant", async (req, res) => {
 // ---------- clarify → apply → compose (zero-LLM) ----------
 router.post("/clarify/compose", async (req, res) => {
   try {
-    const { prompt = "", sessionId = "anon", spec: specIn = {} } = req.body || {};
+    const { prompt = "", sessionId = "anon", spec: specIn = {} } = (req.body || {}) as any;
 
     // Base spec: use existing sections/mode if present, else no-LLM guess
-    let base = { ...specIn, brand: { ...(specIn.brand || {}) } };
-    if (!Array.isArray(base?.layout?.sections) || !base.layout.sections.length) {
+    let base = { ...specIn, brand: { ...(specIn as any).brand || {} } };
+    if (!Array.isArray((base as any)?.layout?.sections) || !(base as any).layout.sections.length) {
       const fit =
         pickFromPlaybook(prompt) ||
         quickGuessIntent(prompt) || {
@@ -1622,15 +1623,15 @@ router.post("/clarify/compose", async (req, res) => {
             vibe: "minimal",
           },
         };
-      base.layout = { sections: fit.intent.sections };
-      if (base.brand.dark == null) base.brand.dark = fit.intent.color_scheme === "dark";
-      if (!base.brand.tone) base.brand.tone = fit.intent.vibe === "minimal" ? "minimal" : "serious";
+      (base as any).layout = { sections: (fit as any).intent.sections };
+      if ((base as any).brand.dark == null) (base as any).brand.dark = (fit as any).intent.color_scheme === "dark";
+      if (!(base as any).brand.tone) (base as any).brand.tone = (fit as any).intent.vibe === "minimal" ? "minimal" : "serious";
     }
 
     // Get clarifier chips and apply them locally
-    const chips = clarifyChips({ prompt, spec: base });
-    let s = base;
-    for (const c of chips) s = applyChipLocal(s, c);
+    const chips = clarifyChips({ prompt, spec: base as any });
+    let s: any = base;
+    for (const c of chips as any[]) s = applyChipLocal(s, c);
 
     // Compose using the existing budgeted pipeline
     let copy =
@@ -1642,7 +1643,7 @@ router.post("/clarify/compose", async (req, res) => {
       });
     {
       const filled = fillSlots({ prompt, spec: s, copy });
-      copy = filled.copy;
+      copy = (filled as any).copy;
     }
     const brandColor = guessBrand({
       vibe: s.brand?.tone || "minimal",
@@ -1662,15 +1663,15 @@ router.post("/clarify/compose", async (req, res) => {
     });
     const actData = await actResR.json();
 
-    let url = null;
-    let result = actData?.result;
-    if (result?.kind === "retrieve" && Array.isArray(result.sections)) {
+    let url: string | null = null;
+    let result = (actData as any)?.result;
+    if ((result as any)?.kind === "retrieve" && Array.isArray((result as any).sections)) {
       const composeAction = {
         kind: "compose",
         cost_est: 0,
         gain_est: 20,
         args: {
-          sections: result.sections,
+          sections: (result as any).sections,
           copy,
           brand: { primary: brandColor },
           variantHints: VARIANT_HINTS,
@@ -1689,8 +1690,8 @@ router.post("/clarify/compose", async (req, res) => {
         }),
       });
       const composeData = await composeR.json();
-      url = composeData?.result?.url || composeData?.result?.path || null;
-      result = composeData?.result;
+      url = (composeData as any)?.result?.url || (composeData as any)?.result?.path || null;
+      result = (composeData as any)?.result;
     }
 
     pushSignal(sessionId, { ts: Date.now(), kind: "clarify_compose", data: { chips } });
@@ -1702,7 +1703,7 @@ router.post("/clarify/compose", async (req, res) => {
 
 // ---------- chips ----------
 router.post("/chips/apply", (req, res) => {
-  const { sessionId = "anon", spec = {}, chip = "" } = req.body || {};
+  const { sessionId = "anon", spec = {}, chip = "" } = (req.body || {}) as any;
   try {
     try {
       editsInc(String(sessionId));
@@ -1748,22 +1749,22 @@ router.get("/metrics", (req, res) => {
     const editsPath = FILE_EDITS_METR;
 
     const stats = fs.existsSync(statsPath) ? JSON.parse(fs.readFileSync(statsPath, "utf8")) : {};
-    const paths = stats?.paths || {};
-    const nRules = paths?.rules?.n || 0;
-    const nLocal = paths?.local?.n || 0;
-    const nCloud = paths?.cloud?.n || 0;
+    const paths = (stats as any)?.paths || {};
+    const nRules = (paths as any)?.rules?.n || 0;
+    const nLocal = (paths as any)?.local?.n || 0;
+    const nCloud = (paths as any)?.cloud?.n || 0;
     const total = Math.max(1, nRules + nLocal + nCloud);
 
     const cloud_pct = Math.round((nCloud / total) * 100);
 
     const retr = loadJSON(retrPath, { tries: 0, hits: 0 });
-    const hit_rate = retr.tries ? Math.round((retr.hits / retr.tries) * 100) : 0;
+    const hit_rate = (retr as any).tries ? Math.round(((retr as any).hits / (retr as any).tries) * 100) : 0;
 
     const ttu = loadJSON(ttuPath, { ema_ms: null });
-    const ttu_ms = ttu.ema_ms != null ? Math.round(ttu.ema_ms) : null;
+    const ttu_ms = (ttu as any).ema_ms != null ? Math.round((ttu as any).ema_ms) : null;
 
     const edits = loadJSON(editsPath, { ema: null });
-    const edits_est = edits.ema != null ? Number(edits.ema.toFixed(2)) : null;
+    const edits_est = (edits as any).ema != null ? Number((edits as any).ema.toFixed(2)) : null;
 
     // Retrieval DB size (lines) stays as a quick sanity
     const retrDbPath = pathResolve(".cache/retrieval.jsonl");
@@ -1773,11 +1774,11 @@ router.get("/metrics", (req, res) => {
 
     // shadow eval metric
     const shadowPath = pathResolve(".cache/shadow.metrics.json");
-    let shadow_agreement_pct = null;
+    let shadow_agreement_pct: number | null = null;
     try {
       if (fs.existsSync(shadowPath)) {
         const sm = JSON.parse(fs.readFileSync(shadowPath, "utf8"));
-        const pct = sm.n ? Math.round(((sm.pass || 0) / sm.n) * 100) : null;
+        const pct = (sm as any).n ? Math.round((((sm as any).pass || 0) / (sm as any).n) * 100) : null;
         shadow_agreement_pct = pct;
       }
     } catch {}
@@ -1790,19 +1791,19 @@ router.get("/metrics", (req, res) => {
     try {
       if (fs.existsSync(costDbPath)) {
         const m = JSON.parse(fs.readFileSync(costDbPath, "utf8"));
-        for (const v of Object.values(m)) {
-          total_cents += Number(v.cents || 0);
-          total_tokens += Number(v.tokens || 0);
+        for (const v of Object.values(m) as any[]) {
+          total_cents += Number((v as any).cents || 0);
+          total_tokens += Number((v as any).tokens || 0);
           pages_costed += 1;
         }
       }
     } catch {}
 
     // taste top keys (if trained)
-    let taste_top = null;
+    let taste_top: any = null;
     try {
       const t = JSON.parse(fs.readFileSync(pathResolve(".cache/token.priors.json"), "utf8"));
-      taste_top = Array.isArray(t?.top) ? t.top.slice(0, 5) : null;
+      taste_top = Array.isArray((t as any)?.top) ? (t as any).top.slice(0, 5) : null;
     } catch {}
 
     return res.json({
@@ -1829,19 +1830,19 @@ router.get("/metrics", (req, res) => {
 // --- KPI hooks ---
 router.post("/kpi/convert", (req, res) => {
   try {
-    const { pageId = "" } = req.body || {};
+    const { pageId = "" } = (req.body || {}) as any;
     if (!pageId) return res.status(400).json({ ok: false, error: "missing_pageId" });
     markConversion(String(pageId));
     try { recordPackWinForPage(String(pageId)); } catch {}
     try {
       const last = lastShipFor(String(pageId));
-      if (last) recordSectionOutcome(last.sections || [], "all", true);
+      if (last) recordSectionOutcome((last as any).sections || [], "all", true);
       try {
-        if (last?.brand) {
+        if ((last as any)?.brand) {
           recordTokenWin({
-            brand: { primary: last.brand.primary, tone: last.brand.tone, dark: last.brand.dark },
-            sessionId: String(last.sessionId || "anon"),
-          });
+            brand: { primary: (last as any).brand.primary, tone: (last as any).brand.tone, dark: (last as any).brand.dark },
+            sessionId: String((last as any).sessionId || "anon"),
+          } as any);
         }
       } catch {}
     } catch {}
@@ -1876,7 +1877,7 @@ router.get("/proof/:pageId", (req, res) => {
   }
 });
 
-function pathResolve(p) {
+function pathResolve(p: string) {
   return path.resolve(p);
 }
 

@@ -3137,6 +3137,23 @@
         "minimal"
       ],
       "addedTs": 1761649845721
+    },
+    "2c27e0042e3fb50146be0f20e62c3a4ba5938cad": {
+      "id": "2c27e0042e3fb50146be0f20e62c3a4ba5938cad",
+      "url": "/vectors/cloud-4.svg",
+      "file": "/Users/reemon/Desktop/Ybuilt/public/vectors/cloud-4.svg",
+      "tags": [
+        "saas",
+        "conversion",
+        "cloud"
+      ],
+      "industry": [
+        "saas"
+      ],
+      "vibe": [
+        "minimal"
+      ],
+      "addedTs": 1761650389064
     }
   },
   "index": {
@@ -3619,13 +3636,15 @@
       "0b7093561a0ae167757708178fc0b4ea7904b172",
       "35f53344032486c7224917b77ba89c2b8cee68a9",
       "00b86d2c330feca6832901b0b5476d267c35c98a",
-      "6abd9243ad73fe0191cc158bd19acefed13b8c9d"
+      "6abd9243ad73fe0191cc158bd19acefed13b8c9d",
+      "2c27e0042e3fb50146be0f20e62c3a4ba5938cad"
     ],
     "ai": [
       "69e25ce969fef4f702fdb5d6d1c10f5acdf96e93"
     ],
     "cloud": [
-      "f3d9adfcf76490f1c66161375d946e51a2a48156"
+      "f3d9adfcf76490f1c66161375d946e51a2a48156",
+      "2c27e0042e3fb50146be0f20e62c3a4ba5938cad"
     ],
     "payment": [
       "4aa3105f1a04c4166ce6b0335bce2798a9342134",
@@ -3649,12 +3668,19 @@
     ],
     "speed": [
       "6abd9243ad73fe0191cc158bd19acefed13b8c9d"
+    ],
+    "saas": [
+      "2c27e0042e3fb50146be0f20e62c3a4ba5938cad"
+    ],
+    "conversion": [
+      "2c27e0042e3fb50146be0f20e62c3a4ba5938cad"
     ]
   },
   "usage": {
-    "406f0c51b9293ebcce2ff7c7d255307632279f78": 1,
-    "d7767530865e1b35ac708f8192ffe7cb3aeb8f4c": 1,
-    "c99162032c9c3b6f7d0c7ede1a8c467e6422b074": 1
+    "406f0c51b9293ebcce2ff7c7d255307632279f78": 2,
+    "d7767530865e1b35ac708f8192ffe7cb3aeb8f4c": 2,
+    "c99162032c9c3b6f7d0c7ede1a8c467e6422b074": 1,
+    "2c27e0042e3fb50146be0f20e62c3a4ba5938cad": 1
   },
   "synonyms": {
     "analytics": [

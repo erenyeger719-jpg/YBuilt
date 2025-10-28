@@ -25,7 +25,12 @@ export type SynthesizeArgs = {
 
 // ---- Public APIs expected by router.ts ----
 export function suggestVectorAssets(args: SuggestArgs = {}) {
-  return _suggestVectorAssets(args);
+  const out = _suggestVectorAssets(args) || {};
+  const cp = { ...(out.copyPatch || {}) };
+  for (const [k, v] of Object.entries(cp)) {
+    if (typeof v === "string" && !v.startsWith("/vectors/")) delete (cp as any)[k];
+  }
+  return { ...out, copyPatch: cp };
 }
 export function rememberVectorAssets(args: RememberArgs = {}) {
   return _rememberVectorAssets(args);
