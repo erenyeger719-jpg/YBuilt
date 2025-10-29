@@ -1,0 +1,50 @@
+[
+  {
+    "promptLike": "saas waitlist founders startup launch",
+    "sections": ["hero-basic", "features-3col", "pricing-simple", "faq-accordion"],
+    "tone": "minimal",
+    "scheme": "dark"
+  },
+  {
+    "promptLike": "developer api docs product",
+    "sections": ["hero-basic@b", "features-3col@alt", "faq-accordion@dense"],
+    "tone": "serious",
+    "scheme": "light"
+  },
+  {
+    "promptLike": "mobile app landing subscription",
+    "sections": ["hero-basic", "pricing-simple@a", "faq-accordion"],
+    "tone": "playful",
+    "scheme": "dark"
+  },
+  {
+    "promptLike": "ai tool productivity chrome extension",
+    "sections": ["hero-basic@b", "features-3col", "pricing-simple"],
+    "tone": "minimal",
+    "scheme": "light"
+  },
+  {
+    "promptLike": "course bootcamp education learn online",
+    "sections": ["hero-basic", "features-3col@alt", "faq-accordion@dense", "pricing-simple@a"],
+    "tone": "serious",
+    "scheme": "light"
+  },
+  {
+    "promptLike": "agency portfolio services contact",
+    "sections": ["hero-basic@b", "features-3col", "faq-accordion"],
+    "tone": "minimal",
+    "scheme": "dark"
+  },
+  {
+    "promptLike": "open source project template github",
+    "sections": ["hero-basic", "features-3col@alt", "faq-accordion"],
+    "tone": "minimal",
+    "scheme": "light"
+  },
+  {
+    "promptLike": "freelancer indie hacker landing",
+    "sections": ["hero-basic", "features-3col", "pricing-simple@a"],
+    "tone": "playful",
+    "scheme": "dark"
+  }
+]

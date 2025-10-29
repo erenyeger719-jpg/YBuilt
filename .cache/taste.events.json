@@ -1,10 +1,10 @@
 {
   "#5921b2|1|minimal": {
-    "seen": 1,
+    "seen": 2,
     "win": 0,
-    "goodSeen": 1,
+    "goodSeen": 2,
     "goodWin": 0,
-    "ts": 1761649851234
+    "ts": 1761657012910
   },
   "#491b92|1|minimal": {
     "seen": 1,
@@ -28,10 +28,80 @@
     "ts": 1761651934202
   },
   "#6d28d9|1|minimal": {
+    "seen": 3,
+    "win": 0,
+    "goodSeen": 3,
+    "goodWin": 0,
+    "ts": 1761657012894
+  },
+  "#5921b2|0|minimal": {
     "seen": 2,
     "win": 0,
     "goodSeen": 2,
     "goodWin": 0,
-    "ts": 1761652513671
+    "ts": 1761657013264
+  },
+  "#6d28d9|0|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761657012935
+  },
+  "#c98209|0|playful": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761657013089
+  },
+  "#8a46cb|1|playful": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761657013110
+  },
+  "#f59e0b|0|playful": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761657013114
+  },
+  "#a855f7|1|playful": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761657013121
+  },
+  "#1e51c1|0|serious": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761657013205
+  },
+  "#6d28d9|1|serious": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761657013221
+  },
+  "#2563eb|0|serious": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761657013226
+  },
+  "#5921b2|1|serious": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761657013231
   }
 }

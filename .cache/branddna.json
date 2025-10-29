@@ -28,5 +28,16 @@
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": true
+  },
+  "r1": {
+    "n": 13,
+    "sections": {
+      "hero-basic": 7,
+      "cta-simple": 12,
+      "features-3col": 7
+    },
+    "primary": "#5921b2",
+    "tone": "minimal",
+    "dark": false
   }
 }

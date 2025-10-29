@@ -73,9 +73,12 @@ import {
   recordPackWinForPage,
 } from "../sections/packs.ts";
 import { maybeNightlyMine as maybeVectorMine, runVectorMiner } from "../media/vector.miner.ts";
+import { __vectorLib_load } from "../media/vector.lib.ts";
 import crypto from "crypto";
 import path from "path";
 import { runArmy } from "./army.ts";
+// at top with other imports
+import { mountCiteLock } from "./citelock.patch.ts";
 
 // Nightly TasteNet retrain (best-effort, no-op if not due)
 try {
@@ -194,6 +197,8 @@ export function pickTierByConfidence(c = 0.6) {
 }
 
 const router = express.Router();
+// after you create your router instance (e.g., const router = Router();)
+mountCiteLock(router);
 
 function extractJSON(s: string) {
   const start = s.indexOf("{");
@@ -211,7 +216,8 @@ function sha1(s: string) {
   return crypto.createHash("sha1").update(String(s)).digest("hex");
 }
 
-async function fetchJSONWithTimeout(url: string, opts?: RequestInit, timeoutMs = 20000) {
+// TS guard: avoid DOM lib types in Node builds
+async function fetchJSONWithTimeout(url: string, opts?: any, timeoutMs = 20000) {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -658,6 +664,80 @@ router.post("/vector/mine", (_req, res) => {
   }
 });
 
+// --- Vector search (network effect) ---
+router.get("/vectors/search", (req, res) => {
+  try {
+    const db = __vectorLib_load();
+    const limit = Math.max(
+      1,
+      Math.min(50, parseInt(String(req.query.limit || "24"), 10) || 24)
+    );
+    const rawQ = String(req.query.q || "").toLowerCase().trim();
+    const tagRaw = String((req.query.tags ?? req.query.tag ?? "") || "")
+      .toLowerCase()
+      .trim();
+    const qTokens = rawQ
+      ? rawQ
+          .replace(/[^a-z0-9\s]/g, " ")
+          .split(/\s+/)
+          .filter(Boolean)
+      : [];
+    const tagTokens = tagRaw
+      ? tagRaw.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    const want = new Set([...qTokens, ...tagTokens]);
+
+    // Collect candidate IDs from inverted index
+    const cand = new Set<string>();
+    const idx = (db as any).index || {};
+    if (want.size) {
+      for (const t of want) {
+        const hit = idx[t] || [];
+        for (const id of hit) cand.add(id);
+      }
+    } else {
+      // no query → return recents
+      for (const id of Object.keys((db as any).assets || {})) cand.add(id);
+    }
+
+    // Score: tag/vibe/industry overlap + mild recency
+    const rows: Array<any> = [];
+    const assets = (db as any).assets || {};
+    for (const id of cand) {
+      const a = assets[id];
+      if (!a) continue;
+      const tags = (a.tags || []).map(String);
+      const vibe = (a.vibe || []).map(String);
+      const ind = (a.industry || []).map(String);
+
+      let overlap = 0;
+      for (const t of tags.concat(vibe, ind)) {
+        if (want.has(String(t).toLowerCase())) overlap += 1;
+      }
+      // recency: newer gets tiny boost
+      const ageMs = Math.max(1, Date.now() - (a.addedTs || 0));
+      const recency = Math.max(0, 1 - ageMs / (30 * 24 * 3600 * 1000)); // 30d window
+      const score = overlap + 0.2 * recency;
+
+      rows.push({
+        id: a.id,
+        url: a.url,
+        file: a.file,
+        tags: a.tags || [],
+        industry: a.industry || [],
+        vibe: a.vibe || [],
+        score,
+      });
+    }
+
+    rows.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+    return res.json({ ok: true, q: rawQ, tags: tagTokens, items: rows.slice(0, limit) });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "vector_search_failed" });
+  }
+});
+
 // --- Vector corpus seeder (fast local network effect) ---
 router.post("/vectors/seed", async (req, res) => {
   try {
@@ -768,14 +848,28 @@ router.post("/act", async (req, res) => {
           ? action.args.sections
           : spec?.layout?.sections || [];
 
-        // Auto-pack fallback: if no sections, choose best-ranked pack
+        // Auto-pack / explicit pack selection
         try {
-          if (!sectionsIn.length) {
-            const ranked = listPacksRanked();
-            if (Array.isArray(ranked) && ranked.length) {
-              const best = ranked[0];
-              action.args = { ...(action.args || {}), sections: best.sections };
-            }
+          const ranked = listPacksRanked();
+          const wantPackId = String(action.args?.packId || "").trim();
+          const wantTagsRaw = action.args?.tags;
+          const wantTags = Array.isArray(wantTagsRaw) ? wantTagsRaw.map(String) : [];
+
+          if (wantPackId && Array.isArray(ranked) && ranked.length) {
+            const pick = ranked.find((p: any) => String(p.id || "") === wantPackId);
+            if (pick?.sections?.length)
+              action.args = { ...(action.args || {}), sections: pick.sections };
+          } else if (wantTags.length && Array.isArray(ranked) && ranked.length) {
+            const pick = ranked.find((p: any) =>
+              (p.tags || []).some((t: string) =>
+                wantTags.includes(String(t).toLowerCase())
+              )
+            );
+            if (pick?.sections?.length)
+              action.args = { ...(action.args || {}), sections: pick.sections };
+          } else if (!sectionsIn.length && Array.isArray(ranked) && ranked.length) {
+            const best = ranked[0];
+            action.args = { ...(action.args || {}), sections: best.sections };
           }
         } catch {}
 
@@ -878,7 +972,9 @@ router.post("/act", async (req, res) => {
 
         // ⬇️ NEW: synthesize vector assets, merge into copy (non-destructive)
         try {
-          // B. fixed synth call to pass brand directly via shim
+          const breadthIn = String((action as any)?.args?.breadth || "").toLowerCase();
+          const wantMax = breadthIn === "max";
+
           const { copyPatch } = await synthesizeAssets({
             brand: {
               ...(prep.brand || {}),
@@ -888,7 +984,7 @@ router.post("/act", async (req, res) => {
                 (spec as any)?.brand?.primary,
             },
             tags: ["saas", "conversion"],
-            count: 4,
+            count: wantMax ? 8 : 4,
           } as any);
           Object.assign(copyWithDefaults, copyPatch);
 
@@ -930,6 +1026,7 @@ router.post("/act", async (req, res) => {
           // 1) Tokens & grid — honor breadth
           const breadthIn = String((action as any)?.args?.breadth || "").toLowerCase();
           const wantWide = breadthIn === "wide" || breadthIn === "max";
+          const wantMax = breadthIn === "max";
           if (wantWide) {
             const w = wideTokenSearch({
               primary: primaryIn,
@@ -982,31 +1079,19 @@ router.post("/act", async (req, res) => {
             eval1 = evaluateDesign(tokens);
           }
 
-          // D. Extra breadth: best-of-3 tokens if visual score is still low (deterministic)
+          // D. Extra breadth: best-of-N tokens (deterministic); N grows if breadth=max
           try {
             let evalBest = evaluateDesign(tokens);
             const primary = (tokens as any).palette?.primary || primaryIn;
+            const baseJitters = wantMax ? [0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10] : [0.03, 0.06];
 
-            if ((evalBest as any).visualScore < 70) {
-              // Two small, deterministic jitters around the current primary
-              const j1 = tokenMixer({
-                primary,
-                dark: darkIn as boolean,
-                tone: toneIn as string,
-                jitter: 0.03,
-              });
-              const j2 = tokenMixer({
-                primary,
-                dark: darkIn as boolean,
-                tone: toneIn as string,
-                jitter: 0.06,
-              });
-
-              const cands = [
-                { t: tokens, ev: evalBest },
-                { t: j1, ev: evaluateDesign(j1) },
-                { t: j2, ev: evaluateDesign(j2) },
-              ].filter((x) => (x.ev as any).a11yPass);
+            if ((evalBest as any).visualScore < 72 || wantMax) {
+              const jittered = baseJitters.map((j) =>
+                tokenMixer({ primary, dark: darkIn as boolean, tone: toneIn as string, jitter: j })
+              );
+              const cands = [{ t: tokens, ev: evalBest }]
+                .concat(jittered.map((t) => ({ t, ev: evaluateDesign(t) })))
+                .filter((x) => (x.ev as any).a11yPass);
 
               const best =
                 cands.sort(
@@ -1014,15 +1099,15 @@ router.post("/act", async (req, res) => {
                     (b.ev as any).visualScore - (a.ev as any).visualScore
                 )[0] || { t: tokens, ev: evalBest };
 
-              // Adopt only if it clearly improves visual score (>= +5)
+              // Adopt if clearly better (>= +4), or if breadth=max (take top regardless)
               if (
-                (((best.ev as any).visualScore || 0) -
-                  ((evalBest as any).visualScore || 0)) >=
-                5
+                wantMax ||
+                ((((best.ev as any).visualScore || 0) -
+                  ((evalBest as any).visualScore || 0)) >= 4)
               ) {
                 tokens = best.t;
                 evalBest = best.ev;
-                eval1 = evalBest; // propagate improvement to later checks
+                eval1 = evalBest; // propagate improvement
               }
             }
           } catch {}
@@ -1063,8 +1148,7 @@ router.post("/act", async (req, res) => {
           if (!pg.ok) {
             const before = prep.sections.slice();
             prep.sections = downgradeSections(prep.sections);
-            pushSignal((req.body as any)?.sessionId || "anon") as any;
-            pushSignal((req.body as any)?.sessionId || "anon", {
+            pushSignal(String((req.body as any)?.sessionId || "anon"), {
               ts: Date.now(),
               kind: "perf_downgrade",
               data: { before, after: prep.sections, overBy: (pg as any).overBy },
@@ -1273,7 +1357,7 @@ router.post("/act", async (req, res) => {
           }
           // still surface issues to the UI
           if (r.issues.length) {
-            pushSignal(String((req.body as any)?.sessionId || "anon"), {
+            pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
               ts: Date.now(),
               kind: "readability_warn",
               data: { score: r.score, issues: r.issues.slice(0, 6) },
@@ -1308,7 +1392,7 @@ router.post("/act", async (req, res) => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify(payloadForKey),
         });
-        if (!r.ok) return { error: `compose_http_${(r as any).status}` };
+        if (!r.ok) return { kind: "compose", error: `compose_http_${(r as any).status}` };
         const data = await r.json();
 
         // remember successful compose for instant reuse
@@ -1832,7 +1916,9 @@ router.post("/instant", async (req, res) => {
     const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
 
     // 0) No-model intent: playbook → quick guess → safe defaults
-    let fit = pickFromPlaybook(prompt) || quickGuessIntent(prompt);
+    let fit =
+      pickFromPlaybook(prompt) ||
+      quickGuessIntent(prompt);
     if (!fit) {
       const dark = /(^|\s)dark(\s|$)/i.test(String(prompt));
       const intent = {
@@ -1904,8 +1990,13 @@ router.post("/instant", async (req, res) => {
     // ⬇️ PATCH: merge OG + vector asset copy patches, then persist on spec
     try {
       const brand = (spec as any).brand || {};
-      const og = buildSEO({ brand, copy } as any);
-      if ((og as any)?.copyPatch) Object.assign(copy, (og as any).copyPatch);
+      const ogMeta = buildSEO({
+        title: String((copy as any).HEADLINE || "Preview"),
+        description: String((copy as any).HERO_SUBHEAD || (copy as any).TAGLINE || ""),
+        brand,
+        url: null,
+      } as any);
+      if ((ogMeta as any)?.copyPatch) Object.assign(copy, (ogMeta as any).copyPatch);
 
       const vec = await synthesizeAssets({
         brand,

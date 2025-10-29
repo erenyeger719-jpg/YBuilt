@@ -2,11 +2,21 @@
   "global": {},
   "perSession": {},
   "seenGlobal": {
-    "#5921b2|minimal|true": 1,
+    "#5921b2|minimal|true": 2,
     "#491b92|minimal|true": 1,
     "#3c1678|minimal|true": 1,
     "#311262|minimal|true": 1,
-    "#6d28d9|minimal|true": 2
+    "#6d28d9|minimal|true": 3,
+    "#5921b2|minimal|false": 2,
+    "#6d28d9|minimal|false": 1,
+    "#c98209|playful|false": 1,
+    "#8a46cb|playful|true": 1,
+    "#f59e0b|playful|false": 1,
+    "#a855f7|playful|true": 1,
+    "#1e51c1|serious|false": 1,
+    "#6d28d9|serious|true": 1,
+    "#2563eb|serious|false": 1,
+    "#5921b2|serious|true": 1
   },
   "seenPerSession": {
     "vec1": {
@@ -20,6 +30,20 @@
     },
     "p1": {
       "#6d28d9|minimal|true": 1
+    },
+    "r1": {
+      "#6d28d9|minimal|true": 1,
+      "#5921b2|minimal|true": 1,
+      "#5921b2|minimal|false": 2,
+      "#6d28d9|minimal|false": 1,
+      "#c98209|playful|false": 1,
+      "#8a46cb|playful|true": 1,
+      "#f59e0b|playful|false": 1,
+      "#a855f7|playful|true": 1,
+      "#1e51c1|serious|false": 1,
+      "#6d28d9|serious|true": 1,
+      "#2563eb|serious|false": 1,
+      "#5921b2|serious|true": 1
     }
   },
   "_meta": {

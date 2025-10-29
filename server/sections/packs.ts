@@ -96,12 +96,21 @@ const EXTRA_PACKS: Array<Pick<Pack, "id" | "sections" | "tags">> = [
 
 // ---- User inventory (runtime ingest) ----
 function pathResolve(p: string) { return path.resolve(p); }
-function readUserPacks(): any[] {
+function readUserPacks(): Pack[] {
   try {
     const P = pathResolve(".cache/packs.user.json");
     if (!fs.existsSync(P)) return [];
     const j = JSON.parse(fs.readFileSync(P, "utf8"));
-    return Array.isArray(j?.packs) ? j.packs : [];
+    const rows = Array.isArray(j?.packs) ? j.packs : [];
+    return rows
+      .map((p: any, idx: number) => {
+        const id = String(p?.id ?? p?.key ?? `user-${idx}`);
+        const name = String(p?.name ?? humanizeId(id));
+        const sections = Array.isArray(p?.sections) ? p.sections.map(String) : [];
+        const tags = Array.isArray(p?.tags) ? p.tags.map(String) : undefined;
+        return { id, name, sections, tags };
+      })
+      .filter((p: Pack) => p.sections.length > 0);
   } catch {
     return [];
   }
@@ -147,11 +156,25 @@ function humanizeId(id: string): string {
     .replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-// Find best matching catalog pack for a concrete section list
+// Merge all known packs (Catalog + Extra + User), de-duped by id
+function mergedInventory(): Pack[] {
+  const byId = new Map<string, Pack>();
+  for (const p of CATALOG) byId.set(p.id, p);
+  for (const p of EXTRA_PACKS) {
+    const name = humanizeId(p.id);
+    const full: Pack = { id: p.id, name, sections: p.sections, tags: p.tags };
+    if (!byId.has(full.id)) byId.set(full.id, full);
+  }
+  for (const p of readUserPacks()) if (!byId.has(p.id)) byId.set(p.id, p);
+  return Array.from(byId.values());
+}
+
+// Find best matching pack for a concrete section list across the entire inventory
 function bestPackForSections(sections: string[]): Pack {
-  let best: Pack = CATALOG[0];
+  const inv = mergedInventory();
+  let best: Pack = inv[0];
   let bestScore = -1;
-  for (const p of CATALOG) {
+  for (const p of inv) {
     const s = jaccard(p.sections, sections);
     if (s > bestScore) {
       bestScore = s;
@@ -192,43 +215,7 @@ export function listPacksRanked(): Array<Pack & { score: number; seen: number; w
   const m = load();
   decayIfDue(m);
 
-  // Built-ins: curated catalog + extras (derive names for extras)
-  const builtins: Pack[] = [
-    ...CATALOG,
-    ...EXTRA_PACKS.map((p) => ({
-      id: p.id,
-      name: humanizeId(p.id),
-      sections: p.sections,
-      tags: p.tags,
-    })),
-  ];
-
-  // User packs: read from .cache/packs.user.json
-  const userRaw = readUserPacks();
-  const userNorm: Pack[] = (Array.isArray(userRaw) ? userRaw : [])
-    .map((p: any, idx: number) => {
-      const id = String(p?.id ?? p?.key ?? `user-${idx}`);
-      const name = String(p?.name ?? humanizeId(id));
-      const sections = Array.isArray(p?.sections) ? p.sections.map(String) : [];
-      const tags = Array.isArray(p?.tags) ? p.tags.map(String) : undefined;
-      return { id, name, sections, tags };
-    })
-    .filter((p) => p.sections.length > 0);
-
-  // Merge + de-dupe by id
-  const byId = new Map<string, Pack>();
-  for (const p of [...builtins, ...userNorm]) {
-    if (!byId.has(p.id)) byId.set(p.id, p);
-  }
-  const mergedBase = Array.from(byId.values());
-
-  // ensure every pack has a metrics row
-  for (const p of mergedBase) {
-    if (!m.packs[p.id]) m.packs[p.id] = { seen: 0, wins: 0 };
-  }
-
-  // Rank with existing scoring (CTR lower bound + momentum + freshness)
-  const rows = mergedBase.map((p) => {
+  const rows = mergedInventory().map((p) => {
     const pm = m.packs[p.id] || { seen: 0, wins: 0 };
     const seen = pm.seen;
     const wins = pm.wins;
