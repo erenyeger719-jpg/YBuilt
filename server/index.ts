@@ -22,6 +22,10 @@ import logsApiRouter from './routes/logs.ts'; // note the .ts
 import { persistFork } from './previews.storage.ts';
 import aiRouter from './ai/router.ts'; // ← ensure AI router is statically imported
 
+// NEW: KPI + Execute Sandbox (static) mounts
+import kpiRouter from './routes/kpi';
+import executeSandboxRouter from './routes/execute.sandbox';
+
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
 
@@ -492,9 +496,7 @@ app.use(ipGate());
   const { default: executeRoutes } = await import('./routes/execute.js').catch(() => ({
     default: undefined as any,
   }));
-  const { default: execSandbox } = await import('./routes/execute.sandbox.ts').catch(() => ({
-    default: undefined as any,
-  }));
+  // REMOVED dynamic exec sandbox import; using static import above
   const { default: previewsRouter } = await import('./routes/previews.js').catch(() => ({
     default: undefined as any,
   }));
@@ -560,7 +562,9 @@ app.use(ipGate());
   if (authRoutes) app.use('/api/auth', authRoutes);
   if (projectsRoutes) app.use('/api/projects', projectsRoutes);
   if (chatRoutes) app.use('/api/chat', chatRoutes);
-  if (execSandbox) app.use('/api/execute', express.json({ limit: '256kb' }), execSandbox);
+
+  // --- Execute (sandbox + general) ---
+  app.use('/api/execute', executeSandboxRouter); // -> /api/execute/health
   if (executeRoutes) app.use('/api/execute', express.json({ limit: '256kb' }), executeRoutes);
 
   // --- Build jobs (must be before /api/previews routers) ---
@@ -579,7 +583,7 @@ app.use(ipGate());
 
   // Mount AI routers UNDER THE SAME PREFIX. Order matters:
   // - Mount aiRouter (with /review) first so it takes precedence over any duplicate paths.
-  app.use('/api/ai', aiRouter);                // existing
+  app.use('/api/ai', aiRouter); // existing
   if (aiOrchestrator) app.use('/api/ai', aiOrchestrator);
   if (vectorRouter) app.use('/api/ai', vectorRouter); // ← add this
 
@@ -591,6 +595,9 @@ app.use(ipGate());
 
   // NEW: Palette API
   if (paletteRouter) app.use('/api/palette', paletteRouter);
+
+  // NEW: KPI endpoints (seen/convert/metrics)
+  app.use('/api', kpiRouter);
 
   // Comments API
   if (commentsMod?.list) app.get('/api/comments/list', commentsMod.list);

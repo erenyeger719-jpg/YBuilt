@@ -1,4 +1,15 @@
 {
-  "bias": {},
-  "top": []
+  "bias": {
+    "primary": "#6d28d9",
+    "dark": true,
+    "tone": "minimal"
+  },
+  "top": [
+    [
+      "#6d28d9|1|minimal",
+      0.2,
+      3,
+      0
+    ]
+  ]
 }
