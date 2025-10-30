@@ -169,6 +169,12 @@ const VARIANT_HINTS: Record<string, string[]> = {
   "faq-accordion": ["faq-accordion", "faq-accordion@dense"],
 };
 
+// PREVIEW: resilient local preview output directory (dev safety net)
+const PREVIEW_DIR = ".cache/previews";
+try {
+  fs.mkdirSync(PREVIEW_DIR, { recursive: true });
+} catch {}
+
 export function pickModel(task: "planner" | "coder" | "critic", tier = "balanced") {
   const map = {
     fast: {
@@ -1398,13 +1404,72 @@ router.post("/act", async (req, res) => {
           return { kind: "compose", path: last.url, url: last.url };
         }
 
-        const r = await fetch(`${baseUrl(req)}/api/previews/compose`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payloadForKey),
-        });
-        if (!r.ok) return { kind: "compose", error: `compose_http_${(r as any).status}` };
-        const data = await r.json();
+        // --- Compose remotely, but fall back to local static HTML if it fails ---
+        let data: any = null;
+        try {
+          const r = await fetch(`${baseUrl(req)}/api/previews/compose`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(payloadForKey),
+          });
+          if (r.ok) data = await r.json();
+        } catch {
+          // swallow; we'll attempt local fallback below
+        }
+
+        if (!data || (!data.url && !data.path)) {
+          // Local dev fallback composer (OG + tokens + simple body)
+          const cssVars = (payloadForKey as any)?.brand?.tokens || {};
+          const cssRoot = Object.entries(cssVars)
+            .map(([k, v]) => `${k}:${String(v)}`)
+            .join(";");
+
+          const titleLoc = String(
+            (payloadForKey as any)?.copy?.HEADLINE ||
+              (payloadForKey as any)?.title ||
+              "Preview"
+          );
+          const sub = String(
+            (payloadForKey as any)?.copy?.HERO_SUBHEAD ||
+              (payloadForKey as any)?.copy?.TAGLINE ||
+              ""
+          );
+
+          const localeTag = String((payloadForKey as any)?.locale || "en");
+          const og = `
+<meta property="og:title" content="${titleLoc}">
+<meta property="og:description" content="${sub}">
+<meta name="twitter:card" content="summary_large_image">
+`.trim();
+
+          const css = `
+:root{${cssRoot}}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
+     max-width: 880px; margin: 56px auto; padding: 0 16px; line-height:1.55;}
+h1{font-size: clamp(28px, 5vw, 44px); margin: 0 0 12px;}
+p{opacity:.85; font-size: clamp(16px, 2.2vw, 20px); margin: 0 0 24px;}
+button{padding:.75rem 1rem; border:0; border-radius:12px}
+`.trim();
+
+          const html = `<!doctype html>
+<html lang="${localeTag}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${og}
+<title>${titleLoc}</title>
+<style>${css}</style>
+</head>
+<body>
+  <h1>${titleLoc}</h1>
+  ${sub ? `<p>${sub}</p>` : ""}
+</body>
+</html>`;
+
+          const outFile = path.resolve(PREVIEW_DIR, `${keyNow}.html`);
+          try {
+            fs.writeFileSync(outFile, html);
+          } catch {}
+
+          data = { url: `/api/ai/previews/${keyNow}`, path: `/api/ai/previews/${keyNow}` };
+        }
 
         // remember successful compose for instant reuse
         LAST_COMPOSE.set(((req.body as any)?.sessionId || "anon") as string, {
@@ -2411,6 +2476,14 @@ router.get("/proof/:pageId", (req, res) => {
   } catch (e) {
     return res.status(500).json({ ok: false, error: "proof_failed" });
   }
+});
+
+// Serve local fallback previews (dev safety net)
+router.get("/previews/:id", (req, res) => {
+  const file = path.resolve(PREVIEW_DIR, `${String(req.params.id)}.html`);
+  if (!fs.existsSync(file)) return res.status(404).send("Not found");
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.send(fs.readFileSync(file, "utf8"));
 });
 
 function pathResolve(p: string) {
