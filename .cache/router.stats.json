@@ -1,10 +1,10 @@
 {
   "paths": {
     "rules": {
-      "n": 6,
-      "ships": 6,
+      "n": 8,
+      "ships": 8,
       "conversions": 0,
-      "ema_ttu_ms": 94.4521484375,
+      "ema_ttu_ms": 107.25433349609375,
       "ema_ship_rate": 1,
       "ema_conv_rate": null
     },
@@ -31,11 +31,13 @@
     "9ddc778279d2c9d28978036fbc534e6fb4d3935f": "rules",
     "686ba206af852b3e38f72fe8acbfb2cd7b712c93": "rules",
     "735bae9624ad9632c150bf0d923bde6891269c37": "rules",
-    "35c6b213649607870ae8b0c0496b9b6e5b4f7808": "rules"
+    "35c6b213649607870ae8b0c0496b9b6e5b4f7808": "rules",
+    "ce4695a1af3a55501fed8e1bad6228550d94b256": "rules",
+    "f2339434fc5f8e14366c36145dfd4cb881fff729": "rules"
   },
   "budget": {
     "cloud_n": 0,
-    "total_n": 6
+    "total_n": 8
   },
   "_meta": {
     "lastDecayTs": 1761805098520

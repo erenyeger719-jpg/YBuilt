@@ -306,13 +306,18 @@ function segmentSwapSections(ids: string[] = [], audience = "all") {
   return base.concat(extras);
 }
 
-// NEW — audience inference fallback (used if spec.intent.audience is missing/blank)
+// REPLACED — audience inference (bulletproof via prompt + copy)
 function inferAudience(spec: any): string {
   const direct = String(spec?.audience || spec?.intent?.audience || "").toLowerCase().trim();
   if (direct) return direct;
 
-  const p = String(spec?.summary || "").toLowerCase();
-  // dev synonyms
+  const text =
+    String(spec?.summary || spec?.lastSpec?.summary || "") +
+    " " +
+    Object.values(spec?.copy || {}).join(" ");
+
+  const p = text.toLowerCase();
+
   if (
     /\bdev(eloper|elopers|s)?\b/.test(p) ||
     /\bengineer(s)?\b/.test(p) ||
@@ -320,12 +325,9 @@ function inferAudience(spec: any): string {
     /\bprogrammer(s)?\b/.test(p)
   )
     return "developers";
-  // founder synonyms
   if (/\bfounder(s)?\b/.test(p) || /\bstartup\s*(ceo|cto|team)\b/.test(p)) return "founders";
-  // shopper/consumer/ecom
   if (/\bshopper(s)?\b/.test(p) || /\bconsumer(s)?\b/.test(p) || /\becommerce\b/.test(p))
     return "shoppers";
-
   return "all";
 }
 
@@ -1470,7 +1472,7 @@ router.post("/act", async (req, res) => {
           ((req.body as any)?.sessionId || "anon") as string
         );
         if (last && last.key === keyNow && last.url) {
-          return { kind: "compose", path: last.url, url: last.url };
+          return { kind: "compose", path: last.url, url: last.url, sections: (prep as any).sections };
         }
 
         // --- Compose remotely, but ALWAYS rehost locally with OG injection ---
@@ -1797,7 +1799,7 @@ ${og}
         } catch {}
 
         // return pageId so client can hit KPIs/Proof directly
-        return { kind: "compose", pageId: keyNow, ...(data as any) };
+        return { kind: "compose", pageId: keyNow, sections: (prep as any).sections, ...(data as any) };
       }
 
       return { error: `unknown_action:${(action as any).kind}` };
@@ -1945,7 +1947,16 @@ router.post("/one", async (req, res) => {
     };
     (spec as any).audience = intent.audience || "";
 
+    // Deterministic copy (cheap)
     let copy = (fit as any).copy || cheapCopy(prompt, (fit as any).intent);
+
+    // NEW: bulletproof audience inference using prompt + copy fallback, before /act
+    (spec as any).audience = inferAudience({
+      summary: prompt,
+      intent: { audience: (fit as any)?.intent?.audience || "" },
+      copy,
+    });
+
     let brandColor =
       (prior as any)?.brand?.primary || (fit as any).brandColor || guessBrand((fit as any).intent);
     // Slot Synthesis v1 — fill any missing copy keys deterministically
@@ -2042,16 +2053,12 @@ router.post("/one", async (req, res) => {
       queueShadowEval({ prompt, spec: finalSpec, sessionId });
     } catch {}
 
-    const payload = {
-      ok: true,
-      spec: { ...spec, brandColor, copy },
-      plan: actions,
-      ran: usedAction,
-      result,
-      url,
-      chips,
-      signals: summarySignals,
-    };
+    // Bubble shipped sections back into spec
+    const sectionsUsed =
+      (result as any)?.sections ||
+      ((usedAction as any)?.args?.sections) ||
+      ((spec as any)?.layout?.sections || []);
+    const specOut = { ...spec, brandColor, copy, layout: { sections: sectionsUsed } };
 
     // [BANDIT] mark success with real timing + path
     try {
@@ -2071,7 +2078,16 @@ router.post("/one", async (req, res) => {
       recordTTU(Date.now() - t0);
     } catch {}
 
-    return res.json(payload);
+    return res.json({
+      ok: true,
+      spec: specOut,
+      plan: actions,
+      ran: usedAction,
+      result,
+      url,
+      chips,
+      signals: summarySignals,
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "one_failed" });
   }
@@ -2165,6 +2181,13 @@ router.post("/instant", async (req, res) => {
       copy = (filled as any).copy;
     }
 
+    // NEW: bulletproof audience inference using prompt + copy fallback, before /act
+    (spec as any).audience = inferAudience({
+      summary: prompt,
+      intent: { audience: (fit as any)?.intent?.audience || "" },
+      copy,
+    });
+
     // ⬇️ PATCH: merge OG + vector asset copy patches, then persist on spec
     try {
       const brand = (spec as any).brand || {};
@@ -2237,14 +2260,19 @@ router.post("/instant", async (req, res) => {
       result = (composeData as any)?.result;
     }
 
+    // Bubble shipped sections back into spec
+    const sectionsUsed =
+      (result as any)?.sections ||
+      (spec as any)?.layout?.sections ||
+      (intent.sections || []);
+
     return res.json({
       ok: true,
       source: "instant",
-      spec: { ...spec, brandColor, copy },
+      spec: { ...spec, brandColor, copy, layout: { sections: sectionsUsed } },
       url,
       result,
-      chips:
-        (chips as any).length ? chips : clarifyChips({ prompt, spec }),
+      chips: (chips as any).length ? chips : clarifyChips({ prompt, spec }),
       signals: summarySignals,
     });
   } catch (e) {
@@ -2307,6 +2335,9 @@ router.post("/clarify/compose", async (req, res) => {
       sections: s.layout?.sections || ["hero-basic", "cta-simple"],
     });
 
+    // NEW: set audience on s using prompt + copy before /act
+    s.audience = inferAudience({ summary: prompt, intent: s.intent, copy });
+
     // retrieve → compose
     const retrieve = { kind: "retrieve", args: { sections: s.layout.sections } };
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
@@ -2353,12 +2384,22 @@ router.post("/clarify/compose", async (req, res) => {
       result = (composeData as any)?.result;
     }
 
+    const sectionsUsed =
+      (result as any)?.sections ||
+      ((s as any)?.layout?.sections || []);
+
     pushSignal(sessionId, {
       ts: Date.now(),
       kind: "clarify_compose",
       data: { chips },
     });
-    return res.json({ ok: true, url, result, spec: { ...s, copy, brandColor }, chips });
+    return res.json({
+      ok: true,
+      url,
+      result,
+      spec: { ...s, copy, brandColor, layout: { sections: sectionsUsed } },
+      chips,
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "clarify_compose_failed" });
   }

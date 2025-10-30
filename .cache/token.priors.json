@@ -2,20 +2,22 @@
   "global": {
     "#5921b2|minimal|false": 1,
     "#491b92|minimal|false": 1,
-    "#3c1678|minimal|false": 1
+    "#3c1678|minimal|false": 1,
+    "#311262|minimal|false": 1
   },
   "perSession": {
     "e2e-kpi": {
       "#5921b2|minimal|false": 1,
       "#491b92|minimal|false": 1,
-      "#3c1678|minimal|false": 1
+      "#3c1678|minimal|false": 1,
+      "#311262|minimal|false": 1
     }
   },
   "seenGlobal": {
     "#5921b2|minimal|true": 2.954319936868492,
     "#491b92|minimal|true": 1.977159968434246,
     "#3c1678|minimal|true": 1.977159968434246,
-    "#311262|minimal|true": 0.9771599684342459,
+    "#311262|minimal|true": 1.977159968434246,
     "#6d28d9|minimal|true": 2.9314799053027376,
     "#5921b2|minimal|false": 6.954319936868492,
     "#6d28d9|minimal|false": 0.9771599684342459,
@@ -27,10 +29,11 @@
     "#6d28d9|serious|true": 0.9771599684342459,
     "#2563eb|serious|false": 0.9771599684342459,
     "#5921b2|serious|true": 0.9771599684342459,
-    "#296fff|minimal|false": 6,
-    "#2563eb|minimal|false": 3,
+    "#296fff|minimal|false": 8,
+    "#2563eb|minimal|false": 4,
     "#491b92|minimal|false": 5,
-    "#3c1678|minimal|false": 5
+    "#3c1678|minimal|false": 5,
+    "#311262|minimal|false": 5
   },
   "seenPerSession": {
     "vec1": {
@@ -62,41 +65,47 @@
     "e2e-instant-1": {
       "#5921b2|minimal|true": 1,
       "#491b92|minimal|true": 1,
-      "#3c1678|minimal|true": 1
+      "#3c1678|minimal|true": 1,
+      "#311262|minimal|true": 1
     },
     "e2e-aud-dev": {
       "#5921b2|minimal|false": 1,
       "#491b92|minimal|false": 1,
-      "#3c1678|minimal|false": 1
+      "#3c1678|minimal|false": 1,
+      "#311262|minimal|false": 1
     },
     "e2e-aud-founders": {
       "#5921b2|minimal|false": 1,
       "#491b92|minimal|false": 1,
-      "#3c1678|minimal|false": 1
+      "#3c1678|minimal|false": 1,
+      "#311262|minimal|false": 1
     },
     "e2e-tokens-0": {
-      "#296fff|minimal|false": 3
+      "#296fff|minimal|false": 4
     },
     "e2e-tokens-1": {
-      "#2563eb|minimal|false": 3
+      "#2563eb|minimal|false": 4
     },
     "e2e-kpi": {
       "#5921b2|minimal|false": 1,
       "#491b92|minimal|false": 1,
-      "#3c1678|minimal|false": 1
+      "#3c1678|minimal|false": 1,
+      "#311262|minimal|false": 1
     },
     "e2e-multi": {
       "#5921b2|minimal|false": 1,
       "#491b92|minimal|false": 1,
-      "#3c1678|minimal|false": 1
+      "#3c1678|minimal|false": 1,
+      "#311262|minimal|false": 1
     },
     "e2e-perf": {
-      "#296fff|minimal|false": 3
+      "#296fff|minimal|false": 4
     },
     "e2e-proof": {
       "#5921b2|minimal|false": 1,
       "#491b92|minimal|false": 1,
-      "#3c1678|minimal|false": 1
+      "#3c1678|minimal|false": 1,
+      "#311262|minimal|false": 1
     }
   },
   "_meta": {
