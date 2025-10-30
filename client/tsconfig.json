@@ -1,38 +1,26 @@
 {
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2021",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "lib": ["ES2021", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "node"],
+
     "strict": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "useUnknownInCatchVariables": true,
+
     "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"],
-      "@shared/*": ["../shared/*"]
-    }
+    "paths": { "@/*": ["src/*"] },
+
+    "types": ["vite/client"],
+
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
   },
-  "include": ["./src/**/*", "../shared/**/*.ts"],
-  "exclude": [
-    "src/components/SettingsForm/**/*",
-    "src/components/ThemeModal.tsx",
-    "src/components/BuildTraceViewer.tsx",
-    "src/components/LogoButton.tsx",
-    "src/components/library/PreviewsLibrary.tsx",
-    "src/components/previews/PreviewsList.tsx",
-    "src/components/Hero.tsx",
-    "src/components/TerminalPanel.tsx",
-    "src/components/collab/CommentsDialog.tsx",
-    "src/components/collab/LogsPanel.tsx",
-    "src/components/collab/ProjectChat.tsx",
-    "src/hooks/useBuildTrace.ts",
-    "src/hooks/useWorkspace.ts",
-    "src/pages/CursorCanvas.tsx",
-    "src/pages/Finalize.tsx",
-    "src/pages/settings/Account.tsx",
-    "src/pages/settings/Profile.tsx"
-  ]
+  "include": ["src", "../shared"],
+  "exclude": ["node_modules", "dist"]
 }
