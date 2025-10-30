@@ -17,12 +17,12 @@
     "typecheck:client": "tsc -p client/tsconfig.json --noEmit",
     "typecheck:server": "tsc -p server/tsconfig.json --noEmit",
     "test": "vitest run --config server/vitest.config.ts",
-    "test:watch": "vitest -c server/vitest.config.ts",
+    "test:watch": "vitest -c server/vitest.config.mjs",
     "test:server": "vitest run --config server/vitest.config.ts",
     "typecheck:tests": "tsc -p server/tsconfig.test.json --noEmit",
     "sup:regress": "node tests/sup_algo.regression.mjs http://localhost:5050",
-    "test:unit": "vitest run -c server/vitest.config.ts",
-    "test:cov": "vitest run -c server/vitest.config.ts --coverage",
+    "test:unit": "vitest run -c server/vitest.config.mjs",
+    "test:cov": "vitest run -c server/vitest.config.mjs --coverage",
     "test:all": "npm run test:unit && npm run sup:regress"
   },
   "dependencies": {
@@ -80,7 +80,6 @@
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.46.0",
     "@typescript-eslint/parser": "^8.46.0",
-    "@vitest/ui": "^3.2.4",
     "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
     "axios": "^1.12.2",
@@ -165,16 +164,22 @@
     "@types/passport-local": "^1.0.38",
     "@types/react": "^18.3.26",
     "@types/react-dom": "^18.3.7",
+    "@types/supertest": "^2.0.16",
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.7.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.4",
     "esbuild": "^0.25.0",
+    "fast-check": "^3.14.0",
     "playwright": "^1.56.1",
     "postcss": "^8.4.47",
+    "supertest": "^6.3.3",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.9.3",
-    "vite": "^5.4.20"
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.20",
+    "vitest": "^3.2.4"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"

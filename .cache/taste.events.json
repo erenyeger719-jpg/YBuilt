@@ -28,11 +28,11 @@
     "ts": 1761807792888
   },
   "#6d28d9|1|minimal": {
-    "seen": 16,
-    "win": 3,
-    "goodSeen": 16,
-    "goodWin": 3,
-    "ts": 1761824271267
+    "seen": 26,
+    "win": 5,
+    "goodSeen": 26,
+    "goodWin": 5,
+    "ts": 1761829035170
   },
   "#5921b2|0|minimal": {
     "seen": 8,
@@ -42,18 +42,18 @@
     "ts": 1761805098866
   },
   "#6d28d9|0|minimal": {
-    "seen": 7,
+    "seen": 16,
     "win": 0,
-    "goodSeen": 7,
+    "goodSeen": 16,
     "goodWin": 0,
-    "ts": 1761824271391
+    "ts": 1761829035288
   },
   "#c98209|0|playful": {
-    "seen": 2,
+    "seen": 3,
     "win": 0,
-    "goodSeen": 2,
+    "goodSeen": 3,
     "goodWin": 0,
-    "ts": 1761823593375
+    "ts": 1761829034316
   },
   "#8a46cb|1|playful": {
     "seen": 1,
@@ -105,11 +105,11 @@
     "ts": 1761657013231
   },
   "#296fff|0|minimal": {
-    "seen": 31,
+    "seen": 40,
     "win": 0,
-    "goodSeen": 31,
+    "goodSeen": 40,
     "goodWin": 0,
-    "ts": 1761824271875
+    "ts": 1761829035805
   },
   "#2563eb|0|minimal": {
     "seen": 14,
@@ -280,10 +280,24 @@
     "ts": 1761816263622
   },
   "#a56b07|0|playful": {
-    "seen": 2,
+    "seen": 4,
     "win": 0,
-    "goodSeen": 2,
+    "goodSeen": 4,
     "goodWin": 0,
-    "ts": 1761824271523
+    "ts": 1761829035427
+  },
+  "#2563eb|1|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761829033912
+  },
+  "#296fff|0|serious": {
+    "seen": 2,
+    "win": 1,
+    "goodSeen": 2,
+    "goodWin": 1,
+    "ts": 1761829034086
   }
 }

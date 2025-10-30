@@ -1,11 +1,11 @@
 {
   "all|hero-basic": {
     "hero-basic": {
-      "a": 12,
+      "a": 14,
       "b": 1,
-      "seen": 11,
-      "win": 11,
-      "last": 1761824271266
+      "seen": 13,
+      "win": 13,
+      "last": 1761829035169
     },
     "hero-basic@b": {
       "a": 1,
@@ -17,11 +17,11 @@
   },
   "all|features-3col": {
     "features-3col": {
-      "a": 3,
+      "a": 4,
       "b": 1,
-      "seen": 2,
-      "win": 2,
-      "last": 1761824271266
+      "seen": 3,
+      "win": 3,
+      "last": 1761829035169
     },
     "features-3col@alt": {
       "a": 1,
@@ -33,11 +33,11 @@
   },
   "all|cta-simple": {
     "cta-simple": {
-      "a": 18,
+      "a": 21,
       "b": 1,
-      "seen": 17,
-      "win": 17,
-      "last": 1761824271266
+      "seen": 20,
+      "win": 20,
+      "last": 1761829035169
     }
   },
   "founders|hero-basic": {

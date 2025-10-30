@@ -1,16 +1,16 @@
 {
   "bySection": {
     "cta-simple": {
-      "ships": 166,
-      "convs": 17
+      "ships": 197,
+      "convs": 20
     },
     "hero-basic": {
-      "ships": 98,
-      "convs": 11
+      "ships": 117,
+      "convs": 13
     },
     "features-3col": {
-      "ships": 44,
-      "convs": 2
+      "ships": 57,
+      "convs": 3
     }
   },
   "byBrandSig": {
@@ -31,19 +31,19 @@
       "convs": 0
     },
     "minimal|dark|#6d28d9": {
-      "ships": 13,
-      "convs": 3
+      "ships": 21,
+      "convs": 5
     },
     "minimal|light|#5921b2": {
       "ships": 7,
       "convs": 1
     },
     "minimal|light|#6d28d9": {
-      "ships": 7,
+      "ships": 16,
       "convs": 0
     },
     "playful|light|#c98209": {
-      "ships": 2,
+      "ships": 3,
       "convs": 0
     },
     "playful|dark|#8a46cb": {
@@ -75,7 +75,7 @@
       "convs": 0
     },
     "minimal|light|#296fff": {
-      "ships": 31,
+      "ships": 40,
       "convs": 0
     },
     "minimal|light|#2563eb": {
@@ -175,8 +175,16 @@
       "convs": 1
     },
     "playful|light|#a56b07": {
-      "ships": 2,
+      "ships": 4,
       "convs": 0
+    },
+    "minimal|dark|#2563eb": {
+      "ships": 1,
+      "convs": 0
+    },
+    "serious|light|#296fff": {
+      "ships": 1,
+      "convs": 1
     }
   }
 }

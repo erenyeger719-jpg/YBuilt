@@ -32,13 +32,46 @@
         "proves": 1,
         "nothing.": 1
       }
+    },
+    {
+      "id": "5812500f62a8b0fa34f8966d20025c6e79a14689",
+      "docId": "ev-1761828289600",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "32b93fc9b323227ec155dfb030dcbee94e62edae",
+      "docId": "ev-1761829034395",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "5fa89a1c22c83a42cd0a87f31e4ddaa635604a14",
+      "docId": "ev-1761829035845",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
     }
   ],
   "idf": {
-    "example": 0.13353139262452257,
-    "domain": 0.13353139262452257,
-    "proves": 0.13353139262452257,
-    "nothing.": 0.13353139262452257
+    "example": 0.07410797215372183,
+    "domain": 0.07410797215372183,
+    "proves": 0.07410797215372183,
+    "nothing.": 0.07410797215372183
   },
   "vocabSize": 4
 }

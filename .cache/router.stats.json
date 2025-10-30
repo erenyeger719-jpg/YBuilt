@@ -3,8 +3,8 @@
     "rules": {
       "n": 31,
       "ships": 31,
-      "conversions": 3,
-      "ema_ttu_ms": 120.1980000456546,
+      "conversions": 5,
+      "ema_ttu_ms": 254.12706446395904,
       "ema_ship_rate": 1,
       "ema_conv_rate": 1
     },
@@ -17,12 +17,12 @@
       "ema_conv_rate": null
     },
     "cloud": {
-      "n": 3,
-      "ships": 3,
-      "conversions": 0,
-      "ema_ttu_ms": 114.375,
+      "n": 7,
+      "ships": 7,
+      "conversions": 1,
+      "ema_ttu_ms": 109.87646484375,
       "ema_ship_rate": 1,
-      "ema_conv_rate": null
+      "ema_conv_rate": 1
     }
   },
   "experts": {},
@@ -41,13 +41,18 @@
     "fd550dc617e7ad0c65ed27ec356d342c7e224700": "cloud",
     "84600bed6b5941b8de4dba604ca79db9bae092d8": "rules",
     "9765ec3487d53a58991ff3384b2476763c5dd956": "cloud",
-    "a549997bc56f450f06ab8910e09286d32dfc6b2f": "cloud"
+    "a549997bc56f450f06ab8910e09286d32dfc6b2f": "cloud",
+    "95e3a17d57bfb3c02222e68cfc6056fc876f1fa2": "rules",
+    "98fa339e75e104dd4ad85958913c75e92f51dad1": "rules",
+    "b0f2bd86a5f402b38cd6ef6f329b7d2bc3352620": "rules",
+    "3180c1266b67826b06596d815730abe5a1459c55": "cloud",
+    "6777db57a4dc42eb248cce3731d27c3e34327201": "cloud"
   },
   "budget": {
-    "cloud_n": 3,
-    "total_n": 34
+    "cloud_n": 7,
+    "total_n": 38
   },
   "_meta": {
-    "lastDecayTs": 1761805098520
+    "lastDecayTs": 1761828289018
   }
 }

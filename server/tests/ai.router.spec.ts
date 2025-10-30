@@ -1,3 +1,4 @@
+// server/tests/ai.router.spec.ts
 // Contract tests for /api/ai routes — in-process app, zero network.
 // Vitest globals explicit to avoid editor TS noise.
 import { describe, it, expect } from "vitest";
@@ -37,6 +38,8 @@ function makeApp() {
   return app;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 describe("AI Router — contracts", () => {
   const app = makeApp();
 
@@ -63,9 +66,16 @@ describe("AI Router — contracts", () => {
     expect(prev.text).toMatch(/og:title/);
     expect(prev.text).toMatch(/twitter:card/);
 
-    const sig = await request(app).get(`/api/ai/signals/${sessionId}`).expect(200);
-    const dump = JSON.stringify(sig.body.summary || {});
-    expect(/perf_est|perf_matrix/.test(dump)).toBe(true);
+    // Signals summary is written async; in-process app can read too early.
+    let found = false;
+    let dump = "";
+    for (let i = 0; i < 12 && !found; i++) {
+      const sig = await request(app).get(`/api/ai/signals/${sessionId}`).expect(200);
+      dump = JSON.stringify(sig.body.summary || sig.body || {});
+      found = /perf_est|perf_matrix/i.test(dump);
+      if (!found) await sleep(250);
+    }
+    expect(found, `signals missing perf fields; got: ${dump}`).toBe(true);
   });
 
   it("retrieve respects persona (test mode)", async () => {
@@ -193,7 +203,7 @@ describe("AI Router — contracts", () => {
         if (pr.statusCode === 200) pDump = JSON.stringify(pr.body || {});
       }
       found = WANT.test(sDump) || WANT.test(pDump);
-      if (!found) await new Promise((r) => setTimeout(r, 250));
+      if (!found) await sleep(250);
     }
     expect(found).toBe(true);
   });
