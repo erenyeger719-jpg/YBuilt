@@ -135,29 +135,29 @@
     "dark": false
   },
   "smoke": {
-    "n": 2,
+    "n": 3,
     "sections": {
       "hero-basic": 1,
-      "cta-simple": 2
+      "cta-simple": 3
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": true
   },
   "t_instant_1": {
-    "n": 1,
+    "n": 2,
     "sections": {
-      "cta-simple": 1
+      "cta-simple": 2
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": true
   },
   "t_one_1": {
-    "n": 1,
+    "n": 2,
     "sections": {
       "hero-basic": 1,
-      "cta-simple": 1,
+      "cta-simple": 2,
       "features-3col": 1
     },
     "primary": "#6d28d9",
@@ -165,42 +165,42 @@
     "dark": true
   },
   "t_clarify_1": {
-    "n": 1,
+    "n": 2,
     "sections": {
-      "hero-basic": 1,
-      "features-3col": 1,
-      "cta-simple": 1
+      "hero-basic": 2,
+      "features-3col": 2,
+      "cta-simple": 2
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": false
   },
   "t_edits_1": {
-    "n": 4,
+    "n": 8,
     "sections": {
-      "hero-basic": 1,
-      "cta-simple": 1
+      "hero-basic": 2,
+      "cta-simple": 2
     },
     "tone": "minimal",
     "dark": false,
     "primary": "#6d28d9"
   },
   "t_readability_1": {
-    "n": 1,
+    "n": 2,
     "sections": {
       "features-3col": 1,
-      "cta-simple": 1
+      "cta-simple": 2
     },
-    "primary": "#c98209",
+    "primary": "#a56b07",
     "tone": "playful",
     "dark": false
   },
   "t_locale_1": {
-    "n": 1,
+    "n": 2,
     "sections": {
-      "hero-basic": 1,
-      "features-3col": 1,
-      "cta-simple": 1
+      "hero-basic": 2,
+      "features-3col": 2,
+      "cta-simple": 2
     },
     "primary": "#296fff",
     "tone": "minimal",

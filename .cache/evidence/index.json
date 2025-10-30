@@ -10,13 +10,24 @@
         "proves": 1,
         "nothing.": 1
       }
+    },
+    {
+      "id": "f8d4491db29d7f7f495026089830c33cc11fc2d5",
+      "docId": "ev-1761823950458",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
     }
   ],
   "idf": {
-    "example": 0.28768207245178085,
-    "domain": 0.28768207245178085,
-    "proves": 0.28768207245178085,
-    "nothing.": 0.28768207245178085
+    "example": 0.1823215567939546,
+    "domain": 0.1823215567939546,
+    "proves": 0.1823215567939546,
+    "nothing.": 0.1823215567939546
   },
   "vocabSize": 4
 }

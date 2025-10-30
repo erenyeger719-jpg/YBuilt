@@ -14,7 +14,7 @@
     "#0a0415|minimal|false": 1,
     "#080311|minimal|false": 1,
     "#07020e|minimal|false": 1,
-    "#6d28d9|minimal|true": 1
+    "#6d28d9|minimal|true": 2
   },
   "perSession": {
     "e2e-kpi": {
@@ -34,7 +34,7 @@
       "#07020e|minimal|false": 1
     },
     "t_one_1": {
-      "#6d28d9|minimal|true": 1
+      "#6d28d9|minimal|true": 2
     }
   },
   "seenGlobal": {
@@ -42,9 +42,9 @@
     "#491b92|minimal|true": 1.977159968434246,
     "#3c1678|minimal|true": 1.977159968434246,
     "#311262|minimal|true": 1.977159968434246,
-    "#6d28d9|minimal|true": 6.931479905302737,
+    "#6d28d9|minimal|true": 9.931479905302737,
     "#5921b2|minimal|false": 6.954319936868492,
-    "#6d28d9|minimal|false": 2.977159968434246,
+    "#6d28d9|minimal|false": 4.977159968434246,
     "#c98209|playful|false": 1.977159968434246,
     "#8a46cb|playful|true": 0.9771599684342459,
     "#f59e0b|playful|false": 0.9771599684342459,
@@ -53,7 +53,7 @@
     "#6d28d9|serious|true": 0.9771599684342459,
     "#2563eb|serious|false": 0.9771599684342459,
     "#5921b2|serious|true": 0.9771599684342459,
-    "#296fff|minimal|false": 29,
+    "#296fff|minimal|false": 30,
     "#2563eb|minimal|false": 14,
     "#491b92|minimal|false": 5,
     "#3c1678|minimal|false": 5,
@@ -77,7 +77,8 @@
     "#080311|minimal|true": 1,
     "#080311|minimal|false": 5,
     "#07020e|minimal|true": 1,
-    "#07020e|minimal|false": 5
+    "#07020e|minimal|false": 5,
+    "#a56b07|playful|false": 1
   },
   "seenPerSession": {
     "vec1": {
@@ -212,25 +213,26 @@
       "#07020e|minimal|false": 1
     },
     "smoke": {
-      "#6d28d9|minimal|true": 2
+      "#6d28d9|minimal|true": 3
     },
     "t_instant_1": {
-      "#6d28d9|minimal|true": 1
+      "#6d28d9|minimal|true": 2
     },
     "t_one_1": {
-      "#6d28d9|minimal|true": 1
+      "#6d28d9|minimal|true": 2
     },
     "t_clarify_1": {
-      "#6d28d9|minimal|false": 1
+      "#6d28d9|minimal|false": 2
     },
     "t_edits_1": {
-      "#6d28d9|minimal|false": 1
+      "#6d28d9|minimal|false": 2
     },
     "t_readability_1": {
-      "#c98209|playful|false": 1
+      "#c98209|playful|false": 1,
+      "#a56b07|playful|false": 1
     },
     "t_locale_1": {
-      "#296fff|minimal|false": 1
+      "#296fff|minimal|false": 2
     }
   },
   "_meta": {
