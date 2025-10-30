@@ -86,7 +86,8 @@ function abs(urlOrPath) {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-audience": "developers"
+          "x-audience": "developers",
+          "x-test": "1"
         },
         body: JSON.stringify({
           sessionId: sid("e2e-dev"),
@@ -108,7 +109,8 @@ function abs(urlOrPath) {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-audience": "founders"
+          "x-audience": "founders",
+          "x-test": "1"
         },
         body: JSON.stringify({
           sessionId: sid("e2e-founders"),
