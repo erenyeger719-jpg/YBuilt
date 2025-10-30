@@ -32,7 +32,7 @@ import { expertsForTask } from "../intent/experts.ts";
 import { queueShadowEval, rewardShadow } from "../intent/shadowEval.ts";
 import { runBuilder } from "../intent/builder.ts";
 import { generateMedia } from "../media/pool.ts";
-import { synthesizeAssets } from "../intent/assets.ts";
+import { synthesizeAssets, suggestVectorAssets, rememberVectorAssets } from "../intent/assets.ts";
 import { tokenMixer } from "../design/tokens.ts";
 import { buildGrid } from "../design/grid.ts";
 import { evaluateDesign } from "../design/score.ts";
@@ -65,8 +65,6 @@ import { editSearch } from "../qa/edit.search.ts";
 import { wideTokenSearch } from "../design/search.wide.ts";
 import { runSnapshots } from "../qa/snapshots.ts";
 import { runDeviceGate } from "../qa/device.gate.ts";
-// A. swapped import to use the shim
-import { suggestVectorAssets, rememberVectorAssets } from "../intent/assets.ts";
 import {
   listPacksRanked,
   recordPackSeenForPage,
@@ -77,7 +75,6 @@ import { __vectorLib_load } from "../media/vector.lib.ts";
 import crypto from "crypto";
 import path from "path";
 import { runArmy } from "./army.ts";
-// at top with other imports
 import { mountCiteLock } from "./citelock.patch.ts";
 
 // Nightly TasteNet retrain (best-effort, no-op if not due)
@@ -203,7 +200,7 @@ export function pickTierByConfidence(c = 0.6) {
 }
 
 const router = express.Router();
-// after you create your router instance (e.g., const router = Router();)
+// mount CiteLock shim
 mountCiteLock(router);
 
 function extractJSON(s: string) {
@@ -681,8 +678,8 @@ router.post("/vector/mine", (_req, res) => {
   }
 });
 
-// --- Vector search (network effect) ---
-router.get("/vectors/search", (req, res) => {
+// --- Vector search (network effect) --- (with cold-start fallback)
+router.get("/vectors/search", async (req, res) => {
   try {
     const db = __vectorLib_load();
     const limit = Math.max(
@@ -694,14 +691,9 @@ router.get("/vectors/search", (req, res) => {
       .toLowerCase()
       .trim();
     const qTokens = rawQ
-      ? rawQ
-          .replace(/[^a-z0-9\s]/g, " ")
-          .split(/\s+/)
-          .filter(Boolean)
+      ? rawQ.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean)
       : [];
-    const tagTokens = tagRaw
-      ? tagRaw.split(",").map((s) => s.trim()).filter(Boolean)
-      : [];
+    const tagTokens = tagRaw ? tagRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
     const want = new Set([...qTokens, ...tagTokens]);
 
@@ -749,13 +741,37 @@ router.get("/vectors/search", (req, res) => {
     }
 
     rows.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+
+    // Cold-start: if empty corpus or zero hits, synthesize a tiny batch and persist
+    if (rows.length === 0) {
+      const wantTags = qTokens.length ? qTokens.slice(0, 2) : ["saas"];
+      const { assets: gen, copyPatch } = await synthesizeAssets({
+        brand: {},
+        tags: wantTags,
+        count: Math.min(8, limit),
+      } as any);
+      try {
+        if (copyPatch) rememberVectorAssets({ copy: copyPatch, brand: {} } as any);
+      } catch {}
+      const items = (gen || []).map((a: any, i: number) => ({
+        id: a.id || `gen-${Date.now()}-${i}`,
+        url: a.url,
+        file: a.file,
+        tags: a.tags || wantTags,
+        industry: a.industry || [],
+        vibe: a.vibe || [],
+        score: 1,
+      }));
+      return res.json({ ok: true, q: rawQ, tags: wantTags, items });
+    }
+
     return res.json({ ok: true, q: rawQ, tags: tagTokens, items: rows.slice(0, limit) });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "vector_search_failed" });
   }
 });
 
-// --- Vector corpus seeder (fast local network effect) ---
+// --- Vector corpus seeder (register assets into library) ---
 router.post("/vectors/seed", async (req, res) => {
   try {
     const {
@@ -767,8 +783,12 @@ router.post("/vectors/seed", async (req, res) => {
     let total = 0;
     const per = Math.max(1, Math.ceil(count / tags.length));
     for (const t of tags) {
-      const { assets } = await synthesizeAssets({ brand, tags: [t], count: per } as any);
+      const { assets, copyPatch } = await synthesizeAssets({ brand, tags: [t], count: per } as any);
       total += Array.isArray(assets) ? assets.length : 0;
+      // persist into the vector lib via the same path compose uses
+      try {
+        if (copyPatch) rememberVectorAssets({ copy: copyPatch, brand } as any);
+      } catch {}
     }
     return res.json({
       ok: true,
