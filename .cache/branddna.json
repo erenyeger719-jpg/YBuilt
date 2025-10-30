@@ -133,5 +133,15 @@
     "primary": "#07020e",
     "tone": "minimal",
     "dark": false
+  },
+  "smoke": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "primary": "#6d28d9",
+    "tone": "minimal",
+    "dark": true
   }
 }

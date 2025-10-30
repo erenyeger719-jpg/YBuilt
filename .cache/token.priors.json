@@ -38,7 +38,7 @@
     "#491b92|minimal|true": 1.977159968434246,
     "#3c1678|minimal|true": 1.977159968434246,
     "#311262|minimal|true": 1.977159968434246,
-    "#6d28d9|minimal|true": 2.9314799053027376,
+    "#6d28d9|minimal|true": 3.9314799053027376,
     "#5921b2|minimal|false": 6.954319936868492,
     "#6d28d9|minimal|false": 0.9771599684342459,
     "#c98209|playful|false": 0.9771599684342459,
@@ -206,6 +206,9 @@
       "#0a0415|minimal|false": 1,
       "#080311|minimal|false": 1,
       "#07020e|minimal|false": 1
+    },
+    "smoke": {
+      "#6d28d9|minimal|true": 1
     }
   },
   "_meta": {
