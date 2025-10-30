@@ -76,6 +76,7 @@ import crypto from "crypto";
 import path from "path";
 import { runArmy } from "./army.ts";
 import { mountCiteLock } from "./citelock.patch.ts";
+import { registerSelfTest } from "./selftest";
 
 // Nightly TasteNet retrain (best-effort, no-op if not due)
 try {
@@ -2721,5 +2722,7 @@ router.get("/previews/:id", (req, res) => {
 function pathResolve(p: string) {
   return path.resolve(p);
 }
+
+registerSelfTest(router);
 
 export default router;
