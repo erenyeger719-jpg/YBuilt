@@ -1,15 +1,15 @@
 {
   "packs": {
     "p-hero-cta": {
-      "seen": 26,
-      "wins": 2,
-      "lastSeenTs": 1761806488178,
-      "lastWinTs": 1761806488065
+      "seen": 34,
+      "wins": 3,
+      "lastSeenTs": 1761807188039,
+      "lastWinTs": 1761807187923
     },
     "p-hero-features-cta": {
-      "seen": 10,
+      "seen": 11,
       "wins": 0,
-      "lastSeenTs": 1761806488130
+      "lastSeenTs": 1761807187992
     },
     "p-lean": {
       "seen": 1,
@@ -54,7 +54,14 @@
     "3be55c3a7e267fc3247c897b9a697b5bc2f59261": "p-hero-cta",
     "fb9c7782cd3e52b89ed5b4b64ba34050a7800a8d": "p-hero-cta",
     "7fe8a7578e0866c62c08473f6058793d937bc080": "p-hero-features-cta",
-    "cdf2d6b0a6a74d2c01d53798a26de37a8696275e": "p-hero-cta"
+    "cdf2d6b0a6a74d2c01d53798a26de37a8696275e": "p-hero-cta",
+    "f3234a62a97f0091a9124e8698480e5e5b17a736": "p-hero-cta",
+    "50bcfd7665a01fdeec58beb49ee04a68fcc2bd93": "p-hero-cta",
+    "93f05e911cfe933cf83435a485ae27a3bf72fc94": "p-hero-cta",
+    "35c6b213649607870ae8b0c0496b9b6e5b4f7808": "p-hero-cta",
+    "73f4e77a5f5444ae87f2e499234e407aa688663e": "p-hero-cta",
+    "c5d79684396404f4b9bfdf59e88262c467c08830": "p-hero-cta",
+    "bef6dce544b40851f2e979a0a772522af35165e1": "p-hero-cta"
   },
   "_meta": {
     "lastDecayTs": 1761649845737

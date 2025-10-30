@@ -306,55 +306,80 @@ function segmentSwapSections(ids: string[] = [], audience = "all") {
   return base.concat(extras);
 }
 
+// NEW — audience inference fallback (used if spec.intent.audience is missing/blank)
+function inferAudience(spec: any): string {
+  const direct = String(spec?.audience || spec?.intent?.audience || "").toLowerCase().trim();
+  if (direct) return direct;
+
+  const p = String(spec?.summary || "").toLowerCase();
+  // dev synonyms
+  if (
+    /\bdev(eloper|elopers|s)?\b/.test(p) ||
+    /\bengineer(s)?\b/.test(p) ||
+    /\bcoder(s)?\b/.test(p) ||
+    /\bprogrammer(s)?\b/.test(p)
+  )
+    return "developers";
+  // founder synonyms
+  if (/\bfounder(s)?\b/.test(p) || /\bstartup\s*(ceo|cto|team)\b/.test(p)) return "founders";
+  // shopper/consumer/ecom
+  if (/\bshopper(s)?\b/.test(p) || /\bconsumer(s)?\b/.test(p) || /\becommerce\b/.test(p))
+    return "shoppers";
+
+  return "all";
+}
+
 // Very cheap intent guesser for common phrases (skips a model call a lot)
 function quickGuessIntent(prompt: string) {
   const p = String(prompt || "").toLowerCase();
 
-  const has = (w: string) => p.includes(w);
+  const isDev =
+    /\bdev(eloper|elopers|s)?\b/.test(p) ||
+    /\bengineer(s)?\b/.test(p) ||
+    /\bcoder(s)?\b/.test(p) ||
+    /\bprogrammer(s)?\b/.test(p);
+
+  const isFounder = /\bfounder(s)?\b/.test(p) || /\bstartup\s*(ceo|cto|team)\b/.test(p);
+  const isShopper = /\bshopper(s)?\b/.test(p) || /\bconsumer(s)?\b/.test(p);
+
   const intent = {
-    audience: has("dev")
-      ? "developers"
-      : has("founder")
-      ? "founders"
-      : has("shopper")
-      ? "shoppers"
-      : "",
-    goal: has("waitlist")
+    audience: isDev ? "developers" : isFounder ? "founders" : isShopper ? "shoppers" : "",
+    goal: /\bwaitlist\b/.test(p)
       ? "waitlist"
-      : has("demo")
+      : /\bdemo\b/.test(p)
       ? "demo"
-      : has("buy") || has("purchase")
+      : /\b(buy|purchase)\b/.test(p)
       ? "purchase"
-      : has("contact")
+      : /\bcontact\b/.test(p)
       ? "contact"
       : "",
-    industry: has("saas")
+    industry: /\bsaas\b/.test(p)
       ? "saas"
-      : has("ecommerce")
+      : /\becomm(erce)?\b/.test(p)
       ? "ecommerce"
-      : has("portfolio")
+      : /\bportfolio\b/.test(p)
       ? "portfolio"
       : "",
-    vibe: has("minimal")
+    vibe: /\bminimal\b/.test(p)
       ? "minimal"
-      : has("bold")
+      : /\bbold\b/.test(p)
       ? "bold"
-      : has("playful")
+      : /\bplayful\b/.test(p)
       ? "playful"
-      : has("serious")
+      : /\bserious\b/.test(p)
       ? "serious"
       : "",
-    color_scheme: has("dark") ? "dark" : has("light") ? "light" : "",
-    density: has("minimal") ? "minimal" : "",
-    complexity: has("simple") ? "simple" : "",
-    sections: ["hero-basic", "cta-simple"].concat(has("feature") ? ["features-3col"] : []),
+    color_scheme: /\bdark\b/.test(p) ? "dark" : /\blight\b/.test(p) ? "light" : "",
+    density: /\bminimal\b/.test(p) ? "minimal" : "",
+    complexity: /\bsimple\b/.test(p) ? "simple" : "",
+    sections: ["hero-basic", "cta-simple"].concat(/\bfeature(s)?\b/.test(p) ? ["features-3col"] : []),
   };
 
   const filled = Object.values({ ...intent, sections: null as any }).filter(Boolean).length;
-  const coverage = filled / 7; // rough
+  const coverage = filled / 7;
   const chips = [
     intent.color_scheme !== "light" ? "Switch to light" : "Use dark mode",
-    has("minimal") ? "More playful" : "More minimal",
+    /\bminimal\b/.test(p) ? "More playful" : "More minimal",
     intent.goal === "waitlist" ? "Use email signup CTA" : "Use waitlist",
   ];
 
@@ -740,7 +765,7 @@ router.get("/vectors/search", async (req, res) => {
       const vibe = (a.vibe || []).map(String);
       const ind = (a.industry || []).map(String);
 
-    let overlap = 0;
+      let overlap = 0;
       for (const t of tags.concat(vibe, ind)) {
         if (want.has(String(t).toLowerCase())) overlap += 1;
       }
@@ -883,12 +908,10 @@ router.post("/act", async (req, res) => {
           ? action.args.sections
           : spec?.layout?.sections || [];
 
-        // Normalize audience and apply gentle swaps here too (so tests see it)
-        const intentFromSpec = (spec as any)?.intent || {};
-        const audienceKey = String(
-          (spec as any)?.audience || intentFromSpec?.audience || "all"
-        ).toLowerCase().trim();
+        // Bandit audience key (with robust fallback)
+        const audienceKey = inferAudience(spec);
 
+        // Personalize sections slightly based on audience (non-creepy, bounded)
         const sections = segmentSwapSections(sectionsIn, audienceKey);
         return { kind: "retrieve", sections };
       }
@@ -938,11 +961,9 @@ router.post("/act", async (req, res) => {
           }
         } catch {}
 
-        // Bandit audience key derived from intent/spec
+        // Bandit audience key derived from intent/spec (with fallback)
         const intentFromSpec = (spec as any)?.intent || {};
-        const audienceKey = String(
-          (spec as any)?.audience || intentFromSpec?.audience || "all"
-        ).toLowerCase().trim();
+        const audienceKey = inferAudience(spec);
 
         // Personalize sections slightly based on audience (non-creepy, bounded)
         const sectionsPersonal = segmentSwapSections(sectionsIn, audienceKey);
