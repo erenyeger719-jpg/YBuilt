@@ -145,172 +145,173 @@
     "dark": true
   },
   "t_instant_1": {
-    "n": 6,
+    "n": 8,
     "sections": {
-      "cta-simple": 6,
-      "hero-basic": 3
+      "cta-simple": 8,
+      "hero-basic": 4
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": true
   },
   "t_one_1": {
-    "n": 6,
+    "n": 8,
     "sections": {
       "hero-basic": 5,
-      "cta-simple": 6,
-      "features-3col": 3
+      "cta-simple": 8,
+      "features-3col": 4
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": true
   },
   "t_clarify_1": {
-    "n": 6,
+    "n": 8,
     "sections": {
-      "hero-basic": 4,
-      "features-3col": 5,
-      "cta-simple": 6
+      "hero-basic": 5,
+      "features-3col": 6,
+      "cta-simple": 8
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": false
   },
   "t_edits_1": {
-    "n": 24,
+    "n": 32,
     "sections": {
       "hero-basic": 5,
-      "cta-simple": 6
+      "cta-simple": 8
     },
     "tone": "minimal",
     "dark": false,
     "primary": "#6d28d9"
   },
   "t_readability_1": {
-    "n": 6,
+    "n": 8,
     "sections": {
-      "features-3col": 3,
-      "cta-simple": 6,
-      "hero-basic": 1
+      "features-3col": 5,
+      "cta-simple": 8,
+      "hero-basic": 2
     },
     "primary": "#a56b07",
     "tone": "playful",
     "dark": false
   },
   "t_locale_1": {
-    "n": 6,
+    "n": 8,
     "sections": {
       "hero-basic": 4,
-      "features-3col": 5,
-      "cta-simple": 6
+      "features-3col": 6,
+      "cta-simple": 8
     },
     "primary": "#296fff",
     "tone": "minimal",
     "dark": false
   },
   "p_chips": {
-    "n": 50,
+    "n": 100,
     "sections": {}
   },
   "p_locale": {
-    "n": 10,
+    "n": 18,
     "sections": {
-      "cta-simple": 10,
-      "hero-basic": 6,
-      "features-3col": 4
+      "cta-simple": 18,
+      "hero-basic": 11,
+      "features-3col": 10
     },
     "primary": "#296fff",
     "tone": "minimal",
     "dark": false
   },
   "p20_purity": {
-    "n": 2,
+    "n": 4,
     "sections": {
-      "cta-simple": 2,
-      "hero-basic": 1
+      "cta-simple": 4,
+      "hero-basic": 3,
+      "features-3col": 2
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": true
   },
   "p20": {
-    "n": 8,
+    "n": 16,
     "sections": {
-      "hero-basic": 5,
-      "cta-simple": 8,
-      "features-3col": 6
+      "hero-basic": 12,
+      "cta-simple": 16,
+      "features-3col": 10
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": false
   },
   "u_instant_1": {
-    "n": 2,
+    "n": 4,
     "sections": {
-      "cta-simple": 2,
-      "hero-basic": 1
+      "cta-simple": 4,
+      "hero-basic": 2
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": true
   },
   "p20_brand": {
-    "n": 6,
+    "n": 12,
     "sections": {
-      "hero-basic": 3,
-      "features-3col": 1,
-      "cta-simple": 4
+      "hero-basic": 5,
+      "features-3col": 3,
+      "cta-simple": 8
     },
     "primary": "#296fff",
     "tone": "minimal",
     "dark": false
   },
   "u_one_1": {
-    "n": 2,
+    "n": 4,
     "sections": {
-      "cta-simple": 2,
-      "features-3col": 1,
-      "hero-basic": 1
+      "cta-simple": 4,
+      "features-3col": 2,
+      "hero-basic": 3
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": true
   },
   "u_kpi_1": {
-    "n": 2,
+    "n": 4,
     "sections": {
-      "cta-simple": 2
+      "cta-simple": 4
     },
     "primary": "#296fff",
     "tone": "serious",
     "dark": false
   },
   "u_clarify_1": {
-    "n": 2,
+    "n": 4,
     "sections": {
       "hero-basic": 2,
-      "features-3col": 2,
-      "cta-simple": 2
+      "features-3col": 4,
+      "cta-simple": 4
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": false
   },
   "u_edits_1": {
-    "n": 8,
+    "n": 16,
     "sections": {
       "hero-basic": 1,
-      "cta-simple": 2
+      "cta-simple": 4
     },
     "tone": "minimal",
     "dark": false,
     "primary": "#6d28d9"
   },
   "u_read_1": {
-    "n": 2,
+    "n": 4,
     "sections": {
-      "features-3col": 2,
-      "cta-simple": 2,
+      "features-3col": 4,
+      "cta-simple": 4,
       "hero-basic": 1
     },
     "primary": "#a56b07",
@@ -318,11 +319,11 @@
     "dark": false
   },
   "u_locale_1": {
-    "n": 2,
+    "n": 4,
     "sections": {
-      "hero-basic": 2,
-      "cta-simple": 2,
-      "features-3col": 1
+      "hero-basic": 4,
+      "cta-simple": 4,
+      "features-3col": 3
     },
     "primary": "#296fff",
     "tone": "minimal",

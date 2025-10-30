@@ -17,11 +17,11 @@
   },
   "all|features-3col": {
     "features-3col": {
-      "a": 4,
+      "a": 5,
       "b": 1,
-      "seen": 3,
-      "win": 3,
-      "last": 1761829035169
+      "seen": 4,
+      "win": 4,
+      "last": 1761833300785
     },
     "features-3col@alt": {
       "a": 1,
@@ -33,11 +33,11 @@
   },
   "all|cta-simple": {
     "cta-simple": {
-      "a": 23,
+      "a": 27,
       "b": 1,
-      "seen": 22,
-      "win": 22,
-      "last": 1761829932191
+      "seen": 26,
+      "win": 26,
+      "last": 1761833300785
     }
   },
   "founders|hero-basic": {

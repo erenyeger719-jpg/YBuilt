@@ -14,8 +14,8 @@
     "#0a0415|minimal|false": 1,
     "#080311|minimal|false": 1,
     "#07020e|minimal|false": 1,
-    "#6d28d9|minimal|true": 6,
-    "#296fff|serious|false": 2
+    "#6d28d9|minimal|true": 8,
+    "#296fff|serious|false": 4
   },
   "perSession": {
     "e2e-kpi": {
@@ -35,10 +35,10 @@
       "#07020e|minimal|false": 1
     },
     "t_one_1": {
-      "#6d28d9|minimal|true": 6
+      "#6d28d9|minimal|true": 8
     },
     "u_kpi_1": {
-      "#296fff|serious|false": 2
+      "#296fff|serious|false": 4
     }
   },
   "seenGlobal": {
@@ -46,9 +46,9 @@
     "#491b92|minimal|true": 1.977159968434246,
     "#3c1678|minimal|true": 1.977159968434246,
     "#311262|minimal|true": 1.977159968434246,
-    "#6d28d9|minimal|true": 26.931479905302737,
+    "#6d28d9|minimal|true": 38.93147990530274,
     "#5921b2|minimal|false": 6.954319936868492,
-    "#6d28d9|minimal|false": 22.977159968434247,
+    "#6d28d9|minimal|false": 36.97715996843425,
     "#c98209|playful|false": 2.977159968434246,
     "#8a46cb|playful|true": 0.9771599684342459,
     "#f59e0b|playful|false": 0.9771599684342459,
@@ -57,7 +57,7 @@
     "#6d28d9|serious|true": 0.9771599684342459,
     "#2563eb|serious|false": 0.9771599684342459,
     "#5921b2|serious|true": 0.9771599684342459,
-    "#296fff|minimal|false": 48,
+    "#296fff|minimal|false": 62,
     "#2563eb|minimal|false": 14,
     "#491b92|minimal|false": 5,
     "#3c1678|minimal|false": 5,
@@ -82,10 +82,10 @@
     "#080311|minimal|false": 5,
     "#07020e|minimal|true": 1,
     "#07020e|minimal|false": 5,
-    "#a56b07|playful|false": 6,
+    "#a56b07|playful|false": 10,
     "#2563eb|minimal|true": 1,
-    "#296fff|serious|false": 2,
-    "#296fff|minimal|true": 1
+    "#296fff|serious|false": 4,
+    "#296fff|minimal|true": 3
   },
   "seenPerSession": {
     "vec1": {
@@ -223,60 +223,60 @@
       "#6d28d9|minimal|true": 4
     },
     "t_instant_1": {
-      "#6d28d9|minimal|true": 6
+      "#6d28d9|minimal|true": 8
     },
     "t_one_1": {
-      "#6d28d9|minimal|true": 6
+      "#6d28d9|minimal|true": 8
     },
     "t_clarify_1": {
-      "#6d28d9|minimal|false": 6
+      "#6d28d9|minimal|false": 8
     },
     "t_edits_1": {
-      "#6d28d9|minimal|false": 6
+      "#6d28d9|minimal|false": 8
     },
     "t_readability_1": {
       "#c98209|playful|false": 1,
-      "#a56b07|playful|false": 5
+      "#a56b07|playful|false": 7
     },
     "t_locale_1": {
-      "#296fff|minimal|false": 6
+      "#296fff|minimal|false": 8
     },
     "p_locale": {
-      "#296fff|minimal|false": 10
+      "#296fff|minimal|false": 18
     },
     "p20_purity": {
-      "#6d28d9|minimal|true": 2
+      "#6d28d9|minimal|true": 4
     },
     "p20": {
-      "#6d28d9|minimal|true": 2,
-      "#6d28d9|minimal|false": 6
+      "#6d28d9|minimal|true": 4,
+      "#6d28d9|minimal|false": 12
     },
     "u_instant_1": {
-      "#6d28d9|minimal|true": 2
+      "#6d28d9|minimal|true": 4
     },
     "p20_brand": {
       "#2563eb|minimal|true": 1,
-      "#296fff|minimal|false": 2,
-      "#296fff|minimal|true": 1
+      "#296fff|minimal|false": 4,
+      "#296fff|minimal|true": 3
     },
     "u_one_1": {
-      "#6d28d9|minimal|true": 2
+      "#6d28d9|minimal|true": 4
     },
     "u_kpi_1": {
-      "#296fff|serious|false": 2
+      "#296fff|serious|false": 4
     },
     "u_clarify_1": {
-      "#6d28d9|minimal|false": 2
+      "#6d28d9|minimal|false": 4
     },
     "u_edits_1": {
-      "#6d28d9|minimal|false": 2
+      "#6d28d9|minimal|false": 4
     },
     "u_read_1": {
       "#c98209|playful|false": 1,
-      "#a56b07|playful|false": 1
+      "#a56b07|playful|false": 3
     },
     "u_locale_1": {
-      "#296fff|minimal|false": 2
+      "#296fff|minimal|false": 4
     }
   },
   "_meta": {
