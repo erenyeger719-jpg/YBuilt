@@ -16,6 +16,10 @@
     "db:push": "drizzle-kit push",
     "typecheck:client": "tsc -p client/tsconfig.json --noEmit",
     "typecheck:server": "tsc -p server/tsconfig.json --noEmit",
+    "test": "vitest run --config server/vitest.config.ts",
+    "test:watch": "vitest --config server/vitest.config.ts",
+    "test:server": "vitest run --config server/vitest.config.ts",
+    "typecheck:tests": "tsc -p server/tsconfig.test.json --noEmit",
     "sup:regress": "node tests/sup_algo.regression.mjs http://localhost:5050"
   },
   "dependencies": {

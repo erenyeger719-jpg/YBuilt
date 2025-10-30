@@ -187,6 +187,16 @@
         "testpack",
         "demo"
       ]
+    },
+    {
+      "sections": [
+        "hero-basic",
+        "cta-simple"
+      ],
+      "tags": [
+        "testpack",
+        "demo"
+      ]
     }
   ]
 }
