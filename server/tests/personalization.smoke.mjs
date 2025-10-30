@@ -12,7 +12,7 @@ async function post(path, body, headers = {}) {
   if (!j.ok) throw new Error(`${path} failed: ${JSON.stringify(j)}`);
   return j;
 }
-const has = (list, x) => list.includes(x);
+const has = (list, x) => Array.isArray(list) && list.includes(x);
 
 (async () => {
   // A) explicit via spec.intent.audience
@@ -41,13 +41,27 @@ const has = (list, x) => list.includes(x);
     );
     const got = j.result.sections;
     assert(has(got, "pricing-simple"), "founders should add pricing-simple");
-    console.log("✓ founders (header) → pricing-simple");
+    assert(has(got, "hero-basic"), "hero-basic must be preserved");
+    console.log("✓ founders (header) → pricing-simple (+preserve hero-basic)");
   }
 
-  // C) inference from copy when nothing explicit is set
+  // C) explicit via args.audience (deterministic signal the harness uses)
   {
     const j = await post("/api/ai/act", {
       sessionId: "t-persona-c",
+      spec: { layout: { sections: ["hero-basic","cta-simple"] } },
+      action: { kind: "retrieve", args: { sections: ["hero-basic","cta-simple"], audience: "founders" } },
+    });
+    const got = j.result.sections;
+    assert(has(got, "pricing-simple"), "args.audience founders should add pricing-simple");
+    assert(has(got, "hero-basic"), "hero-basic must be preserved");
+    console.log("✓ founders (args) → pricing-simple (+preserve hero-basic)");
+  }
+
+  // D) inference from copy when nothing explicit is set
+  {
+    const j = await post("/api/ai/act", {
+      sessionId: "t-persona-d",
       spec: {
         copy: { HERO_SUBHEAD: "Tools built for developers and engineers" },
         layout: { sections: ["cta-simple"] },
