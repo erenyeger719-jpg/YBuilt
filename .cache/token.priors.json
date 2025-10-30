@@ -46,9 +46,9 @@
     "#491b92|minimal|true": 1.977159968434246,
     "#3c1678|minimal|true": 1.977159968434246,
     "#311262|minimal|true": 1.977159968434246,
-    "#6d28d9|minimal|true": 45.93147990530274,
+    "#6d28d9|minimal|true": 46.93147990530274,
     "#5921b2|minimal|false": 6.954319936868492,
-    "#6d28d9|minimal|false": 36.97715996843425,
+    "#6d28d9|minimal|false": 41.97715996843425,
     "#c98209|playful|false": 2.977159968434246,
     "#8a46cb|playful|true": 0.9771599684342459,
     "#f59e0b|playful|false": 0.9771599684342459,
@@ -279,7 +279,8 @@
       "#296fff|minimal|false": 4
     },
     "anon": {
-      "#6d28d9|minimal|true": 7
+      "#6d28d9|minimal|true": 8,
+      "#6d28d9|minimal|false": 5
     },
     "soak": {
       "#2563eb|serious|false": 14

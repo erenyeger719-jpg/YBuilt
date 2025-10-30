@@ -330,14 +330,14 @@
     "dark": false
   },
   "anon": {
-    "n": 7,
+    "n": 13,
     "sections": {
-      "cta-simple": 7,
-      "hero-basic": 3
+      "cta-simple": 13,
+      "hero-basic": 6
     },
     "primary": "#6d28d9",
     "tone": "minimal",
-    "dark": true
+    "dark": false
   },
   "soak": {
     "n": 14,

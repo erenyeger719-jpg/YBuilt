@@ -45,7 +45,7 @@
     "unknown": 6
   },
   "proof_ok": true,
-  "cls_est": 0.09,
+  "cls_est": 0.05,
   "lcp_est_ms": 2080,
   "perf_matrix": {
     "base": {
@@ -64,14 +64,14 @@
         "device": "mobile",
         "theme": "light",
         "net": "fast",
-        "cls_est": 0.09,
+        "cls_est": 0.05,
         "lcp_est_ms": 1200
       },
       {
         "device": "mobile",
         "theme": "dark",
         "net": "slow",
-        "cls_est": 0.09,
+        "cls_est": 0.05,
         "lcp_est_ms": 2080
       },
       {
@@ -93,7 +93,7 @@
       "device": "mobile",
       "theme": "dark",
       "net": "slow",
-      "cls_est": 0.09,
+      "cls_est": 0.05,
       "lcp_est_ms": 2080
     }
   }
