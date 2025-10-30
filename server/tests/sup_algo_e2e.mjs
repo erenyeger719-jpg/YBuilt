@@ -1,5 +1,5 @@
 // Node 18+ (native fetch). Run: node tests/sup_algo_e2e.mjs http://localhost:3000
-// Optional: BASE can be full '/api/ai' path (defaults to http://localhost:3000/api/ai)
+// Optional: BASE can be full '/api/ai' path (defaults to http://localhost:5050/api/ai)
 
 const BASE = (process.argv[2] || process.env.BASE || "http://localhost:5050") + "/api/ai";
 const ORIGIN = BASE.replace(/\/api\/ai\/?$/, "");
@@ -12,6 +12,9 @@ function log(ok, name, detail = "") {
   console.log(`${s} ${name}${detail ? " — " + detail : ""}`);
 }
 function title(s) { console.log("\n— " + s); }
+
+// unique session ids to avoid cross-run bleed
+const sid = (name) => `${name}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
 
 async function fjson(path, { method = "GET", body, headers = {}, timeout = 15000 } = {}) {
   const ctrl = new AbortController();
@@ -77,14 +80,17 @@ function abs(urlOrPath) {
 
   title("Personalization without creep (developers vs founders)");
   {
-    // Developers — pass audience in args (deterministic), also send header for parity
+    // Developers — strong signal + fresh session
     try {
       const r = await fetch(`${BASE}/act`, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-audience": "developers" },
+        headers: {
+          "content-type": "application/json",
+          "x-audience": "developers"
+        },
         body: JSON.stringify({
-          sessionId: "e2e-dev",
-          spec: { layout: { sections: ["cta-simple"] } },
+          sessionId: sid("e2e-dev"),
+          spec: { intent: { audience: "developers" }, layout: { sections: ["cta-simple"] } },
           action: { kind: "retrieve", args: { sections: ["cta-simple"], audience: "developers" } }
         })
       });
@@ -96,14 +102,17 @@ function abs(urlOrPath) {
       log(false, "Audience(dev) → adds features-3col", e?.message || String(e));
     }
 
-    // Founders — Expect: pricing-simple gets inserted (deterministic)
+    // Founders — strong signal + fresh session
     try {
       const r = await fetch(`${BASE}/act`, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-audience": "founders" },
+        headers: {
+          "content-type": "application/json",
+          "x-audience": "founders"
+        },
         body: JSON.stringify({
-          sessionId: "e2e-founders",
-          spec: { layout: { sections: ["hero-basic","cta-simple"] } },
+          sessionId: sid("e2e-founders"),
+          spec: { intent: { audience: "founders" }, layout: { sections: ["hero-basic","cta-simple"] } },
           action: { kind: "retrieve", args: { sections: ["hero-basic","cta-simple"], audience: "founders" } }
         })
       });

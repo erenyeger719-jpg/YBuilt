@@ -8,7 +8,8 @@
     "#210c42|minimal|false": 1,
     "#1b0a36|minimal|false": 1,
     "#16082c|minimal|false": 1,
-    "#120724|minimal|false": 1
+    "#120724|minimal|false": 1,
+    "#0f061e|minimal|false": 1
   },
   "perSession": {
     "e2e-kpi": {
@@ -20,7 +21,8 @@
       "#210c42|minimal|false": 1,
       "#1b0a36|minimal|false": 1,
       "#16082c|minimal|false": 1,
-      "#120724|minimal|false": 1
+      "#120724|minimal|false": 1,
+      "#0f061e|minimal|false": 1
     }
   },
   "seenGlobal": {
@@ -39,8 +41,8 @@
     "#6d28d9|serious|true": 0.9771599684342459,
     "#2563eb|serious|false": 0.9771599684342459,
     "#5921b2|serious|true": 0.9771599684342459,
-    "#296fff|minimal|false": 18,
-    "#2563eb|minimal|false": 9,
+    "#296fff|minimal|false": 20,
+    "#2563eb|minimal|false": 10,
     "#491b92|minimal|false": 5,
     "#3c1678|minimal|false": 5,
     "#311262|minimal|false": 5,
@@ -53,7 +55,9 @@
     "#16082c|minimal|true": 1,
     "#16082c|minimal|false": 5,
     "#120724|minimal|true": 1,
-    "#120724|minimal|false": 5
+    "#120724|minimal|false": 5,
+    "#0f061e|minimal|true": 1,
+    "#0f061e|minimal|false": 5
   },
   "seenPerSession": {
     "vec1": {
@@ -91,7 +95,8 @@
       "#210c42|minimal|true": 1,
       "#1b0a36|minimal|true": 1,
       "#16082c|minimal|true": 1,
-      "#120724|minimal|true": 1
+      "#120724|minimal|true": 1,
+      "#0f061e|minimal|true": 1
     },
     "e2e-aud-dev": {
       "#5921b2|minimal|false": 1,
@@ -102,7 +107,8 @@
       "#210c42|minimal|false": 1,
       "#1b0a36|minimal|false": 1,
       "#16082c|minimal|false": 1,
-      "#120724|minimal|false": 1
+      "#120724|minimal|false": 1,
+      "#0f061e|minimal|false": 1
     },
     "e2e-aud-founders": {
       "#5921b2|minimal|false": 1,
@@ -113,13 +119,14 @@
       "#210c42|minimal|false": 1,
       "#1b0a36|minimal|false": 1,
       "#16082c|minimal|false": 1,
-      "#120724|minimal|false": 1
+      "#120724|minimal|false": 1,
+      "#0f061e|minimal|false": 1
     },
     "e2e-tokens-0": {
-      "#296fff|minimal|false": 9
+      "#296fff|minimal|false": 10
     },
     "e2e-tokens-1": {
-      "#2563eb|minimal|false": 9
+      "#2563eb|minimal|false": 10
     },
     "e2e-kpi": {
       "#5921b2|minimal|false": 1,
@@ -130,7 +137,8 @@
       "#210c42|minimal|false": 1,
       "#1b0a36|minimal|false": 1,
       "#16082c|minimal|false": 1,
-      "#120724|minimal|false": 1
+      "#120724|minimal|false": 1,
+      "#0f061e|minimal|false": 1
     },
     "e2e-multi": {
       "#5921b2|minimal|false": 1,
@@ -141,10 +149,11 @@
       "#210c42|minimal|false": 1,
       "#1b0a36|minimal|false": 1,
       "#16082c|minimal|false": 1,
-      "#120724|minimal|false": 1
+      "#120724|minimal|false": 1,
+      "#0f061e|minimal|false": 1
     },
     "e2e-perf": {
-      "#296fff|minimal|false": 9
+      "#296fff|minimal|false": 10
     },
     "e2e-proof": {
       "#5921b2|minimal|false": 1,
@@ -155,7 +164,8 @@
       "#210c42|minimal|false": 1,
       "#1b0a36|minimal|false": 1,
       "#16082c|minimal|false": 1,
-      "#120724|minimal|false": 1
+      "#120724|minimal|false": 1,
+      "#0f061e|minimal|false": 1
     }
   },
   "_meta": {
