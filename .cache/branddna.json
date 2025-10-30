@@ -41,96 +41,96 @@
     "dark": false
   },
   "e2e-instant-1": {
-    "n": 6,
+    "n": 7,
     "sections": {
-      "cta-simple": 6,
-      "hero-basic": 2
+      "cta-simple": 7,
+      "hero-basic": 3
     },
-    "primary": "#210c42",
+    "primary": "#1b0a36",
     "tone": "minimal",
     "dark": true
   },
   "e2e-aud-dev": {
-    "n": 6,
+    "n": 7,
     "sections": {
-      "cta-simple": 6,
+      "cta-simple": 7,
       "hero-basic": 1,
-      "features-3col": 1
+      "features-3col": 2
     },
-    "primary": "#210c42",
+    "primary": "#1b0a36",
     "tone": "minimal",
     "dark": false
   },
   "e2e-aud-founders": {
-    "n": 6,
+    "n": 7,
     "sections": {
       "hero-basic": 5,
-      "cta-simple": 6
+      "cta-simple": 7
     },
-    "primary": "#210c42",
+    "primary": "#1b0a36",
     "tone": "minimal",
     "dark": false
   },
   "e2e-tokens-0": {
-    "n": 6,
+    "n": 7,
     "sections": {
-      "features-3col": 1,
-      "cta-simple": 6,
-      "hero-basic": 3
+      "features-3col": 2,
+      "cta-simple": 7,
+      "hero-basic": 4
     },
     "primary": "#296fff",
     "tone": "minimal",
     "dark": false
   },
   "e2e-tokens-1": {
-    "n": 6,
+    "n": 7,
     "sections": {
-      "cta-simple": 6,
-      "hero-basic": 3,
-      "features-3col": 3
+      "cta-simple": 7,
+      "hero-basic": 4,
+      "features-3col": 4
     },
     "primary": "#2563eb",
     "tone": "minimal",
     "dark": false
   },
   "e2e-kpi": {
-    "n": 6,
+    "n": 7,
     "sections": {
-      "cta-simple": 6,
-      "hero-basic": 4
+      "cta-simple": 7,
+      "hero-basic": 5
     },
-    "primary": "#210c42",
+    "primary": "#1b0a36",
     "tone": "minimal",
     "dark": false
   },
   "e2e-multi": {
-    "n": 6,
+    "n": 7,
     "sections": {
       "hero-basic": 5,
-      "cta-simple": 6
+      "cta-simple": 7
     },
-    "primary": "#210c42",
+    "primary": "#1b0a36",
     "tone": "minimal",
     "dark": false
   },
   "e2e-perf": {
-    "n": 6,
+    "n": 7,
     "sections": {
-      "hero-basic": 6,
+      "hero-basic": 7,
       "features-3col": 5,
-      "cta-simple": 6
+      "cta-simple": 7
     },
     "primary": "#296fff",
     "tone": "minimal",
     "dark": false
   },
   "e2e-proof": {
-    "n": 6,
+    "n": 7,
     "sections": {
       "hero-basic": 4,
-      "cta-simple": 6
+      "cta-simple": 7
     },
-    "primary": "#210c42",
+    "primary": "#1b0a36",
     "tone": "minimal",
     "dark": false
   }

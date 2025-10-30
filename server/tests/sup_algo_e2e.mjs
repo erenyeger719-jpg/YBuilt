@@ -77,15 +77,15 @@ function abs(urlOrPath) {
 
   title("Personalization without creep (developers vs founders)");
   {
-    // Developers case — Expect: features-3col gets inserted
+    // Developers — pass audience in args (deterministic), also send header for parity
     try {
       const r = await fetch(`${BASE}/act`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-audience": "developers" },
         body: JSON.stringify({
           sessionId: "e2e-dev",
-          spec: { layout: { sections: ["cta-simple"] } }, // thin spec on purpose
-          action: { kind: "retrieve", args: { sections: ["cta-simple"] } }
+          spec: { layout: { sections: ["cta-simple"] } },
+          action: { kind: "retrieve", args: { sections: ["cta-simple"], audience: "developers" } }
         })
       });
       const j = await r.json();
@@ -96,15 +96,15 @@ function abs(urlOrPath) {
       log(false, "Audience(dev) → adds features-3col", e?.message || String(e));
     }
 
-    // Founders case — Expect: pricing-simple gets inserted
+    // Founders — pass audience in args (deterministic), also send header for parity
     try {
       const r = await fetch(`${BASE}/act`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-audience": "founders" },
         body: JSON.stringify({
           sessionId: "e2e-founders",
-          spec: { layout: { sections: ["hero-basic","cta-simple"] } }, // thin spec on purpose
-          action: { kind: "retrieve", args: { sections: ["hero-basic","cta-simple"] } }
+          spec: { layout: { sections: ["hero-basic","cta-simple"] } },
+          action: { kind: "retrieve", args: { sections: ["hero-basic","cta-simple"], audience: "founders" } }
         })
       });
       const j = await r.json();
@@ -225,6 +225,22 @@ function abs(urlOrPath) {
     const hasMap = proof?.json?.proof?.facts || proof?.json?.facts;
     log(Boolean(pid), "Compose page for proof", pid || "");
     log(Boolean(hasMap), "Proof map present", hasMap ? "✓" : "missing");
+  }
+
+  title("No-JS default option (fallback page contains no <script>)");
+  {
+    const r = await fjson("/instant", {
+      method: "POST",
+      body: { prompt: "minimal landing, light", sessionId: "e2e-nojs" }
+    });
+    const url = r.json?.url || r.json?.result?.url || r.json?.result?.path || null;
+    let ok = false, detail = "no url";
+    if (url) {
+      const html = await ftext(abs(url));
+      ok = !/<script\b/i.test(html);            // no <script> tags
+      detail = ok ? "no scripts found" : "script tag present";
+    }
+    log(ok, "No-JS default page", detail);
   }
 
   // Final summary
