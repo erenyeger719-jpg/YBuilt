@@ -1,15 +1,57 @@
 {
   "bias": {
-    "primary": "#6d28d9",
-    "dark": true,
-    "tone": "minimal"
+    "primary": "#296fff",
+    "dark": false,
+    "tone": "serious"
   },
   "top": [
     [
-      "#6d28d9|1|minimal",
-      0.2,
-      3,
-      0
+      "#296fff|0|serious",
+      0.5,
+      8,
+      4
+    ],
+    [
+      "#491b92|0|minimal",
+      0.25,
+      6,
+      1
+    ],
+    [
+      "#3c1678|0|minimal",
+      0.25,
+      6,
+      1
+    ],
+    [
+      "#311262|0|minimal",
+      0.25,
+      6,
+      1
+    ],
+    [
+      "#280f50|0|minimal",
+      0.25,
+      6,
+      1
+    ],
+    [
+      "#210c42|0|minimal",
+      0.25,
+      6,
+      1
+    ],
+    [
+      "#1b0a36|0|minimal",
+      0.25,
+      6,
+      1
+    ],
+    [
+      "#16082c|0|minimal",
+      0.25,
+      6,
+      1
     ]
   ]
 }

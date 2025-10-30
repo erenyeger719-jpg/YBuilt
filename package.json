@@ -4,6 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "ai:smoke": "tsx server/scripts/ai.smoke.ts",
     "dev": "NODE_ENV=development tsx server/index.ts",
     "build": "echo \"(optional) if you compile TS, wire it here\"",
     "build:client": "vite build --config client/vite.config.js",
