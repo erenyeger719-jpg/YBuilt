@@ -1,10 +1,10 @@
 {
   "paths": {
     "rules": {
-      "n": 24,
-      "ships": 24,
+      "n": 26,
+      "ships": 26,
       "conversions": 0,
-      "ema_ttu_ms": 104.819859509833,
+      "ema_ttu_ms": 105.02367097428106,
       "ema_ship_rate": 1,
       "ema_conv_rate": null
     },
@@ -39,7 +39,7 @@
   },
   "budget": {
     "cloud_n": 0,
-    "total_n": 24
+    "total_n": 26
   },
   "_meta": {
     "lastDecayTs": 1761805098520

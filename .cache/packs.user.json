@@ -143,6 +143,18 @@
         "ecommerce",
         "community"
       ]
+    },
+    {
+      "id": "user-pack-1761815162417",
+      "sections": [
+        "hero-basic",
+        "features-3col",
+        "cta-simple"
+      ],
+      "tags": [
+        "ecommerce",
+        "community"
+      ]
     }
   ]
 }

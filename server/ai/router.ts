@@ -215,6 +215,20 @@ function baseUrl(req: express.Request) {
   return process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
 }
 
+// ⬇️ NEW: pass-through headers helper for child /api/ai/act calls
+function childHeaders(req: express.Request) {
+  const h: Record<string, string> = {
+    "content-type": "application/json",
+    "accept-language": String(req.headers["accept-language"] || ""),
+  };
+  // pass through test + audience so /act can enforce persona deterministically
+  const test = String(req.headers["x-test"] || "").toLowerCase();
+  if (test === "1") h["x-test"] = "1";
+  const aud = String(req.headers["x-audience"] || "");
+  if (aud) h["x-audience"] = aud;
+  return h;
+}
+
 function sha1(s: string) {
   return crypto.createHash("sha1").update(String(s)).digest("hex");
 }
@@ -2047,10 +2061,7 @@ router.post("/one", async (req, res) => {
     const top = actions[0];
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "accept-language": String(req.headers["accept-language"] || ""),
-      },
+      headers: childHeaders(req),
       body: JSON.stringify({ sessionId, spec, action: top }),
     });
     const actData = await actResR.json();
@@ -2074,10 +2085,7 @@ router.post("/one", async (req, res) => {
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "accept-language": String(req.headers["accept-language"] || ""),
-        },
+        headers: childHeaders(req),
         body: JSON.stringify({
           sessionId,
           spec: { ...spec, brandColor, copy },
@@ -2273,10 +2281,7 @@ router.post("/instant", async (req, res) => {
     };
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "accept-language": String(req.headers["accept-language"] || ""),
-      },
+      headers: childHeaders(req),
       body: JSON.stringify({ sessionId, spec, action: retrieve }),
     });
     const actData = await actResR.json();
@@ -2299,10 +2304,7 @@ router.post("/instant", async (req, res) => {
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "accept-language": String(req.headers["accept-language"] || ""),
-        },
+        headers: childHeaders(req),
         body: JSON.stringify({
           sessionId,
           spec: { ...spec, brandColor, copy },
@@ -2402,10 +2404,7 @@ router.post("/clarify/compose", async (req, res) => {
     };
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "accept-language": String(req.headers["accept-language"] || ""),
-      },
+      headers: childHeaders(req),
       body: JSON.stringify({ sessionId, spec: s, action: retrieve }),
     });
     const actData = await actResR.json();
@@ -2426,10 +2425,7 @@ router.post("/clarify/compose", async (req, res) => {
       };
       const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "accept-language": String(req.headers["accept-language"] || ""),
-        },
+        headers: childHeaders(req),
         body: JSON.stringify({
           sessionId,
           spec: { ...s, brandColor, copy },
