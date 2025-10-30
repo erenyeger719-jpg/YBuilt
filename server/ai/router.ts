@@ -218,6 +218,14 @@ function baseUrl(req: express.Request) {
 function sha1(s: string) {
   return crypto.createHash("sha1").update(String(s)).digest("hex");
 }
+function escapeHtml(s: string) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 // Node fetch guard (explicit, to avoid silent failure under Node <18)
 function requireFetch(): typeof fetch {
@@ -274,16 +282,28 @@ function jaccard(aSet: Set<string> | any, bSet: Set<string> | any) {
 
 // Personalization without creep: 1–2 section swaps max
 function segmentSwapSections(ids: string[] = [], audience = "all") {
+  const a = String(audience || "").toLowerCase().trim();
   const set = new Set((ids || []).map(String));
-  if (audience === "developers") {
-    set.add("features-3col"); // add 3-card features
-    set.delete("pricing-simple"); // keep page quieter
-  } else if (audience === "founders") {
-    set.add("pricing-simple"); // show pricing early
-  } else if (audience === "shoppers") {
-    set.add("features-3col");
+
+  const isDev =
+    a === "developers" || a === "developer" || a === "dev" || a === "devs";
+  const isFounder = a === "founders" || a === "founder";
+  const isShopper = a === "shoppers" || a === "shopper";
+
+  // Insertions
+  if (isDev || isShopper) set.add("features-3col");
+  if (isFounder) set.add("pricing-simple");
+
+  // Gentle removals to keep the page quiet
+  if (isDev) set.delete("pricing-simple");
+
+  // Preserve original order, then append any new ones deterministically
+  const base = (ids || []).map(String);
+  const extras: string[] = [];
+  for (const k of ["features-3col", "pricing-simple"]) {
+    if (!base.includes(k) && set.has(k)) extras.push(k);
   }
-  return Array.from(set);
+  return base.concat(extras);
 }
 
 // Very cheap intent guesser for common phrases (skips a model call a lot)
@@ -914,7 +934,7 @@ router.post("/act", async (req, res) => {
         const intentFromSpec = (spec as any)?.intent || {};
         const audienceKey = String(
           (spec as any)?.audience || intentFromSpec?.audience || "all"
-        );
+        ).toLowerCase().trim();
 
         // Personalize sections slightly based on audience (non-creepy, bounded)
         const sectionsPersonal = segmentSwapSections(sectionsIn, audienceKey);
@@ -1424,7 +1444,7 @@ router.post("/act", async (req, res) => {
           return { kind: "compose", path: last.url, url: last.url };
         }
 
-        // --- Compose remotely, but fall back to local static HTML if it fails ---
+        // --- Compose remotely, but ALWAYS rehost locally with OG injection ---
         let data: any = null;
         try {
           const r = await fetch(`${baseUrl(req)}/api/previews/compose`, {
@@ -1434,60 +1454,71 @@ router.post("/act", async (req, res) => {
           });
           if (r.ok) data = await r.json();
         } catch {
-          // swallow; we'll attempt local fallback below
+          // swallow; we'll synthesize below
         }
 
-        if (!data || (!data.url && !data.path)) {
-          // Local dev fallback composer (OG + tokens + simple body)
+        // Build OG meta from our payload (deterministic)
+        const titleLoc = String(
+          (payloadForKey as any)?.copy?.HEADLINE ||
+          (payloadForKey as any)?.title ||
+          "Preview"
+        );
+        const sub = String(
+          (payloadForKey as any)?.copy?.HERO_SUBHEAD ||
+          (payloadForKey as any)?.copy?.TAGLINE ||
+          ""
+        );
+        const og = [
+          `<meta property="og:title" content="${escapeHtml(titleLoc)}">`,
+          `<meta property="og:description" content="${escapeHtml(sub)}">`,
+          `<meta name="twitter:card" content="summary_large_image">`,
+        ].join("\n");
+
+        const outFile = path.resolve(PREVIEW_DIR, `${keyNow}.html`);
+
+        try {
+          // Try to fetch upstream HTML (if any), then inject OG and rehost.
+          const pageUrl = (data as any)?.url || (data as any)?.path || null;
+          if (pageUrl) {
+            const abs = /^https?:\/\//i.test(pageUrl) ? pageUrl : `${baseUrl(req)}${pageUrl}`;
+            let html = await fetchTextWithTimeout(abs, 8000);
+            if (html && /<\/head>/i.test(html)) {
+              // Always inject/refresh OG so downstream checks are consistent
+              html = html.replace(/<\/head>/i, `${og}\n</head>`);
+              fs.writeFileSync(outFile, html);
+              data = { url: `/api/ai/previews/${keyNow}`, path: `/api/ai/previews/${keyNow}` };
+            } else {
+              throw new Error("invalid_upstream_html");
+            }
+          } else {
+            throw new Error("no_upstream_url");
+          }
+        } catch {
+          // Synth fallback: minimal local page with OG
           const cssVars = (payloadForKey as any)?.brand?.tokens || {};
-          const cssRoot = Object.entries(cssVars)
-            .map(([k, v]) => `${k}:${String(v)}`)
-            .join(";");
-
-          const titleLoc = String(
-            (payloadForKey as any)?.copy?.HEADLINE ||
-              (payloadForKey as any)?.title ||
-              "Preview"
-          );
-          const sub = String(
-            (payloadForKey as any)?.copy?.HERO_SUBHEAD ||
-              (payloadForKey as any)?.copy?.TAGLINE ||
-              ""
-          );
-
-          const localeTag = String((payloadForKey as any)?.locale || "en");
-          const og = `
-<meta property="og:title" content="${titleLoc}">
-<meta property="og:description" content="${sub}">
-<meta name="twitter:card" content="summary_large_image">
-`.trim();
-
+          const cssRoot = Object.entries(cssVars).map(([k, v]) => `${k}:${String(v)}`).join(";");
           const css = `
 :root{${cssRoot}}
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
-     max-width: 880px; margin: 56px auto; padding: 0 16px; line-height:1.55;}
-h1{font-size: clamp(28px, 5vw, 44px); margin: 0 0 12px;}
-p{opacity:.85; font-size: clamp(16px, 2.2vw, 20px); margin: 0 0 24px;}
-button{padding:.75rem 1rem; border:0; border-radius:12px}
+     max-width:880px;margin:56px auto;padding:0 16px;line-height:1.55;}
+h1{font-size:clamp(28px,5vw,44px);margin:0 0 12px;}
+p{opacity:.85;font-size:clamp(16px,2.2vw,20px);margin:0 0 24px;}
 `.trim();
 
+          const localeTag = String((payloadForKey as any)?.locale || "en");
           const html = `<!doctype html>
 <html lang="${localeTag}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${og}
-<title>${titleLoc}</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+${og}
+<title>${escapeHtml(titleLoc)}</title>
 <style>${css}</style>
 </head>
 <body>
-  <h1>${titleLoc}</h1>
-  ${sub ? `<p>${sub}</p>` : ""}
+  <h1>${escapeHtml(titleLoc)}</h1>
+  ${sub ? `<p>${escapeHtml(sub)}</p>` : ""}
 </body>
 </html>`;
-
-          const outFile = path.resolve(PREVIEW_DIR, `${keyNow}.html`);
-          try {
-            fs.writeFileSync(outFile, html);
-          } catch {}
-
+          fs.writeFileSync(outFile, html);
           data = { url: `/api/ai/previews/${keyNow}`, path: `/api/ai/previews/${keyNow}` };
         }
 
@@ -1874,6 +1905,17 @@ router.post("/one", async (req, res) => {
       },
     });
 
+    // 🔗 propagate intent/audience so bandits & personalization can key on it
+    (spec as any).intent = {
+      audience: intent.audience || "",
+      goal: intent.goal || "",
+      industry: intent.industry || "",
+      vibe: intent.vibe || "",
+      color_scheme: intent.color_scheme || "",
+      sections: intent.sections || [],
+    };
+    (spec as any).audience = intent.audience || "";
+
     let copy = (fit as any).copy || cheapCopy(prompt, (fit as any).intent);
     let brandColor =
       (prior as any)?.brand?.primary || (fit as any).brandColor || guessBrand((fit as any).intent);
@@ -2074,6 +2116,17 @@ router.post("/instant", async (req, res) => {
       },
     });
 
+    // 🔗 propagate intent/audience for bandits + personalization
+    (spec as any).intent = {
+      audience: intent.audience || "",
+      goal: intent.goal || "",
+      industry: intent.industry || "",
+      vibe: intent.vibe || "",
+      color_scheme: intent.color_scheme || "",
+      sections: intent.sections || [],
+    };
+    (spec as any).audience = intent.audience || "";
+
     // Deterministic copy/brand (no model)
     let copy = (fit as any).copy || cheapCopy(prompt, intent);
     const brandColor =
@@ -2188,6 +2241,7 @@ router.post("/clarify/compose", async (req, res) => {
             sections: ["hero-basic", "cta-simple"],
             color_scheme: /(^|\s)dark(\s|$)/i.test(String(prompt)) ? "dark" : "light",
             vibe: "minimal",
+            audience: "",
           },
         };
       (base as any).layout = { sections: (fit as any).intent.sections };
@@ -2196,6 +2250,9 @@ router.post("/clarify/compose", async (req, res) => {
       if (!(base as any).brand.tone)
         (base as any).brand.tone =
           (fit as any).intent.vibe === "minimal" ? "minimal" : "serious";
+      // propagate audience/intent for downstream personalization
+      (base as any).intent = (fit as any).intent || {};
+      (base as any).audience = (fit as any).intent?.audience || "";
     }
 
     // Get clarifier chips and apply them locally
