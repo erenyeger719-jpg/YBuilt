@@ -159,6 +159,12 @@ app.use(ipGate());
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
+  // 🔖 API marker header (place right after CORS/parsers; before routers)
+  app.use('/api', (req, res, next) => {
+    res.setHeader('x-ybuilt-api', '1');
+    next();
+  });
+
   // Previews directory (ensure and reuse same path everywhere)
   const PREVIEWS_DIR = path.resolve(process.env.PREVIEWS_DIR || 'previews');
   if (!fs.existsSync(PREVIEWS_DIR)) fs.mkdirSync(PREVIEWS_DIR, { recursive: true });
