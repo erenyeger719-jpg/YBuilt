@@ -1,7 +1,7 @@
 // Node 18+ (native fetch). Run: node tests/sup_algo_e2e.mjs http://localhost:3000
 // Optional: BASE can be full '/api/ai' path (defaults to http://localhost:3000/api/ai)
 
-const BASE = (process.argv[2] || process.env.BASE || "http://localhost:3000") + "/api/ai";
+const BASE = (process.argv[2] || process.env.BASE || "http://localhost:5050") + "/api/ai";
 const ORIGIN = BASE.replace(/\/api\/ai\/?$/, "");
 const t0 = Date.now();
 
@@ -96,7 +96,7 @@ function abs(urlOrPath) {
       log(false, "Audience(dev) → adds features-3col", e?.message || String(e));
     }
 
-    // Founders — pass audience in args (deterministic), also send header for parity
+    // Founders — Expect: pricing-simple gets inserted (deterministic)
     try {
       const r = await fetch(`${BASE}/act`, {
         method: "POST",
