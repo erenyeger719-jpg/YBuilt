@@ -15,7 +15,8 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "typecheck:client": "tsc -p client/tsconfig.json --noEmit",
-    "typecheck:server": "tsc -p server/tsconfig.json --noEmit"
+    "typecheck:server": "tsc -p server/tsconfig.json --noEmit",
+    "sup:regress": "node tests/sup_algo.regression.mjs http://localhost:5050"
   },
   "dependencies": {
     "@cyclonedx/cyclonedx-npm": "^4.0.3",
