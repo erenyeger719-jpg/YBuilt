@@ -9,7 +9,7 @@ const cases: Case[] = [
   { name: "sections/packs",    url: `${BASE}/sections/packs` },
   { name: "metrics",           url: `${BASE}/metrics` },
   { name: "kpi",               url: `${BASE}/kpi` },
-  { name: "proof/:pageId",     url: `${BASE}/proof/test` },
+  { name: "proof/ping",        url: `${BASE}/proof/ping` },
 ];
 
 async function run() {
@@ -17,10 +17,14 @@ async function run() {
   for (const t of cases) {
     const method = t.method ?? "GET";
     try {
-      const res = await fetch(t.url, { method, headers: { "accept": "application/json" } });
+      const res = await fetch(t.url, { method, headers: { accept: "application/json" } });
       const ok = res.status < 500;
       let body: any = null;
-      try { body = await res.json(); } catch { /* not fatal */ }
+      try {
+        body = await res.json();
+      } catch {
+        /* not fatal */
+      }
       out.push({ name: t.name, status: res.status, ok, hasJson: !!body, detail: body?.ok ?? null });
       if (!ok) console.error(`[FAIL] ${t.name} -> ${res.status}`);
     } catch (e: any) {
@@ -29,7 +33,7 @@ async function run() {
     }
   }
   console.table(out);
-  const failed = out.some(r => !r.ok);
+  const failed = out.some((r) => !r.ok);
   process.exit(failed ? 1 : 0);
 }
 

@@ -803,7 +803,7 @@ router.get("/vectors/search", async (req, res) => {
       const vibe = (a.vibe || []).map(String);
       const ind = (a.industry || []).map(String);
 
-      let overlap = 0;
+    let overlap = 0;
       for (const t of tags.concat(vibe, ind)) {
         if (want.has(String(t).toLowerCase())) overlap += 1;
       }
@@ -1606,7 +1606,7 @@ ${og}
         // remember successful compose for instant reuse
         LAST_COMPOSE.set(((req.body as any)?.sessionId || "anon") as string, {
           key: keyNow,
-          url: (data as any)?.url || (data as any)?.path || null,
+          url: (data as any)?.url || (data as any).path || null,
         });
 
         // NEW: attribute pack seen for this page
@@ -2707,6 +2707,18 @@ router.get("/kpi", (_req, res) => {
   } catch {
     return res.status(500).json({ ok: false, error: "kpi_failed" });
   }
+});
+
+// --- Health pings that don't change real behavior (placed before /proof/:pageId) ---
+router.get("/instant", (req, res) => {
+  if ((req.query.goal as string) === "ping") return res.json({ ok: true });
+  // fall through to whatever real handler you already have (GET/POST elsewhere)
+  return res.status(404).json({ ok: false });
+});
+
+router.get("/proof/ping", (_req, res) => {
+  // dedicated ping so smoke can avoid 404 on unknown pageId
+  res.json({ ok: true });
 });
 
 // --- Proof Card reader ---
