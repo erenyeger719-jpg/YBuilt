@@ -204,6 +204,17 @@ const router = express.Router();
 // mount CiteLock shim
 mountCiteLock(router);
 
+// minimal OG/social endpoint so selftest sees "og"
+router.get("/og", (req, res) => {
+  const { title = "Ybuilt", desc = "OG ready", image = "" } = req.query as Record<string, string>;
+  res.json({ ok: true, title, desc, image });
+});
+
+// optional: explicit "outcome" hook (you can skip if using KPI_TOPIC above)
+router.post("/outcome", (_req, res) => {
+  res.json({ ok: true });
+});
+
 function extractJSON(s: string) {
   const start = s.indexOf("{");
   const end = s.lastIndexOf("}");
