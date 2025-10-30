@@ -23,7 +23,9 @@
     "sup:regress": "node tests/sup_algo.regression.mjs http://localhost:5050",
     "test:unit": "vitest run -c server/vitest.config.mjs",
     "test:cov": "vitest run -c server/vitest.config.mjs --coverage",
-    "test:all": "npm run test:unit && npm run sup:regress"
+    "test:all": "npm run test:unit && npm run sup:regress",
+    "sup:smoke": "tsx scripts/sup.smoke.ts",
+    "sup:bandits": "tsx scripts/sup.bandits.ts"
   },
   "dependencies": {
     "@cyclonedx/cyclonedx-npm": "^4.0.3",

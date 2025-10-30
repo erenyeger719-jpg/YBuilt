@@ -7,11 +7,18 @@ declare module "@/lib/collab" {
   export function emitCursor(p: any): void;
   export function onMention(cb: (p: any) => void): () => void;  // cleanup fn
   export function getMySocketId(): string | undefined;
+
+  // Added helpers for comment + mentions broadcast
+  export function onCommentEvent(cb: (p: any) => void): () => void; // cleanup fn
+  export function broadcastComment(p: any): void;
+  export function sendMention(p: any): void;
 }
 
 // --- Shared schema: pragmatic shapes used across UI
 declare module "@shared/schema" {
   export type SystemStatus = {
+    ok?: boolean;
+    summary?: string;
     services?: { id: string; status: "ok" | "degraded" | "down" }[];
   };
 
@@ -96,6 +103,7 @@ declare module "@shared/schema" {
   export interface BuildTrace {
     stages: Record<string, BuildStageTrace>;
     currentStage?: string;
+    summaryLog?: string; // some viewers expect this
   }
   export type BuildStage = string;
 }
