@@ -216,12 +216,22 @@ function sha1(s: string) {
   return crypto.createHash("sha1").update(String(s)).digest("hex");
 }
 
+// Node fetch guard (explicit, to avoid silent failure under Node <18)
+function requireFetch(): typeof fetch {
+  const f = (globalThis as any).fetch;
+  if (typeof f !== "function") {
+    throw new Error("fetch_unavailable: Node 18+ (or a fetch polyfill) is required.");
+  }
+  return f as typeof fetch;
+}
+
 // TS guard: avoid DOM lib types in Node builds
 async function fetchJSONWithTimeout(url: string, opts?: any, timeoutMs = 20000) {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const r = await fetch(url, { ...(opts || {}), signal: ctrl.signal });
+    const f = requireFetch();
+    const r = await f(url, { ...(opts || {}), signal: ctrl.signal });
     const txt = await r.text();
     if (!r.ok) throw new Error(txt || `HTTP_${(r as any).status}`);
     return JSON.parse(txt);
@@ -234,7 +244,8 @@ async function fetchTextWithTimeout(url: string, timeoutMs = 8000) {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const r = await fetch(url, { signal: ctrl.signal });
+    const f = requireFetch();
+    const r = await f(url, { signal: ctrl.signal });
     return await r.text();
   } finally {
     clearTimeout(id);
