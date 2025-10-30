@@ -332,16 +332,26 @@ function inferAudience(spec: any): string {
 
   const p = text.toLowerCase();
 
-  if (
+  const devHit =
     /\bdev(eloper|elopers|s)?\b/.test(p) ||
     /\bengineer(s)?\b/.test(p) ||
     /\bcoder(s)?\b/.test(p) ||
-    /\bprogrammer(s)?\b/.test(p)
-  )
-    return "developers";
-  if (/\bfounder(s)?\b/.test(p) || /\bstartup\s*(ceo|cto|team)\b/.test(p)) return "founders";
-  if (/\bshopper(s)?\b/.test(p) || /\bconsumer(s)?\b/.test(p) || /\becommerce\b/.test(p))
-    return "shoppers";
+    /\bprogrammer(s)?\b/.test(p);
+
+  // founders/startup signals — previously required "startup ceo/cto/team"
+  const founderHit =
+    /\bfounder(s)?\b/.test(p) ||
+    /\bstartup\b/.test(p) ||
+    /\b(startup|founder)\s*(ceo|cto|team)?\b/.test(p) ||
+    (/\bpricing\b/.test(p) && (/\bstartup\b|\bfounder(s)?\b/.test(p))) ||
+    /\binvest(or|ors|ment)\b/.test(p);
+
+  const shopperHit =
+    /\bshopper(s)?\b/.test(p) || /\bconsumer(s)?\b/.test(p) || /\be-?commerce\b/.test(p);
+
+  if (devHit) return "developers";
+  if (founderHit) return "founders";
+  if (shopperHit) return "shoppers";
   return "all";
 }
 
@@ -496,7 +506,7 @@ Rules:
         max_tokens: Number(process.env.OPENAI_REVIEW_MAXTOKENS || 600),
         response_format: { type: "json_object" },
         messages: [
-          { role: "system, ", content: system },
+          { role: "system", content: system },
           { role: "user", content: user },
         ],
       };
@@ -781,7 +791,7 @@ router.get("/vectors/search", async (req, res) => {
       const vibe = (a.vibe || []).map(String);
       const ind = (a.industry || []).map(String);
 
-    let overlap = 0;
+      let overlap = 0;
       for (const t of tags.concat(vibe, ind)) {
         if (want.has(String(t).toLowerCase())) overlap += 1;
       }
@@ -924,17 +934,13 @@ router.post("/act", async (req, res) => {
           ? action.args.sections
           : spec?.layout?.sections || [];
 
-        // ✅ NEW: pull audience from args/spec/header, else infer using more text
-        const explicit = String(
-          action.args?.audience ||
-          spec?.audience ||
-          spec?.intent?.audience ||
-          ""
-        ).toLowerCase().trim();
-
+        // ✅ NEW precedence: header > args > spec.audience > spec.intent.audience > infer
         const headerAud = String(req.headers["x-audience"] || "")
           .toLowerCase()
           .trim();
+        const argAud = String(action.args?.audience || "").toLowerCase().trim();
+        const specAud = String(spec?.audience || "").toLowerCase().trim();
+        const specIntentAud = String(spec?.intent?.audience || "").toLowerCase().trim();
 
         // widen inference surface to include summary + any copy we have
         const safeForInfer = {
@@ -943,7 +949,8 @@ router.post("/act", async (req, res) => {
           copy: (spec as any)?.copy || (action as any)?.args?.copy || {},
         };
 
-        const audienceKey = explicit || headerAud || inferAudience(safeForInfer);
+        const audienceKey =
+          headerAud || argAud || specAud || specIntentAud || inferAudience(safeForInfer);
 
         const sections = segmentSwapSections(sectionsIn, audienceKey);
         return { kind: "retrieve", sections };
@@ -2059,12 +2066,22 @@ router.post("/one", async (req, res) => {
       return res.json({ ok: true, spec, actions: [], note: "nothing_to_do" });
 
     const top = actions[0];
-    const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
-      method: "POST",
-      headers: childHeaders(req),
-      body: JSON.stringify({ sessionId, spec, action: top }),
-    });
-    const actData = await actResR.json();
+
+    // Ensure retrieve carries audience explicitly
+    if (top?.kind === "retrieve") {
+      top.args = { ...(top.args || {}), audience: String((spec as any)?.audience || "") };
+    }
+
+    {
+      const _h = childHeaders(req);
+      if ((spec as any)?.audience) _h["x-audience"] = String((spec as any).audience);
+      const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+        method: "POST",
+        headers: _h,
+        body: JSON.stringify({ sessionId, spec, action: top }),
+      });
+      var actData = await actResR.json();
+    }
 
     let url: string | null = null;
     let usedAction = top as any;
@@ -2083,16 +2100,20 @@ router.post("/one", async (req, res) => {
           breadth, // ← NEW
         },
       };
-      const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
-        method: "POST",
-        headers: childHeaders(req),
-        body: JSON.stringify({
-          sessionId,
-          spec: { ...spec, brandColor, copy },
-          action: composeAction,
-        }),
-      });
-      const composeData = await composeR.json();
+      {
+        const _h2 = childHeaders(req);
+        if ((spec as any)?.audience) _h2["x-audience"] = String((spec as any).audience);
+        const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+          method: "POST",
+          headers: _h2,
+          body: JSON.stringify({
+            sessionId,
+            spec: { ...spec, brandColor, copy },
+            action: composeAction,
+          }),
+        });
+        var composeData = await composeR.json();
+      }
       url =
         (composeData as any)?.result?.url ||
         (composeData as any)?.result?.path ||
@@ -2279,12 +2300,16 @@ router.post("/instant", async (req, res) => {
       kind: "retrieve",
       args: { sections: intent.sections, breadth, audience: (spec as any).audience || "" },
     };
-    const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
-      method: "POST",
-      headers: childHeaders(req),
-      body: JSON.stringify({ sessionId, spec, action: retrieve }),
-    });
-    const actData = await actResR.json();
+    {
+      const _h = childHeaders(req);
+      if ((spec as any)?.audience) _h["x-audience"] = String((spec as any).audience);
+      const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+        method: "POST",
+        headers: _h,
+        body: JSON.stringify({ sessionId, spec, action: retrieve }),
+      });
+      var actData = await actResR.json();
+    }
 
     let url: string | null = null;
     let result = (actData as any)?.result;
@@ -2302,16 +2327,20 @@ router.post("/instant", async (req, res) => {
           breadth, // NEW
         },
       };
-      const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
-        method: "POST",
-        headers: childHeaders(req),
-        body: JSON.stringify({
-          sessionId,
-          spec: { ...spec, brandColor, copy },
-          action: composeAction,
-        }),
-      });
-      const composeData = await composeR.json();
+      {
+        const _h2 = childHeaders(req);
+        if ((spec as any)?.audience) _h2["x-audience"] = String((spec as any).audience);
+        const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+          method: "POST",
+          headers: _h2,
+          body: JSON.stringify({
+            sessionId,
+            spec: { ...spec, brandColor, copy },
+            action: composeAction,
+          }),
+        });
+        var composeData = await composeR.json();
+      }
       url =
         (composeData as any)?.result?.url ||
         (composeData as any)?.result?.path ||
