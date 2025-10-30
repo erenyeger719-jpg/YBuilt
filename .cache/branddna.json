@@ -328,5 +328,25 @@
     "primary": "#296fff",
     "tone": "minimal",
     "dark": false
+  },
+  "anon": {
+    "n": 7,
+    "sections": {
+      "cta-simple": 7,
+      "hero-basic": 3
+    },
+    "primary": "#6d28d9",
+    "tone": "minimal",
+    "dark": true
+  },
+  "soak": {
+    "n": 14,
+    "sections": {
+      "hero-basic": 11,
+      "cta-simple": 10
+    },
+    "primary": "#2563eb",
+    "tone": "serious",
+    "dark": false
   }
 }

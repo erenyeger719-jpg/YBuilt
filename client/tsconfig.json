@@ -8,7 +8,9 @@
     "types": ["vite/client", "node"],
     "strict": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",                     // ⬅️ add
+    "paths": { "@/*": ["src/*"] }       // ⬅️ add
   },
   "include": ["./src/**/*"]
 }

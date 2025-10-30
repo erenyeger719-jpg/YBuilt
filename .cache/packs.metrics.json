@@ -1,9 +1,9 @@
 {
   "packs": {
     "p-hero-cta": {
-      "seen": 177,
+      "seen": 194,
       "wins": 22,
-      "lastSeenTs": 1761833300865,
+      "lastSeenTs": 1761835027581,
       "lastWinTs": 1761833299769
     },
     "p-hero-features-cta": {
@@ -13,9 +13,9 @@
       "lastWinTs": 1761833300783
     },
     "p-lean": {
-      "seen": 1,
+      "seen": 5,
       "wins": 0,
-      "lastSeenTs": 1761657013238
+      "lastSeenTs": 1761835027176
     }
   },
   "pagePack": {
@@ -176,7 +176,10 @@
     "b68fe68fab9169e31a02b4eca69aedde9460f8c1": "p-hero-cta",
     "d46a7c26f678f10da394c157a88ec19463d00f38": "p-hero-cta",
     "20e0b5e89223d3d825699b17dedf77712580bfac": "p-hero-features-cta",
-    "2a84eac4c3df5d5a42ea10869451119e8c50ac40": "p-hero-features-cta"
+    "2a84eac4c3df5d5a42ea10869451119e8c50ac40": "p-hero-features-cta",
+    "770ad58fa32562c0edfed8b9f498ad5c18f09204": "p-hero-cta",
+    "4e3b3e1d652ddfb06310d359e685196fffba4a82": "p-lean",
+    "040f2e991068d1d8729459bd659d3356886cd265": "p-hero-cta"
   },
   "_meta": {
     "lastDecayTs": 1761649845737
