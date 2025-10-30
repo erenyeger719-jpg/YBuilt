@@ -1,15 +1,15 @@
 {
   "bySection": {
     "cta-simple": {
-      "ships": 54,
-      "convs": 4
+      "ships": 63,
+      "convs": 5
     },
     "hero-basic": {
-      "ships": 32,
-      "convs": 2
+      "ships": 37,
+      "convs": 3
     },
     "features-3col": {
-      "ships": 14,
+      "ships": 15,
       "convs": 0
     }
   },
@@ -75,11 +75,11 @@
       "convs": 0
     },
     "minimal|light|#296fff": {
-      "ships": 8,
+      "ships": 10,
       "convs": 0
     },
     "minimal|light|#2563eb": {
-      "ships": 4,
+      "ships": 5,
       "convs": 0
     },
     "minimal|light|#491b92": {
@@ -91,6 +91,14 @@
       "convs": 1
     },
     "minimal|light|#311262": {
+      "ships": 5,
+      "convs": 1
+    },
+    "minimal|dark|#280f50": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|light|#280f50": {
       "ships": 5,
       "convs": 1
     }

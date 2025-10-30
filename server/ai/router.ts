@@ -482,7 +482,7 @@ Rules:
         max_tokens: Number(process.env.OPENAI_REVIEW_MAXTOKENS || 600),
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: system },
+          { role: "system, ", content: system },
           { role: "user", content: user },
         ],
       };
@@ -767,7 +767,7 @@ router.get("/vectors/search", async (req, res) => {
       const vibe = (a.vibe || []).map(String);
       const ind = (a.industry || []).map(String);
 
-      let overlap = 0;
+    let overlap = 0;
       for (const t of tags.concat(vibe, ind)) {
         if (want.has(String(t).toLowerCase())) overlap += 1;
       }
@@ -910,10 +910,27 @@ router.post("/act", async (req, res) => {
           ? action.args.sections
           : spec?.layout?.sections || [];
 
-        // Bandit audience key (with robust fallback)
-        const audienceKey = inferAudience(spec);
+        // ✅ NEW: pull audience from args/spec/header, else infer using more text
+        const explicit = String(
+          action.args?.audience ||
+          spec?.audience ||
+          spec?.intent?.audience ||
+          ""
+        ).toLowerCase().trim();
 
-        // Personalize sections slightly based on audience (non-creepy, bounded)
+        const headerAud = String(req.headers["x-audience"] || "")
+          .toLowerCase()
+          .trim();
+
+        // widen inference surface to include summary + any copy we have
+        const safeForInfer = {
+          ...spec,
+          summary: String((spec as any)?.summary || (spec as any)?.lastSpec?.summary || ""),
+          copy: (spec as any)?.copy || (action as any)?.args?.copy || {},
+        };
+
+        const audienceKey = explicit || headerAud || inferAudience(safeForInfer);
+
         const sections = segmentSwapSections(sectionsIn, audienceKey);
         return { kind: "retrieve", sections };
       }
@@ -2212,7 +2229,7 @@ router.post("/instant", async (req, res) => {
     // Always retrieve → compose
     const retrieve = {
       kind: "retrieve",
-      args: { sections: intent.sections, breadth },
+      args: { sections: intent.sections, breadth, audience: (spec as any).audience || "" },
     };
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
@@ -2339,7 +2356,10 @@ router.post("/clarify/compose", async (req, res) => {
     s.audience = inferAudience({ summary: prompt, intent: s.intent, copy });
 
     // retrieve → compose
-    const retrieve = { kind: "retrieve", args: { sections: s.layout.sections } };
+    const retrieve = {
+      kind: "retrieve",
+      args: { sections: s.layout.sections, audience: String(s.audience || (s.intent?.audience ?? "")) },
+    };
     const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
       headers: {
