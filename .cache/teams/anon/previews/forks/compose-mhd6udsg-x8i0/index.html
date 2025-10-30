@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en" dir="ltr"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="color-scheme" content="dark light"/>
+<title>we are #1 and deliver 200% growth</title>
+<style>
+
+:root {
+  --bg:#ffffff; --fg:#111111; --brand:#0a0415;
+  --wrap:1120px; --radius:14px; --shadow:0 10px 30px rgba(0,0,0,0.15);
+  --gap:20px; --space:56px; --btn-pad:12px 18px;
+  --border:1px solid rgba(125,125,150,0.15); --card-bg:rgba(20,20,40,0.04);
+  --grad-from:#0a0415; --grad-to:#8b5cf6;
+}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:var(--space) 20px}
+.btn{display:inline-block;background:linear-gradient(90deg,var(--grad-from),var(--grad-to));color:#fff;padding:var(--btn-pad);border-radius:var(--radius);text-decoration:none;box-shadow:var(--shadow)}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--gap)}
+.card{background:var(--card-bg);border:var(--border);padding:16px;border-radius:var(--radius)}
+.hero .sub{opacity:.88;max-width:64ch}
+.hero h1{letter-spacing:-.01em;line-height:1.1;margin:0 0 12px;font-size:clamp(30px,4.2vw,48px)}
+.section{margin-top:var(--space)}
+@media (max-width:800px){.grid{grid-template-columns:1fr}}
+</style></head><body>
+<section class="section hero">
+  <div class="wrap">
+    <h1>Clarity beats cleverness.</h1>
+    <p class="sub">Designed to remove decisions, not control.</p>
+    <a class="btn" href="#" aria-label="Go minimal">Go minimal</a>
+  </div>
+</section>
+
+
+<section class="cta" id="get-started">
+  <div class="wrap">
+    <h2>Setup that respects time</h2>
+    <a class="btn" href="#" aria-label="Go minimal">Go minimal</a>
+  </div>
+</section>
+
+</body></html>
