@@ -1099,8 +1099,10 @@ export default function CursorCanvas() {
 
     function inject() {
       try {
-        const win = iframe.contentWindow as any;
-        const doc = (iframe.contentDocument as Document | null) || win?.document;
+        // A. Null-guard the iframe before use (micro-fix)
+        if (!iframe) return;
+        const win = iframe.contentWindow!;
+        const doc = iframe.contentDocument || win.document;
         if (!win || !doc) return;
         if ((win as any).__yb_injected) return; // guard against double-inject
         (win as any).__yb_injected = true;
@@ -1647,7 +1649,8 @@ export default function CursorCanvas() {
   }
   function onMouseDown(e: React.MouseEvent) {
     if (!(e.buttons & 1)) return;
-    if (!e.getModifierState("Space")) return;
+    // B. Stop using getModifierState("Space") (micro-fix)
+    if (e.code !== "Space" && e.key !== " ") return;
     setPanning(true);
     panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
   }
@@ -3169,7 +3172,7 @@ export default function CursorCanvas() {
                           ↓
                         </button>
                         <select
-                          className="ml-1 px-1 py-0.5 text-xs rounded border max-w-[120px]"
+                          className="ml-1 px-1 py-0.5 text-xs rounded border max-w=[120px] max-w-[120px]"
                           value={s}
                           onChange={(e) =>
                             setSectionOrder((prev) => {
