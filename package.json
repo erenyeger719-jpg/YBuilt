@@ -10,6 +10,8 @@
     "start": "tsx server/index.ts",
     "smoke": "node server/tests/smoke.mjs",
     "smoke:prod": "node -e \"if(!process.env.API) throw new Error('Set API=https://your-api-host');\" && BASE_URL=$API node server/tests/smoke.mjs",
+    "smoke:sup": "node server/tests/sup-algo.smoke.mjs",
+    "smoke:sup:prod": "node -e \"if(!process.env.API) throw new Error('Set API=https://your-api-host');\" && BASE_URL=$API node server/tests/sup-algo.smoke.mjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "typecheck:client": "tsc -p client/tsconfig.json --noEmit",
