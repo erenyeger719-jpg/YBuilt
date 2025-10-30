@@ -1,0 +1,22 @@
+{
+  "paragraphs": [
+    {
+      "id": "67a3442e1c3b910404700ac2091e8e482b967493",
+      "docId": "ev-1761823593738",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    }
+  ],
+  "idf": {
+    "example": 0.28768207245178085,
+    "domain": 0.28768207245178085,
+    "proves": 0.28768207245178085,
+    "nothing.": 0.28768207245178085
+  },
+  "vocabSize": 4
+}

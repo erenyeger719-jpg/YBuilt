@@ -1,11 +1,11 @@
 {
   "all|hero-basic": {
     "hero-basic": {
-      "a": 10,
+      "a": 11,
       "b": 1,
-      "seen": 9,
-      "win": 9,
-      "last": 1761816263460
+      "seen": 10,
+      "win": 10,
+      "last": 1761823593100
     },
     "hero-basic@b": {
       "a": 1,
@@ -17,11 +17,11 @@
   },
   "all|features-3col": {
     "features-3col": {
-      "a": 1,
+      "a": 2,
       "b": 1,
-      "seen": 0,
-      "win": 0,
-      "last": 1761805098479
+      "seen": 1,
+      "win": 1,
+      "last": 1761823593100
     },
     "features-3col@alt": {
       "a": 1,
@@ -33,11 +33,11 @@
   },
   "all|cta-simple": {
     "cta-simple": {
-      "a": 15,
+      "a": 16,
       "b": 1,
-      "seen": 14,
-      "win": 14,
-      "last": 1761816263460
+      "seen": 15,
+      "win": 15,
+      "last": 1761823593100
     }
   },
   "founders|hero-basic": {
@@ -102,6 +102,38 @@
       "seen": 0,
       "win": 0,
       "last": 1761807792933
+    }
+  },
+  "general|hero-basic": {
+    "hero-basic": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761823593323
+    },
+    "hero-basic@b": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761823593323
+    }
+  },
+  "general|features-3col": {
+    "features-3col": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761823593324
+    },
+    "features-3col@alt": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761823593324
     }
   }
 }

@@ -167,6 +167,16 @@
         "ecommerce",
         "community"
       ]
+    },
+    {
+      "sections": [
+        "hero-basic",
+        "cta-simple"
+      ],
+      "tags": [
+        "testpack",
+        "demo"
+      ]
     }
   ]
 }

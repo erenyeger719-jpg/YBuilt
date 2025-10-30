@@ -13,7 +13,8 @@
     "#0c0519|minimal|false": 1,
     "#0a0415|minimal|false": 1,
     "#080311|minimal|false": 1,
-    "#07020e|minimal|false": 1
+    "#07020e|minimal|false": 1,
+    "#6d28d9|minimal|true": 1
   },
   "perSession": {
     "e2e-kpi": {
@@ -31,6 +32,9 @@
       "#0a0415|minimal|false": 1,
       "#080311|minimal|false": 1,
       "#07020e|minimal|false": 1
+    },
+    "t_one_1": {
+      "#6d28d9|minimal|true": 1
     }
   },
   "seenGlobal": {
@@ -38,10 +42,10 @@
     "#491b92|minimal|true": 1.977159968434246,
     "#3c1678|minimal|true": 1.977159968434246,
     "#311262|minimal|true": 1.977159968434246,
-    "#6d28d9|minimal|true": 3.9314799053027376,
+    "#6d28d9|minimal|true": 6.931479905302737,
     "#5921b2|minimal|false": 6.954319936868492,
-    "#6d28d9|minimal|false": 0.9771599684342459,
-    "#c98209|playful|false": 0.9771599684342459,
+    "#6d28d9|minimal|false": 2.977159968434246,
+    "#c98209|playful|false": 1.977159968434246,
     "#8a46cb|playful|true": 0.9771599684342459,
     "#f59e0b|playful|false": 0.9771599684342459,
     "#a855f7|playful|true": 0.9771599684342459,
@@ -49,7 +53,7 @@
     "#6d28d9|serious|true": 0.9771599684342459,
     "#2563eb|serious|false": 0.9771599684342459,
     "#5921b2|serious|true": 0.9771599684342459,
-    "#296fff|minimal|false": 28,
+    "#296fff|minimal|false": 29,
     "#2563eb|minimal|false": 14,
     "#491b92|minimal|false": 5,
     "#3c1678|minimal|false": 5,
@@ -208,7 +212,25 @@
       "#07020e|minimal|false": 1
     },
     "smoke": {
+      "#6d28d9|minimal|true": 2
+    },
+    "t_instant_1": {
       "#6d28d9|minimal|true": 1
+    },
+    "t_one_1": {
+      "#6d28d9|minimal|true": 1
+    },
+    "t_clarify_1": {
+      "#6d28d9|minimal|false": 1
+    },
+    "t_edits_1": {
+      "#6d28d9|minimal|false": 1
+    },
+    "t_readability_1": {
+      "#c98209|playful|false": 1
+    },
+    "t_locale_1": {
+      "#296fff|minimal|false": 1
     }
   },
   "_meta": {

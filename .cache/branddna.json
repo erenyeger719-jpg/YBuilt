@@ -135,13 +135,75 @@
     "dark": false
   },
   "smoke": {
-    "n": 1,
+    "n": 2,
     "sections": {
       "hero-basic": 1,
+      "cta-simple": 2
+    },
+    "primary": "#6d28d9",
+    "tone": "minimal",
+    "dark": true
+  },
+  "t_instant_1": {
+    "n": 1,
+    "sections": {
       "cta-simple": 1
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": true
+  },
+  "t_one_1": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1,
+      "features-3col": 1
+    },
+    "primary": "#6d28d9",
+    "tone": "minimal",
+    "dark": true
+  },
+  "t_clarify_1": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "features-3col": 1,
+      "cta-simple": 1
+    },
+    "primary": "#6d28d9",
+    "tone": "minimal",
+    "dark": false
+  },
+  "t_edits_1": {
+    "n": 4,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "tone": "minimal",
+    "dark": false,
+    "primary": "#6d28d9"
+  },
+  "t_readability_1": {
+    "n": 1,
+    "sections": {
+      "features-3col": 1,
+      "cta-simple": 1
+    },
+    "primary": "#c98209",
+    "tone": "playful",
+    "dark": false
+  },
+  "t_locale_1": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "features-3col": 1,
+      "cta-simple": 1
+    },
+    "primary": "#296fff",
+    "tone": "minimal",
+    "dark": false
   }
 }
