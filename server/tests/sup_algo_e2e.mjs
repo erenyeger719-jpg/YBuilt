@@ -77,20 +77,43 @@ function abs(urlOrPath) {
 
   title("Personalization without creep (developers vs founders)");
   {
-    const dev = await fjson("/instant", {
-      method: "POST",
-      body: { prompt: "landing page for developers minimal", sessionId: "e2e-aud-dev" }
-    });
-    const founder = await fjson("/instant", {
-      method: "POST",
-      body: { prompt: "landing page for founders minimal", sessionId: "e2e-aud-founders" }
-    });
-    const devSections = dev.json?.spec?.layout?.sections || [];
-    const fndSections = founder.json?.spec?.layout?.sections || [];
-    const devOK = devSections.includes("features-3col");
-    const fndOK = fndSections.includes("pricing-simple");
-    log(devOK, "Audience(dev) → adds features-3col", devSections.join(","));
-    log(fndOK, "Audience(founders) → adds pricing-simple", fndSections.join(","));
+    // Developers case — Expect: features-3col gets inserted
+    try {
+      const r = await fetch(`${BASE}/act`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-audience": "developers" },
+        body: JSON.stringify({
+          sessionId: "e2e-dev",
+          spec: { layout: { sections: ["cta-simple"] } }, // thin spec on purpose
+          action: { kind: "retrieve", args: { sections: ["cta-simple"] } }
+        })
+      });
+      const j = await r.json();
+      const got = (j?.result?.sections || []).join(",");
+      const ok = Boolean(j?.ok) && got.includes("features-3col");
+      log(ok, "Audience(dev) → adds features-3col", got || "");
+    } catch (e) {
+      log(false, "Audience(dev) → adds features-3col", e?.message || String(e));
+    }
+
+    // Founders case — Expect: pricing-simple gets inserted
+    try {
+      const r = await fetch(`${BASE}/act`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-audience": "founders" },
+        body: JSON.stringify({
+          sessionId: "e2e-founders",
+          spec: { layout: { sections: ["hero-basic","cta-simple"] } }, // thin spec on purpose
+          action: { kind: "retrieve", args: { sections: ["hero-basic","cta-simple"] } }
+        })
+      });
+      const j = await r.json();
+      const got = (j?.result?.sections || []).join(",");
+      const ok = Boolean(j?.ok) && got.includes("pricing-simple");
+      log(ok, "Audience(founders) → adds pricing-simple", got || "");
+    } catch (e) {
+      log(false, "Audience(founders) → adds pricing-simple", e?.message || String(e));
+    }
   }
 
   title("Massive token-space search (wide/max toggles) + Proof visual score");
@@ -139,7 +162,7 @@ function abs(urlOrPath) {
       }]
     };
     const ingest = await fjson("/sections/packs/ingest", { method: "POST", body: ingestBody });
-    log(ingest.ok && ingest.json?.ok, "Packs ingest ok", `added=${ingest.json?.added}`);
+    log(ingest.ok && ingest.json?.ok, "Packs ingest ok", `added=${(ingest.json?.added ?? "?")}`);
   }
 
   title("Economic flywheel counters + retrieval hit-rate");

@@ -2,7 +2,6 @@
 import assert from "node:assert/strict";
 
 const base = process.argv[2] || "http://localhost:5050";
-
 async function post(path, body, headers = {}) {
   const r = await fetch(`${base}${path}`, {
     method: "POST",
@@ -16,7 +15,7 @@ async function post(path, body, headers = {}) {
 const has = (list, x) => list.includes(x);
 
 (async () => {
-  // A) explicit audience via spec.intent
+  // A) explicit via spec.intent.audience
   {
     const j = await post("/api/ai/act", {
       sessionId: "t-persona-a",
@@ -29,7 +28,7 @@ const has = (list, x) => list.includes(x);
     console.log("✓ developers (spec.intent) → features-3col");
   }
 
-  // B) explicit audience via header
+  // B) explicit via header
   {
     const j = await post(
       "/api/ai/act",
