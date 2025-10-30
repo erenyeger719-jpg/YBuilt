@@ -740,7 +740,7 @@ router.get("/vectors/search", async (req, res) => {
       const vibe = (a.vibe || []).map(String);
       const ind = (a.industry || []).map(String);
 
-      let overlap = 0;
+    let overlap = 0;
       for (const t of tags.concat(vibe, ind)) {
         if (want.has(String(t).toLowerCase())) overlap += 1;
       }
@@ -879,9 +879,17 @@ router.post("/act", async (req, res) => {
 
     const out = await runWithBudget(sessionId, action, async (_tier) => {
       if (action.kind === "retrieve") {
-        const sections = Array.isArray(action.args?.sections)
+        const sectionsIn = Array.isArray(action.args?.sections)
           ? action.args.sections
           : spec?.layout?.sections || [];
+
+        // Normalize audience and apply gentle swaps here too (so tests see it)
+        const intentFromSpec = (spec as any)?.intent || {};
+        const audienceKey = String(
+          (spec as any)?.audience || intentFromSpec?.audience || "all"
+        ).toLowerCase().trim();
+
+        const sections = segmentSwapSections(sectionsIn, audienceKey);
         return { kind: "retrieve", sections };
       }
 
@@ -1322,7 +1330,7 @@ router.post("/act", async (req, res) => {
 
           // 1) emit a soft signal so UI can badge it
           if (redactedCount || flaggedCount) {
-            pushSignal(String((req.body as any)?.sessionId || "anon"), {
+            pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
               ts: Date.now(),
               kind: "proof_warn",
               data: { redactedCount, evidencedCount, flaggedCount },
