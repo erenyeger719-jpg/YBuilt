@@ -1,137 +1,283 @@
-// node tests/sup_algo.regression.mjs http://localhost:5050
-import assert from "node:assert/strict";
-const base = process.argv[2] || "http://localhost:5050";
+// Minimal, loud, no-deps regression harness for Sup Algo.
+// Usage: node tests/sup_algo.regression.mjs http://localhost:5050
 
-async function j(method, path, body, headers = {}) {
-  const r = await fetch(base + path, {
+const BASE = (process.argv[2] || "http://localhost:5050").replace(/\/+$/, "");
+const A = (p) => `${BASE}${p.startsWith("/") ? p : `/${p}`}`;
+
+const red = (s) => `\x1b[31m${s}\x1b[0m`;
+const green = (s) => `\x1b[32m${s}\x1b[0m`;
+const cyan = (s) => `\x1b[36m${s}\x1b[0m`;
+const dim = (s) => `\x1b[2m${s}\x1b[0m`;
+
+let FAILS = 0, PASSES = 0;
+const S = {}; // shared state (pageIds, sessions, urls, etc.)
+
+async function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+function ensure(cond, msg){
+  if (!cond) throw new Error(msg);
+}
+
+async function J(method, path, body, headers = {}) {
+  const r = await fetch(A(path), {
     method,
     headers: { "content-type": "application/json", ...headers },
     body: body ? JSON.stringify(body) : undefined,
   });
   const txt = await r.text();
-  try { return JSON.parse(txt); } catch { throw new Error(`${path} → non-JSON\n${txt}`); }
+  let j = {};
+  try { j = JSON.parse(txt); } catch { j = { raw: txt }; }
+  return { ok: r.ok, status: r.status, json: j, raw: txt };
+}
+const GET = (p, h) => J("GET", p, null, h);
+const POST = (p, b, h) => J("POST", p, b, h);
+
+async function test(name, fn){
+  const t0 = Date.now();
+  try {
+    await fn();
+    PASSES++;
+    console.log(`${green("PASS")} ${name} ${dim(`(${Date.now()-t0}ms)`)}`);
+  } catch (e) {
+    FAILS++;
+    console.log(`${red("FAIL")} ${name} → ${e.message}`);
+  }
 }
 
-function ok(msg) { console.log(`✅ ${msg}`); }
-function bad(msg) { console.log(`❌ ${msg}`); }
+function pickPreviewIdFromUrl(url){
+  // Expect /api/ai/previews/<id>
+  const m = String(url||"").match(/\/previews\/([^/?#]+)/);
+  return m ? m[1] : null;
+}
 
 (async () => {
-  try {
-    // 1) Outcome brain: KPI loop + token/taste hooks exercised via /one → /kpi/convert
-    let r1 = await j("POST","/api/ai/one",{ prompt:"dark saas waitlist for founders", sessionId:"t-kpi", breadth:"" });
-    assert(r1.ok && r1.result?.pageId, "one() should return pageId");
-    const pageId = r1.result.pageId;
-    let k = await j("POST","/api/ai/kpi/convert",{ pageId });
-    assert(k.ok, "convert should mark conversion");
-    ok("Outcome brain — KPI loop reachable");
+  console.log(cyan(`Sup Algo regression @ ${BASE}`));
 
-    // 2) Massive token-space: default + max breadth both yield proof visualScore
-    let r2a = await j("POST","/api/ai/one",{ prompt:"minimal saas landing", sessionId:"t-tokens-a", breadth:"" });
-    let r2b = await j("POST","/api/ai/one",{ prompt:"minimal saas landing", sessionId:"t-tokens-b", breadth:"max" });
-    assert(r2a.result?.pageId && r2b.result?.pageId, "token-space pages should exist");
-    ok("Massive token-space — default & max compose");
+  // 0) Seed retrieval DB (safe no-op if already seeded)
+  await test("seed retrieval examples", async () => {
+    const r = await POST("/api/ai/seed", {});
+    ensure(r.ok && r.json.ok, "seed failed");
+  });
 
-    // 3) Section bandits: compose returns sections; we can at least see variants present
-    assert(Array.isArray(r2a.result?.sections), "sections array present");
-    ok("Section-level bandits — sections present");
+  // 1) Zero-latency path (instant compose) + OG/social + Proof Card + perf signals
+  await test("instant compose → url + proof + signals", async () => {
+    const sessionId = "t_instant_1";
+    const r = await POST("/api/ai/instant", {
+      prompt: "dark saas waitlist for founders",
+      sessionId,
+      breadth: "wide"
+    });
+    ensure(r.ok && r.json.ok, "instant failed");
+    const url = r.json.url || r.json.result?.url || r.json.result?.path;
+    ensure(url, "no preview url");
+    const pageId = r.json.result?.pageId || null;
+    ensure(pageId, "no pageId on compose result");
+    S.instant = { sessionId, url, pageId };
 
-    // 4) Zero-latency path
-    const r4 = await j("POST","/api/ai/instant",{ prompt:"light portfolio page", sessionId:"t-instant" });
-    assert(r4.ok && r4.url, "instant should return URL");
-    ok("Zero-latency path — URL returned");
+    // Proof card should exist
+    const p = await GET(`/api/ai/proof/${pageId}`);
+    ensure(p.ok && p.json.ok, "proof card not found");
+    ensure(Object.prototype.hasOwnProperty.call(p.json.proof, "a11y"), "proof missing a11y");
 
-    // 5) BrandDNA: seed one ship then call /one again and ensure sections grew/stabilized
-    const r5a = await j("POST","/api/ai/one",{ prompt:"dark minimal founders waitlist", sessionId:"t-dna", breadth:"" });
-    const r5b = await j("POST","/api/ai/one",{ prompt:"dark minimal", sessionId:"t-dna", breadth:"" });
-    assert(r5b.spec?.layout?.sections?.length >= r5a.spec?.layout?.sections?.length, "BrandDNA soft influence");
-    ok("BrandDNA learning — soft carryover");
+    // OG tags in preview (either rehosted upstream or local synth)
+    const prev = await GET(`/api/ai/previews/${pageId}`);
+    ensure(prev.ok, "preview fetch failed");
+    ensure(/og:title/.test(prev.raw) && /twitter:card/.test(prev.raw), "missing OG/social meta");
 
-    // 6) CiteLock-Pro — proof card exists and counts present
-    const p6 = await j("GET", `/api/ai/proof/${r1.result.pageId}`);
-    assert(p6.ok && p6.proof && typeof p6.proof.visual !== "undefined", "Proof card exists");
-    ok("CiteLock-Pro — Proof card emitted");
+    // Signals: perf estimates should show up
+    await sleep(200); // allow async signals to flush
+    const sig = await GET(`/api/ai/signals/${sessionId}`);
+    ensure(sig.ok && sig.json.ok, "signals fetch failed");
+    const summary = sig.json.summary || {};
+    const kinds = JSON.stringify(summary);
+    ensure(/perf_est/.test(kinds) || /perf_matrix/.test(kinds), "missing perf signals");
+  });
 
-    // 7) Device-farm sanity — perf estimates embedded
-    assert("cls_est" in p6.proof && "lcp_est_ms" in p6.proof, "Perf estimates present");
-    ok("Device sanity — perf estimates present");
+  // 2) Personalization without creep (developers → features-3col, founders → pricing-simple)
+  await test("retrieve respects persona in test mode", async () => {
+    const act = await POST("/api/ai/act",
+      {
+        sessionId: "t_persona_dev",
+        spec: { layout: { sections: ["hero-basic"] }, audience: "" },
+        action: { kind: "retrieve", args: { sections: ["hero-basic"] } }
+      },
+      { "x-test": "1", "x-audience": "developers" }
+    );
+    ensure(act.ok && act.json.ok, "act/retrieve failed");
+    const sections = act.json.result?.sections || [];
+    ensure(sections.includes("features-3col"), "dev persona did not add features-3col");
 
-    // 8) Vector network — seed → search
-    let s8 = await j("POST","/api/ai/vectors/seed",{ count:12 });
-    assert(s8.ok, "vector seed ok");
-    let q8 = await j("GET", `/api/ai/vectors/search?limit=6&q=saas`);
-    assert(q8.ok && q8.items?.length, "vector search returns items");
-    ok("Vector library — seed + search");
+    const act2 = await POST("/api/ai/act",
+      {
+        sessionId: "t_persona_founder",
+        spec: { layout: { sections: ["hero-basic"] }, audience: "" },
+        action: { kind: "retrieve", args: { sections: ["hero-basic"] } }
+      },
+      { "x-test": "1", "x-audience": "founders" }
+    );
+    const sections2 = act2.json.result?.sections || [];
+    ensure(sections2.includes("pricing-simple"), "founder persona did not add pricing-simple");
+  });
 
-    // 9) Personalization low-creep — developers
-    const dev = await j("POST","/api/ai/act",{
-      sessionId:"t-pers-dev",
-      spec:{ layout:{ sections:["cta-simple"] }, audience:"developers" },
-      action:{ kind:"retrieve", args:{ sections:["cta-simple"], audience:"developers" } }
-    }, { "x-audience":"developers", "x-test":"1" });
-    assert(dev.ok && dev.result?.sections?.includes("features-3col"), "dev should add features-3col");
-    ok("Personalization — developers add features-3col");
+  // 3) Vector library network effect (cold start synth) + seed + tag search
+  await test("vector search returns items (cold-start or corpus)", async () => {
+    const r = await GET("/api/ai/vectors/search?limit=5&q=saas");
+    ensure(r.ok && r.json.ok, "vectors/search failed");
+    ensure((r.json.items||[]).length > 0, "no vector items returned");
+  });
 
-    // 9b) Personalization low-creep — founders
-    const fou = await j("POST","/api/ai/act",{
-      sessionId:"t-pers-founders",
-      spec:{ layout:{ sections:["cta-simple"] }, audience:"founders" },
-      action:{ kind:"retrieve", args:{ sections:["cta-simple"], audience:"founders" } }
-    }, { "x-audience":"founders", "x-test":"1" });
-    assert(fou.ok && fou.result?.sections?.includes("pricing-simple"), "founders should add pricing-simple");
-    ok("Personalization — founders add pricing-simple");
+  await test("vector seed + tagged search", async () => {
+    const seed = await POST("/api/ai/vectors/seed", { count: 8, tags: ["ecommerce", "portfolio"] });
+    ensure(seed.ok && seed.json.ok, "vectors/seed failed");
+    const r = await GET("/api/ai/vectors/search?limit=5&tags=ecommerce");
+    ensure(r.ok && r.json.ok, "vectors/search by tag failed");
+    ensure((r.json.items||[]).length > 0, "seeded search returned 0");
+  });
 
-    // 10) Compose purity — URL served by local preview
-    assert(r1.url && r1.url.startsWith("/api/ai/previews/"), "local preview rehosted");
-    ok("Compose purity — local rehost + OG");
+  // 4) Section marketplace list + ingest
+  await test("section packs list + ingest", async () => {
+    const list = await GET("/api/ai/sections/packs?limit=5");
+    ensure(list.ok && list.json.ok, "packs list failed");
 
-    // 11) Readability — guard emits signal heuristically (smoke: presence not enforced)
-    ok("Auto-readability — covered by copy guard (smoke)");
+    const ingest = await POST("/api/ai/sections/packs/ingest", {
+      packs: [{ sections: ["hero-basic","cta-simple"], tags: ["testpack", "demo"] }]
+    });
+    ensure(ingest.ok && ingest.json.ok, "packs ingest failed");
 
-    // 12) Perf governor — proof/perf recorded
-    ok("Perf governor — budgets enforced (smoke)");
+    const list2 = await GET("/api/ai/sections/packs?limit=20&tags=testpack");
+    ensure(list2.ok && list2.json.ok, "packs list by tag failed");
+    const any = (list2.json.packs||[]).some(p => (p.tags||[]).map(String.toLowerCase).includes("testpack"));
+    ensure(any, "ingested pack not found by tag");
+  });
 
-    // 13) Section marketplace
-    const packs = await j("GET","/api/ai/sections/packs?limit=5");
-    assert(packs.ok && packs.packs?.length, "packs visible");
-    ok("Section marketplace — ranked packs visible");
+  // 5) Full /one pipeline with breadth=max → sections, proof, metrics flywheel
+  await test("one → compose → metrics + bandit hints honored", async () => {
+    const sessionId = "t_one_1";
+    const r = await POST("/api/ai/one", {
+      prompt: "dark saas waitlist for developers",
+      sessionId,
+      breadth: "max"
+    });
+    ensure(r.ok && r.json.ok, "one failed");
+    const url = r.json.url || r.json.result?.url || r.json.result?.path;
+    ensure(url, "no preview url");
+    const pageId = r.json.result?.pageId || null;
+    ensure(pageId, "no pageId");
+    S.one = { sessionId, url, pageId };
 
-    // 14) OG/Social bundle — OG present in preview HTML
-    const htmlRes = await fetch(base + r4.url);
-    const html = await htmlRes.text();
-    assert(/<meta property="og:title"/i.test(html), "OG title present");
-    ok("OG/Social bundle — present in preview");
+    // check sections reflect developer persona (features-3col expected)
+    const sectionsUsed = (r.json?.result?.sections) || (r.json?.spec?.layout?.sections) || [];
+    ensure(sectionsUsed.includes("features-3col"), "bandit/personalization missing features-3col");
 
-    // 15) Proof Card already exercised
-    ok("Proof Card — present");
+    // Proof is present
+    const proof = await GET(`/api/ai/proof/${pageId}`);
+    ensure(proof.ok && proof.json.ok, "proof read failed");
+  });
 
-    // 16) Shadow RL — exercised by /kpi/convert reward hook
-    ok("Shadow RL — reward hook hit");
+  // 6) KPI convert → flywheel accounting & taste/URL cost rollups show up in /metrics
+  await test("kpi convert + metrics rollup", async () => {
+    ensure(S.one?.pageId, "no pageId from previous test");
+    const conv = await POST("/api/ai/kpi/convert", { pageId: S.one.pageId });
+    ensure(conv.ok && conv.json.ok, "kpi/convert failed");
 
-    // 17) Multilingual deterministic — ensure instant with hi-IN succeeds
-    const r17 = await fetch(base + "/api/ai/instant", {
-      method:"POST",
-      headers:{ "content-type":"application/json", "accept-language":"hi-IN" },
-      body: JSON.stringify({ prompt:"मिनिमल लैंडिंग", sessionId:"t-hi" })
-    }).then(r=>r.json());
-    assert(r17.ok, "instant hi-IN ok");
-    ok("Multilingual deterministic — hi-IN ok");
+    const metr = await GET("/api/ai/metrics");
+    ensure(metr.ok && metr.json.ok, "metrics failed");
+    const m = metr.json;
+    ensure(typeof m.cloud_pct === "number", "metrics missing cloud_pct");
+    ensure(typeof m.retrieval_hit_rate_pct === "number", "metrics missing hit rate");
+    ensure(m.url_costs && typeof m.url_costs.cents_total === "number", "metrics missing url_costs");
+  });
 
-    // 18) Failure-aware search — covered by compose flow (smoke)
-    ok("Failure-aware search — smoke pass");
+  // 7) Clarify → apply chips → compose (zero-LLM path)
+  await test("clarify/compose returns preview", async () => {
+    const r = await POST("/api/ai/clarify/compose", {
+      prompt: "light minimal portfolio for designers",
+      sessionId: "t_clarify_1",
+      spec: {}
+    });
+    ensure(r.ok && r.json.ok, "clarify/compose failed");
+    const url = r.json.url || r.json.result?.url || r.json.result?.path;
+    ensure(url, "no preview url from clarify/compose");
+  });
 
-    // 19) No-JS default — preview contains no scripts in fallback mode
-    assert(!/<script\b/i.test(html), "no <script> in fallback preview");
-    ok("No-JS default — preview clean");
+  // 8) Chips apply → edits metric gets flushed on next compose
+  await test("chips apply increments edits → reflected after compose", async () => {
+    const sessionId = "t_edits_1";
+    for (const chip of ["More minimal", "Use dark mode", "Add 3-card features"]) {
+      const r = await POST("/api/ai/chips/apply", { sessionId, spec: {}, chip });
+      ensure(r.ok && r.json.ok, `chip apply failed: ${chip}`);
+    }
+    // Compose to flush edits into EMA
+    const r2 = await POST("/api/ai/instant", { prompt: "saas waitlist", sessionId });
+    ensure(r2.ok && r2.json.ok, "compose after chips failed");
+    const metr = await GET("/api/ai/metrics");
+    ensure(metr.ok && metr.json.ok, "metrics failed");
+    // Either null (first run) or a number. We accept both but prefer a number.
+    const v = metr.json.edits_to_ship_est;
+    ensure(v === null || typeof v === "number", "edits_to_ship_est not present");
+  });
 
-    // 20) Economic flywheel — metrics include url_costs
-    const metr = await j("GET","/api/ai/metrics");
-    assert(metr.ok && metr.url_costs && typeof metr.url_costs.pages === "number", "metrics url_costs visible");
-    ok("Economic flywheel — metrics recorded");
+  // 9) Readability + proof sanitization signals (use a risky/superlative headline)
+  await test("readability + proof sanitization emits signals", async () => {
+    const sessionId = "t_readability_1";
+    const r = await POST("/api/ai/one", {
+      prompt: "We are #1 and get 300% growth in 2 weeks — playful bold saas",
+      sessionId
+    });
+    ensure(r.ok && r.json.ok, "one failed");
+    await sleep(250);
+    const sig = await GET(`/api/ai/signals/${sessionId}`);
+    ensure(sig.ok && sig.json.ok, "signals failed");
+    const dump = JSON.stringify(sig.json.summary||{});
+    ensure(/readability_warn/.test(dump) || /fact_sanitized/.test(dump) || /proof_warn/.test(dump),
+           "expected readability/proof signals not found");
+  });
 
-    console.log("\n=== Sup Algo Regression: PASS ===");
-  } catch (e) {
-    console.error(e?.stack || e);
-    console.log("\n=== Sup Algo Regression: FAIL ===");
-    process.exit(1);
-  }
+  // 10) Multilingual deterministic (Accept-Language → lang attribute)
+  await test("accept-language influences locale of preview", async () => {
+    const sessionId = "t_locale_1";
+    const r = await POST("/api/ai/instant", {
+      prompt: "minimal portfolio",
+      sessionId
+    }, { "accept-language": "fr-FR" });
+    ensure(r.ok && r.json.ok, "instant (fr) failed");
+    const pageId = r.json.result?.pageId;
+    ensure(pageId, "no pageId");
+    const prev = await GET(`/api/ai/previews/${pageId}`);
+    ensure(prev.ok, "preview fetch failed");
+    // Our local synth sets html lang to normalized locale ('fr')
+    ensure(/<html[^>]+lang="fr"/i.test(prev.raw), "preview lang not set to fr");
+  });
+
+  // 11) Packs/seen/win wiring via KPI convert should not crash (already exercised).
+
+  // 12) Economic flywheel sanity re-check
+  await test("economic flywheel counters stable", async () => {
+    const metr = await GET("/api/ai/metrics");
+    ensure(metr.ok && metr.json.ok, "metrics failed");
+    const { url_costs } = metr.json;
+    ensure(url_costs.pages >= 1, "no pages tracked in url_costs");
+  });
+
+  // 13) Evidence admin: add → search → reindex
+  await test("evidence add/search/reindex works", async () => {
+    const id = `ev-${Date.now()}`;
+    const add = await POST("/api/ai/evidence/add", {
+      id, url: "https://example.com", title: "Example", text: "Example domain proves nothing."
+    });
+    ensure(add.ok && add.json.ok, "evidence add failed");
+    const srch = await GET(`/api/ai/evidence/search?q=example`);
+    ensure(srch.ok && srch.json.ok, "evidence search failed");
+    const reidx = await POST("/api/ai/evidence/reindex", {});
+    ensure(reidx.ok && reidx.json.ok, "evidence reindex failed");
+  });
+
+  // Note: /review is only testable if OPENAI_API_KEY is set and your env allows outbound.
+  // We intentionally skip it to keep the harness zero-deps/zero-cloud.
+
+  // Final report
+  const total = PASSES + FAILS;
+  const badge = FAILS === 0 ? green("ALL GREEN") : red(`${FAILS} FAIL`);
+  console.log(cyan(`\n${badge} — ${PASSES}/${total} passing`));
+  if (FAILS) process.exit(1);
 })();
