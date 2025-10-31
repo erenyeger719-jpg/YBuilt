@@ -16,30 +16,52 @@ need_jq(){
 }
 
 bootstrap_dirs(){
-  # Ensure server write targets exist after any cleanup
-  mkdir -p .cache previews data/logs || true
+  # Ensure all expected write targets exist after cleanup
+  mkdir -p \
+    .cache \
+    .cache/specs \
+    .cache/proof \
+    .cache/vectors \
+    .cache/sections \
+    .cache/prior \
+    previews \
+    previews/pages \
+    data/logs \
+    data/tmp || true
+}
+
+probe(){
+  # Run a curl; if ok!=true, dump body and exit
+  local name="$1"; shift
+  local out
+  out="$(eval "$*" || true)"
+  local ok
+  ok="$(printf %s "$out" | jq -r '.ok // false' 2>/dev/null || echo false)"
+  if [ "$ok" != "true" ]; then
+    echo "❌ $name failed. Body:" >&2
+    (echo "$out" | jq .) 2>/dev/null || echo "$out"
+    exit 1
+  fi
 }
 
 ensure_logo_vectors(){
-  # Keep seeding until 'logo' query returns at least 1 hit (max 20 tries)
+  # Seed until 'logo' has at least 1 hit (max 20 tries)
   for ((i=1;i<=20;i++)); do
     local cnt
     cnt="$(curl -s "$AI/vectors/search?q=logo" | jq '.items | length' 2>/dev/null || echo 0)"
-    if [ "${cnt:-0}" -gt 0 ]; then
-      return 0
-    fi
-    curl -s -X POST "$AI/vectors/seed" -H 'content-type: application/json' \
-      --data '{"count":8}' >/dev/null || true
+    if [ "${cnt:-0}" -gt 0 ]; then return 0; fi
+    probe "vectors/seed" \
+      "curl -s -X POST '$AI/vectors/seed' -H 'content-type: application/json' --data '{\"count\":8}'"
     sleep 0.15
   done
   echo "warn: logo search still empty after aggressive seeding; continuing" >&2
 }
 
 ship_until_preview_and_page(){
-  # Ship up to 10 times until we have pageId AND preview path/url
+  # Ship up to 12 times until we have ok=true, pageId, and preview path/url
   local lastPID=""
-  for ((i=1;i<=10;i++)); do
-    local R PID PREVIEW_PATH URL_VAL OK
+  for ((i=1;i<=12;i++)); do
+    local R OK PID PREVIEW_PATH URL_VAL
     R="$(curl -s -X POST "$AI/instant" -H 'content-type: application/json' \
       --data '{"prompt":"warm vitest","sessionId":"vt1"}' || true)"
     OK="$(printf %s "$R" | jq -r '.ok // false' 2>/dev/null || echo false)"
@@ -49,25 +71,23 @@ ship_until_preview_and_page(){
 
     if [ "$OK" = "true" ] && [ -n "$PID" ]; then lastPID="$PID"; fi
     if [ "$OK" = "true" ] && [ -n "$PID" ] && { [ -n "$PREVIEW_PATH" ] || [ -n "$URL_VAL" ]; }; then
-      # nudge proof so proof route/materializes
       curl -s "$AI/proof/$PID" >/dev/null || true
       echo "$PID"
       return 0
     fi
     sleep 0.15
   done
-  # Best effort: if we only got PID, still return it
-  if [ -n "$lastPID" ]; then
-    curl -s "$AI/proof/$lastPID" >/dev/null || true
-    echo "$lastPID"
-    return 0
-  fi
-  echo ""
+
+  # If we never saw ok=true, print the last attempt and fail
+  echo "❌ instant warm never produced a preview. Last server response:" >&2
+  echo "$R" | jq . 2>/dev/null || echo "$R"
+  [ -n "$lastPID" ] && echo "$lastPID" || echo ""
   return 1
 }
 
 ensure_metrics_pages(){
-  # Make sure metrics (url_costs.pages) show >= 1, poll up to 20 times
+  # Ensure metrics.url_costs.pages ≥ 1. If not, force one convert on PID.
+  local pid="${1:-}"
   for ((i=1;i<=20;i++)); do
     local M ok pages
     M="$(curl -s "$AI/metrics" || echo '{}')"
@@ -76,33 +96,36 @@ ensure_metrics_pages(){
     if [ "$ok" = "true" ] && [ "${pages:-0}" -ge 1 ]; then
       return 0
     fi
+    if [ -n "$pid" ]; then
+      curl -s -X POST "$AI/kpi/convert" -H 'content-type: application/json' \
+        --data "{\"pageId\":\"$pid\"}" >/dev/null || true
+    fi
     sleep 0.15
   done
   echo "warn: metrics pages still 0; continuing" >&2
 }
 
 warm(){
-  # Clean to a sane baseline, then immediately recreate write targets
+  # Clean baseline, then immediately recreate write targets
   rm -rf .cache || true
   bootstrap_dirs
 
-  # Seed some vectors first to speed up readiness later
-  curl -s -X POST "$AI/vectors/seed" -H 'content-type: application/json' \
-    --data '{"count":12}' >/dev/null || true
+  # Seed vectors early
+  probe "vectors/seed" \
+    "curl -s -X POST '$AI/vectors/seed' -H 'content-type: application/json' --data '{\"count\":12}'"
 
-  # Ensure we can search 'logo' deterministically
   ensure_logo_vectors
 
-  # Ship until we get a pageId and a preview path/url (hard guard)
+  # Ship a real page and nudge proof
   local PID
   PID="$(ship_until_preview_and_page || true)"
+  [ -z "$PID" ] && { echo "❌ warm failed to produce pageId"; exit 1; }
 
-  # Touch metrics and ensure at least one page accounted
-  ensure_metrics_pages
+  # Make metrics reflect at least one page
+  ensure_metrics_pages "$PID"
 }
 
 # --------------------------------------------------------------------------
-
 need_jq
 
 # 0) Health ping
