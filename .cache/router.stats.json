@@ -3,7 +3,7 @@
     "rules": {
       "n": 98,
       "ships": 79,
-      "conversions": 9,
+      "conversions": 10,
       "ema_ttu_ms": 226.06303228522324,
       "ema_ship_rate": 0.999986632184819,
       "ema_conv_rate": 1

@@ -757,7 +757,26 @@ router.post("/evidence/add", (req, res) => {
   try {
     const { id, url, title, text = "" } = (req.body || {}) as any;
     if (!text) return res.status(400).json({ ok: false, error: "missing_text" });
+
     const out = addEvidence({ id, url, title, text });
+
+    // 🔒 Local, dumb, test-friendly store for search
+    try {
+      const P = pathResolve(".cache/evidence.list.json");
+      const cur: Array<{id:string;url:string;title:string;text:string}> =
+        fs.existsSync(P) ? JSON.parse(fs.readFileSync(P, "utf8")) : [];
+      const rec = {
+        id: String(id || `e-${Date.now()}`),
+        url: String(url || ""),
+        title: String(title || ""),
+        text: String(text || ""),
+      };
+      const next = [...cur.filter(e => e.id !== rec.id), rec];
+      fs.mkdirSync(".cache", { recursive: true });
+      fs.writeFileSync(P, JSON.stringify(next, null, 2));
+      (global as any).EVIDENCE_LIST = next;
+    } catch {}
+
     return res.json({ ok: true, ...out });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "evidence_add_failed" });
@@ -766,7 +785,17 @@ router.post("/evidence/add", (req, res) => {
 
 router.post("/evidence/reindex", (_req, res) => {
   try {
-    return res.json({ ok: true, ...rebuildEvidenceIndex() });
+    const out = rebuildEvidenceIndex(); // keep your original indexer
+
+    // 🔁 Also refresh local list used by /search
+    try {
+      const P = pathResolve(".cache/evidence.list.json");
+      if (fs.existsSync(P)) {
+        (global as any).EVIDENCE_LIST = JSON.parse(fs.readFileSync(P, "utf8"));
+      }
+    } catch {}
+
+    return res.json({ ok: true, ...out });
   } catch {
     return res.status(500).json({ ok: false, error: "evidence_reindex_failed" });
   }
@@ -777,10 +806,19 @@ router.get("/evidence/search", (req, res) => {
   const q = String(req.query.q || "").trim().toLowerCase();
   if (!q) return res.json({ ok: true, hits: [] });
 
-  // Assumes you store items like: { id, url, title, text }
-  // If your store is different, map accordingly.
-  const all: Array<{id:string;url:string;title:string;text:string}> =
-    (global as any).EVIDENCE_LIST || []; // or your real collection
+  let all: Array<{id:string;url:string;title:string;text:string}> =
+    (global as any).EVIDENCE_LIST;
+
+  // Fallback: lazy-load from disk if memory is empty
+  if (!Array.isArray(all)) {
+    try {
+      const P = pathResolve(".cache/evidence.list.json");
+      all = fs.existsSync(P) ? JSON.parse(fs.readFileSync(P, "utf8")) : [];
+      (global as any).EVIDENCE_LIST = all;
+    } catch {
+      all = [];
+    }
+  }
 
   const hits = all
     .filter(e =>
