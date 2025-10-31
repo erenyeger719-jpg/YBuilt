@@ -48,9 +48,14 @@ ok "OG present, no <script>"
 # 5) Proof Card exists and structured
 say "Proof card"
 curl -sf "$BASE/api/ai/proof/$PAGE" \
-| jq -e '.ok==true and .proof|has("fact_counts") and (.proof|has("a11y"))' >/dev/null \
-|| die "proof card"
+| jq -e '
+  .ok==true and
+  (.proof|type=="object") and
+  (.proof|has("fact_counts")) and
+  (.proof|has("a11y"))
+' >/dev/null || die "proof card"
 ok "Proof card emitted"
+
 
 # 6) KPI endpoints (convert + summary)
 say "KPI hooks"

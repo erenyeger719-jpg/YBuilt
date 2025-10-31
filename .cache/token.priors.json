@@ -46,7 +46,7 @@
     "#491b92|minimal|true": 1.977159968434246,
     "#3c1678|minimal|true": 1.977159968434246,
     "#311262|minimal|true": 1.977159968434246,
-    "#6d28d9|minimal|true": 55.93147990530274,
+    "#6d28d9|minimal|true": 56.93147990530274,
     "#5921b2|minimal|false": 8.954319936868492,
     "#6d28d9|minimal|false": 42.97715996843425,
     "#c98209|playful|false": 2.977159968434246,
@@ -221,7 +221,7 @@
       "#07020e|minimal|false": 1
     },
     "smoke": {
-      "#6d28d9|minimal|true": 6
+      "#6d28d9|minimal|true": 7
     },
     "t_instant_1": {
       "#6d28d9|minimal|true": 8
