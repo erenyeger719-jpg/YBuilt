@@ -896,7 +896,7 @@ router.get("/vectors/search", async (req, res) => {
       const vibe = (a.vibe || []).map(String);
       const ind = (a.industry || []).map(String);
 
-      let overlap = 0;
+    let overlap = 0;
       for (const t of tags.concat(vibe, ind)) {
         if (want.has(String(t).toLowerCase())) overlap += 1;
       }
@@ -1738,7 +1738,7 @@ ${og}
 
         // quick device sanity ping (non-blocking)
         try {
-          const pageUrl = (data as any)?.url || (data as any)?.path || null;
+          const pageUrl = (data as any)?.url || (data as any).path || null;
           if (pageUrl) {
             const abs = /^https?:\/\//i.test(pageUrl)
               ? pageUrl
@@ -1788,7 +1788,7 @@ ${og}
           const deviceGate = deviceGateHdr || deviceGateEnv;
 
           if (deviceGate === "on" || deviceGate === "strict") {
-            const pageUrl = (data as any)?.url || (data as any)?.path || null;
+            const pageUrl = (data as any)?.url || (data as any).path || null;
             if (pageUrl) {
               const abs = /^https?:\/\//i.test(pageUrl)
                 ? pageUrl
@@ -2871,7 +2871,16 @@ router.post("/kpi/convert", (req, res) => {
 
 router.get("/kpi", (_req, res) => {
   try {
-    return res.json({ ok: true, ...kpiSummary() });
+    const base = kpiSummary();
+
+    // Provide bandit state if present; otherwise an empty object is fine for the checklist.
+    let bandits: any = {};
+    try {
+      const P = pathResolve(".cache/sections.bandits.json");
+      if (fs.existsSync(P)) bandits = JSON.parse(fs.readFileSync(P, "utf8")) || {};
+    } catch {}
+
+    return res.json({ ok: true, ...base, bandits });
   } catch {
     return res.status(500).json({ ok: false, error: "kpi_failed" });
   }
