@@ -67,5 +67,15 @@
     "primary": "#3c1678",
     "tone": "minimal",
     "dark": true
+  },
+  "can2": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "primary": "#5921b2",
+    "tone": "minimal",
+    "dark": false
   }
 }
