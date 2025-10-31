@@ -1,10 +1,10 @@
 {
   "#5921b2|1|minimal": {
-    "seen": 2,
+    "seen": 3,
     "win": 0,
-    "goodSeen": 2,
+    "goodSeen": 3,
     "goodWin": 0,
-    "ts": 1761898851892
+    "ts": 1761906132029
   },
   "#491b92|1|minimal": {
     "seen": 2,
@@ -26,5 +26,26 @@
     "goodSeen": 1,
     "goodWin": 0,
     "ts": 1761901391481
+  },
+  "#3c1678|0|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761906131974
+  },
+  "#1e51c1|0|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761906132065
+  },
+  "#19429e|0|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761906132121
   }
 }

@@ -2,10 +2,13 @@
   "global": {},
   "perSession": {},
   "seenGlobal": {
-    "#5921b2|minimal|true": 2,
+    "#5921b2|minimal|true": 3,
     "#491b92|minimal|true": 2,
     "#5921b2|minimal|false": 1,
-    "#491b92|minimal|false": 1
+    "#491b92|minimal|false": 1,
+    "#3c1678|minimal|false": 1,
+    "#1e51c1|minimal|false": 1,
+    "#19429e|minimal|false": 1
   },
   "seenPerSession": {
     "smk2": {
@@ -18,7 +21,15 @@
     },
     "p2": {
       "#5921b2|minimal|false": 1,
-      "#491b92|minimal|false": 1
+      "#491b92|minimal|false": 1,
+      "#3c1678|minimal|false": 1
+    },
+    "p4": {
+      "#5921b2|minimal|true": 1
+    },
+    "dna1": {
+      "#1e51c1|minimal|false": 1,
+      "#19429e|minimal|false": 1
     }
   },
   "_meta": {

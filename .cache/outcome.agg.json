@@ -1,17 +1,21 @@
 {
   "bySection": {
     "hero-basic": {
-      "ships": 6,
+      "ships": 8,
       "convs": 0
     },
     "cta-simple": {
-      "ships": 6,
+      "ships": 10,
+      "convs": 0
+    },
+    "features-3col": {
+      "ships": 2,
       "convs": 0
     }
   },
   "byBrandSig": {
     "minimal|dark|#5921b2": {
-      "ships": 2,
+      "ships": 3,
       "convs": 0
     },
     "minimal|dark|#491b92": {
@@ -23,6 +27,18 @@
       "convs": 0
     },
     "minimal|light|#491b92": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|light|#3c1678": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|light|#1e51c1": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|light|#19429e": {
       "ships": 1,
       "convs": 0
     }

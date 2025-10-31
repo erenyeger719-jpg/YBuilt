@@ -20,12 +20,32 @@
     "dark": true
   },
   "p2": {
+    "n": 3,
+    "sections": {
+      "hero-basic": 3,
+      "cta-simple": 3
+    },
+    "primary": "#3c1678",
+    "tone": "minimal",
+    "dark": false
+  },
+  "p4": {
+    "n": 1,
+    "sections": {
+      "cta-simple": 1
+    },
+    "primary": "#5921b2",
+    "tone": "minimal",
+    "dark": true
+  },
+  "dna1": {
     "n": 2,
     "sections": {
-      "hero-basic": 2,
+      "hero-basic": 1,
+      "features-3col": 2,
       "cta-simple": 2
     },
-    "primary": "#491b92",
+    "primary": "#19429e",
     "tone": "minimal",
     "dark": false
   }
