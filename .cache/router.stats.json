@@ -3,10 +3,10 @@
     "rules": {
       "n": 2,
       "ships": 2,
-      "conversions": 0,
+      "conversions": 1,
       "ema_ttu_ms": 1164.5,
       "ema_ship_rate": 1,
-      "ema_conv_rate": null
+      "ema_conv_rate": 1
     },
     "local": {
       "n": 0,

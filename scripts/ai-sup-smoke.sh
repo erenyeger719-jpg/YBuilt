@@ -44,17 +44,18 @@ assert "evidence add+search" \
  --data '{\"id\":\"t1\",\"url\":\"https://example.com\",\"title\":\"Example\",\"text\":\"Minimal landing pages are common.\"}' | jq -er '.ok==true' && \
  curl -s '$AI/evidence/search?q=minimal' | jq -er '.ok==true'"
 
-# • Persona retrieve (seed first so retrieval isn't empty)
+# • Persona retrieve (audience header drives section mix)
 section "Persona retrieve"
-assert "seed retrieval examples" \
-"curl -s -X POST '$AI/seed' -H 'content-type: application/json' >/dev/null"
 
-assert "add persona example" \
-"curl -s -X POST '$AI/persona/add' -H 'content-type: application/json' \
- --data '{\"text\":\"founder who likes dark saas minimal\",\"label\":\"founder\"}' >/dev/null"
+assert "developers → features present, pricing absent" \
+"curl -s -X POST '$AI/act' -H 'content-type: application/json' -H 'x-audience: developers' \
+ --data '{\"sessionId\":\"ps1\",\"spec\":{\"layout\":{\"sections\":[\"hero-basic\"]},\"brand\":{},\"intent\":{},\"audience\":\"\"},\"action\":{\"kind\":\"retrieve\",\"args\":{\"sections\":[\"hero-basic\"]}}}' \
+ | jq -e '.result.sections | (index(\"features-3col\") != null) and (index(\"pricing-simple\") == null)' >/dev/null"
 
-assert "retrieve ok" \
-"curl -s '$AI/persona/retrieve?q=founder&k=5' | jq -e '.items | length > 0' >/dev/null"
+assert "founders → pricing present" \
+"curl -s -X POST '$AI/act' -H 'content-type: application/json' -H 'x-audience: founders' \
+ --data '{\"sessionId\":\"ps2\",\"spec\":{\"layout\":{\"sections\":[\"hero-basic\"]},\"brand\":{},\"intent\":{},\"audience\":\"\"},\"action\":{\"kind\":\"retrieve\",\"args\":{\"sections\":[\"hero-basic\"]}}}' \
+ | jq -e '.result.sections | (index(\"pricing-simple\") != null)' >/dev/null"
 
 section "Metrics surface"
 assert "metrics present" "curl -s '$AI/metrics' | jq -er '.ok==true'"
