@@ -360,11 +360,11 @@
     "dark": true
   },
   "proof": {
-    "n": 6,
+    "n": 7,
     "sections": {
       "hero-basic": 2,
-      "features-3col": 4,
-      "cta-simple": 6
+      "features-3col": 5,
+      "cta-simple": 7
     },
     "primary": "#296fff",
     "tone": "serious",

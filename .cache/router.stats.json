@@ -17,10 +17,10 @@
       "ema_conv_rate": null
     },
     "cloud": {
-      "n": 19,
-      "ships": 19,
+      "n": 20,
+      "ships": 20,
       "conversions": 3,
-      "ema_ttu_ms": 265.51641525740183,
+      "ema_ttu_ms": 321.3873114430514,
       "ema_ship_rate": 1,
       "ema_conv_rate": 1
     }
@@ -66,8 +66,8 @@
     "95db085c3e469587140888ccef2743332a73df36": "rules"
   },
   "budget": {
-    "cloud_n": 19,
-    "total_n": 115
+    "cloud_n": 20,
+    "total_n": 116
   },
   "_meta": {
     "lastDecayTs": 1761884663408

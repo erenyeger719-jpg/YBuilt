@@ -84,7 +84,7 @@
     "#07020e|minimal|false": 5,
     "#a56b07|playful|false": 10,
     "#2563eb|minimal|true": 1,
-    "#296fff|serious|false": 10,
+    "#296fff|serious|false": 11,
     "#296fff|minimal|true": 3
   },
   "seenPerSession": {
@@ -289,7 +289,7 @@
       "#6d28d9|minimal|true": 7
     },
     "proof": {
-      "#296fff|serious|false": 6
+      "#296fff|serious|false": 7
     },
     "gate": {
       "#a855f7|playful|true": 3

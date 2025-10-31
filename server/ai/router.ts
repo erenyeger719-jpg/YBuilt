@@ -260,13 +260,32 @@ function escapeHtml(s: string) {
     .replace(/'/g, "&#39;");
 }
 
-// A) NEW helper — risky claims detector
+// A) NEW helper — risky claims detector (robust for #, %, and x)
 function hasRiskyClaims(s: string) {
-  const p = String(s || "").toLowerCase();
-  const superlative = /\b(#1|no\.?\s?1|top|best|leading|largest)\b/i;
-  const percent = /\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?(%|percent)\b/i;
-  const multiplier = /\b\d+(?:\.\d+)?\s*x\b/i;
-  return superlative.test(p) || percent.test(p) || multiplier.test(p);
+  const p = String(s || "");
+
+  // superlatives like "#1", "No.1", "top", "best" (handle non-word edges like '#')
+  const superlative =
+    /(?:^|[^a-z0-9])(#1|no\.?\s*1|top|best|leading|largest)(?:[^a-z0-9]|$)/i;
+
+  // numeric percent as symbol (e.g., "200%") — allow space after, end, or punctuation
+  const percentSymbol =
+    /(?:^|[^\d])\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?%(?:\D|$)/;
+
+  // numeric percent as word (e.g., "200 percent")
+  const percentWord =
+    /\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?percent\b/i;
+
+  // multipliers like "10x", "2.5x" — no letter/digit immediately after 'x'
+  const multiplier =
+    /\b\d+(?:\.\d+)?\s*x(?!\w)/i;
+
+  return (
+    superlative.test(p) ||
+    percentSymbol.test(p) ||
+    percentWord.test(p) ||
+    multiplier.test(p)
+  );
 }
 
 // NEW helper — strict proof toggle
@@ -825,7 +844,7 @@ router.get("/vectors/search", async (req, res) => {
       const vibe = (a.vibe || []).map(String);
       const ind = (a.industry || []).map(String);
 
-      let overlap = 0;
+    let overlap = 0;
       for (const t of tags.concat(vibe, ind)) {
         if (want.has(String(t).toLowerCase())) overlap += 1;
       }
@@ -2794,6 +2813,12 @@ router.get("/instant", (req, res) => {
 router.get("/proof/ping", (_req, res) => {
   // dedicated ping so smoke can avoid 404 on unknown pageId
   res.json({ ok: true });
+});
+
+// Tiny debug route to sanity-check risky claims detector
+router.get("/risk", (req, res) => {
+  const prompt = String(req.query.prompt || "");
+  return res.json({ ok: true, prompt, risky: hasRiskyClaims(prompt) });
 });
 
 // --- Proof Card reader ---
