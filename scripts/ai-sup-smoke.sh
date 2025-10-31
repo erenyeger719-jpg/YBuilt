@@ -99,10 +99,16 @@ say "Evidence add/search"
 curl -sf -X POST "$BASE/api/ai/evidence/add" -H "$JSON" \
   -d '{"id":"ex1","url":"https://example.com","title":"Example","text":"Calm landing pages improve conversions."}' \
 | jq -e '.ok==true' >/dev/null || die "evidence add"
+
 curl -sf -X POST "$BASE/api/ai/evidence/reindex" | jq -e '.ok==true' >/dev/null || die "evidence reindex"
+
+# <-- add this line
+sleep "${EVIDENCE_SLEEP:-0.4}"
+
 curl -sf "$BASE/api/ai/evidence/search?q=conversions" \
 | jq -e '.ok==true and (.hits|length)>=1' >/dev/null || die "evidence search"
 ok "evidence index OK"
+
 
 # 12) TasteNet-lite retrain (best-effort)
 say "Taste retrain"

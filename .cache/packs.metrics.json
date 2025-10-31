@@ -1,10 +1,10 @@
 {
   "packs": {
     "p-hero-cta": {
-      "seen": 216,
-      "wins": 22,
-      "lastSeenTs": 1761889575181,
-      "lastWinTs": 1761833299769
+      "seen": 217,
+      "wins": 24,
+      "lastSeenTs": 1761889865090,
+      "lastWinTs": 1761889879866
     },
     "p-hero-features-cta": {
       "seen": 101,

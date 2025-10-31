@@ -135,10 +135,10 @@
     "dark": false
   },
   "smoke": {
-    "n": 7,
+    "n": 8,
     "sections": {
       "hero-basic": 3,
-      "cta-simple": 7
+      "cta-simple": 8
     },
     "primary": "#6d28d9",
     "tone": "minimal",

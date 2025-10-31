@@ -14,7 +14,7 @@
     "#0a0415|minimal|false": 1,
     "#080311|minimal|false": 1,
     "#07020e|minimal|false": 1,
-    "#6d28d9|minimal|true": 8,
+    "#6d28d9|minimal|true": 10,
     "#296fff|serious|false": 4
   },
   "perSession": {
@@ -39,6 +39,9 @@
     },
     "u_kpi_1": {
       "#296fff|serious|false": 4
+    },
+    "smoke": {
+      "#6d28d9|minimal|true": 2
     }
   },
   "seenGlobal": {
@@ -46,7 +49,7 @@
     "#491b92|minimal|true": 1.977159968434246,
     "#3c1678|minimal|true": 1.977159968434246,
     "#311262|minimal|true": 1.977159968434246,
-    "#6d28d9|minimal|true": 56.93147990530274,
+    "#6d28d9|minimal|true": 57.93147990530274,
     "#5921b2|minimal|false": 8.954319936868492,
     "#6d28d9|minimal|false": 42.97715996843425,
     "#c98209|playful|false": 2.977159968434246,
@@ -221,7 +224,7 @@
       "#07020e|minimal|false": 1
     },
     "smoke": {
-      "#6d28d9|minimal|true": 7
+      "#6d28d9|minimal|true": 8
     },
     "t_instant_1": {
       "#6d28d9|minimal|true": 8
