@@ -81,9 +81,10 @@ import { registerSelfTest } from "./selftest";
 // --- SUP V1: readiness gate + quotas + abuse intake ---
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 60_000);
 const RATE_MAX = Number(process.env.RATE_MAX ?? 120);
-const PREWARM_TOKEN = process.env.PREWARM_TOKEN ?? ""; // set in prod
 
-let READY = PREWARM_TOKEN ? false : true; // if token set, block until prewarmed
+// (a) Top-of-file prewarm constants (dev auto-ready if no token)
+const PREWARM_TOKEN = process.env.PREWARM_TOKEN || "";
+let READY = !PREWARM_TOKEN; // if no token, dev is auto-ready
 
 type Bucket = { hits: number; resetAt: number };
 const buckets = new Map<string, Bucket>();
@@ -110,7 +111,9 @@ function rateLimitGuard(
   res: import("express").Response,
   next: import("express").NextFunction
 ) {
+  // bypass for prewarm token and abuse intake
   if (req.headers["x-prewarm-token"] === PREWARM_TOKEN) return next();
+  if (req.method === "POST" && req.path === "/abuse/report") return next();
 
   const k = clientKey(req);
   const now = Date.now();
@@ -334,8 +337,19 @@ export function pickTierByConfidence(c = 0.6) {
 
 const router = express.Router();
 
-// attach gates early
-router.use(readinessGate);
+// (c) Middleware: warmup gate BEFORE limiter
+router.use((req, res, next) => {
+  if (READY) return next();
+  return res.status(503).json({ ok: false, error: "warming_up" });
+});
+// (c) Bypass limiter for prewarm + abuse intake; limiter comes right after this
+router.use((req, res, next) => {
+  const bypass = PREWARM_TOKEN && req.headers["x-prewarm-token"] === PREWARM_TOKEN;
+  const isAbuseIntake = req.method === "POST" && req.path === "/abuse/report";
+  if (bypass || isAbuseIntake) return next();
+  return next(); // actual limiter is attached below
+});
+// attach limiter AFTER bypass block
 router.use(rateLimitGuard);
 
 // POST /api/ai/abuse/report  → JSONL sink under .cache/abuse/YYYY-MM-DD.jsonl
@@ -356,9 +370,11 @@ router.post("/abuse/report", express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/ai/__ready  → flip READY once prewarm passes
+// (b) Prewarm endpoint — mark service ready (no-op if no token set)
+// POST /api/ai/__ready — mark service ready
 router.post("/__ready", (req, res) => {
-  if (PREWARM_TOKEN && req.headers["x-prewarm-token"] === PREWARM_TOKEN) {
+  if (!PREWARM_TOKEN) return res.json({ ok: true, ready: true }); // no-op in dev
+  if (req.headers["x-prewarm-token"] === PREWARM_TOKEN) {
     READY = true;
     return res.json({ ok: true, ready: true });
   }
@@ -1085,7 +1101,7 @@ router.get("/vectors/search", async (req, res) => {
     rows.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
 
     // Seeded/placeholder short-circuit + cold-start behavior
-    if (rows.length === 0) {
+    if (rows.length == 0) {
       const seeded = (global as any).__VEC_SEEDED;
       if (Array.isArray(seeded) && seeded.length) {
         return res.json({ ok: true, q: rawQ, tags: tagTokens, items: seeded.slice(0, limit) });
@@ -1313,7 +1329,7 @@ router.post("/act", async (req, res) => {
               action.args = { ...(action.args || {}), sections: pick.sections };
           } else if (wantTags.length && Array.isArray(ranked) && ranked.length) {
             const pick = ranked.find((p: any) =>
-              (p.tags || []).some((t: string) =>
+              (p.tags || []).some((t) =>
                 wantTags.includes(String(t).toLowerCase())
               )
             );

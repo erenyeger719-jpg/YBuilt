@@ -1,2 +1,4 @@
 {"kind":"convert","ts":1761933619255,"pageId":"pg_mhf5s9ir"}
 {"kind":"convert","ts":1761933620252,"pageId":"pg_mhf5saa8"}
+{"kind":"ship","ts":1761935230993,"pageId":"6d933b9a6a771ca65600a0060f17376f54318b6c","url":"/api/ai/previews/6d933b9a6a771ca65600a0060f17376f54318b6c","sections":["hero-basic","cta-simple"],"brand":{"primary":"#1e51c1","tone":"serious","dark":false},"scores":{"visual":79,"a11y":true,"bytes":null},"sessionId":"warm1"}
+{"kind":"ship","ts":1761935304357,"pageId":"8d7ebd5819eb57a51ecf8071e7d23cc17c8efc5d","url":"/api/ai/previews/8d7ebd5819eb57a51ecf8071e7d23cc17c8efc5d","sections":["cta-simple"],"brand":{"primary":"#19429e","tone":"serious","dark":false},"scores":{"visual":79,"a11y":true,"bytes":null},"sessionId":"warm1"}

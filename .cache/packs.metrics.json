@@ -1,0 +1,16 @@
+{
+  "packs": {
+    "p-hero-cta": {
+      "seen": 2,
+      "wins": 0,
+      "lastSeenTs": 1761935304330
+    }
+  },
+  "pagePack": {
+    "6d933b9a6a771ca65600a0060f17376f54318b6c": "p-hero-cta",
+    "8d7ebd5819eb57a51ecf8071e7d23cc17c8efc5d": "p-hero-cta"
+  },
+  "_meta": {
+    "lastDecayTs": 1761935230522
+  }
+}
