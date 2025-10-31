@@ -27,7 +27,8 @@
     "test:cov": "vitest run -c server/vitest.config.mjs --coverage",
     "test:all": "npm run test:unit && npm run sup:regress",
     "sup:smoke": "tsx scripts/sup.smoke.ts",
-    "sup:bandits": "tsx scripts/sup.bandits.ts"
+    "sup:bandits": "tsx scripts/sup.bandits.ts",
+    "smoke:ai": "bash scripts/ai-sup-smoke.sh"
   },
   "dependencies": {
     "@cyclonedx/cyclonedx-npm": "^4.0.3",

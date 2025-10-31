@@ -131,13 +131,30 @@
         "proves": 1,
         "nothing.": 1
       }
+    },
+    {
+      "id": "ff3bbfad03f553b04708a89190574f418bcc7725",
+      "docId": "ex1",
+      "text": "Calm landing pages improve conversions.",
+      "tokens": {
+        "calm": 1,
+        "landing": 1,
+        "pages": 1,
+        "improve": 1,
+        "conversions.": 1
+      }
     }
   ],
   "idf": {
-    "example": 0.03922071315328133,
-    "domain": 0.03922071315328133,
-    "proves": 0.03922071315328133,
-    "nothing.": 0.03922071315328133
+    "example": 0.11332868530700327,
+    "domain": 0.11332868530700327,
+    "proves": 0.11332868530700327,
+    "nothing.": 0.11332868530700327,
+    "calm": 2.2335922215070942,
+    "landing": 2.2335922215070942,
+    "pages": 2.2335922215070942,
+    "improve": 2.2335922215070942,
+    "conversions.": 2.2335922215070942
   },
-  "vocabSize": 4
+  "vocabSize": 9
 }

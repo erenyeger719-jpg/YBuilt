@@ -1,0 +1,9 @@
+{
+  "keyJraW5kIjoiaWxsdXN0cmF0aW9uIiwicHJvbXB0IjoibWluaW1hbCBoZXJvIHNo": {
+    "format": "svg",
+    "inline": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1200 600\" width=\"1200\" height=\"600\" role=\"img\" aria-label=\"Abstract waves\">\n  <defs>\n    <linearGradient id=\"g2a97f045\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\n      <stop offset=\"0%\" stop-color=\"#6d28d9\" stop-opacity=\"0.9\"/>\n      <stop offset=\"100%\" stop-color=\"#6d28d9\" stop-opacity=\"0.35\"/>\n    </linearGradient>\n  </defs>\n  <rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>\n  <g fill=\"url(#g2a97f045)\">\n    <path d=\"M0 450 C 300 360, 600 540, 1200 420 L 1200 600 L 0 600 Z\"/>\n    <path opacity=\"0.5\" d=\"M0 390 C 240 300, 660 480, 1200 360 L 1200 600 L 0 600 Z\"/>\n  </g>\n</svg>",
+    "bytes": 623,
+    "route": "vector_local",
+    "note": "svg_valid"
+  }
+}

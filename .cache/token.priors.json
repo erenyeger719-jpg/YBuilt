@@ -46,9 +46,9 @@
     "#491b92|minimal|true": 1.977159968434246,
     "#3c1678|minimal|true": 1.977159968434246,
     "#311262|minimal|true": 1.977159968434246,
-    "#6d28d9|minimal|true": 54.93147990530274,
-    "#5921b2|minimal|false": 7.954319936868492,
-    "#6d28d9|minimal|false": 41.97715996843425,
+    "#6d28d9|minimal|true": 55.93147990530274,
+    "#5921b2|minimal|false": 8.954319936868492,
+    "#6d28d9|minimal|false": 42.97715996843425,
     "#c98209|playful|false": 2.977159968434246,
     "#8a46cb|playful|true": 0.9771599684342459,
     "#f59e0b|playful|false": 0.9771599684342459,
@@ -85,7 +85,8 @@
     "#a56b07|playful|false": 10,
     "#2563eb|minimal|true": 1,
     "#296fff|serious|false": 11,
-    "#296fff|minimal|true": 3
+    "#296fff|minimal|true": 3,
+    "#8a46cb|minimal|true": 1
   },
   "seenPerSession": {
     "vec1": {
@@ -220,7 +221,7 @@
       "#07020e|minimal|false": 1
     },
     "smoke": {
-      "#6d28d9|minimal|true": 5
+      "#6d28d9|minimal|true": 6
     },
     "t_instant_1": {
       "#6d28d9|minimal|true": 8
@@ -292,9 +293,16 @@
       "#296fff|serious|false": 7
     },
     "gate": {
-      "#a855f7|playful|true": 3
+      "#a855f7|playful|true": 3,
+      "#8a46cb|minimal|true": 1
     },
     "noj": {
+      "#5921b2|minimal|false": 1
+    },
+    "clar": {
+      "#6d28d9|minimal|false": 1
+    },
+    "ed": {
       "#5921b2|minimal|false": 1
     }
   },
