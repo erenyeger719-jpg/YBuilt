@@ -1,0 +1,39 @@
+{
+  "vt1": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "tone": "minimal",
+    "dark": false
+  },
+  "pre": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "tone": "minimal",
+    "dark": false
+  },
+  "t1": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "tone": "minimal",
+    "dark": true
+  },
+  "dna1": {
+    "n": 2,
+    "sections": {
+      "hero-basic": 2,
+      "cta-simple": 2,
+      "features-3col": 1
+    },
+    "tone": "minimal",
+    "dark": false
+  }
+}

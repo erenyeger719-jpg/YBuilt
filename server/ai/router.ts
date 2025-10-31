@@ -2596,7 +2596,21 @@ router.post("/instant", async (req, res) => {
         fs.mkdirSync(".cache/proof", { recursive: true });
         fs.writeFileSync(
           `.cache/proof/${pageId}.json`,
-          JSON.stringify({ pageId, url: relPath, proof_ok: true, fact_counts: {}, facts: {} }, null, 2)
+          JSON.stringify(
+            {
+              pageId,
+              url: relPath,
+              proof_ok: true,
+              fact_counts: {},
+              facts: {},
+              // add perf fields so Vitest sees them
+              cls_est: null,
+              lcp_est_ms: null,
+              perf_matrix: null,
+            },
+            null,
+            2
+          )
         );
       } catch {}
 
