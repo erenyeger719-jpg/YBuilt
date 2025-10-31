@@ -1,5 +1,15 @@
 {
-  "vt1": {
+  "inv2": {
+    "n": 5,
+    "sections": {
+      "hero-basic": 5,
+      "cta-simple": 5,
+      "features-3col": 1
+    },
+    "tone": "minimal",
+    "dark": false
+  },
+  "inv5": {
     "n": 1,
     "sections": {
       "hero-basic": 1,
@@ -8,7 +18,26 @@
     "tone": "minimal",
     "dark": false
   },
-  "pre": {
+  "c1": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "tone": "minimal",
+    "dark": false
+  },
+  "c2": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "features-3col": 1,
+      "cta-simple": 1
+    },
+    "tone": "minimal",
+    "dark": false
+  },
+  "c3": {
     "n": 1,
     "sections": {
       "hero-basic": 1,

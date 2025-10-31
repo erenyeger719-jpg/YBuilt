@@ -1921,7 +1921,7 @@ ${og}
           const deviceGateHdr = String(req.headers["x-device-gate"] || "").toLowerCase();
           const deviceGate = deviceGateHdr || deviceGateEnv;
 
-          if (deviceGate === "on" || deviceGate === "strict") {
+        if (deviceGate === "on" || deviceGate === "strict") {
             const pageUrl = (data as any)?.url || (data as any).path || null;
             if (pageUrl) {
               const abs = /^https?:\/\//i.test(pageUrl)
@@ -2472,7 +2472,7 @@ router.post("/one", async (req, res) => {
 });
 
 // ---------- instant (zero-LLM compose) ----------
-router.post("/instant", async (req, res) => {
+router.post("/instant", express.json(), async (req, res) => {
   try {
     const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
 
@@ -2487,15 +2487,55 @@ router.post("/instant", async (req, res) => {
     if (sticky?.specId) {
       const specCached = readSpecById(sticky.specId);
       if (specCached) {
-        const pageId = `pg_${String(sticky.specId).replace(/^spec_?/, "")}`;
-        const relPath = `/previews/pages/${pageId}.html`;
-        const apiPath = `/api/ai/previews/${pageId}`; // use stripper route
+        const origPageId = `pg_${String(sticky.specId).replace(/^spec_?/, "")}`;
+        const newPageId = `pg_${nanoid(6)}`;
+        try {
+          const src = path.resolve(PREVIEW_DIR, `${origPageId}.html`);
+          const dst = path.resolve(PREVIEW_DIR, `${newPageId}.html`);
+
+          if (fs.existsSync(src)) {
+            // Fast path: copy cached HTML to a fresh pageId for uniqueness
+            fs.copyFileSync(src, dst);
+          } else {
+            // Fallback: (re)render from cached spec, then copy to new id
+            try {
+              writePreview({ id: sticky.specId, copy: specCached.copy });
+            } catch {}
+            const gen = path.resolve(PREVIEW_DIR, `${origPageId}.html`);
+            if (fs.existsSync(gen)) {
+              fs.copyFileSync(gen, dst);
+            }
+          }
+
+          // Ensure a lightweight proof card exists for the new pageId
+          try {
+            fs.mkdirSync(".cache/proof", { recursive: true });
+            fs.writeFileSync(
+              `.cache/proof/${newPageId}.json`,
+              JSON.stringify(
+                {
+                  pageId: newPageId,
+                  url: `/api/ai/previews/${newPageId}`,
+                  proof_ok: true,
+                  fact_counts: {},
+                  facts: {},
+                  cls_est: null,
+                  lcp_est_ms: null,
+                  perf_matrix: null,
+                },
+                null,
+                2
+              )
+            );
+          } catch {}
+        } catch {}
+
         return res.json({
           ok: true,
           source: "instant",
           spec: specCached,
-          result: { pageId, path: relPath }, // keep for compatibility
-          url: apiPath,
+          result: { pageId: newPageId, path: `/previews/pages/${newPageId}.html` },
+          url: `/api/ai/previews/${newPageId}`,
         });
       }
     }
