@@ -1,0 +1,24 @@
+{
+  "paragraphs": [
+    {
+      "id": "ff3bbfad03f553b04708a89190574f418bcc7725",
+      "docId": "ex1",
+      "text": "Calm landing pages improve conversions.",
+      "tokens": {
+        "calm": 1,
+        "landing": 1,
+        "pages": 1,
+        "improve": 1,
+        "conversions.": 1
+      }
+    }
+  ],
+  "idf": {
+    "calm": 0.28768207245178085,
+    "landing": 0.28768207245178085,
+    "pages": 0.28768207245178085,
+    "improve": 0.28768207245178085,
+    "conversions.": 0.28768207245178085
+  },
+  "vocabSize": 5
+}

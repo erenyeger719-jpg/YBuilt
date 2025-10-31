@@ -1,0 +1,18 @@
+{
+  "bySection": {
+    "cta-simple": {
+      "ships": 4,
+      "convs": 1
+    }
+  },
+  "byBrandSig": {
+    "minimal|dark|#5921b2": {
+      "ships": 2,
+      "convs": 1
+    },
+    "minimal|light|#5921b2": {
+      "ships": 2,
+      "convs": 0
+    }
+  }
+}

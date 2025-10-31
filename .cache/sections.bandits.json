@@ -1,0 +1,75 @@
+{
+  "founders|hero-basic": {
+    "hero-basic": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761893857131
+    },
+    "hero-basic@b": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761893857131
+    }
+  },
+  "founders|pricing-simple": {
+    "pricing-simple": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761893857132
+    },
+    "pricing-simple@a": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761893857132
+    }
+  },
+  "all|cta-simple": {
+    "cta-simple": {
+      "a": 2,
+      "b": 1,
+      "seen": 1,
+      "win": 1,
+      "last": 1761893858617
+    }
+  },
+  "all|hero-basic": {
+    "hero-basic": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761893859233
+    },
+    "hero-basic@b": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761893859233
+    }
+  },
+  "all|features-3col": {
+    "features-3col": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761893859234
+    },
+    "features-3col@alt": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761893859234
+    }
+  }
+}

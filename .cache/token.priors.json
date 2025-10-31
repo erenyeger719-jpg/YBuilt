@@ -1,0 +1,31 @@
+{
+  "global": {
+    "#5921b2|minimal|true": 1
+  },
+  "perSession": {
+    "smoke": {
+      "#5921b2|minimal|true": 1
+    }
+  },
+  "seenGlobal": {
+    "#5921b2|minimal|true": 2,
+    "#5921b2|minimal|false": 2
+  },
+  "seenPerSession": {
+    "smoke": {
+      "#5921b2|minimal|true": 1
+    },
+    "clar": {
+      "#5921b2|minimal|false": 1
+    },
+    "ed": {
+      "#5921b2|minimal|false": 1
+    },
+    "gate": {
+      "#5921b2|minimal|true": 1
+    }
+  },
+  "_meta": {
+    "lastDecayTs": 1761893858583
+  }
+}
