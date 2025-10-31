@@ -17,7 +17,7 @@ need_jq(){
 
 ensure_logo_vectors(){
   # Keep seeding until 'logo' query returns at least 1 hit (max 20 tries)
-  for i in $(seq 1 20); do
+  for ((i=1;i<=20;i++)); do
     local cnt
     cnt="$(curl -s "$AI/vectors/search?q=logo" | jq '.items | length' 2>/dev/null || echo 0)"
     if [ "${cnt:-0}" -gt 0 ]; then
@@ -33,16 +33,16 @@ ensure_logo_vectors(){
 ship_until_preview_and_page(){
   # Ship up to 10 times until we have pageId AND preview path/url
   local lastPID=""
-  for i in $(seq 1 10); do
-    local R PID PATH URL
+  for ((i=1;i<=10;i++)); do
+    local R PID PREVIEW_PATH URL_VAL
     R="$(curl -s -X POST "$AI/instant" -H 'content-type: application/json' \
       --data '{"prompt":"warm vitest","sessionId":"vt1"}' || true)"
     PID="$(printf %s "$R" | jq -r '(.result.pageId // .pageId // empty)' 2>/dev/null || true)"
-    PATH="$(printf %s "$R" | jq -r '(.result.path // empty)' 2>/dev/null || true)"
-    URL="$(printf %s "$R" | jq -r '(.url // empty)' 2>/dev/null || true)"
+    PREVIEW_PATH="$(printf %s "$R" | jq -r '(.result.path // empty)' 2>/dev/null || true)"
+    URL_VAL="$(printf %s "$R" | jq -r '(.url // empty)' 2>/dev/null || true)"
 
     if [ -n "$PID" ]; then lastPID="$PID"; fi
-    if [ -n "$PID" ] && { [ -n "$PATH" ] || [ -n "$URL" ]; }; then
+    if [ -n "$PID" ] && { [ -n "$PREVIEW_PATH" ] || [ -n "$URL_VAL" ]; }; then
       # nudge proof so proof route/materializes
       curl -s "$AI/proof/$PID" >/dev/null || true
       echo "$PID"
@@ -62,10 +62,11 @@ ship_until_preview_and_page(){
 
 ensure_metrics_pages(){
   # Make sure metrics (url_costs.pages) show >= 1, poll up to 20 times
-  for i in $(seq 1 20); do
-    local ok pages
-    ok="$(curl -s "$AI/metrics" | jq -r '.ok' 2>/dev/null || echo false)"
-    pages="$(curl -s "$AI/metrics" | jq -r '.url_costs.pages // 0' 2>/dev/null || echo 0)"
+  for ((i=1;i<=20;i++)); do
+    local M ok pages
+    M="$(curl -s "$AI/metrics" || echo '{}')"
+    ok="$(printf %s "$M" | jq -r '.ok' 2>/dev/null || echo false)"
+    pages="$(printf %s "$M" | jq -r '.url_costs.pages // 0' 2>/dev/null || echo 0)"
     if [ "$ok" = "true" ] && [ "${pages:-0}" -ge 1 ]; then
       return 0
     fi
