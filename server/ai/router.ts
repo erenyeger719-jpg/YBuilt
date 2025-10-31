@@ -1638,7 +1638,8 @@ router.post("/act", async (req, res) => {
             pageId: keyNow,
             path: last.url,
             url: last.url,
-            sections: (prep as any).sections
+            sections: (prep as any).sections,
+            brand: (prep as any).brand, // include brand on cache hit too
           };
         }
 
@@ -1815,9 +1816,9 @@ ${og}
         try {
           if (
             process.env.QA_DEVICE_SNAPSHOTS === "1" &&
-            ((data as any)?.url || (data as any)?.path)
+            ((data as any)?.url || (data as any).path)
           ) {
-            const pageUrl = (data as any)?.url || (data as any)?.path;
+            const pageUrl = (data as any)?.url || (data as any).path;
             const abs = /^https?:\/\//i.test(pageUrl)
               ? pageUrl
               : `${baseUrl(req)}${pageUrl}`;
@@ -1967,7 +1968,13 @@ ${og}
         } catch {}
 
         // return pageId so client can hit KPIs/Proof directly
-        return { kind: "compose", pageId: keyNow, sections: (prep as any).sections, ...(data as any) };
+        return {
+          kind: "compose",
+          pageId: keyNow,
+          sections: (prep as any).sections,
+          brand: (prep as any).brand, // expose tokens/grid/motion/meta/proof
+          ...(data as any),
+        };
       }
 
       return { error: `unknown_action:${(action as any).kind}` };
@@ -2302,7 +2309,12 @@ router.post("/one", async (req, res) => {
       (result as any)?.sections ||
       ((usedAction as any)?.args?.sections) ||
       ((spec as any)?.layout?.sections || []);
-    const specOut = { ...spec, brandColor, copy, layout: { sections: sectionsUsed } };
+    const brandOut =
+      (result as any)?.brand
+        ? { ...(spec as any).brand, ...(result as any).brand }
+        : (spec as any).brand;
+
+    const specOut = { ...spec, brand: brandOut, brandColor, copy, layout: { sections: sectionsUsed } };
 
     // [BANDIT] mark success with real timing + path
     try {
@@ -2512,10 +2524,15 @@ router.post("/instant", async (req, res) => {
       (spec as any)?.layout?.sections ||
       (intent.sections || []);
 
+    const brandOut =
+      (result as any)?.brand
+        ? { ...(spec as any).brand, ...(result as any).brand }
+        : (spec as any).brand;
+
     return res.json({
       ok: true,
       source: "instant",
-      spec: { ...spec, brandColor, copy, layout: { sections: sectionsUsed } },
+      spec: { ...spec, brand: brandOut, brandColor, copy, layout: { sections: sectionsUsed } },
       url,
       result,
       chips: (chips as any).length ? chips : clarifyChips({ prompt, spec }),
@@ -2631,6 +2648,11 @@ router.post("/clarify/compose", async (req, res) => {
       (result as any)?.sections ||
       ((s as any)?.layout?.sections || []);
 
+    const brandOut =
+      (result as any)?.brand
+        ? { ...(s as any).brand, ...(result as any).brand }
+        : (s as any).brand;
+
     pushSignal(sessionId, {
       ts: Date.now(),
       kind: "clarify_compose",
@@ -2640,7 +2662,7 @@ router.post("/clarify/compose", async (req, res) => {
       ok: true,
       url,
       result,
-      spec: { ...s, copy, brandColor, layout: { sections: sectionsUsed } },
+      spec: { ...s, brand: brandOut, copy, brandColor, layout: { sections: sectionsUsed } },
       chips,
     });
   } catch (e) {
