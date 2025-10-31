@@ -57,7 +57,6 @@ import { checkCopyReadability } from "../qa/readability.guard.ts";
 import {
   addEvidence,
   rebuildEvidenceIndex,
-  searchEvidence as _searchEvidence,
 } from "../intent/evidence.ts";
 import { localizeCopy } from "../intent/phrases.ts";
 import { normalizeLocale } from "../intent/locales.ts";
@@ -773,14 +772,29 @@ router.post("/evidence/reindex", (_req, res) => {
   }
 });
 
-// optional: quick search for debugging
+// GET /api/ai/evidence/search?q=...
 router.get("/evidence/search", (req, res) => {
-  try {
-    const q = String(req.query.q || "");
-    return res.json({ ok: true, q, hits: _searchEvidence(q, 5) });
-  } catch {
-    return res.status(500).json({ ok: false, error: "evidence_search_failed" });
-  }
+  const q = String(req.query.q || "").trim().toLowerCase();
+  if (!q) return res.json({ ok: true, hits: [] });
+
+  // Assumes you store items like: { id, url, title, text }
+  // If your store is different, map accordingly.
+  const all: Array<{id:string;url:string;title:string;text:string}> =
+    (global as any).EVIDENCE_LIST || []; // or your real collection
+
+  const hits = all
+    .filter(e =>
+      (e.title && e.title.toLowerCase().includes(q)) ||
+      (e.text && e.text.toLowerCase().includes(q))
+    )
+    .map(e => ({
+      id: e.id,
+      url: e.url,
+      title: e.title,
+      snippet: (e.text || "").slice(0, 160)
+    }));
+
+  return res.json({ ok: true, hits });
 });
 
 // --- TasteNet-lite admin ---

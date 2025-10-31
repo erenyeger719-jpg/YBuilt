@@ -349,3 +349,5 @@
 {"kind":"ship","ts":1761889865177,"pageId":"ea435b106f9521c2e6ac1c27dc1201a00658d082","url":"/api/ai/previews/ea435b106f9521c2e6ac1c27dc1201a00658d082","sections":["cta-simple"],"brand":{"primary":"#6d28d9","tone":"minimal","dark":true},"scores":{"visual":79,"a11y":true,"bytes":null},"sessionId":"smoke"}
 {"kind":"convert","ts":1761889865214,"pageId":"ea435b106f9521c2e6ac1c27dc1201a00658d082"}
 {"kind":"convert","ts":1761889879857,"pageId":"ea435b106f9521c2e6ac1c27dc1201a00658d082"}
+{"kind":"ship","ts":1761891368805,"pageId":"3b39e9e8586f83ac14cbf1887d4ad4d4f583e9c2","url":"/api/ai/previews/3b39e9e8586f83ac14cbf1887d4ad4d4f583e9c2","sections":["hero-basic","cta-simple"],"brand":{"primary":"#6d28d9","tone":"minimal","dark":true},"scores":{"visual":79,"a11y":true,"bytes":null},"sessionId":"smoke"}
+{"kind":"convert","ts":1761891368865,"pageId":"3b39e9e8586f83ac14cbf1887d4ad4d4f583e9c2"}

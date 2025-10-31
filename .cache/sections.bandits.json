@@ -1,11 +1,11 @@
 {
   "all|hero-basic": {
     "hero-basic": {
-      "a": 15,
+      "a": 16,
       "b": 1,
-      "seen": 14,
-      "win": 14,
-      "last": 1761829932191
+      "seen": 15,
+      "win": 15,
+      "last": 1761891368874
     },
     "hero-basic@b": {
       "a": 1,
@@ -33,11 +33,11 @@
   },
   "all|cta-simple": {
     "cta-simple": {
-      "a": 29,
+      "a": 30,
       "b": 1,
-      "seen": 28,
-      "win": 28,
-      "last": 1761889879867
+      "seen": 29,
+      "win": 29,
+      "last": 1761891368874
     }
   },
   "founders|hero-basic": {
