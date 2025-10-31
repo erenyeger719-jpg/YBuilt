@@ -64,14 +64,5 @@
     },
     "tone": "minimal",
     "dark": false
-  },
-  "deep": {
-    "n": 1,
-    "sections": {
-      "hero-basic": 1,
-      "cta-simple": 1
-    },
-    "tone": "minimal",
-    "dark": false
   }
 }

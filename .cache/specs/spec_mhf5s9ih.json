@@ -1,0 +1,49 @@
+{
+  "id": "spec_mhf5s9ih",
+  "summary": "minimal saas",
+  "brand": {
+    "tone": "minimal",
+    "dark": false
+  },
+  "layout": {
+    "sections": [
+      "hero-basic",
+      "cta-simple"
+    ]
+  },
+  "confidence": 1,
+  "budget_used": 0,
+  "intent": {
+    "audience": "",
+    "goal": "waitlist",
+    "industry": "",
+    "vibe": "minimal",
+    "color_scheme": "light",
+    "sections": [
+      "hero-basic",
+      "cta-simple"
+    ]
+  },
+  "audience": "all",
+  "copy": {
+    "HERO_TITLE": "Clarity beats cleverness.",
+    "HERO_SUB": "Designed to remove decisions, not control.",
+    "CTA_LABEL": "Go minimal",
+    "CTA_HEAD": "Setup that respects time",
+    "F1_TITLE": "Clean building blocks",
+    "F1_SUB": "Small set, strong choices.",
+    "F2_TITLE": "Micro text wins",
+    "F2_SUB": "Small edits, instant clarity.",
+    "F3_TITLE": "See it as you ship",
+    "F3_SUB": "Ship once you can see it.",
+    "HEADLINE": "Minimal Saas",
+    "HERO_SUBHEAD": "Launch faster. Look credible. No fluff.",
+    "TAGLINE": "Simple • Fast • Credible",
+    "OG_TITLE": "Build Something People Want",
+    "OG_DESC": "Launch faster. Look credible. No fluff.",
+    "OG_IMAGE_URL": "/og/build-something-people-want-d4aae360a94d.svg",
+    "HERO_ILLUSTRATION_URL": "/vectors/ai-6.svg",
+    "FEATURES_ICON_1_URL": "/vectors/analytics-1.svg",
+    "FEATURES_ICON_2_URL": "/vectors/analytics.svg"
+  }
+}

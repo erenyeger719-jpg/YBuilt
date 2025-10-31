@@ -78,54 +78,6 @@ import { runArmy } from "./army.ts";
 import { mountCiteLock } from "./citelock.patch.ts";
 import { registerSelfTest } from "./selftest";
 
-// --- SUP V1: readiness gate + quotas + abuse intake ---
-const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 60_000);
-const RATE_MAX = Number(process.env.RATE_MAX ?? 120);
-const PREWARM_TOKEN = process.env.PREWARM_TOKEN ?? ""; // set in prod
-
-let READY = PREWARM_TOKEN ? false : true; // if token set, block until prewarmed
-
-type Bucket = { hits: number; resetAt: number };
-const buckets = new Map<string, Bucket>();
-
-function clientKey(req: import("express").Request) {
-  const fwd = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
-  const ip = fwd || (req.ip as string) || "0.0.0.0";
-  const sid = String(req.headers["x-session-id"] || (req.query as any).sessionId || "");
-  return `${ip}|${sid}`;
-}
-
-function readinessGate(
-  req: import("express").Request,
-  res: import("express").Response,
-  next: import("express").NextFunction
-) {
-  if (READY) return next();
-  if (req.headers["x-prewarm-token"] === PREWARM_TOKEN) return next();
-  return res.status(503).json({ ok: false, error: "warming_up" });
-}
-
-function rateLimitGuard(
-  req: import("express").Request,
-  res: import("express").Response,
-  next: import("express").NextFunction
-) {
-  if (req.headers["x-prewarm-token"] === PREWARM_TOKEN) return next();
-
-  const k = clientKey(req);
-  const now = Date.now();
-  let b = buckets.get(k);
-  if (!b || now >= b.resetAt) {
-    b = { hits: 0, resetAt: now + RATE_WINDOW_MS };
-    buckets.set(k, b);
-  }
-  b.hits += 1;
-  const remaining = Math.max(0, RATE_MAX - b.hits);
-  res.setHeader("X-RateLimit-Remaining", String(remaining));
-  if (b.hits > RATE_MAX) return res.status(429).json({ ok: false, error: "rate_limited" });
-  next();
-}
-
 // Nightly TasteNet retrain (best-effort, no-op if not due)
 try {
   maybeNightlyRetrain();
@@ -333,38 +285,6 @@ export function pickTierByConfidence(c = 0.6) {
 }
 
 const router = express.Router();
-
-// attach gates early
-router.use(readinessGate);
-router.use(rateLimitGuard);
-
-// POST /api/ai/abuse/report  → JSONL sink under .cache/abuse/YYYY-MM-DD.jsonl
-router.post("/abuse/report", express.json(), (req, res) => {
-  const day = new Date().toISOString().slice(0, 10);
-  const dir = path.join(".cache", "abuse");
-  fs.mkdirSync(dir, { recursive: true });
-  const entry = {
-    at: new Date().toISOString(),
-    ip: String((req.headers["x-forwarded-for"] as string) || req.ip).split(",")[0].trim(),
-    ua: req.headers["user-agent"] || "",
-    path: (req.body as any)?.path || req.path,
-    reason: (req.body as any)?.reason || "unknown",
-    sessionId: (req.body as any)?.sessionId || "",
-    notes: (req.body as any)?.notes || "",
-  };
-  fs.appendFileSync(path.join(dir, `${day}.jsonl`), JSON.stringify(entry) + "\n");
-  res.json({ ok: true });
-});
-
-// POST /api/ai/__ready  → flip READY once prewarm passes
-router.post("/__ready", (req, res) => {
-  if (PREWARM_TOKEN && req.headers["x-prewarm-token"] === PREWARM_TOKEN) {
-    READY = true;
-    return res.json({ ok: true, ready: true });
-  }
-  return res.status(403).json({ ok: false, error: "forbidden" });
-});
-
 // mount CiteLock shim
 mountCiteLock(router);
 
