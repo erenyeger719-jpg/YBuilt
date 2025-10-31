@@ -150,6 +150,26 @@ bash scripts/ai-sup-deep.sh
 step "Reset + Warm (pre-vitest)"
 warm
 
+# --- Instant ship → capture ids (fixed) ---
+resp="$(curl -s -X POST "$AI/instant" -H 'content-type: application/json' -H 'x-ship-preview: 1' \
+  --data '{"prompt":"sanity","sessionId":"pre"}')"
+
+specId="$(jq -r '.spec.id' <<<"$resp")"
+pageId="$(jq -r '.result.pageId' <<<"$resp")"
+
+[ -n "$specId" ] || { echo "❌ no specId from /instant"; exit 1; }
+echo "✅ spec id=$specId"
+
+# --- OG present (try specId, then pageId) ---
+if curl -s "$AI/previews/$specId" | grep -qi 'og:title'; then
+  echo "✅ OG present (specId)"
+elif [ -n "$pageId" ] && curl -s "$AI/previews/$pageId" | grep -qi 'og:title'; then
+  echo "✅ OG present (pageId)"
+else
+  echo "❌ OG meta not found"
+  exit 1
+fi
+
 # 4) Vitest — run files sequentially to avoid cross-file races
 for f in \
   server/tests/ai.scenarios.test.ts \
