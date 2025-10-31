@@ -269,6 +269,12 @@ function hasRiskyClaims(s: string) {
   return superlative.test(p) || percent.test(p) || multiplier.test(p);
 }
 
+// NEW helper — strict proof toggle
+function isProofStrict(req: express.Request) {
+  return process.env.PROOF_STRICT === "1" ||
+         String(req.headers["x-proof-strict"] || "").toLowerCase() === "1";
+}
+
 // Node fetch guard (explicit, to avoid silent failure under Node <18)
 function requireFetch(): typeof fetch {
   const f = (globalThis as any).fetch;
@@ -2088,6 +2094,17 @@ router.post("/one", async (req, res) => {
 
     // B) flag risky prompts so strict mode can block even if copy sanitizes later
     (spec as any).__promptRisk = hasRiskyClaims(prompt);
+
+    // NEW: early strict gate on prompt risk
+    if (isProofStrict(req) && (spec as any).__promptRisk) {
+      return res.json({
+        ok: true,
+        spec,
+        plan: [],
+        ran: null,
+        result: { kind: "compose", error: "proof_gate_fail", promptRisk: true }
+      });
+    }
 
     // Deterministic copy (cheap)
     let copy = (fit as any).copy || cheapCopy(prompt, (fit as any).intent);
