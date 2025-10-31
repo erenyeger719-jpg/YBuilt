@@ -238,6 +238,13 @@ function childHeaders(req: express.Request) {
   if (test === "1") h["x-test"] = "1";
   const aud = String(req.headers["x-audience"] || "");
   if (aud) h["x-audience"] = aud;
+
+  // ✅ pass through strict toggles so /act can enforce them
+  const proofStrict = String(req.headers["x-proof-strict"] || "").toLowerCase();
+  if (proofStrict === "1") h["x-proof-strict"] = "1";
+  const deviceGate = String(req.headers["x-device-gate"] || "").toLowerCase(); // "", "on", "strict"
+  if (deviceGate) h["x-device-gate"] = deviceGate;
+
   return h;
 }
 
@@ -1026,21 +1033,23 @@ router.post("/act", async (req, res) => {
         const sectionsPersonal = segmentSwapSections(sectionsIn, audienceKey);
 
         // Optional: seed bandit pool with sibling variants when provided
-        try {
-          const hints = action.args?.variantHints;
-          if (hints && typeof hints === "object") {
-            for (const id of sectionsIn) {
-              const base = String(id).split("@")[0];
-              const siblings = Array.isArray(hints[base]) ? hints[base] : [];
-              if (siblings.length) seedVariants(base, audienceKey, siblings);
+        if (!testMode) {
+          try {
+            const hints = action.args?.variantHints;
+            if (hints && typeof hints === "object") {
+              for (const id of sectionsIn) {
+                const base = String(id).split("@")[0];
+                const siblings = Array.isArray(hints[base]) ? hints[base] : [];
+                if (siblings.length) seedVariants(base, audienceKey, siblings);
+              }
             }
-          }
-        } catch {}
+          } catch {}
+        }
 
-        // Bandit: pick section variants per audience (safe no-op if none)
-        const banditSections = sectionsPersonal.map((id: string) =>
-          pickVariant(id, audienceKey)
-        );
+        // Bandit: pick section variants per audience (freeze base in test mode)
+        const banditSections = testMode
+          ? sectionsPersonal.map((id: string) => String(id).split("@")[0])
+          : sectionsPersonal.map((id: string) => pickVariant(id, audienceKey));
 
         const dark = !!(spec as any)?.brand?.dark;
         const title = String((spec as any)?.summary || "Preview");
@@ -1929,6 +1938,11 @@ router.post("/one", async (req, res) => {
     const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
     const key = normalizeKey(prompt);
 
+    // TEST MODE freeze (deterministic)
+    const testMode =
+      String((req.headers as any)["x-test"] || "").toLowerCase() === "1" ||
+      process.env.NODE_ENV === "test";
+
     // [BANDIT] vars for logging outcome
     let labelPath: "rules" | "local" | "cloud" = "rules";
     let cloudUsed = false;
@@ -2008,21 +2022,24 @@ router.post("/one", async (req, res) => {
       }
     }
 
-    // Apply priors from brand DNA (soft influence)
-    const prior = suggestFromDNA(sessionId) || {};
-    if (!(fit as any).intent) (fit as any).intent = {};
-    if ((prior as any).brand?.tone && !(fit as any).intent.vibe)
-      (fit as any).intent.vibe = (prior as any).brand.tone;
-    if (
-      typeof (prior as any).brand?.dark === "boolean" &&
-      !(fit as any).intent.color_scheme
-    ) {
-      (fit as any).intent.color_scheme = (prior as any).brand.dark ? "dark" : "light";
-    }
-    if (Array.isArray((prior as any).sections) && (prior as any).sections.length) {
-      const cur = new Set(((fit as any).intent.sections || []) as string[]);
-      for (const s of (prior as any).sections) cur.add(s);
-      (fit as any).intent.sections = Array.from(cur);
+    // Apply priors from brand DNA (soft influence) — SKIP in test mode
+    let prior: any = {};
+    if (!testMode) {
+      prior = suggestFromDNA(sessionId) || {};
+      if (!(fit as any).intent) (fit as any).intent = {};
+      if ((prior as any).brand?.tone && !(fit as any).intent.vibe)
+        (fit as any).intent.vibe = (prior as any).brand.tone;
+      if (
+        typeof (prior as any).brand?.dark === "boolean" &&
+        !(fit as any).intent.color_scheme
+      ) {
+        (fit as any).intent.color_scheme = (prior as any).brand.dark ? "dark" : "light";
+      }
+      if (Array.isArray((prior as any).sections) && (prior as any).sections.length) {
+        const cur = new Set(((fit as any).intent.sections || []) as string[]);
+        for (const s of (prior as any).sections) cur.add(s);
+        (fit as any).intent.sections = Array.from(cur);
+      }
     }
 
     const { intent, confidence: c0, chips } = fit as any;
@@ -2078,22 +2095,26 @@ router.post("/one", async (req, res) => {
     }
     const actions = nextActions(spec, { chips });
 
-    // Try to reuse a shipped spec (retrieval) before composing
-    try {
-      const reuse = await nearest(prompt);
-      retrMark(Boolean(reuse));
-      if (reuse) {
-        const reusedSections =
-          Array.isArray((reuse as any).sections) && (reuse as any).sections.length
-            ? (reuse as any).sections
-            : (spec as any)?.layout?.sections || [];
-        (spec as any).layout = { sections: reusedSections };
-        const mergedCopy = { ...((reuse as any).copy || {}), ...(copy || {}) };
-        copy = mergedCopy;
-        if (!brandColor && (reuse as any)?.brand?.primary)
-          brandColor = (reuse as any).brand.primary;
-      }
-    } catch {}
+    // Try to reuse a shipped spec (retrieval) before composing — SKIP in test mode
+    if (!testMode) {
+      try {
+        const reuse = await nearest(prompt);
+        retrMark(Boolean(reuse));
+        if (reuse) {
+          const reusedSections =
+            Array.isArray((reuse as any).sections) && (reuse as any).sections.length
+              ? (reuse as any).sections
+              : (spec as any)?.layout?.sections || [];
+          (spec as any).layout = { sections: reusedSections };
+          const mergedCopy = { ...((reuse as any).copy || {}), ...(copy || {}) };
+          copy = mergedCopy;
+          if (!brandColor && (reuse as any)?.brand?.primary)
+            brandColor = (reuse as any).brand.primary;
+        }
+      } catch {}
+    } else {
+      retrMark(false);
+    }
 
     if (!actions.length)
       return res.json({ ok: true, spec, actions: [], note: "nothing_to_do" });
@@ -2121,17 +2142,19 @@ router.post("/one", async (req, res) => {
     let result = (actData as any)?.result;
 
     if ((result as any)?.kind === "retrieve" && Array.isArray((result as any).sections)) {
+      const composeArgs: any = {
+        sections: (result as any).sections,
+        copy,
+        brand: { primary: brandColor },
+        breadth, // ← NEW
+      };
+      if (!testMode) composeArgs.variantHints = VARIANT_HINTS;
+
       const composeAction = {
         kind: "compose",
         cost_est: 3,
         gain_est: 20,
-        args: {
-          sections: (result as any).sections,
-          copy,
-          brand: { primary: brandColor },
-          variantHints: VARIANT_HINTS,
-          breadth, // ← NEW
-        },
+        args: composeArgs,
       };
       {
         const _h2 = childHeaders(req);
@@ -2436,7 +2459,7 @@ router.post("/clarify/compose", async (req, res) => {
     // Get clarifier chips and apply them locally
     const chips = clarifyChips({ prompt, spec: base as any });
     let s: any = base;
-    for (const c of chips as any[]) s = applyChipLocal(s, c);
+    for (const c of (chips as any[])) s = applyChipLocal(s, c);
 
     // Compose using the existing budgeted pipeline
     let copy =
