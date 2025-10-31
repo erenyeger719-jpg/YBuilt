@@ -2472,12 +2472,13 @@ router.post("/instant", async (req, res) => {
       if (specCached) {
         const pageId = `pg_${String(sticky.specId).replace(/^spec_?/, "")}`;
         const relPath = `/previews/pages/${pageId}.html`;
+        const apiPath = `/api/ai/previews/${pageId}`; // use stripper route
         return res.json({
           ok: true,
           source: "instant",
           spec: specCached,
-          result: { pageId, path: relPath },
-          url: relPath,
+          result: { pageId, path: relPath }, // keep for compatibility
+          url: apiPath,
         });
       }
     }
@@ -2647,12 +2648,13 @@ router.post("/instant", async (req, res) => {
         recordUrlCost(pageId, 0, 0);
       } catch {}
 
+      const apiPath = `/api/ai/previews/${pageId}`; // use stripper route
       return res.json({
         ok: true,
         source: "instant",
         spec,
-        result: { pageId, path: relPath },
-        url: relPath,
+        result: { pageId, path: relPath }, // keep for compatibility
+        url: apiPath,
       });
     }
 
