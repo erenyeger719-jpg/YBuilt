@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-API="${API:-http://localhost:3000}"
+API="${API:-http://localhost:5050}"
 AI="$API/api/ai"
 
 section(){ echo; echo "• $*"; }
@@ -49,6 +49,7 @@ READYSPEC='{"brand":{"dark":true},"layout":{"sections":["hero-basic","cta-simple
 assert "retrieve ok" \
 "curl -s -X POST '$AI/act' -H 'x-audience: founders' -H 'content-type: application/json' \
  --data '{\"sessionId\":\"smk3\",\"spec\":'$READYSPEC',\"action\":{\"kind\":\"retrieve\"}}' | jq -er '.ok==true or .result.kind==\"retrieve\"'"
+# Why: your API replies ok:true in some modes instead of returning {result:{kind:'retrieve'}}. We accept either.
 
 section "Metrics surface"
 assert "metrics present" "curl -s '$AI/metrics' | jq -er '.ok==true'"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-API="${API:-http://localhost:3000}"
+API="${API:-http://localhost:5050}"
 AI="$API/api/ai"
 
 section(){ echo; echo "• $*"; }
