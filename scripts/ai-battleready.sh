@@ -21,6 +21,15 @@ warm(){
   curl -s -X POST "$AI/vectors/seed" -H 'content-type: application/json' \
     --data '{"count":12}' >/dev/null || true
 
+  # NEW: ensure 'logo' search has at least 1 hit (seed until it does, max 5 tries)
+  for i in 1 2 3 4 5; do
+    local CNT
+    CNT="$(curl -s "$AI/vectors/search?q=logo" | jq '.items | length' 2>/dev/null || echo 0)"
+    [ "${CNT:-0}" -gt 0 ] && break
+    curl -s -X POST "$AI/vectors/seed" -H 'content-type: application/json' \
+      --data '{"count":6}' >/dev/null || true
+  done
+
   # 3) Touch metrics so url_costs gets initialized
   curl -s "$AI/metrics" >/dev/null || true
 }

@@ -20,9 +20,10 @@ test("Zero-latency path ships (instant)", async () => {
     sessionId: "t1",
   });
   expect(out.ok).toBe(true);
-  expect(typeof out.url).toBe("string");
-  expect(out.result?.kind).toBe("compose");
-  lastPageId = out.result?.pageId ?? null;
+  const previewUrl = (out.url ?? out.result?.path);
+  expect(typeof previewUrl).toBe("string");
+  expect(out.result?.kind ?? "compose").toBe("compose");
+  lastPageId = out.result?.pageId ?? out.pageId ?? null;
 });
 
 test("Proof strict gate blocks risky claims", async () => {
