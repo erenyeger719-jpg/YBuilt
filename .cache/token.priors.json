@@ -1,8 +1,14 @@
 {
-  "global": {},
-  "perSession": {},
+  "global": {
+    "#5921b2|minimal|true": 1
+  },
+  "perSession": {
+    "t1": {
+      "#5921b2|minimal|true": 1
+    }
+  },
   "seenGlobal": {
-    "#5921b2|minimal|true": 4,
+    "#5921b2|minimal|true": 5,
     "#491b92|minimal|true": 3,
     "#5921b2|minimal|false": 1,
     "#491b92|minimal|false": 1,
@@ -10,17 +16,22 @@
     "#1e51c1|minimal|false": 1,
     "#19429e|minimal|false": 1,
     "#491b92|serious|false": 1,
-    "#3c1678|minimal|true": 1
+    "#3c1678|minimal|true": 2,
+    "#311262|minimal|true": 1,
+    "#280f50|minimal|true": 1
   },
   "seenPerSession": {
     "smk2": {
       "#5921b2|minimal|true": 1,
       "#491b92|minimal|true": 1,
-      "#3c1678|minimal|true": 1
+      "#3c1678|minimal|true": 1,
+      "#311262|minimal|true": 1,
+      "#280f50|minimal|true": 1
     },
     "deep2": {
       "#5921b2|minimal|true": 1,
-      "#491b92|minimal|true": 1
+      "#491b92|minimal|true": 1,
+      "#3c1678|minimal|true": 1
     },
     "p2": {
       "#5921b2|minimal|false": 1,
@@ -38,6 +49,9 @@
       "#5921b2|minimal|true": 1,
       "#491b92|minimal|true": 1,
       "#491b92|serious|false": 1
+    },
+    "t1": {
+      "#5921b2|minimal|true": 1
     }
   },
   "_meta": {

@@ -2692,7 +2692,14 @@ router.post("/chips/apply", (req, res) => {
 router.post("/persona/add", express.json(), async (req, res) => {
   const { text, label } = (req.body || {}) as any;
   if (!text) return res.status(400).json({ ok: false, error: "text required" });
-  await addExample("persona", { text, label: label ?? null } as any);
+
+  // addExample(ns, prompt, data)
+  await addExample("persona", String(text), {
+    sections: [],
+    copy: { __persona: String(text), LABEL: label ?? null },
+    brand: {},
+  });
+
   return res.json({ ok: true });
 });
 

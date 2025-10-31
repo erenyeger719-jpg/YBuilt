@@ -44,12 +44,17 @@ assert "evidence add+search" \
  --data '{\"id\":\"t1\",\"url\":\"https://example.com\",\"title\":\"Example\",\"text\":\"Minimal landing pages are common.\"}' | jq -er '.ok==true' && \
  curl -s '$AI/evidence/search?q=minimal' | jq -er '.ok==true'"
 
+# • Persona retrieve (seed first so retrieval isn't empty)
 section "Persona retrieve"
-READYSPEC='{"brand":{"dark":true},"layout":{"sections":["hero-basic","cta-simple"]},"copy":{"HEADLINE":"Hi"}}'
+assert "seed retrieval examples" \
+"curl -s -X POST '$AI/seed' -H 'content-type: application/json' >/dev/null"
+
+assert "add persona example" \
+"curl -s -X POST '$AI/persona/add' -H 'content-type: application/json' \
+ --data '{\"text\":\"founder who likes dark saas minimal\",\"label\":\"founder\"}' >/dev/null"
+
 assert "retrieve ok" \
-"curl -s -X POST '$AI/act' -H 'x-audience: founders' -H 'content-type: application/json' \
- --data '{\"sessionId\":\"smk3\",\"spec\":'$READYSPEC',\"action\":{\"kind\":\"retrieve\"}}' | jq -er '.ok==true or .result.kind==\"retrieve\"'"
-# Why: your API replies ok:true in some modes instead of returning {result:{kind:'retrieve'}}. We accept either.
+"curl -s '$AI/persona/retrieve?q=founder&k=5' | jq -e '.items | length > 0' >/dev/null"
 
 section "Metrics surface"
 assert "metrics present" "curl -s '$AI/metrics' | jq -er '.ok==true'"

@@ -1,21 +1,21 @@
 {
   "smk2": {
+    "n": 5,
+    "sections": {
+      "hero-basic": 5,
+      "cta-simple": 5
+    },
+    "primary": "#280f50",
+    "tone": "minimal",
+    "dark": true
+  },
+  "deep2": {
     "n": 3,
     "sections": {
       "hero-basic": 3,
       "cta-simple": 3
     },
     "primary": "#3c1678",
-    "tone": "minimal",
-    "dark": true
-  },
-  "deep2": {
-    "n": 2,
-    "sections": {
-      "hero-basic": 2,
-      "cta-simple": 2
-    },
-    "primary": "#491b92",
     "tone": "minimal",
     "dark": true
   },
@@ -58,5 +58,14 @@
     "primary": "#491b92",
     "tone": "serious",
     "dark": false
+  },
+  "t1": {
+    "n": 1,
+    "sections": {
+      "cta-simple": 1
+    },
+    "primary": "#5921b2",
+    "tone": "minimal",
+    "dark": true
   }
 }
