@@ -153,7 +153,8 @@
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.27",
     "zod": "^3.25.76",
-    "zod-validation-error": "^3.4.0"
+    "zod-validation-error": "^3.4.0",
+    "baseline-browser-mapping": "^1.0.1"
   },
   "devDependencies": {
     "@replit/vite-plugin-cartographer": "^0.3.1",
