@@ -2688,6 +2688,26 @@ router.post("/chips/apply", (req, res) => {
   }
 });
 
+// --- Persona: add example ---
+router.post("/persona/add", express.json(), async (req, res) => {
+  const { text, label } = (req.body || {}) as any;
+  if (!text) return res.status(400).json({ ok: false, error: "text required" });
+  await addExample("persona", { text, label: label ?? null } as any);
+  return res.json({ ok: true });
+});
+
+// --- Persona: retrieve matches ---
+router.get("/persona/retrieve", async (req, res) => {
+  const q = String(req.query.q || "");
+  const k = Math.min(parseInt(String(req.query.k || "5"), 10) || 5, 20);
+  try {
+    const items = await nearest("persona" as any, q as any, k as any);
+    return res.json({ ok: true, items });
+  } catch {
+    return res.json({ ok: true, items: [] });
+  }
+});
+
 // --- seed retrieval with a few good examples (one-shot) ---
 router.post("/seed", async (_req, res) => {
   try {

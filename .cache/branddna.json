@@ -1,11 +1,11 @@
 {
   "smk2": {
-    "n": 2,
+    "n": 3,
     "sections": {
-      "hero-basic": 2,
-      "cta-simple": 2
+      "hero-basic": 3,
+      "cta-simple": 3
     },
-    "primary": "#491b92",
+    "primary": "#3c1678",
     "tone": "minimal",
     "dark": true
   },
@@ -47,6 +47,16 @@
     },
     "primary": "#19429e",
     "tone": "minimal",
+    "dark": false
+  },
+  "sup-73759": {
+    "n": 3,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 3
+    },
+    "primary": "#491b92",
+    "tone": "serious",
     "dark": false
   }
 }
