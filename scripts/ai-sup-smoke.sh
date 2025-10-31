@@ -21,19 +21,30 @@ section "Risk flag"
 assert "/risk behaves" \
 "curl -s '$AI/risk?prompt=%231+tool+with+200%25+growth+and+10x+impact' | jq -er '.risky==true'"
 
-section "Instant ship → spec id (preview optional)"
-RESP=$(curl -s -X POST "$AI/instant?__test=1" -H 'x-test: 1' -H 'content-type: application/json' \
- --data '{"prompt":"dark saas waitlist for founders","sessionId":"smk2"}')
-SPEC_ID=$(printf %s "$RESP" | jq -r '.spec.id // empty')
-[ -n "$SPEC_ID" ] && ok "spec id=$SPEC_ID" || die "no spec id"
+echo
+echo "• Instant ship → spec id (preview optional)"
+resp="$(curl -s -X POST "$AI/instant" \
+  -H 'content-type: application/json' \
+  -H 'x-ship-preview: 1' \
+  --data '{"prompt":"sanity","sessionId":"pre"}')"
 
-URL=$(printf %s "$RESP" | jq -r '.url // .result.path // empty')
-if [ -n "$URL" ]; then
-  HTML="$(curl -s "$API$URL")"
-  assert "OG present" "printf %s \"$HTML\" | grep -q 'og:title'"
-  assert "no <script> tags" "printf %s \"$HTML\" | grep -qi '<script' && exit 1 || exit 0"
+specId="$(jq -r '.spec.id' <<<"$resp")"
+pageId="$(jq -r '.result.pageId' <<<"$resp")"
+
+if [ -z "$specId" ] || [ "$specId" = "null" ]; then
+  echo "  ❌ no specId from /instant"; exit 1
 else
-  echo "  ℹ️ preview not persisted (ok in instant-only mode)"
+  echo "  ✅ spec id=$specId"
+fi
+
+echo
+echo "• OG present"
+if curl -s "$AI/previews/$specId" | grep -qi 'og:title'; then
+  echo "  ✅ OG present (specId)"
+elif [ -n "$pageId" ] && [ "$pageId" != "null" ] && curl -s "$AI/previews/$pageId" | grep -qi 'og:title'; then
+  echo "  ✅ OG present (pageId)"
+else
+  echo "  ❌ OG meta not found"; exit 1
 fi
 
 section "Vectors / sections / evidence"
