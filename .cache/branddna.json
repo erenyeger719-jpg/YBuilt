@@ -1,11 +1,11 @@
 {
   "smk2": {
-    "n": 6,
+    "n": 7,
     "sections": {
-      "hero-basic": 6,
-      "cta-simple": 6
+      "hero-basic": 7,
+      "cta-simple": 7
     },
-    "primary": "#210c42",
+    "primary": "#1b0a36",
     "tone": "minimal",
     "dark": true
   },
@@ -39,13 +39,13 @@
     "dark": true
   },
   "dna1": {
-    "n": 6,
+    "n": 12,
     "sections": {
-      "hero-basic": 5,
-      "features-3col": 3,
-      "cta-simple": 6
+      "hero-basic": 8,
+      "features-3col": 4,
+      "cta-simple": 12
     },
-    "primary": "#0b1e48",
+    "primary": "#030915",
     "tone": "minimal",
     "dark": false
   },
@@ -60,11 +60,11 @@
     "dark": false
   },
   "t1": {
-    "n": 2,
+    "n": 3,
     "sections": {
-      "cta-simple": 2
+      "cta-simple": 3
     },
-    "primary": "#491b92",
+    "primary": "#3c1678",
     "tone": "minimal",
     "dark": true
   }

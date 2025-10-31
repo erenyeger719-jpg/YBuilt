@@ -56,11 +56,11 @@
     "ts": 1761907931674
   },
   "#3c1678|1|minimal": {
-    "seen": 2,
-    "win": 0,
-    "goodSeen": 2,
-    "goodWin": 0,
-    "ts": 1761912262182
+    "seen": 4,
+    "win": 1,
+    "goodSeen": 4,
+    "goodWin": 1,
+    "ts": 1761913116181
   },
   "#311262|1|minimal": {
     "seen": 1,
@@ -110,5 +110,54 @@
     "goodSeen": 1,
     "goodWin": 0,
     "ts": 1761912713228
+  },
+  "#09193b|1|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761913116251
+  },
+  "#071530|1|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761913116316
+  },
+  "#061127|1|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761913116356
+  },
+  "#050e20|1|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761913116396
+  },
+  "#040b1a|1|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761913116437
+  },
+  "#030915|0|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761913116484
+  },
+  "#1b0a36|1|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761913116858
   }
 }

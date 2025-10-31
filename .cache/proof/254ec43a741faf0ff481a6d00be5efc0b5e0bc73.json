@@ -1,0 +1,82 @@
+{
+  "pageId": "254ec43a741faf0ff481a6d00be5efc0b5e0bc73",
+  "url": "/api/ai/previews/254ec43a741faf0ff481a6d00be5efc0b5e0bc73",
+  "a11y": true,
+  "visual": 79,
+  "facts": {
+    "HEADLINE": {
+      "field": "HEADLINE",
+      "claim": "Build something people want.",
+      "status": "unknown",
+      "reason": "no_evidence"
+    },
+    "HERO_SUBHEAD": {
+      "field": "HERO_SUBHEAD",
+      "claim": "Launch fast. Iterate faster.",
+      "status": "unknown",
+      "reason": "no_evidence"
+    },
+    "TAGLINE": {
+      "field": "TAGLINE",
+      "claim": "Quiet speed by default.",
+      "status": "unknown",
+      "reason": "no_evidence"
+    }
+  },
+  "fact_counts": {
+    "unknown": 3
+  },
+  "proof_ok": true,
+  "cls_est": 0.05,
+  "lcp_est_ms": 2080,
+  "perf_matrix": {
+    "base": {
+      "cls_est": 0.05,
+      "lcp_est_ms": 1200,
+      "reasons": {
+        "images_without_size": 0,
+        "webfonts": 0,
+        "css_stylesheets": 0,
+        "inline_js_kb": 0,
+        "font_display_swap": false
+      }
+    },
+    "rows": [
+      {
+        "device": "mobile",
+        "theme": "light",
+        "net": "fast",
+        "cls_est": 0.05,
+        "lcp_est_ms": 1200
+      },
+      {
+        "device": "mobile",
+        "theme": "dark",
+        "net": "slow",
+        "cls_est": 0.05,
+        "lcp_est_ms": 2080
+      },
+      {
+        "device": "desktop",
+        "theme": "light",
+        "net": "fast",
+        "cls_est": 0.05,
+        "lcp_est_ms": 1200
+      },
+      {
+        "device": "desktop",
+        "theme": "dark",
+        "net": "slow",
+        "cls_est": 0.05,
+        "lcp_est_ms": 2080
+      }
+    ],
+    "worst": {
+      "device": "mobile",
+      "theme": "dark",
+      "net": "slow",
+      "cls_est": 0.05,
+      "lcp_est_ms": 2080
+    }
+  }
+}
