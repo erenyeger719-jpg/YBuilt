@@ -46,13 +46,13 @@
     "#491b92|minimal|true": 1.977159968434246,
     "#3c1678|minimal|true": 1.977159968434246,
     "#311262|minimal|true": 1.977159968434246,
-    "#6d28d9|minimal|true": 46.93147990530274,
-    "#5921b2|minimal|false": 6.954319936868492,
+    "#6d28d9|minimal|true": 49.93147990530274,
+    "#5921b2|minimal|false": 7.954319936868492,
     "#6d28d9|minimal|false": 41.97715996843425,
     "#c98209|playful|false": 2.977159968434246,
     "#8a46cb|playful|true": 0.9771599684342459,
     "#f59e0b|playful|false": 0.9771599684342459,
-    "#a855f7|playful|true": 0.9771599684342459,
+    "#a855f7|playful|true": 1.977159968434246,
     "#1e51c1|serious|false": 0.9771599684342459,
     "#6d28d9|serious|true": 0.9771599684342459,
     "#2563eb|serious|false": 14.977159968434247,
@@ -84,7 +84,7 @@
     "#07020e|minimal|false": 5,
     "#a56b07|playful|false": 10,
     "#2563eb|minimal|true": 1,
-    "#296fff|serious|false": 4,
+    "#296fff|serious|false": 5,
     "#296fff|minimal|true": 3
   },
   "seenPerSession": {
@@ -284,6 +284,18 @@
     },
     "soak": {
       "#2563eb|serious|false": 14
+    },
+    "det": {
+      "#6d28d9|minimal|true": 3
+    },
+    "proof": {
+      "#296fff|serious|false": 1
+    },
+    "gate": {
+      "#a855f7|playful|true": 1
+    },
+    "noj": {
+      "#5921b2|minimal|false": 1
     }
   },
   "_meta": {

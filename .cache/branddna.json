@@ -348,5 +348,44 @@
     "primary": "#2563eb",
     "tone": "serious",
     "dark": false
+  },
+  "det": {
+    "n": 3,
+    "sections": {
+      "cta-simple": 3,
+      "hero-basic": 1
+    },
+    "primary": "#6d28d9",
+    "tone": "minimal",
+    "dark": true
+  },
+  "proof": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "features-3col": 1,
+      "cta-simple": 1
+    },
+    "primary": "#296fff",
+    "tone": "serious",
+    "dark": false
+  },
+  "gate": {
+    "n": 1,
+    "sections": {
+      "cta-simple": 1
+    },
+    "primary": "#a855f7",
+    "tone": "playful",
+    "dark": true
+  },
+  "noj": {
+    "n": 1,
+    "sections": {
+      "cta-simple": 1
+    },
+    "primary": "#5921b2",
+    "tone": "minimal",
+    "dark": false
   }
 }

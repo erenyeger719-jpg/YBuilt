@@ -803,7 +803,7 @@ router.get("/vectors/search", async (req, res) => {
       const vibe = (a.vibe || []).map(String);
       const ind = (a.industry || []).map(String);
 
-    let overlap = 0;
+      let overlap = 0;
       for (const t of tags.concat(vibe, ind)) {
         if (want.has(String(t).toLowerCase())) overlap += 1;
       }
@@ -988,6 +988,11 @@ router.post("/act", async (req, res) => {
           ? action.args.sections
           : spec?.layout?.sections || [];
 
+        // --- TEST MODE (compose): deterministic guard for randomness ---
+        const testMode =
+          String(req.headers["x-test"] || "").toLowerCase() === "1" ||
+          process.env.NODE_ENV === "test";
+
         // Auto-pack / explicit pack selection
         try {
           const ranked = listPacksRanked();
@@ -1108,32 +1113,34 @@ router.post("/act", async (req, res) => {
           }
         } catch {}
 
-        // ⬇️ NEW: synthesize vector assets, merge into copy (non-destructive)
-        try {
-          const breadthIn = String((action as any)?.args?.breadth || "").toLowerCase();
-          const wantMax = breadthIn === "max";
-
-          const { copyPatch } = await synthesizeAssets({
-            brand: {
-              ...(prep.brand || {}),
-              primary:
-                (prep.brand as any)?.primary ||
-                (spec as any)?.brandColor ||
-                (spec as any)?.brand?.primary,
-            },
-            tags: ["saas", "conversion"],
-            count: wantMax ? 8 : 4,
-          } as any);
-          Object.assign(copyWithDefaults, copyPatch);
-
-          // remember shipped vector assets for future suggestions
+        // ⬇️ NEW: synthesize vector assets, merge into copy (non-destructive) — SKIP IN TEST
+        if (!testMode) {
           try {
-            rememberVectorAssets({
-              copy: copyWithDefaults,
-              brand: (prep as any).brand,
+            const breadthIn = String((action as any)?.args?.breadth || "").toLowerCase();
+            const wantMax = breadthIn === "max";
+
+            const { copyPatch } = await synthesizeAssets({
+              brand: {
+                ...(prep.brand || {}),
+                primary:
+                  (prep.brand as any)?.primary ||
+                  (spec as any)?.brandColor ||
+                  (spec as any)?.brand?.primary,
+              },
+              tags: ["saas", "conversion"],
+              count: wantMax ? 8 : 4,
             } as any);
+            Object.assign(copyWithDefaults, copyPatch);
+
+            // remember shipped vector assets for future suggestions
+            try {
+              rememberVectorAssets({
+                copy: copyWithDefaults,
+                brand: (prep as any).brand,
+              } as any);
+            } catch {}
           } catch {}
-        } catch {}
+        }
 
         // Keep designer context accessible for later KPI record
         let tokens: any;
@@ -1217,38 +1224,40 @@ router.post("/act", async (req, res) => {
             eval1 = evaluateDesign(tokens);
           }
 
-          // D. Extra breadth: best-of-N tokens (deterministic); N grows if breadth=max
-          try {
-            let evalBest = evaluateDesign(tokens);
-            const primary = (tokens as any).palette?.primary || primaryIn;
-            const baseJitters = wantMax ? [0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10] : [0.03, 0.06];
+          // D. Extra breadth: best-of-N tokens (deterministic); N grows if breadth=max — SKIP IN TEST
+          if (!testMode) {
+            try {
+              let evalBest = evaluateDesign(tokens);
+              const primary = (tokens as any).palette?.primary || primaryIn;
+              const baseJitters = wantMax ? [0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10] : [0.03, 0.06];
 
-            if ((evalBest as any).visualScore < 72 || wantMax) {
-              const jittered = baseJitters.map((j) =>
-                tokenMixer({ primary, dark: darkIn as boolean, tone: toneIn as string, jitter: j })
-              );
-              const cands = [{ t: tokens, ev: evalBest }]
-                .concat(jittered.map((t) => ({ t, ev: evaluateDesign(t) })))
-                .filter((x) => (x.ev as any).a11yPass);
+              if ((evalBest as any).visualScore < 72 || wantMax) {
+                const jittered = baseJitters.map((j) =>
+                  tokenMixer({ primary, dark: darkIn as boolean, tone: toneIn as string, jitter: j })
+                );
+                const cands = [{ t: tokens, ev: evalBest }]
+                  .concat(jittered.map((t) => ({ t, ev: evaluateDesign(t) })))
+                  .filter((x) => (x.ev as any).a11yPass);
 
-              const best =
-                cands.sort(
-                  (a, b) =>
-                    (b.ev as any).visualScore - (a.ev as any).visualScore
-                )[0] || { t: tokens, ev: evalBest };
+                const best =
+                  cands.sort(
+                    (a, b) =>
+                      (b.ev as any).visualScore - (a.ev as any).visualScore
+                  )[0] || { t: tokens, ev: evalBest };
 
-              // Adopt if clearly better (>= +4), or if breadth=max (take top regardless)
-              if (
-                wantMax ||
-                ((((best.ev as any).visualScore || 0) -
-                  ((evalBest as any).visualScore || 0)) >= 4)
-              ) {
-                tokens = best.t;
-                evalBest = best.ev;
-                eval1 = evalBest; // propagate improvement
+                // Adopt if clearly better (>= +4), or if breadth=max (take top regardless)
+                if (
+                  wantMax ||
+                  ((((best.ev as any).visualScore || 0) -
+                    ((evalBest as any).visualScore || 0)) >= 4)
+                ) {
+                  tokens = best.t;
+                  evalBest = best.ev;
+                  eval1 = evalBest; // propagate improvement
+                }
               }
-            }
-          } catch {}
+            } catch {}
+          }
 
           // attach to brand (composer can read css vars; harmless if ignored)
           (prep as any).brand = {
@@ -1410,9 +1419,14 @@ router.post("/act", async (req, res) => {
             });
           }
 
-          // B. STRICT gate (env): block shipping if critical fields are redacted
+          // Header/Env-driven strictness toggle
+          const proofStrict =
+            process.env.PROOF_STRICT === "1" ||
+            String(req.headers["x-proof-strict"] || "").toLowerCase() === "1";
+
+          // B. STRICT gate (header/env): block shipping if critical fields are redacted
           //    OR facts are flagged OR original risky claims existed
-          if (process.env.PROOF_STRICT === "1") {
+          if (proofStrict) {
             const CRIT = new Set(["HEADLINE", "HERO_SUBHEAD", "TAGLINE"]);
             const badCrit = Object.entries(proofData || {}).some(
               ([k, v]: any) =>
@@ -1522,7 +1536,13 @@ router.post("/act", async (req, res) => {
           ((req.body as any)?.sessionId || "anon") as string
         );
         if (last && last.key === keyNow && last.url) {
-          return { kind: "compose", path: last.url, url: last.url, sections: (prep as any).sections };
+          return {
+            kind: "compose",
+            pageId: keyNow,
+            path: last.url,
+            url: last.url,
+            sections: (prep as any).sections
+          };
         }
 
         // --- Compose remotely, but ALWAYS rehost locally with OG injection ---
@@ -1663,12 +1683,13 @@ ${og}
           }
         } catch {}
 
-        // Device Gate — 2 viewports × 2 throttles; optional strict block
+        // Device Gate — 2 viewports × 2 throttles; header/env strict block
         try {
-          if (
-            process.env.DEVICE_GATE === "on" ||
-            process.env.DEVICE_GATE === "strict"
-          ) {
+          const deviceGateEnv = String(process.env.DEVICE_GATE || "").toLowerCase(); // "", "on", "strict"
+          const deviceGateHdr = String(req.headers["x-device-gate"] || "").toLowerCase();
+          const deviceGate = deviceGateHdr || deviceGateEnv;
+
+          if (deviceGate === "on" || deviceGate === "strict") {
             const pageUrl = (data as any)?.url || (data as any)?.path || null;
             if (pageUrl) {
               const abs = /^https?:\/\//i.test(pageUrl)
@@ -1686,7 +1707,7 @@ ${og}
                 },
               });
               // Strict mode: fail hard if budgets not met
-              if (!gate.pass && process.env.DEVICE_GATE === "strict") {
+              if (!gate.pass && deviceGate === "strict") {
                 return { kind: "compose", error: "device_gate_fail", gate };
               }
             }
@@ -1956,7 +1977,7 @@ router.post("/one", async (req, res) => {
           }
           if (!fit) {
             // cloud fallback only if within budget
-            if (allowCloud({ cents: 0.03, tokens: 1200 })) {
+            if (allowCloud({ cents: 0.02, tokens: 800 })) {
               fit = await filterIntent(prompt);
               cloudUsed = true;
               labelPath = "cloud";

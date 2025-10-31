@@ -135,5 +135,37 @@
       "win": 0,
       "last": 1761823593324
     }
+  },
+  "marketers|hero-basic": {
+    "hero-basic": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761850256077
+    },
+    "hero-basic@b": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761850256077
+    }
+  },
+  "marketers|features-3col": {
+    "features-3col": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761850256078
+    },
+    "features-3col@alt": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761850256078
+    }
   }
 }
