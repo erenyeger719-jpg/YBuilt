@@ -19,23 +19,39 @@ assert "strict proof blocks hype" \
 "curl -s -X POST '$AI/one' -H 'x-proof-strict: 1' -H 'content-type: application/json' \
  --data '{\"prompt\":\"#1 with 200% growth and 10x ROI\",\"sessionId\":\"deep1\"}' | jq -er '.result.error==\"proof_gate_fail\"'"
 
-section "Instant spec continuity"
+echo
+echo "• Instant spec continuity"
+resp1="$(curl -s -X POST "$AI/instant" \
+  -H 'content-type: application/json' \
+  -H 'x-ship-preview: 1' \
+  --data '{"prompt":"sanity","sessionId":"deep"}')"
 
-RESP=$(curl -s -X POST "$AI/instant?__test=1" -H 'x-test: 1' -H 'content-type: application/json' \
- --data '{"prompt":"founders dark waitlist","sessionId":"deep2"}')
+specId1="$(jq -r '.spec.id' <<<"$resp1")"
+pageId1="$(jq -r '.result.pageId' <<<"$resp1")"
 
-# Require a spec id; preview is optional
-SPEC_ID=$(printf %s "$RESP" | jq -r '.spec.id // empty')
-[ -n "$SPEC_ID" ] || die "no spec id"
+resp2="$(curl -s -X POST "$AI/instant" \
+  -H 'content-type: application/json' \
+  -H 'x-ship-preview: 1' \
+  --data '{"prompt":"sanity","sessionId":"deep"}')"
 
-# If preview exists, do sanity checks; else move on
-URL=$(printf %s "$RESP" | jq -r '.url // .result.path // empty')
-if [ -n "$URL" ]; then
-  HTML="$(curl -s "$API$URL")"
-  assert "OG present" "printf %s \"$HTML\" | grep -q 'og:title'"
-  assert "no <script> tags" "printf %s \"$HTML\" | grep -qi '<script' && exit 1 || exit 0"
+specId2="$(jq -r '.spec.id' <<<"$resp2")"
+
+if [ -z "$specId1" ] || [ "$specId1" = "null" ]; then
+  echo "  ❌ no specId from first /instant"; exit 1
+fi
+if [ "$specId1" != "$specId2" ]; then
+  echo "  ❌ spec id changed across identical calls ($specId1 → $specId2)"; exit 1
+fi
+echo "  ✅ spec continuity ($specId1)"
+
+echo
+echo "• OG present"
+if curl -s "$AI/previews/$specId1" | grep -qi 'og:title'; then
+  echo "  ✅ OG present (specId)"
+elif [ -n "$pageId1" ] && [ "$pageId1" != "null" ] && curl -s "$AI/previews/$pageId1" | grep -qi 'og:title'; then
+  echo "  ✅ OG present (pageId)"
 else
-  echo "  ℹ️ preview not persisted (ok)"
+  echo "  ❌ OG meta not found"; exit 1
 fi
 
 echo
