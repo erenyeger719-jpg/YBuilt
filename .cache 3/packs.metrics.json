@@ -1,0 +1,69 @@
+{
+  "packs": {
+    "p-hero-cta": {
+      "seen": 46,
+      "wins": 3,
+      "lastSeenTs": 1761914355950,
+      "lastWinTs": 1761913116180
+    },
+    "p-hero-features-cta": {
+      "seen": 5,
+      "wins": 0,
+      "lastSeenTs": 1761914355958
+    }
+  },
+  "pagePack": {
+    "0e79d06fbfd635a91bbaadbcb915a615bc684cfd": "p-hero-cta",
+    "e648a9ba5b760501f23c92a573f82052f4d215a9": "p-hero-cta",
+    "c0593bd28eaabea2a151b11af3c3e4b267d87372": "p-hero-cta",
+    "b6b80142822c4271b26a5d380c0aeb58ae9b6d89": "p-hero-cta",
+    "e13ba0b012b94b6ded80aeaaefb13d7cf92a7950": "p-hero-cta",
+    "59c3ac736a6a7502b4675214915b5027b82e0139": "p-hero-cta",
+    "bda4eb726217b2d34fe0376be565dbe7a7437513": "p-hero-cta",
+    "cc1d4e0856e665185ef9b44cef70b50c7dbc32ee": "p-hero-cta",
+    "0400e4df59339ca567b4088d0ad3ce860fcde9b8": "p-hero-features-cta",
+    "7177bdbdbc3e90f73ffb796aecd12f009a2c299b": "p-hero-features-cta",
+    "287fac34eab546d66496f46081c70cf8857c27fb": "p-hero-cta",
+    "81a677fb85708119456bcaca4f76dcb100ca0454": "p-hero-cta",
+    "e4c28d587d38db4fcf15370cd334b7f329a1e50a": "p-hero-cta",
+    "5c11f2a120fb53c1fd828890b7f55edd53684847": "p-hero-cta",
+    "97b9181476a72e1381108a4d3d259f16cad3f5cf": "p-hero-cta",
+    "5c3c337de85d64f7d06ab2f13429579fbfc2f068": "p-hero-cta",
+    "31bf170e4c1ca83199483e2daf6409656e993090": "p-hero-cta",
+    "82bc2d5fe56bfae8305b47254e36fed0fe00a484": "p-hero-cta",
+    "5ee4223d1d403893586077fbdf40758c32e521a6": "p-hero-features-cta",
+    "4b4940436d500efc37a476c6bb2278ace1c89c94": "p-hero-cta",
+    "d5af418f684be3da1b877381ebc9283116ae4b37": "p-hero-cta",
+    "8fc5b0c713d139920ea36ab2233eed0180ccf993": "p-hero-cta",
+    "ae0047d9448ec7ee62e5400221ba4c889fe0d193": "p-hero-cta",
+    "c1d0ea8f8ceada9a1e3ef3acb18bf40203ab929d": "p-hero-cta",
+    "99f4004c3b5bc6ff75475be9009250e70ea841bc": "p-hero-cta",
+    "c9ae80025b45d3d4d3c01cc60e922207c5856ff8": "p-hero-cta",
+    "102e76a24cbf33072296422c31a9509dbe2caaaf": "p-hero-cta",
+    "2f83192242817d29dafc6bbf585b797b5f9561f5": "p-hero-cta",
+    "81b0e4d702dcfcb873847958bc97506e01041dc1": "p-hero-cta",
+    "c637cdcbc71294ac5156fdd2f33b0848f2196e9b": "p-hero-features-cta",
+    "254ec43a741faf0ff481a6d00be5efc0b5e0bc73": "p-hero-cta",
+    "c67c1c0dd963487d775baefe2ebd7e298670773c": "p-hero-cta",
+    "c18ea05e77c946cd2bb2bca0b14fa80db6dd466d": "p-hero-cta",
+    "701350631d9fa0928bb570f261fa4b1d1875c71d": "p-hero-cta",
+    "98100010be65aa2d4cd5becb173b01a4dfa4fce1": "p-hero-cta",
+    "b284ce59031aeb201bc3318cfd0e8563eebd5c96": "p-hero-cta",
+    "27fbaa7c40688f4647d33f2c50a98cfdfc8c218e": "p-hero-cta",
+    "5dce0e12eed32b9408ebab7c99c03a89b11e10a7": "p-hero-cta",
+    "4ac3f4a43e1cd405c844ccdd3577e81bd8417120": "p-hero-cta",
+    "e6bfb0469dd3065c2253db011be178541eb69145": "p-hero-cta",
+    "d28179b4cd6e7ed0a07ac60dc0109a7f6e1d63be": "p-hero-cta",
+    "98dccf5bbd05295cae6b53ca78253a38aba0f284": "p-hero-cta",
+    "eb53dbc1f582902e6976752d8457e0cfe74b8151": "p-hero-cta",
+    "c1fb743e24edc0e36b7f117f174850a53e4d1995": "p-hero-cta",
+    "bc1fe3c9207ed540da5949dc7170fb1456fe778c": "p-hero-cta",
+    "b5f0cee031aaec18eafc59bd9e1d4bd89efbdec6": "p-hero-cta",
+    "41ce40f2fbcf6fc6482185d59a1ee5c13838c7e8": "p-hero-cta",
+    "642a23c9ba5154b8772e0557289946696cde4028": "p-hero-cta",
+    "9edf34e59b242de363b00de61d65b305e9eb8fd0": "p-hero-cta"
+  },
+  "_meta": {
+    "lastDecayTs": 1761898850382
+  }
+}
