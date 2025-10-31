@@ -1,6 +1,6 @@
 {
-  "id": "spec_mheztdcp",
-  "summary": "portfolio site",
+  "id": "spec_mhf07lne",
+  "summary": "warm vitest",
   "brand": {
     "tone": "minimal",
     "dark": false
@@ -8,7 +8,6 @@
   "layout": {
     "sections": [
       "hero-basic",
-      "features-3col",
       "cta-simple"
     ]
   },
@@ -16,37 +15,30 @@
   "budget_used": 0,
   "intent": {
     "audience": "",
-    "goal": "contact",
-    "industry": "portfolio",
+    "goal": "waitlist",
+    "industry": "",
     "vibe": "minimal",
     "color_scheme": "light",
     "sections": [
       "hero-basic",
-      "features-3col",
       "cta-simple"
     ]
   },
   "audience": "all",
   "copy": {
-    "HERO_TITLE": "Smaller surface, stronger outcomes.",
-    "HERO_SUB": "Tight system, clean UI, measurable wins.",
-    "CTA_LABEL": "Preview now",
+    "HERO_TITLE": "Clarity beats cleverness.",
+    "HERO_SUB": "Designed to remove decisions, not control.",
+    "CTA_LABEL": "Go minimal",
     "CTA_HEAD": "Setup that respects time",
     "F1_TITLE": "Clean building blocks",
     "F1_SUB": "Small set, strong choices.",
     "F2_TITLE": "Micro text wins",
     "F2_SUB": "Small edits, instant clarity.",
-    "F3_TITLE": "See it as you show",
-    "F3_SUB": "show once you can see it.",
-    "HEADLINE": "Portfolio Site",
+    "F3_TITLE": "See it as you ship",
+    "F3_SUB": "Ship once you can see it.",
+    "HEADLINE": "Warm Vitest",
     "HERO_SUBHEAD": "Launch faster. Look credible. No fluff.",
     "TAGLINE": "Simple • Fast • Credible",
-    "FEATURE_1_TITLE": "Speed",
-    "FEATURE_1_DESC": "Crisp copy and clean design that just works.",
-    "FEATURE_2_TITLE": "Clarity",
-    "FEATURE_2_DESC": "Crisp copy and clean design that just works.",
-    "FEATURE_3_TITLE": "Trust",
-    "FEATURE_3_DESC": "Crisp copy and clean design that just works.",
     "OG_TITLE": "Build Something People Want",
     "OG_DESC": "Launch faster. Look credible. No fluff.",
     "OG_IMAGE_URL": "/og/build-something-people-want-d4aae360a94d.svg",

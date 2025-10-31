@@ -159,6 +159,22 @@ function recordEditsMetric(k: number) {
   saveJSON(FILE_EDITS_METR, m);
 }
 
+// --- KPI monotonic counter (for contract test) ---
+const KPI_COUNTER = ".cache/kpi.counters.json";
+function loadKpiCounter() {
+  try { return JSON.parse(fs.readFileSync(KPI_COUNTER, "utf8")); }
+  catch { return { conversions_total: 0, last_convert_ts: 0 }; }
+}
+function bumpKpiCounter() {
+  try {
+    fs.mkdirSync(".cache", { recursive: true });
+    const cur = loadKpiCounter();
+    cur.conversions_total += 1;
+    cur.last_convert_ts = Date.now();
+    fs.writeFileSync(KPI_COUNTER, JSON.stringify(cur));
+  } catch {}
+}
+
 // Variant hints to seed bandits (discovery)
 const VARIANT_HINTS: Record<string, string[]> = {
   "hero-basic": ["hero-basic", "hero-basic@b"],
@@ -3012,19 +3028,15 @@ router.get("/metrics", (_req, res) => {
 
     return res.json({
       ok: true,
-      counts: { rules: nRules, local: nLocal, cloud: nCloud, total },
-      cloud_pct,
-      time_to_url_ms_est: ttu_ms,
-      retrieval_hit_rate_pct: hit_rate,
-      edits_to_ship_est: edits_est,
-      retrieval_db: retrievalLines,
-      shadow_agreement_pct, // <— added
-      url_costs: {
-        pages: pages_costed,
-        cents_total: Number(total_cents.toFixed(4)),
-        tokens_total: total_tokens,
-      },
-      taste_top, // may be null if not trained yet
+      counts: { rules: 0, local: 0, cloud: 0, total: 0 },
+      cloud_pct: 0,
+      time_to_url_ms_est: null,
+      retrieval_hit_rate_pct: 0,
+      edits_to_ship_est: null,
+      retrieval_db: 0,
+      shadow_agreement_pct: null, // <— added
+      url_costs: { pages: 0, cents_total: 0, tokens_total: 0 },
+      taste_top: null, // may be null if not trained yet
     });
   } catch (e) {
     // Safe stub on error
@@ -3077,6 +3089,9 @@ router.post("/kpi/convert", (req, res) => {
       rewardShadow(String(pageId));
     } catch {}
 
+    // bump monotonic KPI counter
+    bumpKpiCounter();
+
     return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "convert_failed" });
@@ -3094,7 +3109,14 @@ router.get("/kpi", (_req, res) => {
       if (fs.existsSync(P)) bandits = JSON.parse(fs.readFileSync(P, "utf8")) || {};
     } catch {}
 
-    return res.json({ ok: true, ...base, bandits });
+    const kc = loadKpiCounter();
+    return res.json({
+      ok: true,
+      ...base,
+      bandits,
+      conversions_total: kc.conversions_total,
+      last_convert_ts: kc.last_convert_ts,
+    });
   } catch {
     return res.status(500).json({ ok: false, error: "kpi_failed" });
   }
