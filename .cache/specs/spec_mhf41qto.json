@@ -1,6 +1,6 @@
 {
-  "id": "spec_mhf3jst2",
-  "summary": "dark minimal saas",
+  "id": "spec_mhf41qto",
+  "summary": "dark saas waitlist for founders",
   "brand": {
     "tone": "minimal",
     "dark": true
@@ -15,7 +15,7 @@
   "budget_used": 0,
   "intent": {
     "audience": "",
-    "goal": "",
+    "goal": "waitlist",
     "industry": "saas",
     "vibe": "minimal",
     "color_scheme": "dark",
@@ -24,7 +24,7 @@
       "cta-simple"
     ]
   },
-  "audience": "all",
+  "audience": "founders",
   "copy": {
     "HERO_TITLE": "Clarity beats cleverness.",
     "HERO_SUB": "Designed to remove decisions, not control.",
@@ -36,7 +36,7 @@
     "F2_SUB": "Small edits, instant clarity.",
     "F3_TITLE": "See it as you ship",
     "F3_SUB": "Ship once you can see it.",
-    "HEADLINE": "Dark Minimal Saas",
+    "HEADLINE": "Dark Saas Waitlist For Founders",
     "HERO_SUBHEAD": "Launch faster. Look credible. No fluff.",
     "TAGLINE": "Simple • Fast • Credible",
     "OG_TITLE": "Build Something People Want",

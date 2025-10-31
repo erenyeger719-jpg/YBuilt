@@ -1,9 +1,9 @@
 {
-  "id": "spec_mhf3jssm",
-  "summary": "dark saas waitlist for founders",
+  "id": "spec_mhf41mk3",
+  "summary": "warm vitest",
   "brand": {
     "tone": "minimal",
-    "dark": true
+    "dark": false
   },
   "layout": {
     "sections": [
@@ -16,15 +16,15 @@
   "intent": {
     "audience": "",
     "goal": "waitlist",
-    "industry": "saas",
+    "industry": "",
     "vibe": "minimal",
-    "color_scheme": "dark",
+    "color_scheme": "light",
     "sections": [
       "hero-basic",
       "cta-simple"
     ]
   },
-  "audience": "founders",
+  "audience": "all",
   "copy": {
     "HERO_TITLE": "Clarity beats cleverness.",
     "HERO_SUB": "Designed to remove decisions, not control.",
@@ -36,12 +36,12 @@
     "F2_SUB": "Small edits, instant clarity.",
     "F3_TITLE": "See it as you ship",
     "F3_SUB": "Ship once you can see it.",
-    "HEADLINE": "Dark Saas Waitlist For Founders",
+    "HEADLINE": "Warm Vitest",
     "HERO_SUBHEAD": "Launch faster. Look credible. No fluff.",
     "TAGLINE": "Simple • Fast • Credible",
     "OG_TITLE": "Build Something People Want",
     "OG_DESC": "Launch faster. Look credible. No fluff.",
-    "OG_IMAGE_URL": "/og/build-something-people-want-6a8d28874ab9.svg",
+    "OG_IMAGE_URL": "/og/build-something-people-want-d4aae360a94d.svg",
     "HERO_ILLUSTRATION_URL": "/vectors/ai-6.svg",
     "FEATURES_ICON_1_URL": "/vectors/analytics-1.svg",
     "FEATURES_ICON_2_URL": "/vectors/analytics.svg"
