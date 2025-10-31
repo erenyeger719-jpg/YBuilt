@@ -260,6 +260,15 @@ function escapeHtml(s: string) {
     .replace(/'/g, "&#39;");
 }
 
+// A) NEW helper — risky claims detector
+function hasRiskyClaims(s: string) {
+  const p = String(s || "").toLowerCase();
+  const superlative = /\b(#1|no\.?\s?1|top|best|leading|largest)\b/i;
+  const percent = /\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?(%|percent)\b/i;
+  const multiplier = /\b\d+(?:\.\d+)?\s*x\b/i;
+  return superlative.test(p) || percent.test(p) || multiplier.test(p);
+}
+
 // Node fetch guard (explicit, to avoid silent failure under Node <18)
 function requireFetch(): typeof fetch {
   const f = (globalThis as any).fetch;
@@ -1086,7 +1095,6 @@ router.post("/act", async (req, res) => {
             "en"
         );
         copyWithDefaults = localizeCopy(copyWithDefaults, locale);
-        // ⬆️
 
         // Failure-aware edit search (deterministic, no-LLM)
         try {
@@ -1433,22 +1441,25 @@ router.post("/act", async (req, res) => {
             process.env.PROOF_STRICT === "1" ||
             String(req.headers["x-proof-strict"] || "").toLowerCase() === "1";
 
+          // NEW: prompt-level risk (e.g., "#1", "200%", "10x") from /one
+          const promptRisk = Boolean((spec as any)?.__promptRisk);
+
           // B. STRICT gate (header/env): block shipping if critical fields are redacted
-          //    OR facts are flagged OR original risky claims existed
+          //    OR facts are flagged OR original risky claims existed OR prompt risk is true
           if (proofStrict) {
             const CRIT = new Set(["HEADLINE", "HERO_SUBHEAD", "TAGLINE"]);
             const badCrit = Object.entries(proofData || {}).some(
               ([k, v]: any) =>
                 CRIT.has(String(k)) && (v as any)?.status === "redacted"
             );
-            // Block if: (1) redacted critical field, (2) fact flags, or (3) original risky claims existed
-            if (badCrit || flaggedCount > 0 || originalRisk > 0) {
+            if (badCrit || flaggedCount > 0 || originalRisk > 0 || promptRisk) {
               return {
                 kind: "compose",
                 error: "proof_gate_fail",
                 redactedCount,
                 flaggedCount,
                 originalRisk,
+                promptRisk, // <- visible in logs
               };
             }
           }
@@ -2074,6 +2085,9 @@ router.post("/one", async (req, res) => {
       sections: intent.sections || [],
     };
     (spec as any).audience = intent.audience || "";
+
+    // B) flag risky prompts so strict mode can block even if copy sanitizes later
+    (spec as any).__promptRisk = hasRiskyClaims(prompt);
 
     // Deterministic copy (cheap)
     let copy = (fit as any).copy || cheapCopy(prompt, (fit as any).intent);

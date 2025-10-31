@@ -350,30 +350,31 @@
     "dark": false
   },
   "det": {
-    "n": 5,
+    "n": 6,
     "sections": {
-      "cta-simple": 5,
-      "hero-basic": 2
+      "cta-simple": 6,
+      "hero-basic": 3
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": true
   },
   "proof": {
-    "n": 2,
+    "n": 4,
     "sections": {
-      "hero-basic": 1,
-      "features-3col": 2,
-      "cta-simple": 2
+      "hero-basic": 2,
+      "features-3col": 3,
+      "cta-simple": 4
     },
     "primary": "#296fff",
     "tone": "serious",
     "dark": false
   },
   "gate": {
-    "n": 2,
+    "n": 3,
     "sections": {
-      "cta-simple": 2
+      "cta-simple": 3,
+      "features-3col": 1
     },
     "primary": "#a855f7",
     "tone": "playful",
