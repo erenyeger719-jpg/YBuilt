@@ -62,7 +62,9 @@ ship_until_preview_and_page(){
   local last_ok_pid=""
   local R
   for ((i=1;i<=12;i++)); do
-    R="$(curl -s -X POST "$AI/instant" -H 'content-type: application/json' \
+    R="$(curl -s -X POST "$AI/instant" \
+      -H 'content-type: application/json' \
+      -H 'x-ship-preview: 1' \
       --data '{"prompt":"warm vitest","sessionId":"vt1"}' || true)"
     local OK PID PREVIEW_PATH URL_VAL
     OK="$(printf %s "$R" | jq -r '.ok // false' 2>/dev/null || echo false)"

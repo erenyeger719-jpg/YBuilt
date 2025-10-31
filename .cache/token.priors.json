@@ -1,0 +1,19 @@
+{
+  "global": {},
+  "perSession": {},
+  "seenGlobal": {
+    "#5921b2|minimal|false": 1,
+    "#5921b2|minimal|true": 1
+  },
+  "seenPerSession": {
+    "can2": {
+      "#5921b2|minimal|false": 1
+    },
+    "smk2": {
+      "#5921b2|minimal|true": 1
+    }
+  },
+  "_meta": {
+    "lastDecayTs": 1761917817215
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "paths": {
+    "rules": {
+      "n": 0,
+      "ships": 0,
+      "conversions": 0,
+      "ema_ttu_ms": null,
+      "ema_ship_rate": null,
+      "ema_conv_rate": null
+    },
+    "local": {
+      "n": 0,
+      "ships": 0,
+      "conversions": 0,
+      "ema_ttu_ms": null,
+      "ema_ship_rate": null,
+      "ema_conv_rate": null
+    },
+    "cloud": {
+      "n": 0,
+      "ships": 0,
+      "conversions": 0,
+      "ema_ttu_ms": null,
+      "ema_ship_rate": null,
+      "ema_conv_rate": null
+    }
+  },
+  "experts": {},
+  "pageLabel": {},
+  "budget": {
+    "cloud_n": 0,
+    "total_n": 0
+  },
+  "_meta": {
+    "lastDecayTs": 1761917815718
+  }
+}
