@@ -1,0 +1,21 @@
+{
+  "global": {},
+  "perSession": {},
+  "seenGlobal": {
+    "#5921b2|minimal|true": 2,
+    "#491b92|minimal|true": 2
+  },
+  "seenPerSession": {
+    "smk2": {
+      "#5921b2|minimal|true": 1,
+      "#491b92|minimal|true": 1
+    },
+    "deep2": {
+      "#5921b2|minimal|true": 1,
+      "#491b92|minimal|true": 1
+    }
+  },
+  "_meta": {
+    "lastDecayTs": 1761898851590
+  }
+}

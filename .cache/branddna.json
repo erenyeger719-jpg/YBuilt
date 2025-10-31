@@ -1,0 +1,22 @@
+{
+  "smk2": {
+    "n": 2,
+    "sections": {
+      "hero-basic": 2,
+      "cta-simple": 2
+    },
+    "primary": "#491b92",
+    "tone": "minimal",
+    "dark": true
+  },
+  "deep2": {
+    "n": 2,
+    "sections": {
+      "hero-basic": 2,
+      "cta-simple": 2
+    },
+    "primary": "#491b92",
+    "tone": "minimal",
+    "dark": true
+  }
+}

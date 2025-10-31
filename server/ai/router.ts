@@ -896,7 +896,7 @@ router.get("/vectors/search", async (req, res) => {
       const vibe = (a.vibe || []).map(String);
       const ind = (a.industry || []).map(String);
 
-    let overlap = 0;
+      let overlap = 0;
       for (const t of tags.concat(vibe, ind)) {
         if (want.has(String(t).toLowerCase())) overlap += 1;
       }
@@ -1519,7 +1519,7 @@ router.post("/act", async (req, res) => {
             String(req.headers["x-proof-strict"] || "").toLowerCase() === "1";
 
           // NEW: prompt-level risk (e.g., "#1", "200%", "10x") from /one
-          const promptRisk = Boolean((spec as any)?.__promptRisk);
+          const promptRisk = Boolean((spec as any).__promptRisk);
 
           // B. STRICT gate (header/env): block shipping if critical fields are redacted
           //    OR facts are flagged OR original risky claims existed OR prompt risk is true

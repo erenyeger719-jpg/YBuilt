@@ -1,0 +1,22 @@
+{
+  "bySection": {
+    "hero-basic": {
+      "ships": 4,
+      "convs": 0
+    },
+    "cta-simple": {
+      "ships": 4,
+      "convs": 0
+    }
+  },
+  "byBrandSig": {
+    "minimal|dark|#5921b2": {
+      "ships": 2,
+      "convs": 0
+    },
+    "minimal|dark|#491b92": {
+      "ships": 2,
+      "convs": 0
+    }
+  }
+}
