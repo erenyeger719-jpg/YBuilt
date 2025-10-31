@@ -1,6 +1,6 @@
 {
-  "id": "spec_mhf07nho",
-  "summary": "landing page",
+  "id": "spec_mhf34y8a",
+  "summary": "warm vitest",
   "brand": {
     "tone": "minimal",
     "dark": false
@@ -36,7 +36,7 @@
     "F2_SUB": "Small edits, instant clarity.",
     "F3_TITLE": "See it as you ship",
     "F3_SUB": "Ship once you can see it.",
-    "HEADLINE": "Landing Page",
+    "HEADLINE": "Warm Vitest",
     "HERO_SUBHEAD": "Launch faster. Look credible. No fluff.",
     "TAGLINE": "Simple • Fast • Credible",
     "OG_TITLE": "Build Something People Want",

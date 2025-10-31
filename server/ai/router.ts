@@ -290,7 +290,7 @@ mountCiteLock(router);
 
 // minimal OG/social endpoint so selftest sees "og"
 router.get("/og", (req, res) => {
-  const { title = "Ybuilt", desc = "OG ready", image = "" } = req.query as Record<string, string>;
+  const { title = "Ybuilt", desc = "OG ready", image = "" } = (req.query as Record<string, string>);
   res.json({ ok: true, title, desc, image });
 });
 
@@ -3153,12 +3153,18 @@ router.get("/proof/:pageId", (req, res) => {
   }
 });
 
-// Serve local fallback previews (dev safety net)
+// Serve local fallback previews (dev safety net) — script-stripper
 router.get("/previews/:id", (req, res) => {
   const file = path.resolve(PREVIEW_DIR, `${String(req.params.id)}.html`);
   if (!fs.existsSync(file)) return res.status(404).send("Not found");
+
+  // Hard ban: strip ALL <script> blocks (module/inline/async/defer/self-closing)
+  let html = fs.readFileSync(file, "utf8")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<script\b[^>]*\/>/gi, "");
+
   res.setHeader("content-type", "text/html; charset=utf-8");
-  res.send(fs.readFileSync(file, "utf8"));
+  res.send(html);
 });
 
 function pathResolve(p: string) {
