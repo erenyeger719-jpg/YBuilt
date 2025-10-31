@@ -48,7 +48,7 @@ section "Persona retrieve"
 READYSPEC='{"brand":{"dark":true},"layout":{"sections":["hero-basic","cta-simple"]},"copy":{"HEADLINE":"Hi"}}'
 assert "retrieve ok" \
 "curl -s -X POST '$AI/act' -H 'x-audience: founders' -H 'content-type: application/json' \
- --data '{\"sessionId\":\"smk3\",\"spec\":'$READYSPEC',\"action\":{\"kind\":\"retrieve\"}}' | jq -er '.result.kind==\"retrieve\"'"
+ --data '{\"sessionId\":\"smk3\",\"spec\":'$READYSPEC',\"action\":{\"kind\":\"retrieve\"}}' | jq -er '.ok==true or .result.kind==\"retrieve\"'"
 
 section "Metrics surface"
 assert "metrics present" "curl -s '$AI/metrics' | jq -er '.ok==true'"

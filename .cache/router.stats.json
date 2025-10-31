@@ -1,11 +1,11 @@
 {
   "paths": {
     "rules": {
-      "n": 10,
+      "n": 0,
       "ships": 0,
       "conversions": 0,
-      "ema_ttu_ms": 6.3022918701171875,
-      "ema_ship_rate": 0,
+      "ema_ttu_ms": null,
+      "ema_ship_rate": null,
       "ema_conv_rate": null
     },
     "local": {
@@ -29,9 +29,9 @@
   "pageLabel": {},
   "budget": {
     "cloud_n": 0,
-    "total_n": 10
+    "total_n": 0
   },
   "_meta": {
-    "lastDecayTs": 1761894786903
+    "lastDecayTs": 1761895945785
   }
 }
