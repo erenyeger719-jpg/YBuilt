@@ -15,6 +15,11 @@ need_jq(){
   fi
 }
 
+bootstrap_dirs(){
+  # Ensure server write targets exist after any cleanup
+  mkdir -p .cache previews data/logs || true
+}
+
 ensure_logo_vectors(){
   # Keep seeding until 'logo' query returns at least 1 hit (max 20 tries)
   for ((i=1;i<=20;i++)); do
@@ -34,15 +39,16 @@ ship_until_preview_and_page(){
   # Ship up to 10 times until we have pageId AND preview path/url
   local lastPID=""
   for ((i=1;i<=10;i++)); do
-    local R PID PREVIEW_PATH URL_VAL
+    local R PID PREVIEW_PATH URL_VAL OK
     R="$(curl -s -X POST "$AI/instant" -H 'content-type: application/json' \
       --data '{"prompt":"warm vitest","sessionId":"vt1"}' || true)"
+    OK="$(printf %s "$R" | jq -r '.ok // false' 2>/dev/null || echo false)"
     PID="$(printf %s "$R" | jq -r '(.result.pageId // .pageId // empty)' 2>/dev/null || true)"
     PREVIEW_PATH="$(printf %s "$R" | jq -r '(.result.path // empty)' 2>/dev/null || true)"
     URL_VAL="$(printf %s "$R" | jq -r '(.url // empty)' 2>/dev/null || true)"
 
-    if [ -n "$PID" ]; then lastPID="$PID"; fi
-    if [ -n "$PID" ] && { [ -n "$PREVIEW_PATH" ] || [ -n "$URL_VAL" ]; }; then
+    if [ "$OK" = "true" ] && [ -n "$PID" ]; then lastPID="$PID"; fi
+    if [ "$OK" = "true" ] && [ -n "$PID" ] && { [ -n "$PREVIEW_PATH" ] || [ -n "$URL_VAL" ]; }; then
       # nudge proof so proof route/materializes
       curl -s "$AI/proof/$PID" >/dev/null || true
       echo "$PID"
@@ -76,8 +82,9 @@ ensure_metrics_pages(){
 }
 
 warm(){
-  # Clean + minimal warm so every suite sees a sane baseline
+  # Clean to a sane baseline, then immediately recreate write targets
   rm -rf .cache || true
+  bootstrap_dirs
 
   # Seed some vectors first to speed up readiness later
   curl -s -X POST "$AI/vectors/seed" -H 'content-type: application/json' \
@@ -86,7 +93,7 @@ warm(){
   # Ensure we can search 'logo' deterministically
   ensure_logo_vectors
 
-  # Ship until we get a pageId and a preview path/url
+  # Ship until we get a pageId and a preview path/url (hard guard)
   local PID
   PID="$(ship_until_preview_and_page || true)"
 
