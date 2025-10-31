@@ -4,7 +4,8 @@
   "seenGlobal": {
     "#5921b2|minimal|true": 2,
     "#491b92|minimal|true": 2,
-    "#5921b2|minimal|false": 1
+    "#5921b2|minimal|false": 1,
+    "#491b92|minimal|false": 1
   },
   "seenPerSession": {
     "smk2": {
@@ -16,7 +17,8 @@
       "#491b92|minimal|true": 1
     },
     "p2": {
-      "#5921b2|minimal|false": 1
+      "#5921b2|minimal|false": 1,
+      "#491b92|minimal|false": 1
     }
   },
   "_meta": {

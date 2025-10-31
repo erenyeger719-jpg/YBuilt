@@ -1,11 +1,11 @@
 {
   "bySection": {
     "hero-basic": {
-      "ships": 5,
+      "ships": 6,
       "convs": 0
     },
     "cta-simple": {
-      "ships": 5,
+      "ships": 6,
       "convs": 0
     }
   },
@@ -19,6 +19,10 @@
       "convs": 0
     },
     "minimal|light|#5921b2": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|light|#491b92": {
       "ships": 1,
       "convs": 0
     }
