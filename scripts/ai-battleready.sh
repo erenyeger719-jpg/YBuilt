@@ -31,7 +31,7 @@ bootstrap_dirs(){
 }
 
 probe(){
-  # Run a curl; if ok!=true, dump body and exit
+  # Run a curl; if ok!=true, dump body (to stderr) and exit
   local name="$1"; shift
   local out
   out="$(eval "$*" || true)"
@@ -39,7 +39,7 @@ probe(){
   ok="$(printf %s "$out" | jq -r '.ok // false' 2>/dev/null || echo false)"
   if [ "$ok" != "true" ]; then
     echo "❌ $name failed. Body:" >&2
-    (echo "$out" | jq .) 2>/dev/null || echo "$out"
+    (echo "$out" | jq .) 1>&2 2>/dev/null || echo "$out" >&2
     exit 1
   fi
 }
@@ -58,30 +58,30 @@ ensure_logo_vectors(){
 }
 
 ship_until_preview_and_page(){
-  # Ship up to 12 times until we have ok=true, pageId, and preview path/url
-  local lastPID=""
+  # Try up to 12 times for ok=true + pageId + preview path/url
+  local last_ok_pid=""
+  local R
   for ((i=1;i<=12;i++)); do
-    local R OK PID PREVIEW_PATH URL_VAL
     R="$(curl -s -X POST "$AI/instant" -H 'content-type: application/json' \
       --data '{"prompt":"warm vitest","sessionId":"vt1"}' || true)"
+    local OK PID PREVIEW_PATH URL_VAL
     OK="$(printf %s "$R" | jq -r '.ok // false' 2>/dev/null || echo false)"
     PID="$(printf %s "$R" | jq -r '(.result.pageId // .pageId // empty)' 2>/dev/null || true)"
     PREVIEW_PATH="$(printf %s "$R" | jq -r '(.result.path // empty)' 2>/dev/null || true)"
     URL_VAL="$(printf %s "$R" | jq -r '(.url // empty)' 2>/dev/null || true)"
 
-    if [ "$OK" = "true" ] && [ -n "$PID" ]; then lastPID="$PID"; fi
+    if [ "$OK" = "true" ] && [ -n "$PID" ]; then last_ok_pid="$PID"; fi
     if [ "$OK" = "true" ] && [ -n "$PID" ] && { [ -n "$PREVIEW_PATH" ] || [ -n "$URL_VAL" ]; }; then
       curl -s "$AI/proof/$PID" >/dev/null || true
-      echo "$PID"
+      echo "$PID"        # stdout only on success
       return 0
     fi
     sleep 0.15
   done
 
-  # If we never saw ok=true, print the last attempt and fail
+  # Failure path: print diagnostics to STDERR only; print NOTHING to stdout
   echo "❌ instant warm never produced a preview. Last server response:" >&2
-  echo "$R" | jq . 2>/dev/null || echo "$R"
-  [ -n "$lastPID" ] && echo "$lastPID" || echo ""
+  (echo "$R" | jq .) 1>&2 2>/dev/null || echo "$R" >&2
   return 1
 }
 
@@ -102,7 +102,7 @@ ensure_metrics_pages(){
     fi
     sleep 0.15
   done
-  echo "warn: metrics pages still 0; continuing" >&2
+  echo "warn: metrics pages still 0 after convert attempts; continuing" >&2
 }
 
 warm(){
@@ -110,16 +110,18 @@ warm(){
   rm -rf .cache || true
   bootstrap_dirs
 
-  # Seed vectors early
+  # Seed vectors early (fail fast if broken)
   probe "vectors/seed" \
     "curl -s -X POST '$AI/vectors/seed' -H 'content-type: application/json' --data '{\"count\":12}'"
 
   ensure_logo_vectors
 
-  # Ship a real page and nudge proof
+  # Ship a real page and nudge proof (hard fail if no PID)
   local PID
-  PID="$(ship_until_preview_and_page || true)"
-  [ -z "$PID" ] && { echo "❌ warm failed to produce pageId"; exit 1; }
+  if ! PID="$(ship_until_preview_and_page)"; then
+    echo "❌ warm failed to produce pageId; aborting pre-vitest." >&2
+    exit 1
+  fi
 
   # Make metrics reflect at least one page
   ensure_metrics_pages "$PID"
