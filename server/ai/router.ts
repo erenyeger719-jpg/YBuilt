@@ -216,6 +216,31 @@ function writePreview(spec: any) {
   return { pageId, relPath, specId };
 }
 
+// --- Sticky /instant helpers (spec reuse) -----------------------------------
+function readSpecById(id: string) {
+  try {
+    return JSON.parse(
+      fs.readFileSync(path.resolve(".cache/specs", `${id}.json`), "utf8")
+    );
+  } catch {
+    return null;
+  }
+}
+function writeSpecToCache(spec: any) {
+  try {
+    const id = String(spec?.id || "");
+    if (!id) return;
+    const dir = path.resolve(".cache/specs");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify(spec, null, 2), "utf8");
+  } catch {}
+}
+function stickyKeyFor(body: any) {
+  const s = String(body?.sessionId ?? "");
+  const p = String(body?.prompt ?? "");
+  return normalizeKey(`instant:${s}::${p}`);
+}
+
 export function pickModel(task: "planner" | "coder" | "critic", tier = "balanced") {
   const map = {
     fast: {
@@ -2373,7 +2398,7 @@ router.post("/one", async (req, res) => {
       result,
       url,
       chips,
-      signals: summarySignals,
+      signals: summarize(sessionId),
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "one_failed" });
@@ -2384,6 +2409,24 @@ router.post("/one", async (req, res) => {
 router.post("/instant", async (req, res) => {
   try {
     const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
+
+    // --- Sticky precheck: reuse existing specId for identical {sessionId, prompt}
+    const stickyKey = stickyKeyFor(req.body || {});
+    const sticky = cacheGet(`instant:${stickyKey}`) as any;
+    if (sticky?.specId) {
+      const specCached = readSpecById(sticky.specId);
+      if (specCached) {
+        const pageId = `pg_${String(sticky.specId).replace(/^spec_?/, "")}`;
+        const relPath = `/previews/pages/${pageId}.html`;
+        return res.json({
+          ok: true,
+          source: "instant",
+          spec: specCached,
+          result: { pageId, path: relPath },
+          url: relPath,
+        });
+      }
+    }
 
     // 0) No-model intent: playbook → quick guess → safe defaults
     let fit =
@@ -2503,7 +2546,15 @@ router.post("/instant", async (req, res) => {
       (req.body && (req.body as any).ship === true);
 
     if (dev || forceShip) {
-      const { pageId, relPath } = writePreview({ id: (spec as any)?.id, copy: (spec as any).copy });
+      if (!(spec as any).id) {
+        (spec as any).id = `spec_${nanoid(8)}`;
+      }
+      const { pageId, relPath, specId } = writePreview({ id: (spec as any)?.id, copy: (spec as any).copy });
+
+      // Persist spec and make sticky for identical {sessionId, prompt}
+      try { writeSpecToCache(spec); } catch {}
+      try { cacheSet(`instant:${stickyKey}`, { specId: specId || (spec as any)?.id }); } catch {}
+
       return res.json({
         ok: true,
         source: "instant",
