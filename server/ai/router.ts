@@ -167,15 +167,14 @@ const VARIANT_HINTS: Record<string, string[]> = {
   "faq-accordion": ["faq-accordion", "faq-accordion@dense"],
 };
 
-// PREVIEW: resilient local preview output directory (dev safety net)
-const PREVIEW_DIR = ".cache/previews";
+// ⬇️ DEV preview + preview cache directories (updated)
+const DEV_PREVIEW_DIR = path.resolve(process.cwd(), "previews/pages");
+const PREVIEW_DIR = path.resolve(process.cwd(), ".cache/previews"); // used by /api/ai/previews/:id
 try {
   fs.mkdirSync(PREVIEW_DIR, { recursive: true });
 } catch {}
 
 // ⬇️ DEV preview helpers for /instant (write to /previews/pages/* in dev or when forced)
-const DEV_PREVIEW_DIR = path.resolve(process.cwd(), "previews/pages");
-
 function makeHtml(spec: any) {
   const t = (k: string, d = "") => spec?.copy?.[k] ?? d;
   return `<!doctype html>
@@ -195,12 +194,26 @@ function makeHtml(spec: any) {
 }
 
 function writePreview(spec: any) {
-  const pageId = (String(spec?.id || "") || `pg_${nanoid(8)}`).replace(/^spec_/, "pg_");
+  // Keep BOTH ids so old checks pass:
+  const specId = String(spec?.id || `spec_${nanoid(8)}`);
+  const pageId = specId.replace(/^spec_/, "pg_");
+
   fs.mkdirSync(DEV_PREVIEW_DIR, { recursive: true });
-  const filePath = path.join(DEV_PREVIEW_DIR, `${pageId}.html`);
-  fs.writeFileSync(filePath, makeHtml(spec), "utf8");
+  fs.mkdirSync(PREVIEW_DIR, { recursive: true });
+
+  const html = makeHtml(spec);
+
+  // 1) Dev page path used by /instant dev ship
+  fs.writeFileSync(path.join(DEV_PREVIEW_DIR, `${pageId}.html`), html, "utf8");
+
+  // 2) Compatibility mirrors used by smoke/Vitest:
+  //    - /api/ai/previews/<pageId>
+  //    - /api/ai/previews/<specId>
+  fs.writeFileSync(path.join(PREVIEW_DIR, `${pageId}.html`), html, "utf8");
+  fs.writeFileSync(path.join(PREVIEW_DIR, `${specId}.html`), html, "utf8");
+
   const relPath = `/previews/pages/${pageId}.html`;
-  return { pageId, relPath };
+  return { pageId, relPath, specId };
 }
 
 export function pickModel(task: "planner" | "coder" | "critic", tier = "balanced") {
