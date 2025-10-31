@@ -12,5 +12,12 @@
     "goodSeen": 2,
     "goodWin": 0,
     "ts": 1761898879819
+  },
+  "#5921b2|0|minimal": {
+    "seen": 1,
+    "win": 0,
+    "goodSeen": 1,
+    "goodWin": 0,
+    "ts": 1761900340295
   }
 }

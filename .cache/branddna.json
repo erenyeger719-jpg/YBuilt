@@ -18,5 +18,15 @@
     "primary": "#491b92",
     "tone": "minimal",
     "dark": true
+  },
+  "p2": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "primary": "#5921b2",
+    "tone": "minimal",
+    "dark": false
   }
 }
