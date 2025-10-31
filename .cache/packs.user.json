@@ -338,6 +338,17 @@
         "qa",
         "docs"
       ]
+    },
+    {
+      "sections": [
+        "hero-basic",
+        "faq-accordion",
+        "cta-simple"
+      ],
+      "tags": [
+        "qa",
+        "docs"
+      ]
     }
   ]
 }

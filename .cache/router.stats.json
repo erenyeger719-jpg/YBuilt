@@ -1,11 +1,11 @@
 {
   "paths": {
     "rules": {
-      "n": 98,
-      "ships": 79,
-      "conversions": 10,
-      "ema_ttu_ms": 226.06303228522324,
-      "ema_ship_rate": 0.999986632184819,
+      "n": 99,
+      "ships": 80,
+      "conversions": 11,
+      "ema_ttu_ms": 404.04727421391743,
+      "ema_ship_rate": 0.9999899741386142,
       "ema_conv_rate": 1
     },
     "local": {
@@ -17,10 +17,10 @@
       "ema_conv_rate": null
     },
     "cloud": {
-      "n": 21,
-      "ships": 21,
+      "n": 22,
+      "ships": 22,
       "conversions": 3,
-      "ema_ttu_ms": 270.2904835822885,
+      "ema_ttu_ms": 228.9678626867164,
       "ema_ship_rate": 1,
       "ema_conv_rate": 1
     }
@@ -65,11 +65,13 @@
     "67a1a45967f0dc6c27911ffb4c1a6a88d3e9111a": "cloud",
     "95db085c3e469587140888ccef2743332a73df36": "rules",
     "2d4464ff6c335b86f7daf20aa3d8c83e748c1f3f": "cloud",
-    "a44cf569d6804f5af4469fe3d1429f450529ec72": "rules"
+    "a44cf569d6804f5af4469fe3d1429f450529ec72": "rules",
+    "1aa20b30b839587644bcb3d41de59da43eee1162": "cloud",
+    "f21c204e0960f7f6785aad5aa1e647b536594e8a": "rules"
   },
   "budget": {
-    "cloud_n": 21,
-    "total_n": 118
+    "cloud_n": 22,
+    "total_n": 120
   },
   "_meta": {
     "lastDecayTs": 1761884663408

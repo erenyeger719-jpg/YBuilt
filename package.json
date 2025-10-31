@@ -28,7 +28,10 @@
     "test:all": "npm run test:unit && npm run sup:regress",
     "sup:smoke": "tsx scripts/sup.smoke.ts",
     "sup:bandits": "tsx scripts/sup.bandits.ts",
-    "smoke:ai": "bash scripts/ai-sup-smoke.sh"
+    "smoke:ai": "bash scripts/ai-sup-smoke.sh",
+    "chaos:ai": "bash scripts/ai-sup-chaos.sh",
+    "deep:ai": "bash scripts/ai-sup-deep.sh"
+    
   },
   "dependencies": {
     "@cyclonedx/cyclonedx-npm": "^4.0.3",

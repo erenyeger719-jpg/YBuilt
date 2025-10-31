@@ -1,0 +1,100 @@
+{
+  "pageId": "1aa20b30b839587644bcb3d41de59da43eee1162",
+  "url": "/api/ai/previews/1aa20b30b839587644bcb3d41de59da43eee1162",
+  "a11y": true,
+  "visual": 79,
+  "facts": {
+    "HEADLINE": {
+      "field": "HEADLINE",
+      "claim": "Build something people want.",
+      "status": "unknown",
+      "reason": "no_evidence"
+    },
+    "HERO_SUBHEAD": {
+      "field": "HERO_SUBHEAD",
+      "claim": "Launch fast. Iterate faster.",
+      "status": "unknown",
+      "reason": "no_evidence"
+    },
+    "TAGLINE": {
+      "field": "TAGLINE",
+      "claim": "Quiet speed by default.",
+      "status": "unknown",
+      "reason": "no_evidence"
+    },
+    "FEATURES_ICON_2_URL": {
+      "field": "FEATURES_ICON_2_URL",
+      "claim": "/vectors/cloud-4.svg",
+      "status": "unknown",
+      "reason": "no_evidence"
+    },
+    "HERO_ILLUSTRATION_URL": {
+      "field": "HERO_ILLUSTRATION_URL",
+      "claim": "/og/bold-dark-saas-landing-claiming-1-and-500-1f94f2c1d55f.svg",
+      "status": "unknown",
+      "reason": "no_evidence"
+    },
+    "FEATURES_ICON_1_URL": {
+      "field": "FEATURES_ICON_1_URL",
+      "claim": "/og/minimal-dark-saas-waitlist-for-founders-0f5a5e406a0c.svg",
+      "status": "unknown",
+      "reason": "no_evidence"
+    }
+  },
+  "fact_counts": {
+    "unknown": 6
+  },
+  "proof_ok": true,
+  "cls_est": 0.05,
+  "lcp_est_ms": 2080,
+  "perf_matrix": {
+    "base": {
+      "cls_est": 0.05,
+      "lcp_est_ms": 1200,
+      "reasons": {
+        "images_without_size": 0,
+        "webfonts": 0,
+        "css_stylesheets": 0,
+        "inline_js_kb": 0,
+        "font_display_swap": false
+      }
+    },
+    "rows": [
+      {
+        "device": "mobile",
+        "theme": "light",
+        "net": "fast",
+        "cls_est": 0.05,
+        "lcp_est_ms": 1200
+      },
+      {
+        "device": "mobile",
+        "theme": "dark",
+        "net": "slow",
+        "cls_est": 0.05,
+        "lcp_est_ms": 2080
+      },
+      {
+        "device": "desktop",
+        "theme": "light",
+        "net": "fast",
+        "cls_est": 0.05,
+        "lcp_est_ms": 1200
+      },
+      {
+        "device": "desktop",
+        "theme": "dark",
+        "net": "slow",
+        "cls_est": 0.05,
+        "lcp_est_ms": 2080
+      }
+    ],
+    "worst": {
+      "device": "mobile",
+      "theme": "dark",
+      "net": "slow",
+      "cls_est": 0.05,
+      "lcp_est_ms": 2080
+    }
+  }
+}

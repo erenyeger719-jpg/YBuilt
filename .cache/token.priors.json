@@ -14,7 +14,7 @@
     "#0a0415|minimal|false": 0.9771599684342459,
     "#080311|minimal|false": 0.9771599684342459,
     "#07020e|minimal|false": 0.9771599684342459,
-    "#6d28d9|minimal|true": 11.748759652776705,
+    "#6d28d9|minimal|true": 12.748759652776705,
     "#296fff|serious|false": 3.9086398737369836
   },
   "perSession": {
@@ -41,7 +41,7 @@
       "#296fff|serious|false": 3.9086398737369836
     },
     "smoke": {
-      "#6d28d9|minimal|true": 3.9314799053027376
+      "#6d28d9|minimal|true": 4.931479905302737
     }
   },
   "seenGlobal": {
@@ -49,9 +49,9 @@
     "#491b92|minimal|true": 1.9320015723446624,
     "#3c1678|minimal|true": 1.9320015723446624,
     "#311262|minimal|true": 1.9320015723446624,
-    "#6d28d9|minimal|true": 58.58548304404902,
+    "#6d28d9|minimal|true": 59.58548304404902,
     "#5921b2|minimal|false": 8.749802986860555,
-    "#6d28d9|minimal|false": 41.99556027814875,
+    "#6d28d9|minimal|false": 42.99556027814875,
     "#c98209|playful|false": 2.9091615407789084,
     "#8a46cb|playful|true": 0.9548416039104165,
     "#f59e0b|playful|false": 0.9548416039104165,
@@ -62,7 +62,7 @@
     "#5921b2|serious|true": 0.9548416039104165,
     "#296fff|minimal|false": 60.583918042923244,
     "#2563eb|minimal|false": 13.680239558079442,
-    "#491b92|minimal|false": 4.885799842171229,
+    "#491b92|minimal|false": 5.885799842171229,
     "#3c1678|minimal|false": 4.885799842171229,
     "#311262|minimal|false": 4.885799842171229,
     "#280f50|minimal|true": 0.9771599684342459,
@@ -89,7 +89,8 @@
     "#2563eb|minimal|true": 0.9771599684342459,
     "#296fff|serious|false": 10.748759652776705,
     "#296fff|minimal|true": 2.9314799053027376,
-    "#8a46cb|minimal|true": 0.9771599684342459
+    "#8a46cb|minimal|true": 0.9771599684342459,
+    "#7139a6|minimal|true": 1
   },
   "seenPerSession": {
     "vec1": {
@@ -224,7 +225,7 @@
       "#07020e|minimal|false": 0.9771599684342459
     },
     "smoke": {
-      "#6d28d9|minimal|true": 9.794439715908213
+      "#6d28d9|minimal|true": 10.794439715908213
     },
     "t_instant_1": {
       "#6d28d9|minimal|true": 7.817279747473967
@@ -297,16 +298,18 @@
     },
     "gate": {
       "#a855f7|playful|true": 2.9314799053027376,
-      "#8a46cb|minimal|true": 0.9771599684342459
+      "#8a46cb|minimal|true": 0.9771599684342459,
+      "#7139a6|minimal|true": 1
     },
     "noj": {
       "#5921b2|minimal|false": 0.9771599684342459
     },
     "clar": {
-      "#6d28d9|minimal|false": 0.9771599684342459
+      "#6d28d9|minimal|false": 1.977159968434246
     },
     "ed": {
-      "#5921b2|minimal|false": 0.9771599684342459
+      "#5921b2|minimal|false": 0.9771599684342459,
+      "#491b92|minimal|false": 1
     }
   },
   "_meta": {

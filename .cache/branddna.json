@@ -135,10 +135,10 @@
     "dark": false
   },
   "smoke": {
-    "n": 10,
+    "n": 11,
     "sections": {
       "hero-basic": 4,
-      "cta-simple": 10
+      "cta-simple": 11
     },
     "primary": "#6d28d9",
     "tone": "minimal",
@@ -371,13 +371,13 @@
     "dark": false
   },
   "gate": {
-    "n": 4,
+    "n": 5,
     "sections": {
-      "cta-simple": 4,
-      "features-3col": 2,
-      "hero-basic": 1
+      "cta-simple": 5,
+      "features-3col": 3,
+      "hero-basic": 2
     },
-    "primary": "#8a46cb",
+    "primary": "#7139a6",
     "tone": "minimal",
     "dark": true
   },
@@ -391,23 +391,23 @@
     "dark": false
   },
   "clar": {
-    "n": 1,
+    "n": 2,
     "sections": {
       "hero-basic": 1,
-      "features-3col": 1,
-      "cta-simple": 1
+      "features-3col": 2,
+      "cta-simple": 2
     },
     "primary": "#6d28d9",
     "tone": "minimal",
     "dark": false
   },
   "ed": {
-    "n": 2,
+    "n": 4,
     "sections": {
-      "cta-simple": 1
+      "cta-simple": 2
     },
     "dark": false,
-    "primary": "#5921b2",
+    "primary": "#491b92",
     "tone": "minimal"
   }
 }
