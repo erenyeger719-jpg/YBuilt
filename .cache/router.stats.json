@@ -1,11 +1,11 @@
 {
   "paths": {
     "rules": {
-      "n": 2,
+      "n": 1,
       "ships": 1,
       "conversions": 0,
-      "ema_ttu_ms": 536,
-      "ema_ship_rate": 0.75,
+      "ema_ttu_ms": 68,
+      "ema_ship_rate": 1,
       "ema_conv_rate": null
     },
     "local": {
@@ -27,13 +27,13 @@
   },
   "experts": {},
   "pageLabel": {
-    "57caaa3f8e748691d617454fc3ab7223e98303d6": "rules"
+    "87fcce83829a8a290d181b55fb5cdc9e9c1abc18": "rules"
   },
   "budget": {
     "cloud_n": 0,
-    "total_n": 2
+    "total_n": 1
   },
   "_meta": {
-    "lastDecayTs": 1761969584136
+    "lastDecayTs": 1761971061368
   }
 }

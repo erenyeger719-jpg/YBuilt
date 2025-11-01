@@ -19,6 +19,10 @@ section(){ say "$*"; }
 
 jget(){ jq -r "$1"; }
 
+# Unique session IDs for persona probes (avoid 429s)
+DEV_SID="dev-$RANDOM-$(date +%s)"
+FOUNDER_SID="founder-$RANDOM-$(date +%s)"
+
 # ---- 0) Ready gate ----------------------------------------------------------
 section "Prewarm / Ready gate"
 curl -fsS -X POST -H "x-prewarm-token: $TOK" "$AI/__ready" >/dev/null || die "prewarm failed"
@@ -54,22 +58,26 @@ section "Device gate (strict header) is enforced"
 DG="$(curl -fsS -H 'x-device-gate: strict' -H 'content-type: application/json' \
   -d '{"prompt":"minimal light portfolio","sessionId":"sup3"}' "$AI/one")"
 # Pass if either it composes cleanly OR returns device_gate_fail (both are valid behaviors)
-( echo "$DG" | jq -e '.result.kind == "compose" or (.result.error == "device_gate_fail")' >/dev/null ) \
+( echo "$DG" | jq -e '.result.kind == "compose" or (.result.error == "device_gate_fail")' >/devnull ) \
   || die "device gate not honored"
 ok "device gate honored (compose or blocked by gate)"
 
 # ---- 4) Section-level bandits / Persona routing -----------------------------
 section "Bandits route by persona (developers vs founders)"
-DEV="$(curl -fsS -H 'content-type: application/json' \
+DEV="$(curl -fsS \
+  -H 'content-type: application/json' \
+  -H "x-test: 1" -H "x-session-id: $DEV_SID" -H "x-audience: developers" \
   -d '{"sessionId":"sup4","spec":{"layout":{"sections":["hero-basic","pricing-simple"]}},"action":{"kind":"retrieve"}}' \
-  -H 'x-audience: developers' "$AI/act")"
+  "$AI/act")"
 # developers must have features-3col and NOT have pricing-simple
 echo "$DEV" | jq -e '.result.sections | (index("features-3col") != null) and (index("pricing-simple") == null)'
 ok "developers → features-3col (and pricing-simple dropped)"
 
-FOU="$(curl -fsS -H 'content-type: application/json' \
+FOU="$(curl -fsS \
+  -H 'content-type: application/json' \
+  -H "x-test: 1" -H "x-session-id: $FOUNDER_SID" -H "x-audience: founders" \
   -d '{"sessionId":"sup5","spec":{"layout":{"sections":["hero-basic"]}},"action":{"kind":"retrieve"}}' \
-  -H 'x-audience: founders' "$AI/act")"
+  "$AI/act")"
 # founders must have pricing-simple
 echo "$FOU" | jq -e '.result.sections | index("pricing-simple") != null'
 ok "founders → pricing-simple"

@@ -1,5 +1,5 @@
 {
-  "id": "spec_mhfrr7z7",
+  "id": "spec_mhfs2ry0",
   "summary": "dark saas waitlist for founders",
   "brand": {
     "tone": "minimal",
@@ -42,8 +42,8 @@
     "OG_TITLE": "Build Something People Want",
     "OG_DESC": "Launch faster. Look credible. No fluff.",
     "OG_IMAGE_URL": "/og/build-something-people-want-6a8d28874ab9.svg",
-    "HERO_ILLUSTRATION_URL": "/og/bold-dark-saas-landing-claiming-1-and-500-1f94f2c1d55f.svg",
-    "FEATURES_ICON_1_URL": "/og/minimal-dark-saas-waitlist-for-founders-0f5a5e406a0c.svg",
-    "FEATURES_ICON_2_URL": "/og/build-something-people-want-0592ebfda407.svg"
+    "HERO_ILLUSTRATION_URL": "/vectors/ai-6.svg",
+    "FEATURES_ICON_1_URL": "/vectors/analytics-1.svg",
+    "FEATURES_ICON_2_URL": "/vectors/analytics.svg"
   }
 }

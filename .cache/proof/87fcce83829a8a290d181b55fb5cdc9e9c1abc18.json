@@ -1,6 +1,6 @@
 {
-  "pageId": "57caaa3f8e748691d617454fc3ab7223e98303d6",
-  "url": "/api/ai/previews/57caaa3f8e748691d617454fc3ab7223e98303d6",
+  "pageId": "87fcce83829a8a290d181b55fb5cdc9e9c1abc18",
+  "url": "/api/ai/previews/87fcce83829a8a290d181b55fb5cdc9e9c1abc18",
   "a11y": true,
   "visual": 79,
   "facts": {
@@ -24,25 +24,19 @@
     },
     "HERO_ILLUSTRATION_URL": {
       "field": "HERO_ILLUSTRATION_URL",
-      "claim": "/og/bold-dark-saas-landing-claiming-1-and-500-1f94f2c1d55f.svg",
+      "claim": "/vectors/ai-6.svg",
       "status": "unknown",
       "reason": "no_evidence"
     },
     "FEATURES_ICON_1_URL": {
       "field": "FEATURES_ICON_1_URL",
-      "claim": "/og/minimal-dark-saas-waitlist-for-founders-0f5a5e406a0c.svg",
-      "status": "unknown",
-      "reason": "no_evidence"
-    },
-    "FEATURES_ICON_2_URL": {
-      "field": "FEATURES_ICON_2_URL",
-      "claim": "/og/build-something-people-want-0592ebfda407.svg",
+      "claim": "/vectors/analytics-1.svg",
       "status": "unknown",
       "reason": "no_evidence"
     }
   },
   "fact_counts": {
-    "unknown": 6
+    "unknown": 5
   },
   "proof_ok": true,
   "cls_est": null,
