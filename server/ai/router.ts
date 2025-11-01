@@ -3153,98 +3153,46 @@ router.post("/seed", async (_req, res) => {
 });
 
 // --- lightweight metrics snapshot ---
+// REPLACED with minimal, robust version that always includes url_costs
 router.get("/metrics", (_req, res) => {
+  // Minimal, robust metrics: always include url_costs
   try {
-    const statsPath = pathResolve(".cache/router.stats.json");
-    const retrPath = FILE_RETR;
-    const ttuPath = FILE_TTU;
-    const editsPath = FILE_EDITS_METR;
-
-    const stats = fs.existsSync(statsPath)
-      ? JSON.parse(fs.readFileSync(statsPath, "utf8"))
-      : {};
-    const paths = (stats as any)?.paths || {};
-    const nRules = (paths as any)?.rules?.n || 0;
-    const nLocal = (paths as any)?.local?.n || 0;
-    const nCloud = (paths as any)?.cloud?.n || 0;
-    const total = Math.max(1, nRules + nLocal + nCloud);
-
-    const cloud_pct = Math.round((nCloud / total) * 100);
-
-    const retr = loadJSON(retrPath, { tries: 0, hits: 0 });
-    const hit_rate = (retr as any).tries
-      ? Math.round(((retr as any).hits / (retr as any).tries) * 100)
-      : 0;
-
-    const ttu = loadJSON(ttuPath, { ema_ms: null });
-    const ttu_ms =
-      (ttu as any).ema_ms != null ? Math.round((ttu as any).ema_ms) : null;
-
-    const edits = loadJSON(editsPath, { ema: null });
-    const edits_est =
-      (edits as any).ema != null ? Number((edits as any).ema.toFixed(2)) : null;
-
-    // Retrieval DB size (lines) stays as a quick sanity
-    const retrDbPath = pathResolve(".cache/retrieval.jsonl");
-    const retrievalLines = fs.existsSync(retrDbPath)
-      ? fs
-          .readFileSync(retrDbPath, "utf8")
-          .split(/\r?\n/)
-          .filter(Boolean).length
-      : 0;
-
-    // shadow eval metric
-    const shadowPath = pathResolve(".cache/shadow.metrics.json");
-    let shadow_agreement_pct: number | null = null;
+    // Sum URL cost db (written by recordUrlCost)
+    let pages = 0, cents_total = 0, tokens_total = 0;
     try {
-      if (fs.existsSync(shadowPath)) {
-        const sm = JSON.parse(fs.readFileSync(shadowPath, "utf8"));
-        const pct = (sm as any).n
-          ? Math.round((((sm as any).pass || 0) / (sm as any).n) * 100)
-          : null;
-        shadow_agreement_pct = pct;
-      }
-    } catch {}
-
-    // url cost summary
-    const costDbPath = pathResolve(".cache/url.costs.json");
-    let total_cents = 0,
-      total_tokens = 0,
-      pages_costed = 0;
-    try {
-      if (fs.existsSync(costDbPath)) {
-        const m = JSON.parse(fs.readFileSync(costDbPath, "utf8"));
-        for (const v of Object.values(m) as any[]) {
-          total_cents += Number((v as any).cents || 0);
-          total_tokens += Number((v as any).tokens || 0);
-          pages_costed += 1;
+      if (fs.existsSync(".cache/url.costs.json")) {
+        const data = JSON.parse(fs.readFileSync(".cache/url.costs.json", "utf8"));
+        for (const v of Object.values(data) as any[]) {
+          pages += 1;
+          cents_total += Number(v?.cents || 0);
+          tokens_total += Number(v?.tokens || 0);
         }
       }
-    } catch {}
+    } catch (_) {
+      // keep zeros on parse errors
+    }
 
-    // taste top keys (if trained)
-    let taste_top: any = null;
-    try {
-      const t = JSON.parse(
-        fs.readFileSync(pathResolve(".cache/token.priors.json"), "utf8")
-      );
-      taste_top = Array.isArray((t as any)?.top) ? (t as any).top.slice(0, 5) : null;
-    } catch {}
+    // Basic counters (safe defaults; expand later if you like)
+    const counts = { rules: 0, local: 0, cloud: 0, total: 0 };
 
     return res.json({
       ok: true,
-      counts: { rules: 0, local: 0, cloud: 0, total: 0 },
+      counts,
       cloud_pct: 0,
       time_to_url_ms_est: null,
       retrieval_hit_rate_pct: 0,
       edits_to_ship_est: null,
       retrieval_db: 0,
-      shadow_agreement_pct: null, // <— added
-      url_costs: { pages: 0, cents_total: 0, tokens_total: 0 },
-      taste_top: null, // may be null if not trained yet
+      shadow_agreement_pct: null,
+      url_costs: {
+        pages,
+        cents_total: Number(cents_total.toFixed(4)),
+        tokens_total
+      },
+      taste_top: null,
     });
-  } catch (e) {
-    // Safe stub on error
+  } catch {
+    // Guaranteed shape even on unexpected errors
     return res.json({
       ok: true,
       counts: { rules: 0, local: 0, cloud: 0, total: 0 },

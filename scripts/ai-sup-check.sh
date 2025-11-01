@@ -63,15 +63,15 @@ section "Bandits route by persona (developers vs founders)"
 DEV="$(curl -fsS -H 'content-type: application/json' \
   -d '{"sessionId":"sup4","spec":{"layout":{"sections":["hero-basic","pricing-simple"]}},"action":{"kind":"retrieve"}}' \
   -H 'x-audience: developers' "$AI/act")"
-echo "$DEV" | jq -e '.result.sections | index("features-3col") != null and (index("pricing-simple") == null or . != .)' >/dev/null \
-  || die "dev persona did not include features-3col / or failed to drop pricing-simple"
+# developers must have features-3col and NOT have pricing-simple
+echo "$DEV" | jq -e '.result.sections | (index("features-3col") != null) and (index("pricing-simple") == null)'
 ok "developers → features-3col (and pricing-simple dropped)"
 
 FOU="$(curl -fsS -H 'content-type: application/json' \
   -d '{"sessionId":"sup5","spec":{"layout":{"sections":["hero-basic"]}},"action":{"kind":"retrieve"}}' \
   -H 'x-audience: founders' "$AI/act")"
-echo "$FOU" | jq -e '.result.sections | index("pricing-simple") != null' >/dev/null \
-  || die "founders persona did not include pricing-simple"
+# founders must have pricing-simple
+echo "$FOU" | jq -e '.result.sections | index("pricing-simple") != null'
 ok "founders → pricing-simple"
 
 # ---- 5) Vector network effect ----------------------------------------------

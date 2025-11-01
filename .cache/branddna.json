@@ -1,19 +1,37 @@
 {
-  "inv2": {
-    "n": 5,
-    "sections": {
-      "hero-basic": 5,
-      "cta-simple": 5,
-      "features-3col": 1
-    },
-    "tone": "minimal",
-    "dark": false
-  },
-  "inv5": {
+  "vt1": {
     "n": 1,
     "sections": {
       "hero-basic": 1,
       "cta-simple": 1
+    },
+    "tone": "minimal",
+    "dark": false
+  },
+  "pre": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "tone": "minimal",
+    "dark": false
+  },
+  "t1": {
+    "n": 1,
+    "sections": {
+      "hero-basic": 1,
+      "cta-simple": 1
+    },
+    "tone": "minimal",
+    "dark": true
+  },
+  "dna1": {
+    "n": 2,
+    "sections": {
+      "hero-basic": 2,
+      "cta-simple": 2,
+      "features-3col": 1
     },
     "tone": "minimal",
     "dark": false
@@ -46,33 +64,13 @@
     "tone": "minimal",
     "dark": false
   },
-  "t1": {
-    "n": 1,
+  "inv2": {
+    "n": 4,
     "sections": {
-      "hero-basic": 1,
-      "cta-simple": 1
+      "hero-basic": 4,
+      "cta-simple": 4
     },
     "tone": "minimal",
-    "dark": true
-  },
-  "dna1": {
-    "n": 2,
-    "sections": {
-      "hero-basic": 2,
-      "cta-simple": 2,
-      "features-3col": 1
-    },
-    "tone": "minimal",
-    "dark": false
-  },
-  "warm1": {
-    "n": 2,
-    "sections": {
-      "hero-basic": 1,
-      "cta-simple": 2
-    },
-    "primary": "#19429e",
-    "tone": "serious",
     "dark": false
   }
 }
