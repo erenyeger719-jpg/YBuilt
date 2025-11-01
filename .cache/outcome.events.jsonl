@@ -20,3 +20,4 @@
 {"kind":"convert","ts":1761969587995,"pageId":"pg_mhfr7467"}
 {"kind":"convert","ts":1761969590680,"pageId":"pg_mhfr798u"}
 {"kind":"convert","ts":1761969591932,"pageId":"pg_mhfr7a7u"}
+{"kind":"ship","ts":1761970522896,"pageId":"57caaa3f8e748691d617454fc3ab7223e98303d6","url":"/api/ai/previews/57caaa3f8e748691d617454fc3ab7223e98303d6","sections":["hero-basic","cta-simple"],"brand":{"primary":"#1e51c1","tone":"minimal","dark":false},"scores":{"visual":79,"a11y":true,"bytes":null},"sessionId":"sup3"}

@@ -1,6 +1,6 @@
 {
-  "id": "spec_mhfr77bn",
-  "summary": "sanity",
+  "id": "spec_mhfrrhp1",
+  "summary": "warm vitest",
   "brand": {
     "tone": "minimal",
     "dark": false
@@ -36,7 +36,7 @@
     "F2_SUB": "Small edits, instant clarity.",
     "F3_TITLE": "See it as you ship",
     "F3_SUB": "Ship once you can see it.",
-    "HEADLINE": "Sanity",
+    "HEADLINE": "Warm Vitest",
     "HERO_SUBHEAD": "Launch faster. Look credible. No fluff.",
     "TAGLINE": "Simple • Fast • Credible",
     "OG_TITLE": "Build Something People Want",

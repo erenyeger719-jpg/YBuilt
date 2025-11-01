@@ -1,4 +1,18 @@
 {
-  "bySection": {},
-  "byBrandSig": {}
+  "bySection": {
+    "hero-basic": {
+      "ships": 1,
+      "convs": 0
+    },
+    "cta-simple": {
+      "ships": 1,
+      "convs": 0
+    }
+  },
+  "byBrandSig": {
+    "minimal|light|#1e51c1": {
+      "ships": 1,
+      "convs": 0
+    }
+  }
 }

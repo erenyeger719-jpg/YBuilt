@@ -1257,7 +1257,7 @@ router.post("/sections/packs/ingest", (req, res) => {
 });
 
 // ---------- act ----------
-router.post("/act", async (req, res) => {
+router.post("/act", express.json(), async (req, res) => {
   try {
     const { sessionId = "anon", spec = {}, action = {} } = (req.body || {}) as any;
     if (!action || !action.kind)
@@ -1315,6 +1315,16 @@ router.post("/act", async (req, res) => {
         const testMode =
           String(req.headers["x-test"] || "").toLowerCase() === "1" ||
           process.env.NODE_ENV === "test";
+
+        // Early strict-proof gate at /act level (headers can target this call directly)
+        if (isProofStrict(req)) {
+          const risky =
+            Boolean((spec as any)?.__promptRisk) ||
+            hasRiskyClaims(String((spec as any)?.summary || ""));
+          if (risky) {
+            return { kind: "compose", error: "proof_gate_fail", via: "act_early" };
+          }
+        }
 
         // Auto-pack / explicit pack selection
         try {
@@ -1951,6 +1961,32 @@ ${og}
           data = { url: `/api/ai/previews/${keyNow}`, path: `/api/ai/previews/${keyNow}` };
         }
 
+        // Device Gate — run early, fail fast in strict mode
+        try {
+          const deviceGateEnv = String(process.env.DEVICE_GATE || "").toLowerCase(); // "", "on", "strict"
+          const deviceGateHdr = String(req.headers["x-device-gate"] || "").toLowerCase();
+          const deviceGate = deviceGateHdr || deviceGateEnv;
+
+          if (deviceGate === "on" || deviceGate === "strict") {
+            const pageUrl = (data as any)?.url || (data as any)?.path || null;
+            if (pageUrl) {
+              const abs = /^https?:\/\//i.test(pageUrl) ? pageUrl : `${baseUrl(req)}${pageUrl}`;
+              const gate = (await runDeviceGate(abs, keyNow)) as any;
+
+              // Emit for logs/UI
+              pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
+                ts: Date.now(),
+                kind: "device_gate",
+                data: { pass: gate.pass, worst_cls: gate.worst_cls, total_clipped: gate.total_clipped },
+              });
+
+              if (!gate.pass && deviceGate === "strict") {
+                return { kind: "compose", error: "device_gate_fail", gate };
+              }
+            }
+          }
+        } catch {}
+
         // remember successful compose for instant reuse
         LAST_COMPOSE.set(((req.body as any)?.sessionId || "anon") as string, {
           key: keyNow,
@@ -2007,37 +2043,6 @@ ${og}
                   data: perfMatrix,
                 });
               } catch {}
-            }
-          }
-        } catch {}
-
-        // Device Gate — 2 viewports × 2 throttles; header/env strict block
-        try {
-          const deviceGateEnv = String(process.env.DEVICE_GATE || "").toLowerCase(); // "", "on", "strict"
-          const deviceGateHdr = String(req.headers["x-device-gate"] || "").toLowerCase();
-          const deviceGate = deviceGateHdr || deviceGateEnv;
-
-        if (deviceGate === "on" || deviceGate === "strict") {
-            const pageUrl = (data as any)?.url || (data as any).path || null;
-            if (pageUrl) {
-              const abs = /^https?:\/\//i.test(pageUrl)
-                ? pageUrl
-                : `${baseUrl(req)}${pageUrl}`;
-              const gate = (await runDeviceGate(abs, keyNow)) as any;
-              // Emit a signal for UI and logs
-              pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
-                ts: Date.now(),
-                kind: "device_gate",
-                data: {
-                  pass: gate.pass,
-                  worst_cls: gate.worst_cls,
-                  total_clipped: gate.total_clipped,
-                },
-              });
-              // Strict mode: fail hard if budgets not met
-              if (!gate.pass && deviceGate === "strict") {
-                return { kind: "compose", error: "device_gate_fail", gate };
-              }
             }
           }
         } catch {}
@@ -2245,7 +2250,7 @@ ${og}
 });
 
 // ---------- one ----------
-router.post("/one", async (req, res) => {
+router.post("/one", express.json(), async (req, res) => {
   try {
     const t0 = Date.now(); // full request -> URL timer
     const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
