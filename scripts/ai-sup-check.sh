@@ -58,7 +58,8 @@ section "Device gate (strict header) is enforced"
 DG="$(curl -fsS -H 'x-device-gate: strict' -H 'content-type: application/json' \
   -d '{"prompt":"minimal light portfolio","sessionId":"sup3"}' "$AI/one")"
 # Pass if either it composes cleanly OR returns device_gate_fail (both are valid behaviors)
-( echo "$DG" | jq -e '.result.kind == "compose" or (.result.error == "device_gate_fail")' >/devnull ) \
+( echo "$DG" | jq -e '.result.kind == "compose" or (.result.error == "device_gate_fail")' >/dev/null 2>&1 ) \
+
   || die "device gate not honored"
 ok "device gate honored (compose or blocked by gate)"
 
