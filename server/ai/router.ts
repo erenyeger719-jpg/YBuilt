@@ -77,6 +77,8 @@ import { nanoid } from "nanoid";
 import { runArmy } from "./army.ts";
 import { mountCiteLock } from "./citelock.patch.ts";
 import { registerSelfTest } from "./selftest";
+// EDIT 2.1 — SUP policy core
+import { computeRiskVector, supGuard, supDecide, POLICY_VERSION, signProof } from "../sup/policy.core.ts";
 
 // --- SUP V1: readiness gate + quotas + abuse intake ---
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 60_000);
@@ -352,7 +354,8 @@ router.use((req, res, next) => {
   return next(); // actual limiter is attached below
 });
 // attach limiter AFTER bypass block
-router.use(rateLimitGuard);
+// EDIT 2.2 — swap old limiter for SUP guard
+router.use(supGuard());
 
 // POST /api/ai/abuse/report  → JSONL sink under .cache/abuse/YYYY-MM-DD.jsonl
 router.post("/abuse/report", express.json(), (req, res) => {
@@ -442,11 +445,18 @@ function escapeHtml(s: string) {
     .replace(/'/g, "&#39;");
 }
 
+// 3) Drain Mode helper — deterministic retrieval-only fallback
+function drainMode(req: express.Request) {
+  const envOn = String(process.env.DRAIN_MODE || "").toLowerCase() === "1";
+  const hdrOn = String(req.get("x-drain") || "").toLowerCase() === "1";
+  return envOn || hdrOn;
+}
+
 // A) NEW helper — risky claims detector (robust for #, %, and x)
 function hasRiskyClaims(s: string) {
   const p = String(s || "");
 
-  // superlatives like "#1", "No.1", "No 1", "No1", "number one", "top", "best"
+  // superlatives like "#1", "No.1", "No 1", "No1", "number one", "top", "best", "leading", "largest"
   const superlative =
     /(?:^|[^a-z0-9])(#[ ]?1|no\.?\s*1|no\s*1|no1|number\s*one|top|best|leading|largest)(?:[^a-z0-9]|$)/i;
 
@@ -477,12 +487,12 @@ function isProofStrict(req: express.Request) {
 }
 
 // Node fetch guard (explicit, to avoid silent failure under Node <18)
-function requireFetch(): typeof fetch {
+function requireFetch(): (input: any, init?: any) => Promise<any> {
   const f = (globalThis as any).fetch;
   if (typeof f !== "function") {
     throw new Error("fetch_unavailable: Node 18+ (or a fetch polyfill) is required.");
   }
-  return f as typeof fetch;
+  return f as any;
 }
 
 // TS guard: avoid DOM lib types in Node builds
@@ -701,6 +711,128 @@ function applyChipLocal(spec: any = {}, chip = "") {
   }
   return s;
 }
+
+// --- UX DESIGNER (spacing/rhythm) ------------------------------------------
+// Goal: detect overly-tight stacks, missing container max-width, and uneven rhythm.
+// Provide a deterministic CSS auto-fix (safe, minimal) and surface a UX score.
+
+type UXAudit = {
+  score: number;            // 0..100
+  issues: string[];         // e.g., ["no_max_width","tight_stacks"]
+  pass: boolean;            // score >= 70
+  cssFix?: string | null;   // injected if !pass
+};
+
+function clamp(n: number, a: number, b: number) {
+  return Math.min(Math.max(n, a), b);
+}
+
+function basePxFromTokens(tokens: any): number {
+  try {
+    // Try tokens.type.basePx if available
+    const px = Number(tokens?.type?.basePx || NaN);
+    if (!Number.isNaN(px) && px > 0) return px;
+    // Try cssVars pattern like "--type-base-px:18px"
+    const vars = String(tokens?.cssVars || "");
+    const m = vars.match(/--type-[a-z-]*base[a-z-]*:\s*([0-9]+)px/i);
+    if (m && Number(m[1]) > 0) return Number(m[1]);
+  } catch {}
+  return 18; // safe default
+}
+
+function buildUxFixCss(basePx = 18): string {
+  // A calm, premium rhythm derived from base type size
+  // Container 72ch; vertical rhythm around 1.5–2.0 × base
+  const s1 = Math.round(basePx * 0.5);   // minor
+  const s2 = Math.round(basePx * 0.75);  // small
+  const s3 = Math.round(basePx * 1.0);   // base
+  const s4 = Math.round(basePx * 1.5);   // section rhythm
+  const s6 = Math.round(basePx * 2.0);   // larger blocks
+
+  return `
+/* === UX Designer Auto-Fix (spacing/rhythm) === */
+:root{
+  --ux-container-ch:72;
+  --ux-space-1:${s1}px;
+  --ux-space-2:${s2}px;
+  --ux-space-3:${s3}px;
+  --ux-space-4:${s4}px;
+  --ux-space-6:${s6}px;
+}
+main,section,article{
+  max-width:calc(var(--ux-container-ch)*1ch);
+  margin-left:auto;margin-right:auto;
+  padding-left:clamp(12px,4vw,24px);
+  padding-right:clamp(12px,4vw,24px);
+}
+h1{margin-top:0;margin-bottom:var(--ux-space-3);}
+h2,h3{margin-top:var(--ux-space-3);margin-bottom:var(--ux-space-2);}
+p,ul,ol,pre,blockquote{margin-top:var(--ux-space-2);margin-bottom:var(--ux-space-3);}
+section + section, article + article{margin-top:var(--ux-space-6);}
+img,video,figure{display:block;max-width:100%;height:auto;margin:var(--ux-space-3) 0;}
+button,.btn,.cta{margin-top:var(--ux-space-2);}
+hr{border:none;height:1px;background-color:rgba(0,0,0,.08);margin:var(--ux-space-4) 0;}
+/* === end UX auto-fix === */
+  `.trim();
+}
+
+// Heuristics on raw HTML (no DOM): cheap signals that correlate with poor spacing.
+function auditUXFromHtml(html: string, tokens?: any): UXAudit {
+  const issues: string[] = [];
+  const src = String(html || "");
+  const lower = src.toLowerCase();
+
+  // 1) Missing container: no max-width in CSS and no common container classes
+  const hasMaxWidth = /max-width\s*:\s*\d+(px|rem|ch)/i.test(src);
+  const hasContainerClass = /\b(container|wrapper|content|prose)\b/.test(lower);
+  if (!hasMaxWidth && !hasContainerClass) issues.push("no_max_width");
+
+  // 2) Tight stacks: block closings followed immediately by another block opening
+  const tightPairs =
+    (src.match(/<\/(h1|h2|h3|p|ul|ol|section|article)>\s*<(h1|h2|h3|p|ul|ol|section|article)/gi) || [])
+      .length;
+  if (tightPairs >= 6) issues.push("tight_stacks");
+  else if (tightPairs >= 3) issues.push("slightly_tight");
+
+  // 3) Long paragraphs (bad measure or missing line breaks)
+  const longParas =
+    (lower.match(/<p>[^<]{220,}<\/p>/gi) || []).length +
+    (lower.match(/<li>[^<]{180,}<\/li>/gi) || []).length;
+  if (longParas >= 4) issues.push("long_blocks");
+  else if (longParas >= 1) issues.push("some_long_blocks");
+
+  // 4) Headline rhythm: h1 immediately followed by h1/h2 without spacing wrapper
+  const headlineRush =
+    (src.match(/<\/h1>\s*<(h1|h2)\b/gi) || []).length;
+  if (headlineRush >= 2) issues.push("headline_rush");
+
+  // Score (start high, subtract per issue)
+  let score = 92;
+  const penalties: Record<string, number> = {
+    no_max_width: 18,
+    tight_stacks: 18,
+    slightly_tight: 8,
+    long_blocks: 14,
+    some_long_blocks: 6,
+    headline_rush: 10,
+  };
+  for (const i of issues) score -= penalties[i] || 6;
+  score = clamp(score, 30, 100);
+
+  const pass = score >= 70;
+  const cssFix = pass ? null : buildUxFixCss(basePxFromTokens(tokens));
+  return { score, issues, pass, cssFix };
+}
+
+function injectCssIntoHead(html: string, css: string) {
+  if (!css) return html;
+  if (!/<\/head>/i.test(html)) {
+    // no head: prepend style safely
+    return `<style>${css}</style>\n${html}`;
+  }
+  return html.replace(/<\/head>/i, `<style>${css}</style>\n</head>`);
+}
+// --- /UX DESIGNER ----------------------------------------------------------
 
 // ---------- /review ----------
 const LAST_REVIEW_SIG = new Map<string, string>(); // sessionId -> last sha1(codeTrim)
@@ -1863,6 +1995,23 @@ router.post("/act", express.json(), async (req, res) => {
           }
         } catch {}
 
+        // --- SUP decision (pre-ship) ---
+        try {
+          const preRisk = computeRiskVector({
+            prompt: String((spec as any)?.summary || ""),
+            copy: copyWithDefaults,
+            proof: proofData,
+            a11yPass: tokens ? (evaluateDesign(tokens) as any).a11yPass : null,
+            perf: null,
+            ux: null,
+          });
+          const decision = supDecide("/act/compose", preRisk);
+          (prep as any).__sup = { mode: decision.mode, reasons: decision.reasons };
+          if (decision.mode === "block") {
+            return { kind: "compose", error: "sup_block", sup: decision };
+          }
+        } catch {}
+
         // Decide whether to strip all <script> tags in composer
         const stripJS = shouldStripJS(prep.sections);
 
@@ -1889,13 +2038,18 @@ router.post("/act", express.json(), async (req, res) => {
             url: last.url,
             sections: (prep as any).sections,
             brand: (prep as any).brand, // include brand on cache hit too
+            sup: (prep as any).__sup || null,
           };
         }
 
         // --- Compose remotely, but ALWAYS rehost locally with OG injection ---
         let data: any = null;
+        // [UX] audit result holders
+        let uxAudit: UXAudit | null = null;
+
         try {
-          const r = await fetch(`${baseUrl(req)}/api/previews/compose`, {
+          const f = requireFetch();
+          const r = await f(`${baseUrl(req)}/api/previews/compose`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(payloadForKey),
@@ -1925,12 +2079,29 @@ router.post("/act", express.json(), async (req, res) => {
         const outFile = path.resolve(PREVIEW_DIR, `${keyNow}.html`);
 
         try {
-          // Try to fetch upstream HTML (if any), then inject OG and rehost.
+          // Try to fetch upstream HTML (if any), then inject OG, run UX audit, possibly auto-fix, and rehost.
           const pageUrl = (data as any)?.url || (data as any)?.path || null;
           if (pageUrl) {
             const abs = /^https?:\/\//i.test(pageUrl) ? pageUrl : `${baseUrl(req)}${pageUrl}`;
             let html = await fetchTextWithTimeout(abs, 8000);
             if (html && /<\/head>/i.test(html)) {
+              // [UX] audit + optional auto-fix injection
+              try {
+                uxAudit = auditUXFromHtml(html, (payloadForKey as any)?.brand?.tokens ? { type: {}, cssVars: (payloadForKey as any).brand.tokens } : undefined);
+                pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
+                  ts: Date.now(),
+                  kind: "ux_audit",
+                  data: { score: uxAudit.score, issues: uxAudit.issues },
+                });
+                if (!uxAudit.pass && uxAudit.cssFix) {
+                  html = injectCssIntoHead(html, uxAudit.cssFix);
+                  pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
+                    ts: Date.now(),
+                    kind: "ux_fix_applied",
+                    data: { cssBytes: uxAudit.cssFix.length },
+                  });
+                }
+              } catch {}
               // Always inject/refresh OG so downstream checks are consistent
               html = html.replace(/<\/head>/i, `${og}\n</head>`);
               fs.writeFileSync(outFile, html);
@@ -1942,7 +2113,7 @@ router.post("/act", express.json(), async (req, res) => {
             throw new Error("no_upstream_url");
           }
         } catch {
-          // Synth fallback: minimal local page with OG
+          // Synth fallback: minimal local page with OG (+ run UX audit on the synth and apply fix inline)
           const cssVars = (payloadForKey as any)?.brand?.tokens || {};
           const cssRoot = Object.entries(cssVars).map(([k, v]) => `${k}:${String(v)}`).join(";");
           const css = `
@@ -1954,7 +2125,7 @@ p{opacity:.85;font-size:clamp(16px,2.2vw,20px);margin:0 0 24px;}
 `.trim();
 
           const localeTag = String((payloadForKey as any)?.locale || "en");
-          const html = `<!doctype html>
+          let html = `<!doctype html>
 <html lang="${localeTag}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 ${og}
@@ -1962,10 +2133,34 @@ ${og}
 <style>${css}</style>
 </head>
 <body>
-  <h1>${escapeHtml(titleLoc)}</h1>
-  ${sub ? `<p>${escapeHtml(sub)}</p>` : ""}
+  <main>
+    <section>
+      <h1>${escapeHtml(titleLoc)}</h1>
+      ${sub ? `<p>${escapeHtml(sub)}</p>` : ""}
+    </section>
+  </main>
 </body>
 </html>`;
+
+          // [UX] audit synth + inject fix if needed
+          try {
+            const tkn = (payloadForKey as any)?.brand?.tokens ? { cssVars: (payloadForKey as any).brand.tokens, type: {} } : undefined;
+            uxAudit = auditUXFromHtml(html, tkn);
+            pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
+              ts: Date.now(),
+              kind: "ux_audit",
+              data: { score: uxAudit.score, issues: uxAudit.issues },
+            });
+            if (!uxAudit.pass && uxAudit.cssFix) {
+              html = injectCssIntoHead(html, uxAudit.cssFix);
+              pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
+                ts: Date.now(),
+                kind: "ux_fix_applied",
+                data: { cssBytes: uxAudit.cssFix.length },
+              });
+            }
+          } catch {}
+
           fs.writeFileSync(outFile, html);
           data = { url: `/api/ai/previews/${keyNow}`, path: `/api/ai/previews/${keyNow}` };
         }
@@ -1990,7 +2185,7 @@ ${og}
               });
 
               if (!gate.pass && deviceGate === "strict") {
-                return { kind: "compose", error: "device_gate_fail", gate };
+                return { kind: "compose", error: "device_gate_fail", gate, sup: (prep as any).__sup || null };
               }
             }
           }
@@ -2117,8 +2312,8 @@ ${og}
             recordDNA(String(((req.body as any)?.sessionId || "anon") as string), {
               brand: {
                 primary: (prep as any).brand?.primary,
-                tone: (spec as any)?.brand?.tone,
-                dark: !!(spec as any)?.brand?.dark,
+                tone: toneIn,
+                dark: darkIn,
               },
               sections: prep.sections,
             });
@@ -2164,32 +2359,49 @@ ${og}
           } as any);
         } catch {}
 
-        // Persist a tiny Proof Card (best-effort) with counts and proof_ok
+        // Persist a tiny Proof Card (best-effort) with counts, proof_ok, and UX info
         try {
           const proofDir = ".cache/proof";
-          fs.mkdirSync(proofDir, { recursive: true }); // <— added to avoid 404
-          fs.writeFileSync(
-            `${proofDir}/${keyNow}.json`,
-            JSON.stringify(
-              {
-                pageId: keyNow,
-                url: (data as any)?.url || null,
-                a11y: (tokens ? (evaluateDesign(tokens) as any).a11yPass : null),
-                visual: (tokens ? (evaluateDesign(tokens) as any).visualScore : null),
-                facts: proofData || {},
-                fact_counts: Object.values(proofData || {}).reduce((acc: any, v: any) => {
-                  acc[v.status] = (acc[v.status] || 0) + 1;
-                  return acc;
-                }, {}),
-                proof_ok: !Object.values(proofData || {}).some((p: any) => p.status === "redacted"),
-                cls_est: null,
-                lcp_est_ms: null,
-                perf_matrix: null,
-              },
-              null,
-              2
-            )
-          );
+          fs.mkdirSync(proofDir, { recursive: true });
+          // ensure a local prompt surrogate for risk vector
+          const prompt = String((spec as any)?.summary || "");
+          const risk = computeRiskVector({
+            prompt,
+            copy: copyWithDefaults,
+            proof: proofData,
+            perf: perfEst,
+            ux: uxAudit,
+            a11yPass: tokens ? (evaluateDesign(tokens) as any).a11yPass : null,
+          });
+          const card = {
+            pageId: keyNow,
+            url: (data as any)?.url || null,
+            a11y: tokens ? (evaluateDesign(tokens) as any).a11yPass : null,
+            visual: tokens ? (evaluateDesign(tokens) as any).visualScore : null,
+            facts: proofData || {},
+            fact_counts: Object.values(proofData || {}).reduce((acc: any, v: any) => {
+              acc[(v as any).status] = (acc[(v as any).status] || 0) + 1;
+              return acc;
+            }, {}),
+            proof_ok: !Object.values(proofData || {}).some((p: any) => p.status === "redacted"),
+            cls_est: (perfEst as any)?.cls_est ?? null,
+            lcp_est_ms: (perfEst as any)?.lcp_est_ms ?? null,
+            perf_matrix: perfMatrix ?? null,
+            // [UX]
+            ux_score: uxAudit ? uxAudit.score : null,
+            ux_issues: uxAudit ? uxAudit.issues : [],
+            // [SUP]
+            policy_version: POLICY_VERSION,
+            risk,
+          };
+          // include a stable, tamper-evident signature over key fields
+          (card as any).signature = signProof({
+            pageId: card.pageId,
+            policy_version: card.policy_version,
+            risk: card.risk,
+          });
+
+          fs.writeFileSync(`${proofDir}/${keyNow}.json`, JSON.stringify(card, null, 2));
         } catch {}
 
         // edits_to_ship: count chip applies since last ship
@@ -2205,6 +2417,7 @@ ${og}
           pageId: keyNow,
           sections: (prep as any).sections,
           brand: (prep as any).brand, // expose tokens/grid/motion/meta/proof
+          sup: (prep as any).__sup || null,
           ...(data as any),
         };
       }
@@ -2249,6 +2462,14 @@ ${og}
         // Final: preserve → persona → produced (stable, unique, deterministic)
         const final = Array.from(new Set<string>([...incoming, ...add, ...produced]));
         (out as any).sections = final;
+      }
+    } catch {}
+
+    try {
+      if ((out as any)?.sup) {
+        res.setHeader("X-SUP-Mode", String(((out as any).sup.mode) || ""));
+        const reasons = Array.isArray((out as any).sup.reasons) ? (out as any).sup.reasons.join(",") : "";
+        res.setHeader("X-SUP-Reasons", reasons);
       }
     } catch {}
 
@@ -2436,31 +2657,33 @@ router.post("/one", express.json(), async (req, res) => {
     }
     const actions = nextActions(spec, { chips });
 
-    // Try to reuse a shipped spec (retrieval) before composing — SKIP in test mode
-    if (!testMode) {
-      try {
-        const reuse = await nearest(prompt);
-        retrMark(Boolean(reuse));
-        if (reuse) {
-          const reusedSections =
-            Array.isArray((reuse as any).sections) && (reuse as any).sections.length
-              ? (reuse as any).sections
-              : (spec as any)?.layout?.sections || [];
-          (spec as any).layout = { sections: reusedSections };
-          const mergedCopy = { ...((reuse as any).copy || {}), ...(copy || {}) };
-          copy = mergedCopy;
-          if (!brandColor && (reuse as any)?.brand?.primary)
-            brandColor = (reuse as any).brand.primary;
-        }
-      } catch {}
-    } else {
-      retrMark(false);
-    }
-
     if (!actions.length)
       return res.json({ ok: true, spec, actions: [], note: "nothing_to_do" });
 
     const top = actions[0];
+
+    // 3) Drain Mode short-circuit (retrieval-only, deterministic preview)
+    if (drainMode(req)) {
+      // Retrieval-only degrade: ship a minimal, safe preview deterministically.
+      const tmpSpec = { id: `spec_${nanoid(8)}`, copy };
+      const { pageId: dpid, relPath } = writePreview(tmpSpec);
+
+      const sectionsUsed =
+        Array.isArray((top as any)?.args?.sections) && (top as any).args.sections.length
+          ? (top as any).args.sections
+          : (spec as any)?.layout?.sections || [];
+
+      return res.json({
+        ok: true,
+        spec: { ...spec, layout: { sections: sectionsUsed }, copy, brandColor },
+        plan: actions,
+        ran: { kind: "retrieve", args: (top as any).args || {} },
+        result: { pageId: dpid, path: relPath },
+        url: `/api/ai/previews/${dpid}`,
+        chips,
+        signals: summarize(sessionId),
+      });
+    }
 
     // Ensure retrieve carries audience explicitly
     if (top?.kind === "retrieve") {
@@ -2470,7 +2693,8 @@ router.post("/one", express.json(), async (req, res) => {
     {
       const _h = childHeaders(req);
       if ((spec as any)?.audience) _h["x-audience"] = String((spec as any).audience);
-      const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+      const f1 = requireFetch();
+      const actResR = await f1(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
         headers: _h,
         body: JSON.stringify({ sessionId, spec, action: top }),
@@ -2500,7 +2724,8 @@ router.post("/one", express.json(), async (req, res) => {
       {
         const _h2 = childHeaders(req);
         if ((spec as any)?.audience) _h2["x-audience"] = String((spec as any).audience);
-        const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+        const f2 = requireFetch();
+        const composeR = await f2(`${baseUrl(req)}/api/ai/act`, {
           method: "POST",
           headers: _h2,
           body: JSON.stringify({
@@ -2566,6 +2791,14 @@ router.post("/one", express.json(), async (req, res) => {
       recordTTU(Date.now() - t0);
     } catch {}
 
+    try {
+      if ((result as any)?.sup) {
+        res.setHeader("X-SUP-Mode", String(((result as any).sup.mode) || ""));
+        const reasons = Array.isArray((result as any).sup.reasons) ? (result as any).sup.reasons.join(",") : "";
+        res.setHeader("X-SUP-Reasons", reasons);
+      }
+    } catch {}
+
     return res.json({
       ok: true,
       spec: specOut,
@@ -2609,6 +2842,30 @@ router.post("/instant", async (req, res) => {
     if (sticky?.specId) {
       const specCached = readSpecById(sticky.specId);
       if (specCached) {
+        // SUP decision before reusing/copying
+        try {
+          const risk = computeRiskVector({
+            prompt,
+            copy: (specCached as any)?.copy || {},
+            proof: {},
+            perf: null,
+            ux: null,
+            a11yPass: null,
+          });
+          const decision = supDecide("/instant/sticky", risk);
+          if (decision.mode === "block") {
+            res.setHeader("X-SUP-Mode", decision.mode);
+            res.setHeader("X-SUP-Reasons", (decision.reasons || []).join(","));
+            return res.json({
+              ok: true,
+              source: "instant",
+              spec: specCached,
+              result: { kind: "compose", error: "sup_block", sup: decision },
+              url: null,
+            });
+          }
+        } catch {}
+
         const origPageId = `pg_${String(sticky.specId).replace(/^spec_?/, "")}`;
         const newPageId = `pg_${nanoid(6)}`;
         try {
@@ -2632,23 +2889,35 @@ router.post("/instant", async (req, res) => {
           // Ensure a lightweight proof card exists for the new pageId
           try {
             fs.mkdirSync(".cache/proof", { recursive: true });
-            fs.writeFileSync(
-              `.cache/proof/${newPageId}.json`,
-              JSON.stringify(
-                {
-                  pageId: newPageId,
-                  url: `/api/ai/previews/${newPageId}`,
-                  proof_ok: true,
-                  fact_counts: {},
-                  facts: {},
-                  cls_est: null,
-                  lcp_est_ms: null,
-                  perf_matrix: null,
-                },
-                null,
-                2
-              )
-            );
+            // EDIT 2.3 (Spot B) — stamp policy+risk+signature for instant copy path
+            const risk = computeRiskVector({
+              prompt,
+              copy: (specCached as any)?.copy || {},
+              proof: {},
+              perf: null,
+              ux: null,
+              a11yPass: null,
+            });
+            const card = {
+              pageId: newPageId,
+              url: `/api/ai/previews/${newPageId}`,
+              proof_ok: true,
+              fact_counts: {},
+              facts: {},
+              cls_est: null,
+              lcp_est_ms: null,
+              perf_matrix: null,
+              ux_score: null,
+              ux_issues: [],
+              policy_version: POLICY_VERSION,
+              risk,
+            };
+            (card as any).signature = signProof({
+              pageId: card.pageId,
+              policy_version: card.policy_version,
+              risk: card.risk,
+            });
+            fs.writeFileSync(`.cache/proof/${newPageId}.json`, JSON.stringify(card, null, 2));
           } catch {}
         } catch {}
 
@@ -2771,13 +3040,38 @@ router.post("/instant", async (req, res) => {
       (spec as any).copy = copy;
     } catch {}
 
-    // ⬇️ DEV/force ship: write a local preview immediately (no composer)
+    // ⬇️ DEV/force ship: run SUP pre-ship, then write a local preview immediately (no composer)
     const dev = process.env.NODE_ENV !== "production";
     const forceShip =
       String(req.get("x-ship-preview") || "") === "1" ||
       (req.body && (req.body as any).ship === true);
 
     if (dev || forceShip) {
+      // SUP decision for instant-dev path
+      let decision: any = null;
+      try {
+        const risk = computeRiskVector({
+          prompt,
+          copy: (spec as any)?.copy || {},
+          proof: {},
+          perf: null,
+          ux: null,
+          a11yPass: null,
+        });
+        decision = supDecide("/instant/dev", risk);
+        if (decision.mode === "block") {
+          res.setHeader("X-SUP-Mode", decision.mode);
+          res.setHeader("X-SUP-Reasons", (decision.reasons || []).join(","));
+          return res.json({
+            ok: true,
+            source: "instant",
+            spec,
+            result: { kind: "compose", error: "sup_block", sup: decision },
+            url: null,
+          });
+        }
+      } catch {}
+
       if (!(spec as any).id) {
         (spec as any).id = `spec_${nanoid(8)}`;
       }
@@ -2790,24 +3084,35 @@ router.post("/instant", async (req, res) => {
       // Minimal Proof Card so /proof/:pageId works in tests
       try {
         fs.mkdirSync(".cache/proof", { recursive: true });
-        fs.writeFileSync(
-          `.cache/proof/${pageId}.json`,
-          JSON.stringify(
-            {
-              pageId,
-              url: relPath,
-              proof_ok: true,
-              fact_counts: {},
-              facts: {},
-              // add perf fields so Vitest sees them
-              cls_est: null,
-              lcp_est_ms: null,
-              perf_matrix: null,
-            },
-            null,
-            2
-          )
-        );
+        // EDIT 2.3 (Spot B) — dev/force ship proof card with policy+risk+signature
+        const risk = computeRiskVector({
+          prompt,
+          copy: (spec as any)?.copy || {},
+          proof: {},
+          perf: null,
+          ux: null,
+          a11yPass: null,
+        });
+        const card = {
+          pageId,
+          url: relPath,
+          proof_ok: true,
+          fact_counts: {},
+          facts: {},
+          cls_est: null,
+          lcp_est_ms: null,
+          perf_matrix: null,
+          ux_score: null,
+          ux_issues: [],
+          policy_version: POLICY_VERSION,
+          risk,
+        };
+        (card as any).signature = signProof({
+          pageId: card.pageId,
+          policy_version: card.policy_version,
+          risk: card.risk,
+        });
+        fs.writeFileSync(`.cache/proof/${pageId}.json`, JSON.stringify(card, null, 2));
       } catch {}
 
       // BrandDNA learns from instant ship
@@ -2828,11 +3133,19 @@ router.post("/instant", async (req, res) => {
       } catch {}
 
       const apiPath = `/api/ai/previews/${pageId}`; // use stripper route
+
+      try {
+        if (decision) {
+          res.setHeader("X-SUP-Mode", String(decision.mode || ""));
+          res.setHeader("X-SUP-Reasons", String((decision.reasons || []).join(",")));
+        }
+      } catch {}
+
       return res.json({
         ok: true,
         source: "instant",
         spec,
-        result: { pageId, path: relPath }, // keep for compatibility
+        result: { pageId, path: relPath, sup: decision || null }, // keep for compatibility
         url: apiPath,
       });
     }
@@ -2901,6 +3214,14 @@ router.post("/instant", async (req, res) => {
         ? { ...(spec as any).brand, ...(result as any).brand }
         : (spec as any).brand;
 
+    try {
+      if ((result as any)?.sup) {
+        res.setHeader("X-SUP-Mode", String(((result as any).sup.mode) || ""));
+        const reasons = Array.isArray((result as any).sup.reasons) ? (result as any).sup.reasons.join(",") : "";
+        res.setHeader("X-SUP-Reasons", reasons);
+      }
+    } catch {}
+
     return res.json({
       ok: true,
       source: "instant",
@@ -2926,22 +3247,31 @@ router.post("/instant", async (req, res) => {
       // Minimal Proof Card so /proof/:pageId is stable.
       try {
         fs.mkdirSync(".cache/proof", { recursive: true });
+        const risk = computeRiskVector({
+          prompt: "", copy: {}, proof: {}, perf: null, ux: null, a11yPass: null,
+        });
+        const card = {
+          pageId,
+          url: `/api/ai/previews/${pageId}`,
+          proof_ok: true,
+          fact_counts: {},
+          facts: {},
+          cls_est: null,
+          lcp_est_ms: null,
+          perf_matrix: null,
+          ux_score: null,
+          ux_issues: [],
+          policy_version: POLICY_VERSION,
+          risk,
+        };
+        (card as any).signature = signProof({
+          pageId: card.pageId,
+          policy_version: card.policy_version,
+          risk: card.risk,
+        });
         fs.writeFileSync(
           `.cache/proof/${pageId}.json`,
-          JSON.stringify(
-            {
-              pageId,
-              url: `/api/ai/previews/${pageId}`,
-              proof_ok: true,
-              fact_counts: {},
-              facts: {},
-              cls_est: null,
-              lcp_est_ms: null,
-              perf_matrix: null,
-            },
-            null,
-            2
-          )
+          JSON.stringify(card, null, 2)
         );
       } catch {}
 
@@ -3028,7 +3358,8 @@ router.post("/clarify/compose", async (req, res) => {
       kind: "retrieve",
       args: { sections: s.layout.sections, audience: String(s.audience || (s.intent?.audience ?? "")) },
     };
-    const actResR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+    const f3 = requireFetch();
+    const actResR = await f3(`${baseUrl(req)}/api/ai/act`, {
       method: "POST",
       headers: childHeaders(req),
       body: JSON.stringify({ sessionId, spec: s, action: retrieve }),
@@ -3049,7 +3380,8 @@ router.post("/clarify/compose", async (req, res) => {
           variantHints: VARIANT_HINTS,
         },
       };
-      const composeR = await fetch(`${baseUrl(req)}/api/ai/act`, {
+      const f4 = requireFetch();
+      const composeR = await f4(`${baseUrl(req)}/api/ai/act`, {
         method: "POST",
         headers: childHeaders(req),
         body: JSON.stringify({
@@ -3080,6 +3412,13 @@ router.post("/clarify/compose", async (req, res) => {
       kind: "clarify_compose",
       data: { chips },
     });
+    try {
+      if ((result as any)?.sup) {
+        res.setHeader("X-SUP-Mode", String(((result as any).sup.mode) || ""));
+        const reasons = Array.isArray((result as any).sup.reasons) ? (result as any).sup.reasons.join(",") : "";
+        res.setHeader("X-SUP-Reasons", reasons);
+      }
+    } catch {}
     return res.json({
       ok: true,
       url,
@@ -3307,6 +3646,8 @@ router.get("/proof/:pageId", (req, res) => {
     if (!fs.existsSync(proofPath)) {
       try {
         fs.mkdirSync(proofDir, { recursive: true });
+        let _risk:any;
+        try { _risk = computeRiskVector({ prompt:"", copy:{}, proof:{}, perf:null, ux:null, a11yPass:null }); } catch { _risk = {}; }
         const minimal = {
           pageId: id,
           url: `/api/ai/previews/${id}`,
@@ -3316,12 +3657,19 @@ router.get("/proof/:pageId", (req, res) => {
           cls_est: null,
           lcp_est_ms: null,
           perf_matrix: null,
+          ux_score: null,
+          ux_issues: [],
+          policy_version: POLICY_VERSION,
+          risk: _risk,
+          signature: signProof({ pageId: id, policy_version: POLICY_VERSION, risk: _risk }),
         };
         fs.writeFileSync(proofPath, JSON.stringify(minimal, null, 2));
       } catch {}
     }
 
     if (!fs.existsSync(proofPath)) {
+      let _risk:any;
+      try { _risk = computeRiskVector({ prompt:"", copy:{}, proof:{}, perf:null, ux:null, a11yPass:null }); } catch { _risk = {}; }
       return res.json({
         ok: true,
         proof: {
@@ -3333,6 +3681,11 @@ router.get("/proof/:pageId", (req, res) => {
           cls_est: null,
           lcp_est_ms: null,
           perf_matrix: null,
+          ux_score: null,
+          ux_issues: [],
+          policy_version: POLICY_VERSION,
+          risk: _risk,
+          signature: signProof({ pageId: id, policy_version: POLICY_VERSION, risk: _risk }),
         },
       });
     }
@@ -3341,6 +3694,8 @@ router.get("/proof/:pageId", (req, res) => {
     return res.json({ ok: true, proof: j });
   } catch {
     const id = String(req.params.pageId || "");
+    let _risk:any;
+    try { _risk = computeRiskVector({ prompt:"", copy:{}, proof:{}, perf:null, ux:null, a11yPass:null }); } catch { _risk = {}; }
     return res.json({
       ok: true,
       proof: {
@@ -3352,6 +3707,11 @@ router.get("/proof/:pageId", (req, res) => {
         cls_est: null,
         lcp_est_ms: null,
         perf_matrix: null,
+        ux_score: null,
+        ux_issues: [],
+        policy_version: POLICY_VERSION,
+        risk: _risk,
+        signature: signProof({ pageId: id, policy_version: POLICY_VERSION, risk: _risk }),
       },
     });
   }
