@@ -2582,9 +2582,21 @@ router.post("/one", express.json(), async (req, res) => {
 });
 
 // ---------- instant (zero-LLM compose) ----------
-router.post("/instant", express.json(), async (req, res) => {
+// EDIT A: remove express.json() so sloppy curl bodies don't 400 before handler
+router.post("/instant", async (req, res) => {
   try {
     const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
+
+    // EDIT B: strict-proof gate for zero-LLM path
+    if (isProofStrict(req) && hasRiskyClaims(prompt)) {
+      return res.json({
+        ok: true,
+        source: "instant",
+        spec: {},
+        result: { kind: "compose", error: "proof_gate_fail", promptRisk: true },
+        url: null,
+      });
+    }
 
     // test-safe mode
     const testMode =
