@@ -78,7 +78,11 @@ import { runArmy } from "./army.ts";
 import { mountCiteLock } from "./citelock.patch.ts";
 import { registerSelfTest } from "./selftest";
 // EDIT 2.1 — SUP policy core
-import { computeRiskVector, supGuard, supDecide, POLICY_VERSION, signProof } from "../sup/policy.core.ts";
+import { computeRiskVector, supDecide, POLICY_VERSION, signProof } from "../sup/policy.core.ts";
+// ADD (review registry):
+import { chatJSON } from "../llm/registry.ts";
+// NEW — quotas+risk+proof middleware (per request)
+import { supGuard } from "../mw/sup.ts";
 
 // --- SUP V1: readiness gate + quotas + abuse intake ---
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 60_000);
@@ -355,7 +359,7 @@ router.use((req, res, next) => {
 });
 // attach limiter AFTER bypass block
 // EDIT 2.2 — swap old limiter for SUP guard
-router.use(supGuard());
+router.use(supGuard("ai"));
 
 // POST /api/ai/abuse/report  → JSONL sink under .cache/abuse/YYYY-MM-DD.jsonl
 router.post("/abuse/report", express.json(), (req, res) => {
@@ -867,37 +871,19 @@ Rules:
 
     async function runCritic(exp: any) {
       const t0 = Date.now();
-      const payload = {
-        model: exp.model,
+
+      // REPLACED: use registry-based call rather than direct OpenAI HTTP
+      const { json } = await chatJSON({
+        task: "critic",
+        system,
+        user,
         temperature: 0,
         max_tokens: Number(process.env.OPENAI_REVIEW_MAXTOKENS || 600),
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      };
+        timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS || 20000),
+        tags: { model_hint: exp.model },
+        req, // allow header overrides: x-llm-provider, x-llm-shadow
+      });
 
-      const data = await fetchJSONWithTimeout(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        },
-        Number(process.env.OPENAI_TIMEOUT_MS || 20000)
-      );
-
-      const raw = data?.choices?.[0]?.message?.content || "{}";
-      let json;
-      try {
-        json = JSON.parse(raw);
-      } catch {
-        json = JSON.parse(extractJSON(raw));
-      }
       const ms = Date.now() - t0;
       try {
         recordExpertOutcome(exp.key, {

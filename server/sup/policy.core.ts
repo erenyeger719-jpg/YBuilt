@@ -335,6 +335,7 @@ export function supGuard() {
       (req.method === "POST" && req.path === "/abuse/report")
     ) {
       res.setHeader("X-SUP-Mode", "allow");
+      res.setHeader("X-SUP-Policy-Version", POLICY_VERSION);
       return next();
     }
 
@@ -347,11 +348,13 @@ export function supGuard() {
       score: 0,
     };
 
-    if (now - rec.windowStart >= QUOTA.WINDOW_MS) {
+    const elapsed = now - rec.windowStart;
+
+    if (elapsed >= QUOTA.WINDOW_MS) {
+      // correct decay check must use elapsed BEFORE resetting windowStart
+      if (elapsed > QUOTA.DECAY_MS) rec.score = 0;
       rec.hits = 0;
       rec.windowStart = now;
-      // decay reputation/score
-      if (now - rec.windowStart > QUOTA.DECAY_MS) rec.score = 0;
     }
 
     rec.hits += 1;
@@ -367,6 +370,7 @@ export function supGuard() {
 
     const remaining = Math.max(0, QUOTA.MAX_BURST - rec.hits);
     res.setHeader("X-SUP-Quota-Remaining", String(remaining));
+    res.setHeader("X-SUP-Policy-Version", POLICY_VERSION);
 
     if (rec.hits > QUOTA.MAX_BURST) {
       return res.status(429).json({ ok: false, error: "rate_limited" });
