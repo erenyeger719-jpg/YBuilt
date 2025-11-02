@@ -9,3 +9,9 @@ vite.config.ts.*
 .env.*
 server/.env
 server/.env.*
+
+# env
+.env
+.env.*
+server/.env
+server/.env.*
