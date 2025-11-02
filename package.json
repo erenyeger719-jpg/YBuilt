@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": "20.x" },
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "ai:battle": "bash scripts/ai-battleready.sh",
     "ai:smoke": "tsx server/scripts/ai.smoke.ts",
@@ -96,6 +98,7 @@
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "better-sqlite3": "^12.4.1",
+    "browserslist": "4.23.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -148,16 +151,13 @@
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.2.5",
     "uuid": "^13.0.0",
-    "vault": "^1.1.2",
     "vm2": "^3.9.19",
-    "vitest": "^1.6.0",
     "wouter": "^3.7.1",
     "ws": "^8.18.0",
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.27",
     "zod": "^3.25.76",
-    "zod-validation-error": "^3.4.0",
-    "browserslist": "4.23.3"
+    "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
     "@replit/vite-plugin-cartographer": "^0.3.1",

@@ -3858,7 +3858,7 @@ router.get("/narrative/:pageId", async (req, res) => {
 
     // — summary bullets
     const bullets: string[] = [];
-    bullets.push(proof: proof_ok ? "Proof: ✓ evidence attached" : "Proof: ✗ gaps found");
+    bullets.push(proof_ok ? "Proof: ✓ evidence attached" : "Proof: ✗ gaps found");
     bullets.push(a11y ? "A11y: ✓ passes checks" : "A11y: ✗ issues remain");
     if (cls != null) bullets.push(`CLS: ${cls.toFixed(3)} ${cls <= 0.10 ? "✓" : "⚠︎ >0.10 → reserve heights, lock ratios"}`);
     if (lcp != null) bullets.push(`LCP: ${Math.round(lcp)}ms ${lcp <= 2500 ? "✓" : "⚠︎ >2500ms → Zero-JS or image size cut"}`);
