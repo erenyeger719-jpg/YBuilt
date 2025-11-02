@@ -1,8 +1,18 @@
 // server/mw/sup.ts
 import type { Request, Response, NextFunction } from "express";
-import { computeRiskVector, decideGates, POLICY_VERSION, contentHash, type GateMap } from "../sup/policy";
+import * as policy from "../sup/policy";
+import type { GateMap } from "../sup/policy";
 import { keyFor, checkBudget, recordHit } from "../sup/ledger";
 import { makeProof, writeProof } from "../sup/proof";
+
+const { computeRiskVector, decideGates, contentHash } = policy as {
+  computeRiskVector: typeof import("../sup/policy").computeRiskVector;
+  decideGates: typeof import("../sup/policy").decideGates;
+  contentHash: typeof import("../sup/policy").contentHash;
+};
+
+// Fallback if the policy module doesn’t export it
+const POLICY_VERSION: string = (policy as any).POLICY_VERSION ?? "v1";
 
 function idFrom(req: Request) {
   const ip =
