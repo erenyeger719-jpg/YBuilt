@@ -54,6 +54,9 @@ import uxMicrocopyRouter from './routes/ux.microcopy.ts';
 // NEW: PII scrubber for AI routes
 import piiScrub from './mw/pii-scrub.ts';
 
+// NEW: Code router (repo editing utilities)
+import codeRouter from './routes/code.ts';
+
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
 
@@ -185,6 +188,8 @@ app.use(ipGate());
   app.use(cookieParser()); // cookie support for session/team routes
   app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
   app.use(express.json({ limit: '1mb' }));
+  // ensure .cache exists early for routers that write there
+  try { fs.mkdirSync('.cache', { recursive: true }); } catch {}
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
   // 🔖 API marker header (place right after CORS/parsers; before routers)
@@ -659,6 +664,9 @@ app.use(ipGate());
   app.use('/api/ux', express.json({ limit: '256kb' }), uxPatchRouter);
   // NEW: UX Microcopy API
   app.use('/api/ux', express.json({ limit: '128kb' }), uxMicrocopyRouter);
+
+  // NEW: Code API (repo tree/read/edits/tests/migrate)
+  app.use('/api/code', codeRouter);
 
   // Comments API
   if (commentsMod?.list) app.get('/api/comments/list', commentsMod.list);

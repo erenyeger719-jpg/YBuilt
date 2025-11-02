@@ -1,53 +1,63 @@
-// server/sup/ledger.ts
+// server/sup/proof.ts
 import fs from "fs";
 import path from "path";
-import * as crypto from "crypto";
 
+export type ProofMeta = {
+  endpoint: string;
+  status: number;
+  ms: number;
+};
 
-const FILE = path.join(".cache", "ledger.v1.json");
-type Stamp = { last: number; burst: number; credit: number };
-type State = Record<string, Stamp>; // key = ip|session|apiKey
+export type Proof = {
+  requestId: string;
+  policyVersion: string;
+  gates: Record<string, boolean>; // keep it loose; policy owns the schema
+  risk: Record<string, unknown>;  // ditto
+  provider: string;
+  contentHash: string;
+  meta: ProofMeta;
+  ts: string; // ISO timestamp
+};
 
-function read(): State {
-  try { return JSON.parse(fs.readFileSync(FILE, "utf8")); }
-  catch { return {}; }
+/**
+ * Build a normalized proof object from inputs.
+ * Keep this dead-simple and deterministic so downstream tooling can tail/parse easily.
+ */
+export function makeProof(input: {
+  requestId: string;
+  policyVersion: string;
+  gates: Record<string, boolean>;
+  risk: Record<string, unknown>;
+  provider: string;
+  contentHash: string;
+  meta: ProofMeta;
+}): Proof {
+  return {
+    requestId: input.requestId,
+    policyVersion: input.policyVersion,
+    gates: input.gates,
+    risk: input.risk,
+    provider: input.provider,
+    contentHash: input.contentHash,
+    meta: {
+      endpoint: input.meta.endpoint,
+      status: input.meta.status,
+      ms: input.meta.ms,
+    },
+    ts: new Date().toISOString(),
+  };
 }
-function write(s: State) {
-  try { fs.mkdirSync(".cache", { recursive: true }); fs.writeFileSync(FILE, JSON.stringify(s)); } catch {}
-}
 
-export type Budget = { allowed: boolean; tier: "full" | "light" | "safe"; reason: string; remaining: number };
-
-export function assessAndUpdate(key: string, endpoint: string, cost = 1): Budget {
-  const now = Date.now();
-  const s = read();
-  const rec = s[key] || { last: now, burst: 0, credit: 100 }; // credit starts at 100
-  const dt = Math.max(1, (now - rec.last) / 1000);
-
-  // decay burst, replenish credit slowly
-  rec.burst = Math.max(0, rec.burst - dt * 0.5);
-  rec.credit = Math.min(150, rec.credit + dt * 0.1);
-
-  // apply this request
-  rec.burst += cost;
-
-  // quick heuristics: shape thresholds per endpoint
-  const hardBurst = endpoint === "compose" ? 12 : 6;
-  const softBurst = endpoint === "compose" ? 8 : 4;
-
-  let tier: Budget["tier"] = "full";
-  let allowed = true;
-  let reason = "ok";
-
-  if (rec.burst > hardBurst || rec.credit < 10) {
-    tier = "safe"; allowed = endpoint !== "compose"; reason = "over_budget_hard";
-  } else if (rec.burst > softBurst || rec.credit < 30) {
-    tier = "light"; allowed = true; reason = "over_budget_soft";
+/**
+ * Append the proof as JSONL into .cache/proofs.log.
+ * Atomic enough for our dev/runtime; rotate later if the file grows.
+ */
+export function writeProof(p: Proof) {
+  try {
+    fs.mkdirSync(".cache", { recursive: true });
+    const file = path.join(".cache", "proofs.log");
+    fs.appendFileSync(file, JSON.stringify(p) + "\n", "utf8");
+  } catch {
+    // don’t throw from a logging side-effect; guardrails must not crash the request
   }
-
-  // penalize if soft/hard
-  if (tier !== "full") rec.credit = Math.max(0, rec.credit - 5);
-
-  rec.last = now; s[key] = rec; write(s);
-  return { allowed, tier, reason, remaining: Math.max(0, hardBurst - rec.burst) };
 }

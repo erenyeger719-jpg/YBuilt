@@ -3642,20 +3642,23 @@ router.post("/clarify/compose", async (req, res) => {
 });
 
 // ---------- chips ----------
-router.post("/chips/apply", contractsHardStop(), (req, res) => {
-  const { sessionId = "anon", spec = {}, chip = "" } = (req.body || {}) as any;
+router.post("/chips/apply", contractsHardStop(), async (req, res) => {
   try {
-    try {
-      editsInc(String(sessionId));
-    } catch {}
-    const s = applyChipLocal(spec, chip);
-    pushSignal(sessionId, { ts: Date.now(), kind: "chip_apply", data: { chip } });
-    try {
-      learnFromChip(String(sessionId), String(chip || ""));
-    } catch {}
-    return res.json({ ok: true, spec: s });
-  } catch {
-    return res.status(500).json({ ok: false, error: "chip_apply_failed" });
+    const prepared: any = (req as any).__prepared;
+    if (!prepared) {
+      return res.status(500).json({
+        ok: false,
+        error: "server_error",
+        message: "Contracts guard did not prepare the patch.",
+      });
+    }
+    const preview = cheapCopy(prepared);
+    const receipt = buildReceipt(prepared.before, prepared.patch, prepared);
+    const intent = ledgerFor(prepared.patch?.copy || "");
+    const cost = estimateCost(prepared.before, prepared.patch);
+    return res.json({ ok: true, preview, meta: { cost, receipt, intent } });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "server_error", message: "Something went wrong on our side." });
   }
 });
 
