@@ -132,7 +132,20 @@ router.post("/apply", (req, res) => {
       return res.json({ ok: false, error: "contracts_failed", reasons: gate.reasons });
     }
 
-    const out = applyWrite(p, String(newContent), Boolean(dryRun));
+    // 👇 NEW: succeed without touching disk on dry-run
+    if (Boolean(dryRun)) {
+      return res.json({
+        ok: true,
+        path: String(p),
+        bytes: Buffer.byteLength(String(newContent), "utf8"),
+        dryRun: true,
+      });
+    }
+
+    // 👇 NEW: ensure directory exists for real writes
+    fs.mkdirSync(path.dirname(String(p)), { recursive: true });
+
+    const out = applyWrite(String(p), String(newContent), false);
     res.json({ ok: true, ...out });
   } catch (e: any) {
     bad(res, e?.message || "apply_error");
