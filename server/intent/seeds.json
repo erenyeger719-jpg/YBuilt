@@ -1,0 +1,604 @@
+[
+  {
+    "slug": "lp_hero_dark_minimal",
+    "tags": ["hero", "cta", "price", "dark", "minimal", "section"],
+    "text": "Fast, focused, and frugal. Launch in minutes, not weeks.",
+    "weight": 1.3,
+    "updatedAt": 1762060800000
+  },
+  {
+    "slug": "pricing_value_lite",
+    "tags": ["pricing", "value-prop", "light", "section"],
+    "text": "Everything you need, nothing you do not. Start free, grow when it pays.",
+    "weight": 1.2,
+    "updatedAt": 1762060801000
+  },
+  {
+    "slug": "proof_claim_latency",
+    "tags": ["claim", "proof", "perf", "lcp"],
+    "text": "Under 1.2s LCP on real 4G — sane defaults over hacks.",
+    "weight": 1.4,
+    "updatedAt": 1762060802000
+  },
+  {
+    "slug": "hero_basic_v1",
+    "tags": ["hero", "section", "light"],
+    "text": "Clarity first: a single promise, a single CTA, zero fluff.",
+    "weight": 1.2,
+    "updatedAt": 1762060803000
+  },
+  {
+    "slug": "hero_basic_b",
+    "tags": ["hero", "section", "variant-b"],
+    "text": "Ship the value, not the buzzwords. Lead with outcomes.",
+    "weight": 1.05,
+    "updatedAt": 1762060804000
+  },
+  {
+    "slug": "features_3col_v1",
+    "tags": ["features", "section", "grid"],
+    "text": "Three crisp pillars with short headlines and one-liners.",
+    "weight": 1.1,
+    "updatedAt": 1762060805000
+  },
+  {
+    "slug": "features_3col_alt",
+    "tags": ["features", "section", "grid", "alt"],
+    "text": "Icons, tight copy, and scannable bullets for quick intent.",
+    "weight": 1.05,
+    "updatedAt": 1762060806000
+  },
+  {
+    "slug": "pricing_simple_v1",
+    "tags": ["pricing", "section", "conversion"],
+    "text": "Clear tiers, one highlighted pick, frictionless upgrade.",
+    "weight": 1.2,
+    "updatedAt": 1762060807000
+  },
+  {
+    "slug": "pricing_simple_a",
+    "tags": ["pricing", "section", "variant-a"],
+    "text": "Monthly first, yearly savings inline, taxes clarified.",
+    "weight": 1.05,
+    "updatedAt": 1762060808000
+  },
+  {
+    "slug": "faq_accordion_v1",
+    "tags": ["faq", "section", "support"],
+    "text": "Answer top five objections with short, honest copy.",
+    "weight": 1.1,
+    "updatedAt": 1762060809000
+  },
+  {
+    "slug": "faq_accordion_dense",
+    "tags": ["faq", "section", "dense"],
+    "text": "Compact accordion with deep links for power users.",
+    "weight": 1.02,
+    "updatedAt": 1762060810000
+  },
+  {
+    "slug": "cta_primary_signup",
+    "tags": ["cta", "conversion"],
+    "text": "Primary CTA: Sign up free.",
+    "weight": 1.2,
+    "updatedAt": 1762060811000
+  },
+  {
+    "slug": "cta_get_started",
+    "tags": ["cta", "conversion"],
+    "text": "Primary CTA: Get started.",
+    "weight": 1.1,
+    "updatedAt": 1762060812000
+  },
+  {
+    "slug": "cta_join_waitlist",
+    "tags": ["cta", "waitlist"],
+    "text": "Primary CTA: Join the waitlist with email only.",
+    "weight": 1.05,
+    "updatedAt": 1762060813000
+  },
+  {
+    "slug": "cta_request_demo",
+    "tags": ["cta", "sales"],
+    "text": "Secondary CTA: Request a demo.",
+    "weight": 1.0,
+    "updatedAt": 1762060814000
+  },
+  {
+    "slug": "claim_soften_missing_evidence",
+    "tags": ["claim", "ethics"],
+    "text": "Flag strong claims lacking evidence and soften the copy.",
+    "weight": 1.1,
+    "updatedAt": 1762060815000
+  },
+  {
+    "slug": "proof_link_required",
+    "tags": ["claim", "proof", "compliance"],
+    "text": "Require a public link or footnote for every quantitative claim.",
+    "weight": 1.15,
+    "updatedAt": 1762060816000
+  },
+  {
+    "slug": "claim_superlatives_guard",
+    "tags": ["claim", "style"],
+    "text": "Avoid superlatives like best or fastest unless verified.",
+    "weight": 1.08,
+    "updatedAt": 1762060817000
+  },
+  {
+    "slug": "price_per_month_annual",
+    "tags": ["price", "clarity"],
+    "text": "Show per month and total annual price with savings percent.",
+    "weight": 1.12,
+    "updatedAt": 1762060818000
+  },
+  {
+    "slug": "perf_zero_js",
+    "tags": ["perf", "lcp", "cls"],
+    "text": "Zero JS above the fold to reduce LCP and stabilize CLS.",
+    "weight": 1.2,
+    "updatedAt": 1762060819000
+  },
+  {
+    "slug": "perf_swap_visuals_to_svg",
+    "tags": ["perf", "assets", "vector"],
+    "text": "Swap heavy hero images for vector illustrations.",
+    "weight": 1.08,
+    "updatedAt": 1762060820000
+  },
+  {
+    "slug": "perf_tighten_rhythm",
+    "tags": ["perf", "layout", "rhythm"],
+    "text": "Tighter vertical rhythm for faster scanning and fewer scrolls.",
+    "weight": 1.06,
+    "updatedAt": 1762060821000
+  },
+  {
+    "slug": "perf_wcag_aa_contrast",
+    "tags": ["perf", "wcag", "aa"],
+    "text": "Increase contrast to WCAG AA for readability and trust.",
+    "weight": 1.1,
+    "updatedAt": 1762060822000
+  },
+  {
+    "slug": "playbook_email_signup",
+    "tags": ["playbook", "cta", "email"],
+    "text": "Collect email with a single field, explain value and cadence.",
+    "weight": 1.1,
+    "updatedAt": 1762060823000
+  },
+  {
+    "slug": "playbook_more_minimal_layout",
+    "tags": ["playbook", "layout", "minimal"],
+    "text": "Strip decorations; let whitespace and type do the work.",
+    "weight": 1.05,
+    "updatedAt": 1762060824000
+  },
+  {
+    "slug": "playbook_dark_mode_switch",
+    "tags": ["playbook", "dark", "theme"],
+    "text": "Offer a dark mode toggle that remembers preference.",
+    "weight": 1.05,
+    "updatedAt": 1762060825000
+  },
+  {
+    "slug": "section_testimonial_quote",
+    "tags": ["section", "social-proof", "testimonials"],
+    "text": "One killer quote with face, role, and measurable outcome.",
+    "weight": 1.15,
+    "updatedAt": 1762060826000
+  },
+  {
+    "slug": "section_logos_social_proof",
+    "tags": ["section", "social-proof", "logos"],
+    "text": "Row of recognizable logos with alt text and title tips.",
+    "weight": 1.08,
+    "updatedAt": 1762060827000
+  },
+  {
+    "slug": "section_benefits_checklist",
+    "tags": ["section", "benefits", "checklist"],
+    "text": "Short checklist mapping features to outcomes users feel.",
+    "weight": 1.1,
+    "updatedAt": 1762060828000
+  },
+  {
+    "slug": "section_how_it_works_steps",
+    "tags": ["section", "how-it-works", "steps"],
+    "text": "Three steps with verbs, one visual, and a final CTA.",
+    "weight": 1.12,
+    "updatedAt": 1762060829000
+  },
+  {
+    "slug": "section_integrations_grid",
+    "tags": ["section", "integrations", "grid"],
+    "text": "Show the ecosystem: logos, scopes, and setup time.",
+    "weight": 1.06,
+    "updatedAt": 1762060830000
+  },
+  {
+    "slug": "section_footer_simple",
+    "tags": ["section", "footer", "trust"],
+    "text": "Short footer with legal, status, and a single CTA.",
+    "weight": 1.02,
+    "updatedAt": 1762060831000
+  },
+  {
+    "slug": "theme_saas_waitlist_founders",
+    "tags": ["theme", "saas", "waitlist"],
+    "text": "Founder tone, transparent roadmap, and early access perks.",
+    "weight": 1.05,
+    "updatedAt": 1762060832000
+  },
+  {
+    "slug": "theme_devtools_dark",
+    "tags": ["theme", "devtools", "dark"],
+    "text": "Monospace, code samples, and fast paths to a CLI.",
+    "weight": 1.08,
+    "updatedAt": 1762060833000
+  },
+  {
+    "slug": "theme_marketing_minimal",
+    "tags": ["theme", "marketing", "minimal"],
+    "text": "Editorial feel with roomy type and gentle motion.",
+    "weight": 1.02,
+    "updatedAt": 1762060834000
+  },
+  {
+    "slug": "theme_conversion_lp",
+    "tags": ["theme", "landing", "conversion"],
+    "text": "Above-the-fold value, proof, and a single action.",
+    "weight": 1.12,
+    "updatedAt": 1762060835000
+  },
+  {
+    "slug": "exp_ab_arm_a",
+    "tags": ["exp", "ab-test", "arm-a"],
+    "text": "A/B arm A registered with metrics and guardrails.",
+    "weight": 1.0,
+    "updatedAt": 1762060836000
+  },
+  {
+    "slug": "exp_ab_arm_b",
+    "tags": ["exp", "ab-test", "arm-b"],
+    "text": "A/B arm B variant with conservative changes.",
+    "weight": 1.0,
+    "updatedAt": 1762060837000
+  },
+  {
+    "slug": "exp_sprt",
+    "tags": ["exp", "sequential", "sprt"],
+    "text": "Sequential test with early stopping for strong signals.",
+    "weight": 1.05,
+    "updatedAt": 1762060838000
+  },
+  {
+    "slug": "data_error_state_banner",
+    "tags": ["data", "state", "error"],
+    "text": "Top banner error with retry and status link.",
+    "weight": 1.02,
+    "updatedAt": 1762060839000
+  },
+  {
+    "slug": "data_skeleton_shimmer",
+    "tags": ["data", "state", "loading"],
+    "text": "Skeleton loading that matches real content shape.",
+    "weight": 1.04,
+    "updatedAt": 1762060840000
+  },
+  {
+    "slug": "data_empty_state_copy",
+    "tags": ["data", "state", "empty"],
+    "text": "Empty state that teaches with one-liner and CTA.",
+    "weight": 1.06,
+    "updatedAt": 1762060841000
+  },
+  {
+    "slug": "data_long_text_overflow",
+    "tags": ["data", "state", "overflow"],
+    "text": "Clamp long text with expand to keep rhythm intact.",
+    "weight": 1.02,
+    "updatedAt": 1762060842000
+  },
+  {
+    "slug": "lp_hero_light_playful",
+    "tags": ["hero", "light", "playful", "section"],
+    "text": "Warm gradients, friendly faces, and a direct CTA.",
+    "weight": 1.08,
+    "updatedAt": 1762060843000
+  },
+  {
+    "slug": "lp_hero_media_left_copy_right",
+    "tags": ["hero", "layout", "section"],
+    "text": "Media left, proof chips right, one primary action.",
+    "weight": 1.06,
+    "updatedAt": 1762060844000
+  },
+  {
+    "slug": "lp_hero_video_bg_safe",
+    "tags": ["hero", "video", "perf", "section"],
+    "text": "Muted, looped video under 1.5MB with text shadow.",
+    "weight": 1.03,
+    "updatedAt": 1762060845000
+  },
+  {
+    "slug": "pricing_three_tiers_toggle",
+    "tags": ["pricing", "toggle", "section"],
+    "text": "Monthly/yearly toggle with remembered choice.",
+    "weight": 1.08,
+    "updatedAt": 1762060846000
+  },
+  {
+    "slug": "pricing_enterprise_contact",
+    "tags": ["pricing", "enterprise", "section"],
+    "text": "Enterprise card with contact, security, and SSO.",
+    "weight": 1.05,
+    "updatedAt": 1762060847000
+  },
+  {
+    "slug": "pricing_per_seat",
+    "tags": ["pricing", "teams", "section"],
+    "text": "Per-seat pricing with team caps and overages explained.",
+    "weight": 1.04,
+    "updatedAt": 1762060848000
+  },
+  {
+    "slug": "faq_minimal_three",
+    "tags": ["faq", "minimal", "section"],
+    "text": "Three short answers with links to docs and status.",
+    "weight": 1.02,
+    "updatedAt": 1762060849000
+  },
+  {
+    "slug": "faq_split_two_col",
+    "tags": ["faq", "layout", "section"],
+    "text": "Two-column FAQ with categories for quick scan.",
+    "weight": 1.03,
+    "updatedAt": 1762060850000
+  },
+  {
+    "slug": "cta_secondary_learn_more",
+    "tags": ["cta", "secondary"],
+    "text": "Secondary CTA: Learn more.",
+    "weight": 1.0,
+    "updatedAt": 1762060851000
+  },
+  {
+    "slug": "cta_navbar_trial",
+    "tags": ["cta", "nav", "trial"],
+    "text": "Navbar CTA: Start trial.",
+    "weight": 1.02,
+    "updatedAt": 1762060852000
+  },
+  {
+    "slug": "claim_security_compliance",
+    "tags": ["claim", "security", "compliance"],
+    "text": "SOC 2 Type II and GDPR compliance documented.",
+    "weight": 1.12,
+    "updatedAt": 1762060853000
+  },
+  {
+    "slug": "proof_customer_count",
+    "tags": ["proof", "social-proof", "metrics"],
+    "text": "Trusted by 2,000+ teams with public references.",
+    "weight": 1.08,
+    "updatedAt": 1762060854000
+  },
+  {
+    "slug": "proof_case_study",
+    "tags": ["proof", "case-study"],
+    "text": "Case study with baseline, lift, and time to value.",
+    "weight": 1.1,
+    "updatedAt": 1762060855000
+  },
+  {
+    "slug": "perf_lazy_load_images",
+    "tags": ["perf", "images"],
+    "text": "Lazy-load below-the-fold images with fetchpriority hints.",
+    "weight": 1.07,
+    "updatedAt": 1762060856000
+  },
+  {
+    "slug": "perf_preload_key_assets",
+    "tags": ["perf", "preload"],
+    "text": "Preload the hero font and hero image only.",
+    "weight": 1.06,
+    "updatedAt": 1762060857000
+  },
+  {
+    "slug": "perf_font_fallbacks",
+    "tags": ["perf", "fonts"],
+    "text": "System font stack first with font-display swap.",
+    "weight": 1.05,
+    "updatedAt": 1762060858000
+  },
+  {
+    "slug": "perf_reduce_dom_depth",
+    "tags": ["perf", "layout"],
+    "text": "Shallow DOM and fewer wrappers for faster paint.",
+    "weight": 1.04,
+    "updatedAt": 1762060859000
+  },
+  {
+    "slug": "playbook_inline_validation",
+    "tags": ["playbook", "forms"],
+    "text": "Inline form validation with specific fixes, not red walls.",
+    "weight": 1.06,
+    "updatedAt": 1762060860000
+  },
+  {
+    "slug": "playbook_progressive_disclosure",
+    "tags": ["playbook", "ux"],
+    "text": "Show detail on demand; avoid overwhelming novices.",
+    "weight": 1.05,
+    "updatedAt": 1762060861000
+  },
+  {
+    "slug": "playbook_sticky_nav",
+    "tags": ["playbook", "nav"],
+    "text": "Sticky nav with section highlights and one action.",
+    "weight": 1.03,
+    "updatedAt": 1762060862000
+  },
+  {
+    "slug": "playbook_inline_tooltips",
+    "tags": ["playbook", "ux", "tooltips"],
+    "text": "Short tooltips with verbs and examples, never jargon.",
+    "weight": 1.02,
+    "updatedAt": 1762060863000
+  },
+  {
+    "slug": "section_trust_badges",
+    "tags": ["section", "trust", "security"],
+    "text": "Security badges with links to real audits and status.",
+    "weight": 1.06,
+    "updatedAt": 1762060864000
+  },
+  {
+    "slug": "section_press_logos",
+    "tags": ["section", "press", "logos"],
+    "text": "Press mentions with publication names and dates.",
+    "weight": 1.03,
+    "updatedAt": 1762060865000
+  },
+  {
+    "slug": "section_usage_stats",
+    "tags": ["section", "proof", "metrics"],
+    "text": "Daily active, retention, and NPS with context.",
+    "weight": 1.07,
+    "updatedAt": 1762060866000
+  },
+  {
+    "slug": "section_download_app",
+    "tags": ["section", "apps", "download"],
+    "text": "App store badges with size, version, and changelog.",
+    "weight": 1.02,
+    "updatedAt": 1762060867000
+  },
+  {
+    "slug": "theme_fintech_trust",
+    "tags": ["theme", "fintech", "trust"],
+    "text": "Crisp lines, calm colors, and explicit compliance.",
+    "weight": 1.05,
+    "updatedAt": 1762060868000
+  },
+  {
+    "slug": "theme_healthcare_hipaa",
+    "tags": ["theme", "healthcare", "hipaa"],
+    "text": "Accessible palette and policy links above the fold.",
+    "weight": 1.06,
+    "updatedAt": 1762060869000
+  },
+  {
+    "slug": "theme_education_students",
+    "tags": ["theme", "education"],
+    "text": "Friendly headings, clear pricing for students and orgs.",
+    "weight": 1.03,
+    "updatedAt": 1762060870000
+  },
+  {
+    "slug": "theme_ecommerce_minimal",
+    "tags": ["theme", "ecommerce", "minimal"],
+    "text": "Big imagery, honest specs, and fast checkout links.",
+    "weight": 1.04,
+    "updatedAt": 1762060871000
+  },
+  {
+    "slug": "exp_multivariate_copy",
+    "tags": ["exp", "multivariate"],
+    "text": "Test headline, subhead, and CTA together with caps.",
+    "weight": 1.02,
+    "updatedAt": 1762060872000
+  },
+  {
+    "slug": "exp_holdout_control",
+    "tags": ["exp", "control"],
+    "text": "Holdout control to measure real lift over time.",
+    "weight": 1.03,
+    "updatedAt": 1762060873000
+  },
+  {
+    "slug": "data_pagination",
+    "tags": ["data", "list", "pagination"],
+    "text": "Progressive pagination with preserved filters.",
+    "weight": 1.02,
+    "updatedAt": 1762060874000
+  },
+  {
+    "slug": "data_empty_search",
+    "tags": ["data", "search", "empty"],
+    "text": "Empty search state suggests examples and syntax.",
+    "weight": 1.03,
+    "updatedAt": 1762060875000
+  },
+  {
+    "slug": "data_error_retry",
+    "tags": ["data", "error", "retry"],
+    "text": "Inline retry with small diagnostics for support.",
+    "weight": 1.03,
+    "updatedAt": 1762060876000
+  },
+  {
+    "slug": "data_loading_skeleton_cards",
+    "tags": ["data", "loading", "skeleton"],
+    "text": "Card skeletons with stable heights to protect CLS.",
+    "weight": 1.04,
+    "updatedAt": 1762060877000
+  },
+  {
+    "slug": "microcopy_form_error_generic",
+    "tags": ["microcopy", "forms", "error"],
+    "text": "Please fix the highlighted fields and try again.",
+    "weight": 1.02,
+    "updatedAt": 1762060878000
+  },
+  {
+    "slug": "microcopy_toast_success_short",
+    "tags": ["microcopy", "toast", "success"],
+    "text": "Saved. You are all set.",
+    "weight": 1.01,
+    "updatedAt": 1762060879000
+  },
+  {
+    "slug": "microcopy_password_requirements",
+    "tags": ["microcopy", "auth"],
+    "text": "Use 12 or more characters with a number and a symbol.",
+    "weight": 1.02,
+    "updatedAt": 1762060880000
+  },
+  {
+    "slug": "conversion_exit_intent_modal",
+    "tags": ["conversion", "modal", "exit-intent"],
+    "text": "A gentle reminder with value recap before exit.",
+    "weight": 1.02,
+    "updatedAt": 1762060881000
+  },
+  {
+    "slug": "conversion_scroll_trigger_cta",
+    "tags": ["conversion", "cta", "scroll"],
+    "text": "Reveal a sticky CTA after proof and benefits.",
+    "weight": 1.03,
+    "updatedAt": 1762060882000
+  },
+  {
+    "slug": "conversion_inline_upgrade_nudge",
+    "tags": ["conversion", "upsell"],
+    "text": "Inline upgrade nudge when hitting free limits.",
+    "weight": 1.05,
+    "updatedAt": 1762060883000
+  },
+  {
+    "slug": "brand_palette_minimal",
+    "tags": ["brand", "palette", "minimal"],
+    "text": "Neutral base, one accent, and deliberate contrast steps.",
+    "weight": 1.03,
+    "updatedAt": 1762060884000
+  },
+  {
+    "slug": "brand_palette_dark_plum",
+    "tags": ["brand", "palette", "dark"],
+    "text": "Deep plum accent with soft grays and AA contrast.",
+    "weight": 1.02,
+    "updatedAt": 1762060885000
+  }
+]

@@ -21,10 +21,38 @@ import { wireBuildsNamespace } from './builds.ts';
 import logsApiRouter from './routes/logs.ts'; // note the .ts
 import { persistFork } from './previews.storage.ts';
 import aiRouter from './ai/router.ts'; // ← ensure AI router is statically imported
+import { never500 } from './mw/failsafe.ts'; // 👈 failsafe middleware
 
 // NEW: KPI + Execute Sandbox (static) mounts
 import kpiRouter from './routes/kpi';
 import executeSandboxRouter from './routes/execute.sandbox';
+
+// NEW: Outgoing hash middleware
+import { hashOutgoing } from './mw/hash-outgoing.ts';
+
+// NEW: Shadow guard (block ship when X-Shadow: 1)
+import { shadowGuard } from './mw/shadow-guard.ts';
+
+// NEW: Challenge API router
+import challengeRouter from './routes/challenge.ts';
+
+// NEW: Drain-mode middleware for AI routes
+import { drainMode } from './mw/drain-mode.ts';
+
+// NEW: Admin ops router
+import adminOpsRouter from './routes/admin.ops.ts';
+
+// NEW: UX Snapshot router
+import uxSnapshotRouter from './routes/ux.snapshot.ts';
+
+// NEW: UX Patch router
+import uxPatchRouter from './routes/ux.patch.ts';
+
+// NEW: UX Microcopy router
+import uxMicrocopyRouter from './routes/ux.microcopy.ts';
+
+// NEW: PII scrubber for AI routes
+import piiScrub from './mw/pii-scrub.ts';
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -383,6 +411,9 @@ app.use(ipGate());
     }, 60_000);
   }
 
+  // 🔐 Global response hashing (keep this early)
+  app.use(hashOutgoing());
+
   // Health checks (early)
   app.get('/api/status', (_req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -409,6 +440,10 @@ app.use(ipGate());
     // mock mode: don't throw, just return a clear payload
     return res.json({ mock: true, key: null });
   });
+
+  // 🛡️ Shadow guard for ship/persist endpoints (must be before those routers)
+  app.use('/api/previews', shadowGuard());
+  app.use('/api/deploy', shadowGuard());
 
   // --- Add: fork a preview template into a unique slug under /previews/forks/<slug> ---
   app.post('/api/previews/fork', async (req: Request, res: Response) => {
@@ -587,6 +622,13 @@ app.use(ipGate());
   if (importRouter) app.use('/api/import', express.json({ limit: '2mb' }), importRouter);
   if (previewsManage) app.use('/api/previews', express.json(), previewsManage);
 
+  // 🔻 Drain-mode guard MUST be before any AI routers
+  app.use('/api/ai', drainMode());
+  // Ensure body parsed for AI routes before PII scrub
+  app.use('/api/ai', express.json({ limit: '1mb' }));
+  // Scrub PII before SUP/logging/model calls
+  app.use('/api/ai', piiScrub());
+
   // Mount AI routers UNDER THE SAME PREFIX. Order matters:
   // - Mount aiRouter (with /review) first so it takes precedence over any duplicate paths.
   app.use('/api/ai', aiRouter); // existing
@@ -604,6 +646,19 @@ app.use(ipGate());
 
   // NEW: KPI endpoints (seen/convert/metrics)
   app.use('/api', kpiRouter);
+
+  // NEW: Challenge API (with JSON parsing)
+  app.use('/api/challenge', express.json({ limit: '16kb' }), challengeRouter);
+
+  // NEW: Admin Ops API
+  app.use('/api/admin', express.json({ limit: '16kb' }), adminOpsRouter);
+
+  // NEW: UX Snapshot API (higher body limit for small screenshots)
+  app.use('/api/ux', express.json({ limit: '6mb' }), uxSnapshotRouter);
+  // NEW: UX Patch API (smaller body limit for patch payloads)
+  app.use('/api/ux', express.json({ limit: '256kb' }), uxPatchRouter);
+  // NEW: UX Microcopy API
+  app.use('/api/ux', express.json({ limit: '128kb' }), uxMicrocopyRouter);
 
   // Comments API
   if (commentsMod?.list) app.get('/api/comments/list', commentsMod.list);
@@ -665,6 +720,9 @@ app.use(ipGate());
 
   // Your centralized error handler (must be last)
   app.use(errorHandler);
+
+  // Final failsafe — never let a 500 leak unshaped
+  app.use(never500());
 
   // Start + retry ports
   async function startServer(attemptPort: number, maxAttempts = 3) {

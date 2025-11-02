@@ -4,6 +4,8 @@
 
 import type { Request, Response, NextFunction } from "express";
 import * as crypto from "node:crypto";
+import * as fs from "node:fs";
+import { hitSignatures } from "./signatures.ts";
 
 // ----- Versioning / Config ---------------------------------------------------
 
@@ -11,7 +13,9 @@ export const POLICY_VERSION = process.env.SUP_POLICY_VERSION || "2.0.0";
 
 // HMAC secret for proof signatures (dev-safe default)
 const HMAC_SECRET =
-  process.env.POLICY_HMAC_SECRET || "dev-only-not-for-production";
+  process.env.SUP_HMAC_KEY ||
+  process.env.POLICY_HMAC_SECRET ||
+  "dev-only-not-for-production";
 
 // Soft config (can be lifted into a JSON file later)
 type GateMode = "off" | "on" | "strict";
@@ -65,6 +69,7 @@ export type RiskVector = {
   a11y: { pass: boolean | null };
   pii: { present: boolean };
   abuse_signals: { sketchy: boolean; reasons: string[] };
+  ux?: { score: number | null }; // LQR score (0..100), optional
 };
 
 type ComputeArgs = {
@@ -111,6 +116,21 @@ function countClaims(text: string) {
 
 function hasPII(text: string) {
   return RE.email.test(text) || RE.phone.test(text) || RE.cc.test(text);
+}
+
+// small content hash helper (for audit trail)
+function contentHash(s: string) {
+  return crypto.createHash("sha256").update(s).digest("hex");
+}
+
+// map reasons → degrade hints for downstream (UI/runner)
+function pickDegrade(reasons: string[]) {
+  const s = new Set<string>();
+  if (reasons.includes("unproven_claims") || reasons.includes("prompt_risk")) s.add("neutralize-claims");
+  if (reasons.includes("high_cls") || reasons.includes("slow_lcp")) s.add("no-js");
+  if (reasons.includes("lqr_low")) s.add("no-js");
+  if (reasons.some((r) => r.startsWith("abuse:"))) s.add("shadow");
+  return Array.from(s).join(",");
 }
 
 export function computeRiskVector(args: ComputeArgs): RiskVector {
@@ -189,8 +209,6 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
       ? (args.perf.lcp_est_ms as number)
       : null;
 
-  const a11y = { pass: args.a11yPass };
-
   // 4) PII
   const pii = { present: hasPII(allText) };
 
@@ -218,6 +236,7 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
     a11y: { pass: args.a11yPass },
     pii,
     abuse_signals,
+    ux: { score: args.ux?.score ?? null },
   };
 }
 
@@ -255,6 +274,11 @@ export function supDecide(
   if (THRESH.REQUIRE_A11Y && risk.a11y.pass === false)
     reasons.push("a11y_fail");
 
+  // UX (LQR)
+  if ((risk.ux?.score ?? null) != null && (risk.ux!.score as number) < 70) {
+    reasons.push("lqr_low");
+  }
+
   // Prompt risk
   if (risk.prompt_risk) reasons.push("prompt_risk");
 
@@ -262,8 +286,9 @@ export function supDecide(
   if (THRESH.BLOCK_PII_STRICT && risk.pii.present) reasons.push("pii_present");
 
   // Abuse
-  if (risk.abuse_signals.sketchy)
-    reasons.push(`abuse:${risk.abuse_signals.reasons.join("+")}`);
+  if (risk.abuse_signals.sketchy) {
+    for (const r of risk.abuse_signals.reasons) reasons.push(`abuse:${r}`);
+  }
 
   // Decide mode
   if (gate === "strict") {
@@ -275,12 +300,16 @@ export function supDecide(
   if (reasons.includes("abuse:scam_lang") || reasons.includes("pii_present")) {
     return { mode: "block", reasons };
   }
+  if (reasons.some((r) => r.startsWith("abuse:"))) {
+    return { mode: "strict", reasons };
+  }
   if (reasons.includes("unproven_claims") || reasons.includes("prompt_risk")) {
     return { mode: "strict", reasons };
   }
   if (reasons.includes("high_cls") || reasons.includes("slow_lcp")) {
     return { mode: "strict", reasons };
   }
+  // Note: lqr_low currently degrades via pickDegrade when strict is entered for any reason.
 
   return { mode: "allow", reasons: [] };
 }
@@ -304,6 +333,7 @@ export function signProof(payload: {
 
 type LedgerRec = { hits: number; windowStart: number; score: number };
 const ledger = new Map<string, LedgerRec>();
+let _pruneTick = 0;
 
 const QUOTA = {
   WINDOW_MS: parseInt(process.env.SUP_WINDOW_MS || "60000", 10), // 60s
@@ -326,58 +356,203 @@ function keyFrom(req: Request) {
 
 export function supGuard() {
   return (req: Request, res: Response, next: NextFunction) => {
+    // Match /api/abuse/report (not just raw path)
+    const p = String(req.originalUrl || req.path || "");
+    const isAbuseIntake = req.method === "POST" && /\/abuse\/report$/i.test(p);
+
     // Bypass: tests, prewarm, abuse intake
     if (
       (QUOTA.BYPASS_TEST &&
         String(req.headers["x-test"] || "").toLowerCase() === "1") ||
       (process.env.PREWARM_TOKEN &&
         req.headers["x-prewarm-token"] === process.env.PREWARM_TOKEN) ||
-      (req.method === "POST" && req.path === "/abuse/report")
+      isAbuseIntake
     ) {
       res.setHeader("X-SUP-Mode", "allow");
       res.setHeader("X-SUP-Policy-Version", POLICY_VERSION);
       return next();
     }
 
-    // Basic ledger quotas (IP|session|api-key)
+    // ------- Quota bucket (IP|session|api-key)
     const k = keyFrom(req);
     const now = Date.now();
-    const rec = ledger.get(k) || {
-      hits: 0,
-      windowStart: now,
-      score: 0,
-    };
+    const rec = ledger.get(k) || { hits: 0, windowStart: now, score: 0 };
 
     const elapsed = now - rec.windowStart;
-
     if (elapsed >= QUOTA.WINDOW_MS) {
-      // correct decay check must use elapsed BEFORE resetting windowStart
-      if (elapsed > QUOTA.DECAY_MS) rec.score = 0;
+      // decay score based on elapsed BEFORE resetting window
+      if (elapsed >= QUOTA.DECAY_MS) {
+        rec.score = 0;
+      } else {
+        const decay = elapsed / QUOTA.DECAY_MS; // 0..1
+        rec.score = Math.max(0, rec.score - decay);
+      }
       rec.hits = 0;
       rec.windowStart = now;
     }
 
     rec.hits += 1;
 
-    // Simple heuristics to nudge score
-    if (
-      /curl|python-requests|wget/i.test(String(req.headers["user-agent"] || ""))
-    )
-      rec.score += 0.1;
+    // Light heuristics
+    if (/curl|python-requests|wget/i.test(String(req.headers["user-agent"] || ""))) rec.score += 0.1;
     if (rec.hits > QUOTA.MAX_BURST) rec.score += 1;
 
     ledger.set(k, rec);
+
+    // periodic prune to cap memory
+    if ((++_pruneTick % 1000) === 0) {
+      const nowMs = Date.now();
+      for (const [key, val] of ledger) {
+        if (nowMs - val.windowStart > QUOTA.DECAY_MS * 6) ledger.delete(key);
+      }
+    }
 
     const remaining = Math.max(0, QUOTA.MAX_BURST - rec.hits);
     res.setHeader("X-SUP-Quota-Remaining", String(remaining));
     res.setHeader("X-SUP-Policy-Version", POLICY_VERSION);
 
     if (rec.hits > QUOTA.MAX_BURST) {
+      res.setHeader("X-SUP-Mode", "block");
       return res.status(429).json({ ok: false, error: "rate_limited" });
     }
 
-    // Informational header (policy decisions are per-endpoint)
-    res.setHeader("X-SUP-Mode", "allow");
+    // ------- Compute risk + decision
+    const body: any = req.body || {};
+    const prompt = String(body.prompt || body.user || "");
+    const copy = (body.copy && typeof body.copy === "object") ? body.copy : {};
+
+    // Accept optional UX/perf/a11y from the request
+    const perf =
+      body && typeof body.perf === "object"
+        ? {
+            cls_est: typeof body.perf.cls_est === "number" ? body.perf.cls_est : null,
+            lcp_est_ms: typeof body.perf.lcp_est_ms === "number" ? body.perf.lcp_est_ms : null,
+          }
+        : null;
+
+    const ux =
+      body && typeof body.ux === "object"
+        ? {
+            score: typeof body.ux.score === "number" ? body.ux.score : null,
+            issues: Array.isArray(body.ux.issues) ? body.ux.issues.slice(0, 20) : [],
+          }
+        : null;
+
+    const a11yPass =
+      typeof body.a11yPass === "boolean" ? body.a11yPass : null;
+
+    const risk = computeRiskVector({
+      prompt,
+      copy,
+      proof: {},
+      perf,
+      ux,
+      a11yPass,
+    });
+
+    // --- quick heuristics that raise score ---
+    const ua = String(req.headers["user-agent"] || "");
+    const headlessHit = /(headless|puppeteer|playwright|phantomjs|selenium)/i.test(ua);
+    if (headlessHit) rec.score += 0.5;
+
+    // micro-burst inside current window
+    if (rec.hits > Math.min(QUOTA.MAX_BURST * 0.5, 30)) rec.score += 0.5;
+
+    // --- Honey + signature matches (Abuse Mesh v0.5) ---
+    const matchText = `${prompt} ${Object.values(copy).map(v => String(v ?? "")).join(" ")}`;
+    const sigHits = hitSignatures(matchText);
+    if (sigHits.length) {
+      risk.abuse_signals.sketchy = true;
+      for (const r of sigHits) {
+        if (!risk.abuse_signals.reasons.includes(r)) {
+          risk.abuse_signals.reasons.push(r); // e.g. "honey:..." or "sig:..."
+        }
+      }
+      // tiny score bump to ensure strict/shadow kicks in consistently
+      const rec2 = (ledger.get(k) || { hits: 0, windowStart: Date.now(), score: 0 });
+      rec2.score += 0.5;
+      ledger.set(k, rec2);
+      rec.score = rec2.score; // keep local ref in sync
+    }
+
+    // fold into risk BEFORE decision so it goes to strict
+    const extraReasons: string[] = [];
+    if (rec.score >= 1) extraReasons.push("abuse:velocity");
+    if (headlessHit) extraReasons.push("abuse:ua_entropy");
+    if (extraReasons.length) {
+      risk.abuse_signals.sketchy = true;
+      for (const r of extraReasons) {
+        if (!risk.abuse_signals.reasons.includes(r)) risk.abuse_signals.reasons.push(r);
+      }
+    }
+
+    const decision = supDecide((req.path as any) || "default", risk);
+
+    res.setHeader("X-SUP-Mode", decision.mode);
+    res.setHeader("X-SUP-Reasons", decision.reasons.join(","));
+    // Echo perf/UX metrics for observability
+    if (risk.device_perf.cls_est != null) res.setHeader("X-Perf-CLS", String(risk.device_perf.cls_est));
+    if (risk.device_perf.lcp_est_ms != null) res.setHeader("X-Perf-LCP", String(risk.device_perf.lcp_est_ms));
+    if (typeof (risk as any).ux?.score === "number") res.setHeader("X-UX-LQR", String((risk as any).ux.score));
+
+    // ---- Proof header (attestation)
+    const pageId =
+      String((req.headers["x-page-id"] as string) || (req.body?.pageId as string) || "") || "anon";
+    const proofSig = signProof({
+      pageId,
+      policy_version: POLICY_VERSION,
+      risk,
+    });
+    res.setHeader("X-SUP-Proof-Sig", proofSig);
+
+    if (decision.mode === "block") {
+      return res.status(403).json({ ok: false, error: "sup_block", reasons: decision.reasons });
+    }
+    if (decision.mode === "strict") {
+      // downstream can degrade behavior (retrieval-only, neutral tone, no-JS)
+      (req.headers as any)["x-drain"] = "1";
+      res.setHeader("X-Drain", "1");
+      const degrade = pickDegrade(decision.reasons);
+      if (degrade) res.setHeader("X-Degrade", degrade);
+      // If strict due to abuse, advertise a POW challenge (no UI dependency)
+      if (decision.reasons.some((r) => r.startsWith("abuse:"))) {
+        res.setHeader("X-Challenge", "pow-v0");
+      }
+      (res.locals as any).sup = { mode: "strict", reasons: decision.reasons, degrade };
+    }
+
+    // ---- Tamper-evident audit trail (JSONL)
+    const started = Date.now();
+    const reqHash = contentHash(
+      String((req.body?.prompt as string) || "") +
+        JSON.stringify((req.body?.copy as any) || {})
+    );
+
+    res.on("finish", () => {
+      try {
+        const outHash = String(res.getHeader("X-Content-Hash") || "");
+        const row = {
+          ts: new Date().toISOString(),
+          endpoint: req.path,
+          pageId,
+          policy_version: POLICY_VERSION,
+          mode: decision.mode,
+          reasons: decision.reasons,
+          status: res.statusCode,
+          ms: Date.now() - started,
+          req_hash: reqHash,
+          res_hash: outHash || undefined,
+          // risk snapshot
+          perf: risk.device_perf,
+          ux_lqr: (risk as any).ux?.score ?? null,
+        };
+        fs.mkdirSync(".logs/sup", { recursive: true });
+        fs.appendFile(".logs/sup/audit.jsonl", JSON.stringify(row) + "\n", () => {});
+      } catch {
+        /* no-op */
+      }
+    });
+
     return next();
   };
 }

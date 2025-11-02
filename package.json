@@ -20,7 +20,7 @@
     "db:push": "drizzle-kit push",
     "typecheck:client": "tsc -p client/tsconfig.json --noEmit",
     "typecheck:server": "tsc -p server/tsconfig.json --noEmit",
-    "test": "vitest run --pool=threads --passWithNoTests",
+    "test": "vitest",
     "test:watch": "vitest --pool=threads",
     "test:server": "vitest run --config server/vitest.config.ts --pool=threads",
     "typecheck:tests": "tsc -p server/tsconfig.test.json --noEmit",

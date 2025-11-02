@@ -1,6 +1,10 @@
 // server/ai/router.ts
 import express from "express";
 import fs from "fs";
+import crypto from "crypto";
+import path from "path";
+import { nanoid } from "nanoid";
+
 import { buildSpec } from "../intent/brief.ts";
 import { nextActions } from "../intent/planner.ts";
 import { runWithBudget } from "../intent/budget.ts";
@@ -54,35 +58,195 @@ import {
 } from "../design/outcome.priors.ts";
 import { quickLayoutSanity, quickPerfEst, matrixPerfEst } from "../qa/layout.sanity.ts";
 import { checkCopyReadability } from "../qa/readability.guard.ts";
-import {
-  addEvidence,
-  rebuildEvidenceIndex,
-} from "../intent/evidence.ts";
+import { addEvidence, rebuildEvidenceIndex } from "../intent/evidence.ts";
 import { localizeCopy } from "../intent/phrases.ts";
 import { normalizeLocale } from "../intent/locales.ts";
 import { editSearch } from "../qa/edit.search.ts";
 import { wideTokenSearch } from "../design/search.wide.ts";
 import { runSnapshots } from "../qa/snapshots.ts";
 import { runDeviceGate } from "../qa/device.gate.ts";
-import {
-  listPacksRanked,
-  recordPackSeenForPage,
-  recordPackWinForPage,
-} from "../sections/packs.ts";
+import { listPacksRanked, recordPackSeenForPage, recordPackWinForPage } from "../sections/packs.ts";
 import { maybeNightlyMine as maybeVectorMine, runVectorMiner } from "../media/vector.miner.ts";
 import { __vectorLib_load } from "../media/vector.lib.ts";
-import crypto from "crypto";
-import path from "path";
-import { nanoid } from "nanoid";
 import { runArmy } from "./army.ts";
 import { mountCiteLock } from "./citelock.patch.ts";
 import { registerSelfTest } from "./selftest";
+
 // EDIT 2.1 — SUP policy core
 import { computeRiskVector, supDecide, POLICY_VERSION, signProof } from "../sup/policy.core.ts";
 // ADD (review registry):
 import { chatJSON } from "../llm/registry.ts";
 // NEW — quotas+risk+proof middleware (per request)
 import { supGuard } from "../mw/sup.ts";
+// NEW — degrade middleware (apply right after supGuard)
+import { applyDegrade } from "../mw/apply-degrade.ts";
+// NEW — shared cache
+import { sharedCache, makeKeyFromRequest } from "../intent/cache2.ts";
+
+// 🔹 NEW (as requested): global AI quota middleware
+import { aiQuota } from "../middleware/quotas.ts";
+
+// NEW (contracts hard stop for mutators)
+import { contractsHardStop } from "../middleware/contracts.ts";
+
+// NEW (cost meta for compose_success)
+import { estimateCost } from "../ai/costs.ts";
+
+// NEW (receipts for compose_success meta)
+import { buildReceipt } from "../ai/receipts.ts";
+
+// ---------- BLOCK A: add after existing imports ----------
+import type { Request, Response, NextFunction } from "express";
+
+const pathResolve = (...p: string[]) => path.resolve(...p);
+
+/** Thin per-IP quotas (daily + burst) */
+const QUOTA_DAILY = parseInt(process.env.QUOTA_DAILY || "800", 10);
+const QUOTA_BURST = parseInt(process.env.QUOTA_BURST || "40", 10);
+type Q = { count: number; reset: number; burst: number; _burstTimer?: NodeJS.Timeout };
+const quotaState = new Map<string, Q>();
+
+const QUOTA_PATHS = new Set<string>([
+  "/instant",
+  "/act",
+  "/chips/apply",
+  "/army",
+  "/vectors/search",
+]);
+
+function quotaMiddleware(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Only limit heavy-ish AI endpoints
+    const p = req.path || "";
+    if (!QUOTA_PATHS.has(p)) return next();
+
+    const ip = String(
+      (req as any).ip ||
+        req.headers["x-forwarded-for"] ||
+        (req.socket && req.socket.remoteAddress) ||
+        "anon"
+    );
+    const now = Date.now();
+    let q = quotaState.get(ip);
+    if (!q || q.reset < now) {
+      q = { count: 0, reset: now + 24 * 60 * 60 * 1000, burst: 0 };
+      quotaState.set(ip, q);
+    }
+
+    q.count++;
+    q.burst++;
+
+    // Soft backoff (burst) and daily cap
+    const overBurst = q.burst > QUOTA_BURST;
+    const overDaily = q.count > QUOTA_DAILY;
+
+    // Reset burst window gently every ~2 minutes
+    if (!q._burstTimer) {
+      q._burstTimer = setTimeout(() => {
+        const cur = quotaState.get(ip);
+        if (cur) cur.burst = Math.max(0, Math.floor(cur.burst * 0.5));
+        if (q && q._burstTimer) {
+          try {
+            q._burstTimer.unref?.();
+          } catch {}
+        }
+        if (q) q._burstTimer = undefined;
+      }, 120_000);
+      q._burstTimer.unref?.();
+    }
+
+    if (overBurst || overDaily) {
+      const retrySec = Math.max(1, Math.floor((q.reset - now) / 1000));
+      res.setHeader("Retry-After", String(retrySec));
+      res.setHeader("X-RateLimit-Limit", String(QUOTA_DAILY));
+      res.setHeader("X-RateLimit-Remaining", String(Math.max(0, QUOTA_DAILY - q.count)));
+      return res.status(429).json({ ok: false, error: "rate_limited", retry_after_s: retrySec });
+    }
+
+    // Observability
+    res.setHeader("X-RateLimit-Limit", String(QUOTA_DAILY));
+    res.setHeader("X-RateLimit-Remaining", String(Math.max(0, QUOTA_DAILY - q.count)));
+    next();
+  } catch {
+    next();
+  }
+}
+
+/** Contracts-first guard:
+ * Wraps res.json for /act and /chips/apply.
+ * Before sending success, fetches proof & perf and blocks if budgets fail.
+ */
+function contractsGuard(req: Request, res: Response, next: NextFunction) {
+  const p = req.path || "";
+  if (p !== "/act" && p !== "/chips/apply") return next();
+
+  const base = `${req.protocol}://${req.get("host")}`;
+  const originalJson = res.json.bind(res);
+
+  // Patch res.json to enforce guard before success leaves the server.
+  (res as any).json = async (body: any) => {
+    try {
+      // If already failing, or if there is no candidate pageId, just pass through.
+      if (!body || body.ok === false) {
+        return originalJson(body);
+      }
+
+      // Resolve pageId from common shapes (result.pageId, pageId, or embedded in path/url)
+      let pid: string | null =
+        (body?.result && body.result.pageId) ||
+        body?.pageId ||
+        null;
+
+      const pullId = (s: string | null | undefined) => {
+        if (!s) return null;
+        const m = String(s).match(/(?:^|\/)(pg_[A-Za-z0-9_-]+)/);
+        return m ? m[1] : null;
+      };
+      if (!pid) pid = pullId(body?.result?.path);
+      if (!pid) pid = pullId(body?.result?.url);
+      if (!pid) pid = pullId(body?.path);
+      if (!pid) pid = pullId(body?.url);
+
+      if (!pid) {
+        // Nothing to verify; pass through.
+        return originalJson(body);
+      }
+
+      // Node 18+ fetch guard using existing util
+      const f = requireFetch();
+      const proofResp = await f(`${base}/api/ai/proof/${encodeURIComponent(pid)}`).catch(() => null);
+      const proofJson = proofResp ? await proofResp.json().catch(() => null) : null;
+      const pObj = (proofJson && (proofJson.proof ?? proofJson)) || null;
+
+      const clsOk = typeof pObj?.cls_est !== "number" || pObj.cls_est <= 0.10;
+      const lcpOk = typeof pObj?.lcp_est_ms !== "number" || pObj.lcp_est_ms <= 2500;
+      const a11yOk = pObj?.a11y === true;
+      const proofOk = pObj?.proof_ok === true;
+
+      // Surface guard decisions in headers (debuggable from client/logs)
+      res.setHeader("X-Guard-CLS", pObj?.cls_est != null ? String(pObj.cls_est) : "");
+      res.setHeader("X-Guard-LCP", pObj?.lcp_est_ms != null ? String(pObj.lcp_est_ms) : "");
+      res.setHeader("X-Guard-A11y", String(!!pObj?.a11y));
+      res.setHeader("X-Guard-Proof", String(!!pObj?.proof_ok));
+
+      const pass = clsOk && lcpOk && a11yOk && proofOk;
+
+      if (!pass) {
+        // Block the commit; client will auto-undo visually, server stays clean.
+        return originalJson({ ok: false, error: "contracts_failed", proof: pObj });
+      }
+    } catch {
+      // If the guard itself errors, fail closed for safety.
+      return originalJson({ ok: false, error: "contracts_guard_error" });
+    }
+
+    // All good → send original success payload.
+    return originalJson(body);
+  };
+
+  next();
+}
+// ---------- /BLOCK A ----------
 
 // --- SUP V1: readiness gate + quotas + abuse intake ---
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 60_000);
@@ -260,10 +424,10 @@ function makeHtml(spec: any) {
 <meta property="og:title" content="${t("OG_TITLE","Preview")}"/>
 <meta property="og:description" content="${t("OG_DESC","")}"/>
 <body style="font-family:system-ui,-apple-system,Segoe UI,Roboto;max-width:800px;margin:40px auto;padding:24px;line-height:1.5">
-  <h1>${t("HERO_TITLE", t("HEADLINE","Warm Vitest"))}</h1>
-  <p>${t("HERO_SUB", t("HERO_SUBHEAD",""))}</p>
-  <hr/>
-  <p style="opacity:.6">Preview generated by instant (dev ship).</p>
+<h1>${t("HERO_TITLE", t("HEADLINE","Warm Vitest"))}</h1>
+<p>${t("HERO_SUB", t("HERO_SUBHEAD",""))}</p>
+<hr/>
+<p style="opacity:.6">Preview generated by instant (dev ship).</p>
 </body>
 </html>`;
 }
@@ -282,8 +446,8 @@ function writePreview(spec: any) {
   fs.writeFileSync(path.join(DEV_PREVIEW_DIR, `${pageId}.html`), html, "utf8");
 
   // 2) Compatibility mirrors used by smoke/Vitest:
-  //    - /api/ai/previews/<pageId>
-  //    - /api/ai/previews/<specId>
+  // - /api/ai/previews/<pageId>
+  // - /api/ai/previews/<specId>
   fs.writeFileSync(path.join(PREVIEW_DIR, `${pageId}.html`), html, "utf8");
   fs.writeFileSync(path.join(PREVIEW_DIR, `${specId}.html`), html, "utf8");
 
@@ -344,10 +508,16 @@ export function pickTierByConfidence(c = 0.6) {
 }
 
 const router = express.Router();
+router.use(express.json()); // parse JSON before guarded POSTs
 
-// (c) Middleware: warmup gate BEFORE limiter
+// 🔹 Apply global thin per-IP AI quota (requested)
+router.use(aiQuota);
+
+// (c) Middleware: warmup gate BEFORE limiter, but allow __ready and prewarm token
 router.use((req, res, next) => {
   if (READY) return next();
+  if (req.path === "/__ready") return next();
+  if (PREWARM_TOKEN && req.headers["x-prewarm-token"] === PREWARM_TOKEN) return next();
   return res.status(503).json({ ok: false, error: "warming_up" });
 });
 // (c) Bypass limiter for prewarm + abuse intake; limiter comes right after this
@@ -360,8 +530,17 @@ router.use((req, res, next) => {
 // attach limiter AFTER bypass block
 // EDIT 2.2 — swap old limiter for SUP guard
 router.use(supGuard("ai"));
+// NEW — apply degrade immediately after SUP decides
+router.use(applyDegrade());
 
-// POST /api/ai/abuse/report  → JSONL sink under .cache/abuse/YYYY-MM-DD.jsonl
+// ---------- BLOCK B: mount middlewares early on your AI router ----------
+// Thin quotas for hot endpoints
+router.use(quotaMiddleware);
+// Contracts-first guard for compose/chips (pre-send check)
+router.use(contractsGuard);
+// ---------- /BLOCK B ----------
+
+// POST /api/ai/abuse/report → JSONL sink under .cache/abuse/YYYY-MM-DD.jsonl
 router.post("/abuse/report", express.json(), (req, res) => {
   const day = new Date().toISOString().slice(0, 10);
   const dir = path.join(".cache", "abuse");
@@ -456,6 +635,37 @@ function drainMode(req: express.Request) {
   return envOn || hdrOn;
 }
 
+// B. Caching middleware helper
+function cacheMW(intent: string) {
+  return (req: any, res: any, next: any) => {
+    const key = makeKeyFromRequest(req.path, req.body, { intent });
+    // If SUP says strict + abuse, bypass cache
+    const mode = String(res.getHeader?.("X-SUP-Mode") || req.headers["x-sup-mode"] || "");
+    const reasons = String(res.getHeader?.("X-SUP-Reasons") || req.headers["x-sup-reasons"] || "");
+    const bypass = mode === "strict" && /(?:^|,)abuse:/.test(reasons);
+
+    if (!bypass) {
+      const hit = sharedCache.get(key);
+      if (hit != null) {
+        res.setHeader("X-Cache", "hit");
+        res.setHeader("X-Cache-Key", key);
+        return res.json(hit);
+      }
+    }
+
+    const origJson = res.json.bind(res);
+    (res as any).json = (body: any) => {
+      if (!bypass) {
+        sharedCache.set(key, body);
+        res.setHeader("X-Cache", "miss");
+        res.setHeader("X-Cache-Key", key);
+      }
+      return origJson(body);
+    };
+    next();
+  };
+}
+
 // A) NEW helper — risky claims detector (robust for #, %, and x)
 function hasRiskyClaims(s: string) {
   const p = String(s || "");
@@ -487,7 +697,7 @@ function hasRiskyClaims(s: string) {
 // NEW helper — strict proof toggle
 function isProofStrict(req: express.Request) {
   return process.env.PROOF_STRICT === "1" ||
-         String(req.headers["x-proof-strict"] || "").toLowerCase() === "1";
+    String(req.headers["x-proof-strict"] || "").toLowerCase() === "1";
 }
 
 // Node fetch guard (explicit, to avoid silent failure under Node <18)
@@ -717,14 +927,11 @@ function applyChipLocal(spec: any = {}, chip = "") {
 }
 
 // --- UX DESIGNER (spacing/rhythm) ------------------------------------------
-// Goal: detect overly-tight stacks, missing container max-width, and uneven rhythm.
-// Provide a deterministic CSS auto-fix (safe, minimal) and surface a UX score.
-
 type UXAudit = {
-  score: number;            // 0..100
-  issues: string[];         // e.g., ["no_max_width","tight_stacks"]
-  pass: boolean;            // score >= 70
-  cssFix?: string | null;   // injected if !pass
+  score: number; // 0..100
+  issues: string[]; // e.g., ["no_max_width","tight_stacks"]
+  pass: boolean; // score >= 70
+  cssFix?: string | null; // injected if !pass
 };
 
 function clamp(n: number, a: number, b: number) {
@@ -747,11 +954,11 @@ function basePxFromTokens(tokens: any): number {
 function buildUxFixCss(basePx = 18): string {
   // A calm, premium rhythm derived from base type size
   // Container 72ch; vertical rhythm around 1.5–2.0 × base
-  const s1 = Math.round(basePx * 0.5);   // minor
-  const s2 = Math.round(basePx * 0.75);  // small
-  const s3 = Math.round(basePx * 1.0);   // base
-  const s4 = Math.round(basePx * 1.5);   // section rhythm
-  const s6 = Math.round(basePx * 2.0);   // larger blocks
+  const s1 = Math.round(basePx * 0.5); // minor
+  const s2 = Math.round(basePx * 0.75); // small
+  const s3 = Math.round(basePx * 1.0); // base
+  const s4 = Math.round(basePx * 1.5); // section rhythm
+  const s6 = Math.round(basePx * 2.0); // larger blocks
 
   return `
 /* === UX Designer Auto-Fix (spacing/rhythm) === */
@@ -777,7 +984,7 @@ img,video,figure{display:block;max-width:100%;height:auto;margin:var(--ux-space-
 button,.btn,.cta{margin-top:var(--ux-space-2);}
 hr{border:none;height:1px;background-color:rgba(0,0,0,.08);margin:var(--ux-space-4) 0;}
 /* === end UX auto-fix === */
-  `.trim();
+`.trim();
 }
 
 // Heuristics on raw HTML (no DOM): cheap signals that correlate with poor spacing.
@@ -841,7 +1048,7 @@ function injectCssIntoHead(html: string, css: string) {
 // ---------- /review ----------
 const LAST_REVIEW_SIG = new Map<string, string>(); // sessionId -> last sha1(codeTrim)
 
-router.post("/review", async (req, res) => {
+router.post("/review", express.json(), async (req, res) => {
   try {
     let { code = "", tier = "balanced", sessionId = "anon" } = (req.body || {}) as any;
     if (!code || typeof code !== "string")
@@ -976,7 +1183,7 @@ router.post("/filter", async (req, res) => {
   }
 });
 
-// POST /api/ai/clarify  { prompt?: string, spec?: {...} }
+// POST /api/ai/clarify { prompt?: string, spec?: {...} }
 router.post("/clarify", (req, res) => {
   try {
     const { prompt = "", spec = {} } = (req.body || {}) as any;
@@ -1198,7 +1405,7 @@ router.get("/vectors/search", async (req, res) => {
       const vibe = (a.vibe || []).map(String);
       const ind = (a.industry || []).map(String);
 
-    let overlap = 0;
+      let overlap = 0;
       for (const t of tags.concat(vibe, ind)) {
         if (want.has(String(t).toLowerCase())) overlap += 1;
       }
@@ -1335,7 +1542,8 @@ router.get("/sections/packs", (req, res) => {
     const raw = String((req.query.tags ?? req.query.tag ?? "") || "").trim();
     const tags = raw
       ? raw
-          .split(",")
+          .split(","
+          )
           .map((s) => s.trim().toLowerCase())
           .filter(Boolean)
       : [];
@@ -1356,7 +1564,7 @@ router.get("/sections/packs", (req, res) => {
   }
 });
 
-// POST /api/ai/sections/packs/ingest  { packs: [{sections:[...], tags:[...]}, ...] }
+// POST /api/ai/sections/packs/ingest { packs: [{sections:[...], tags:[...]}, ...] }
 router.post("/sections/packs/ingest", (req, res) => {
   try {
     const body = (req.body || {}) as any;
@@ -1377,7 +1585,7 @@ router.post("/sections/packs/ingest", (req, res) => {
 });
 
 // ---------- act ----------
-router.post("/act", express.json(), async (req, res) => {
+router.post("/act", express.json(), contractsHardStop(), async (req, res) => {
   try {
     const { sessionId = "anon", spec = {}, action = {} } = (req.body || {}) as any;
     if (!action || !action.kind)
@@ -1392,9 +1600,9 @@ router.post("/act", express.json(), async (req, res) => {
         // ✅ NEW precedence: header > args > spec.audience > spec.intent.audience > infer
         const headerAud = String(
           req.get("x-audience") ||
-          (req.headers as any)["x-audience"] ||
-          (req.headers as any)["X-Audience"] ||
-          ""
+            (req.headers as any)["x-audience"] ||
+            (req.headers as any)["X-Audience"] ||
+            ""
         ).toLowerCase().trim();
         const argAud = String(action.args?.audience || "").toLowerCase().trim();
         const specAud = String(spec?.audience || "").toLowerCase().trim();
@@ -1889,7 +2097,7 @@ router.post("/act", express.json(), async (req, res) => {
           const promptRisk = Boolean((spec as any).__promptRisk);
 
           // B. STRICT gate (header/env): block shipping if critical fields are redacted
-          //    OR facts are flagged OR original risky claims existed OR prompt risk is true
+          // OR facts are flagged OR original risky claims existed OR prompt risk is true
           if (proofStrict) {
             const CRIT = new Set(["HEADLINE", "HERO_SUBHEAD", "TAGLINE"]);
             const badCrit = Object.entries(proofData || {}).some(
@@ -2048,13 +2256,13 @@ router.post("/act", express.json(), async (req, res) => {
         // Build OG meta from our payload (deterministic)
         const titleLoc = String(
           (payloadForKey as any)?.copy?.HEADLINE ||
-          (payloadForKey as any)?.title ||
-          "Preview"
+            (payloadForKey as any)?.title ||
+            "Preview"
         );
         const sub = String(
           (payloadForKey as any)?.copy?.HERO_SUBHEAD ||
-          (payloadForKey as any)?.copy?.TAGLINE ||
-          ""
+            (payloadForKey as any)?.copy?.TAGLINE ||
+            ""
         );
         const og = [
           `<meta property="og:title" content="${escapeHtml(titleLoc)}">`,
@@ -2105,7 +2313,7 @@ router.post("/act", express.json(), async (req, res) => {
           const css = `
 :root{${cssRoot}}
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
-     max-width:880px;margin:56px auto;padding:0 16px;line-height:1.55;}
+max-width:880px;margin:56px auto;padding:0 16px;line-height:1.55;}
 h1{font-size:clamp(28px,5vw,44px);margin:0 0 12px;}
 p{opacity:.85;font-size:clamp(16px,2.2vw,20px);margin:0 0 24px;}
 `.trim();
@@ -2119,19 +2327,19 @@ ${og}
 <style>${css}</style>
 </head>
 <body>
-  <main>
-    <section>
-      <h1>${escapeHtml(titleLoc)}</h1>
-      ${sub ? `<p>${escapeHtml(sub)}</p>` : ""}
-    </section>
-  </main>
+<main>
+  <section>
+    <h1>${escapeHtml(titleLoc)}</h1>
+    ${sub ? `<p>${escapeHtml(sub)}</p>` : ""}
+  </section>
+</main>
 </body>
 </html>`;
 
           // [UX] audit synth + inject fix if needed
           try {
             const tkn = (payloadForKey as any)?.brand?.tokens ? { cssVars: (payloadForKey as any).brand.tokens, type: {} } : undefined;
-            uxAudit = auditUXFromHtml(html, tkn);
+            const uxAudit = auditUXFromHtml(html, tkn);
             pushSignal(String(((req.body as any)?.sessionId || "anon") as string), {
               ts: Date.now(),
               kind: "ux_audit",
@@ -2276,11 +2484,27 @@ ${og}
             copy: copyWithDefaults,
             brand: (prep as any).brand,
           });
+
+          // ⬇️ cost meta for compose_success (ACT)
+          const cost = estimateCost(prep);
+
+          // ⬇️ receipt meta
+          let receipt: any = null;
+          try {
+            const body: any = req.body || {};
+            const sid = String(body.sessionId || "anon").trim();
+            const patch = body.winner || body.apply || body.patch || {};
+            const baseLG: any = lastGoodFor(sid) || {};
+            const hardened = (req as any).__prepared || prep;
+            receipt = buildReceipt(baseLG, patch, hardened);
+          } catch {}
+
           pushSignal(((req.body as any)?.sessionId || "anon") as string, {
             ts: Date.now(),
             kind: "compose_success",
-            data: { url: (data as any)?.url },
+            data: { url: (data as any)?.url, source: "act", cost, receipt },
           });
+
           // store successful example for retrieval reuse
           try {
             await addExample(
@@ -2294,16 +2518,16 @@ ${og}
             );
           } catch {}
           // Learn from ships (brand DNA)
-          try {
-            recordDNA(String(((req.body as any)?.sessionId || "anon") as string), {
-              brand: {
-                primary: (prep as any).brand?.primary,
-                tone: toneIn,
-                dark: darkIn,
-              },
-              sections: prep.sections,
-            });
-          } catch {}
+        } catch {}
+        try {
+          recordDNA(String(((req.body as any)?.sessionId || "anon") as string), {
+            brand: {
+              primary: (prep as any).brand?.primary,
+              tone: (prep as any).brand?.tone,
+              dark: (prep as any).brand?.dark,
+            },
+            sections: prep.sections,
+          });
         } catch {}
 
         // Record ship KPI snapshot (best-effort, resilient if tokens are missing)
@@ -2576,7 +2800,7 @@ router.post("/one", express.json(), async (req, res) => {
       }
     }
 
-    const { intent, confidence: c0, chips } = fit as any;
+    const { intent, confidence: c0, chips } = (fit as any);
     const summarySignals = summarize(sessionId);
     const confidence = boostConfidence(c0, summarySignals);
 
@@ -2802,7 +3026,7 @@ router.post("/one", express.json(), async (req, res) => {
 
 // ---------- instant (zero-LLM compose) ----------
 // EDIT A: remove express.json() so sloppy curl bodies don't 400 before handler
-router.post("/instant", async (req, res) => {
+router.post("/instant", cacheMW("instant"), async (req, res) => {
   try {
     const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
 
@@ -3418,7 +3642,7 @@ router.post("/clarify/compose", async (req, res) => {
 });
 
 // ---------- chips ----------
-router.post("/chips/apply", (req, res) => {
+router.post("/chips/apply", contractsHardStop(), (req, res) => {
   const { sessionId = "anon", spec = {}, chip = "" } = (req.body || {}) as any;
   try {
     try {
@@ -3616,6 +3840,45 @@ router.get("/proof/ping", (_req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Narrative (Pro) ----------
+router.get("/narrative/:pageId", async (req, res) => {
+  const pid = String(req.params.pageId || "").trim();
+  if (!pid) return res.status(400).json({ ok: false, error: "missing_pageId" });
+  try {
+    const base = `${req.protocol}://${req.get("host")}`;
+    const f = requireFetch();
+    const proofResp = await f(`${base}/api/ai/proof/${encodeURIComponent(pid)}`).catch(() => null);
+    const proofJson = proofResp ? await proofResp.json().catch(() => null) : null;
+    const p = (proofJson?.proof ?? proofJson ?? {}) as any;
+
+    const cls = typeof p?.cls_est === "number" ? p.cls_est : null;
+    const lcp = typeof p?.lcp_est_ms === "number" ? p.lcp_est_ms : null;
+    const a11y = p?.a11y === true;
+    const proof_ok = p?.proof_ok === true;
+
+    // — summary bullets
+    const bullets: string[] = [];
+    bullets.push(proof: proof_ok ? "Proof: ✓ evidence attached" : "Proof: ✗ gaps found");
+    bullets.push(a11y ? "A11y: ✓ passes checks" : "A11y: ✗ issues remain");
+    if (cls != null) bullets.push(`CLS: ${cls.toFixed(3)} ${cls <= 0.10 ? "✓" : "⚠︎ >0.10 → reserve heights, lock ratios"}`);
+    if (lcp != null) bullets.push(`LCP: ${Math.round(lcp)}ms ${lcp <= 2500 ? "✓" : "⚠︎ >2500ms → Zero-JS or image size cut"}`);
+
+    // — next moves (deterministic suggestions)
+    const next: string[] = [];
+    if (!proof_ok) next.push("Attach receipts to risky claims (Proof Passport).");
+    if (!a11y) next.push("Fix contrast/labels; re-run guard (A11y).");
+    if (cls != null && cls > 0.10) next.push("Reserve image/video height; avoid lazy layout shifts.");
+    if (lcp != null && lcp > 2500) next.push("Swap heavy widget → static HTML; defer non-critical JS.");
+
+    // — status line
+    const text = `Change summary — proof ${proof_ok ? "OK" : "needs work"}, a11y ${a11y ? "OK" : "needs work"}, LCP ${lcp != null ? Math.round(lcp) + "ms" : "n/a"}, CLS ${cls != null ? cls.toFixed(3) : "n/a"}.`;
+
+    return res.json({ ok: true, narrative: { text, bullets, next }, proof: p });
+  } catch {
+    return res.status(500).json({ ok: false, error: "narrative_error" });
+  }
+});
+
 // Tiny debug route to sanity-check risky claims detector
 router.get("/risk", (req, res) => {
   const prompt = String(req.query.prompt || "");
@@ -3629,62 +3892,14 @@ router.get("/proof/:pageId", (req, res) => {
     const proofDir = ".cache/proof";
     const proofPath = `${proofDir}/${id}.json`;
 
-    if (!fs.existsSync(proofPath)) {
-      try {
-        fs.mkdirSync(proofDir, { recursive: true });
-        let _risk:any;
-        try { _risk = computeRiskVector({ prompt:"", copy:{}, proof:{}, perf:null, ux:null, a11yPass:null }); } catch { _risk = {}; }
-        const minimal = {
-          pageId: id,
-          url: `/api/ai/previews/${id}`,
-          proof_ok: true,
-          fact_counts: {},
-          facts: {},
-          cls_est: null,
-          lcp_est_ms: null,
-          perf_matrix: null,
-          ux_score: null,
-          ux_issues: [],
-          policy_version: POLICY_VERSION,
-          risk: _risk,
-          signature: signProof({ pageId: id, policy_version: POLICY_VERSION, risk: _risk }),
-        };
-        fs.writeFileSync(proofPath, JSON.stringify(minimal, null, 2));
-      } catch {}
-    }
+    // Ensure directory exists
+    try { fs.mkdirSync(proofDir, { recursive: true }); } catch {}
 
     if (!fs.existsSync(proofPath)) {
-      let _risk:any;
+      // Create a minimal proof card if missing
+      let _risk: any;
       try { _risk = computeRiskVector({ prompt:"", copy:{}, proof:{}, perf:null, ux:null, a11yPass:null }); } catch { _risk = {}; }
-      return res.json({
-        ok: true,
-        proof: {
-          pageId: id,
-          url: `/api/ai/previews/${id}`,
-          proof_ok: true,
-          fact_counts: {},
-          facts: {},
-          cls_est: null,
-          lcp_est_ms: null,
-          perf_matrix: null,
-          ux_score: null,
-          ux_issues: [],
-          policy_version: POLICY_VERSION,
-          risk: _risk,
-          signature: signProof({ pageId: id, policy_version: POLICY_VERSION, risk: _risk }),
-        },
-      });
-    }
-
-    const j = JSON.parse(fs.readFileSync(proofPath, "utf8"));
-    return res.json({ ok: true, proof: j });
-  } catch {
-    const id = String(req.params.pageId || "");
-    let _risk:any;
-    try { _risk = computeRiskVector({ prompt:"", copy:{}, proof:{}, perf:null, ux:null, a11yPass:null }); } catch { _risk = {}; }
-    return res.json({
-      ok: true,
-      proof: {
+      const minimal = {
         pageId: id,
         url: `/api/ai/previews/${id}`,
         proof_ok: true,
@@ -3698,29 +3913,195 @@ router.get("/proof/:pageId", (req, res) => {
         policy_version: POLICY_VERSION,
         risk: _risk,
         signature: signProof({ pageId: id, policy_version: POLICY_VERSION, risk: _risk }),
-      },
-    });
+      };
+      try {
+        fs.writeFileSync(proofPath, JSON.stringify(minimal, null, 2));
+      } catch {}
+    }
+
+    let obj: any = null;
+    try {
+      obj = JSON.parse(fs.readFileSync(proofPath, "utf8"));
+    } catch {
+      // Fallback to a minimal object if read fails
+      let _risk: any;
+      try { _risk = computeRiskVector({ prompt:"", copy:{}, proof:{}, perf:null, ux:null, a11yPass:null }); } catch { _risk = {}; }
+      obj = {
+        pageId: id,
+        url: `/api/ai/previews/${id}`,
+        proof_ok: true,
+        fact_counts: {},
+        facts: {},
+        cls_est: null,
+        lcp_est_ms: null,
+        perf_matrix: null,
+        ux_score: null,
+        ux_issues: [],
+        policy_version: POLICY_VERSION,
+        risk: _risk,
+        signature: signProof({ pageId: id, policy_version: POLICY_VERSION, risk: _risk }),
+      };
+    }
+
+    // Harden policy metadata
+    if (!obj.policy_version) obj.policy_version = POLICY_VERSION;
+    if (!obj.signature) {
+      try {
+        obj.signature = signProof({
+          pageId: obj.pageId || id,
+          policy_version: obj.policy_version,
+          risk: obj.risk || {},
+        });
+      } catch {}
+    }
+
+    return res.json({ ok: true, proof: obj });
+  } catch {
+    return res.status(500).json({ ok: false, error: "proof_failed" });
   }
 });
 
-// Serve local fallback previews (dev safety net) — script-stripper
-router.get("/previews/:id", (req, res) => {
-  const file = path.resolve(PREVIEW_DIR, `${String(req.params.id)}.html`);
-  if (!fs.existsSync(file)) return res.status(404).send("Not found");
-
-  // Hard ban: strip ALL <script> blocks (module/inline/async/defer/self-closing)
-  let html = fs.readFileSync(file, "utf8")
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<script\b[^>]*\/>/gi, "");
-
-  res.setHeader("content-type", "text/html; charset=utf-8");
-  res.send(html);
-});
-
-function pathResolve(p: string) {
-  return path.resolve(p);
+// --- Preview stripper route (serve cached previews with scripts removed) ---
+function stripScripts(html: string) {
+  if (!html) return html;
+  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
 }
 
-registerSelfTest(router);
+router.get("/previews/:id", (req, res) => {
+  try {
+    const idRaw = String(req.params.id || "");
+    if (!/^[A-Za-z0-9._-]+$/.test(idRaw)) return res.status(400).send("bad id");
+    const names = [
+      path.join(PREVIEW_DIR, `${idRaw}.html`),
+      path.join(DEV_PREVIEW_DIR, `${idRaw}.html`),
+    ];
+    let html: string | null = null;
+    for (const f of names) {
+      if (fs.existsSync(f)) {
+        try {
+          html = fs.readFileSync(f, "utf8");
+          break;
+        } catch {}
+      }
+    }
+    if (!html) return res.status(404).send("not found");
 
+    const stripped = stripScripts(html);
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    return res.status(200).send(stripped);
+  } catch {
+    return res.status(500).send("preview_failed");
+  }
+});
+
+// --- Raw (no strip) debug route (useful locally) ---
+router.get("/previews/:id/raw", (req, res) => {
+  try {
+    const idRaw = String(req.params.id || "");
+    if (!/^[A-Za-z0-9._-]+$/.test(idRaw)) return res.status(400).send("bad id");
+    const filePath =
+      fs.existsSync(path.join(PREVIEW_DIR, `${idRaw}.html`))
+        ? path.join(PREVIEW_DIR, `${idRaw}.html`)
+        : path.join(DEV_PREVIEW_DIR, `${idRaw}.html`);
+    if (!fs.existsSync(filePath)) return res.status(404).send("not found");
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    return res.status(200).send(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return res.status(500).send("preview_failed");
+  }
+});
+
+// --- Minimal passthrough for dev pages (optional; under /api/ai) ---
+router.get("/previews/pages/:file", (req, res) => {
+  try {
+    const file = String(req.params.file || "");
+    if (!/^[A-Za-z0-9._-]+$/.test(file)) return res.status(400).send("bad file");
+    const fp = path.join(DEV_PREVIEW_DIR, file);
+    if (!fs.existsSync(fp)) return res.status(404).send("not found");
+    const stripped = stripScripts(fs.readFileSync(fp, "utf8"));
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    return res.status(200).send(stripped);
+  } catch {
+    return res.status(500).send("preview_failed");
+  }
+});
+
+// --- A/B: promote winner to last-good & broadcast compose_success ---
+router.post("/ab/promote", express.json(), contractsHardStop(), async (req, res) => {
+  try {
+    const body = (req.body || {}) as any;
+    const sessionId = String(body.sessionId || "").trim();
+    const winner = (body.winner || {}) as {
+      sections?: string[];
+      copy?: Record<string, any>;
+      brand?: Record<string, any>;
+    };
+    const audit = body.audit || {};
+
+    if (!sessionId) return res.status(400).json({ ok: false, error: "missing sessionId" });
+    if (!winner || typeof winner !== "object")
+      return res.status(400).json({ ok: false, error: "missing winner patch" });
+
+    // Get current good baseline
+    const base = (lastGoodFor(sessionId) as any) || {};
+
+    // Shallow-merge: sections order, copy overrides, brand overrides
+    const merged = {
+      ...base,
+      sections: Array.isArray(winner.sections) ? winner.sections : (base.sections || []),
+      copy: { ...(base.copy || {}), ...(winner.copy || {}) },
+      brand: { ...(base.brand || {}), ...(winner.brand || {}) },
+    };
+
+    // Validate & harden
+    const prepared = verifyAndPrepare(merged);
+
+    // Persist as the new "last good"
+    rememberLastGood(sessionId, prepared);
+
+    // Compute cost and Notify listeners with compose_success (Promoted)
+    const cost = estimateCost(prepared);
+
+    // ⬇️ receipt meta
+    let receipt: any = null;
+    try {
+      const baseLG: any = lastGoodFor(sessionId) || {};
+      const hardened = (req as any).__prepared || prepared;
+      const patch = winner || {};
+      receipt = buildReceipt(baseLG, patch, hardened);
+    } catch {}
+
+    pushSignal(sessionId, {
+      ts: Date.now(),
+      kind: "compose_success",
+      data: {
+        promoted: true,
+        via: "ab_promote",
+        audit,
+        source: "ab_promote",
+        cost,
+        receipt,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      applied: {
+        hasSections: Array.isArray(winner.sections),
+        copyKeys: Object.keys(winner.copy || {}),
+        brandKeys: Object.keys(winner.brand || {}),
+      },
+      spec: prepared,
+      note: "promoted",
+    });
+  } catch (err: any) {
+    return res.status(500).json({ ok: false, error: String(err?.message || err) });
+  }
+});
+
+// --- Register internal self-tests (no-op if already wired) ---
+try { registerSelfTest(router); } catch {}
+
+// Export router
 export default router;
+export { router };

@@ -13,6 +13,13 @@ const json = (body: any) => ({
   headers: { "content-type": "application/json" },
   body: JSON.stringify(body),
 });
+const postJson = (url: string, body: any) =>
+  fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }).then((r) => r.json());
+
 function rid(n = 10) {
   const a = "abcdefghijklmnopqrstuvwxyz0123456789";
   return Array.from({ length: n }, () => a[(Math.random() * a.length) | 0]).join("");
@@ -122,7 +129,9 @@ function importMacrosFromFile(file: File, existing: Macro[], onDone: (next: Macr
     try {
       const raw = JSON.parse(String(reader.result) || "[]");
       const arr: Macro[] = Array.isArray(raw) ? raw : [];
-      const next = [...existing, ...arr].filter(Boolean);
+      const seen = new Set((existing || []).map((m) => m.name?.trim().toLowerCase()));
+      const fresh = arr.filter((m) => m && m.name && !seen.has(m.name.trim().toLowerCase()));
+      const next = [...existing, ...fresh];
       onDone(next);
       saveMacros(next);
     } catch {}
@@ -163,6 +172,7 @@ export default function CursorCanvas() {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [panning, setPanning] = useState(false);
+  const [spaceDown, setSpaceDown] = useState(false); // FIX: proper Space+Drag pan
   const panStart = useRef<{ x: number; y: number } | null>(null);
 
   // NEW: surface ref for 1280x800, and pin drag state
@@ -224,9 +234,12 @@ export default function CursorCanvas() {
   // --- Add: Auto-Stop state for A/B ---
   const [abAuto, setAbAuto] = useState({
     enabled: true,
-    confidence: 0.95,
+    confidence: 0.95, // for z-test mode
     minViews: 100,
     minConv: 5,
+    // NEW:
+    seq: false, // strict sequential (Wald SPRT)
+    power: 0.8, // desired power for SPRT (1 - beta)
   });
   const [abWinner, setAbWinner] = useState<"A" | "B" | null>(null);
 
@@ -332,6 +345,56 @@ export default function CursorCanvas() {
       clearTimeout(t);
     };
   }, [showComments, comments.length]);
+
+  // ---------- Ledger (hover “truths”) ----------
+  const [ledger, setLedger] = useState<{
+    show: boolean;
+    rect: { x: number; y: number; w: number; h: number } | null;
+    truths: string[];
+  }>({ show: false, rect: null, truths: [] });
+
+  function classifyFromMeta(meta: HoverMsg["meta"] | null): string[] {
+    const truths: string[] = [];
+    if (!meta) return truths;
+    const tag = (meta.tag || "").toLowerCase();
+    const role = (meta.role || "").toLowerCase();
+    const text = (meta.text || "").trim().toLowerCase();
+
+    // CTA
+    if (
+      tag === "button" ||
+      role === "button" ||
+      (tag === "a" &&
+        /(sign up|buy|get|start|try|join|subscribe|demo|learn|add to cart|checkout)/.test(text))
+    ) {
+      truths.push("CTA");
+    }
+    // Price/offer
+    if (/[₹$€]\s?\d|(\d+(\.\d+)?\s?%)/.test(text) || /(month|year|mo|annual|monthly)/.test(text)) {
+      truths.push("Price");
+    }
+    // Claim language
+    if (/\b(best|only|#1|fastest|guarantee|unlimited|world)\b/.test(text)) {
+      truths.push("Claim");
+    }
+    // Feature-ish
+    if (/(feature|benefit|how it works|why|workflow|integrat)/.test(text)) {
+      truths.push("Feature");
+    }
+    if (!truths.length) truths.push(tag.toUpperCase() || "NODE");
+    // Gate overlays
+    const p = proofRef.current;
+    if (p) {
+      if (p.proof_ok === false) truths.push("Proof risk");
+      if (p.a11y === false) truths.push("A11y issues");
+      if (typeof p.lcp_est_ms === "number" && p.lcp_est_ms > 2500)
+        truths.push(`LCP ~${Math.round(p.lcp_est_ms)}ms`);
+      if (typeof p.cls_est === "number" && p.cls_est > 0.1)
+        truths.push(`CLS ~${Number(p.cls_est).toFixed(3)}`);
+    }
+    return truths;
+  }
+  // -------------------------------------------
 
   function addCommentAtCursor() {
     if (!pageId || !cursorPt) return;
@@ -465,6 +528,20 @@ export default function CursorCanvas() {
     }
   }
 
+  // ---- Contracts Mode (budgets) ----
+  const GUARD = { requireProof: true, requireA11y: true, maxCLS: 0.10, maxLCPms: 2500 };
+
+  async function passesBudgets(pid: string | null) {
+    if (!pid) return false;
+    const p = await fetchProofNow(pid);
+    if (!p) return false;
+    if (GUARD.requireProof && p.proof_ok !== true) return false;
+    if (GUARD.requireA11y && p.a11y !== true) return false;
+    if (typeof p.cls_est === "number" && p.cls_est > GUARD.maxCLS) return false;
+    if (typeof p.lcp_est_ms === "number" && p.lcp_est_ms > GUARD.maxLCPms) return false;
+    return true;
+  }
+
   async function guardedExec(plan: string, doWork: () => Promise<void> | void) {
     const ok = await askConfirm(plan);
     if (!ok) return false;
@@ -520,14 +597,14 @@ export default function CursorCanvas() {
       actions: {
         setPrompt: (s: string) => setPagePrompt(s),
 
-        // Guarded compose
+        // Guarded compose (pre-commit budgets)
         composeInstant: async () => {
-          await guardedExec(`Plan: compose "${pagePrompt}"`, () => composeInstant());
+          await composeGuarded();
         },
 
-        // Guarded chip
+        // Guarded chip (pre-commit budgets)
         applyChip: async (chip: string) => {
-          await guardedExec(`Plan: apply chip "${chip}"`, () => applyChip(chip));
+          await applyChipGuarded(chip);
         },
 
         setZeroJs: async (on: boolean) => {
@@ -672,7 +749,7 @@ export default function CursorCanvas() {
     setMacroName("");
   }
   async function playMacro(m: Macro) {
-    await applyChipBatch(m.steps);
+    await applyChipBatchGuarded(m.steps);
   }
   function deleteMacro(idx: number) {
     const next = macros.filter((_, i) => i !== idx);
@@ -766,11 +843,36 @@ export default function CursorCanvas() {
     await recompose(next);
   }
 
+  /** -------------------- cost chip state + helpers -------------------- **/
+  const [costMeta, setCostMeta] = useState<{ latencyMs: number; tokens: number; cents: number } | null>(null);
+  const [receipt, setReceipt] = useState<{ summary: string } | null>(null);
+  function pickCostMeta(c: any): { latencyMs: number; tokens: number; cents: number } | null {
+    if (!c || typeof c.tokens !== "number") return null;
+    const latencyMs = Number(c.latencyMs ?? c.latency_ms ?? c.latency ?? 0);
+    const cents =
+      c.cents != null
+        ? Number(c.cents)
+        : c.usd_cents != null
+        ? Number(c.usd_cents)
+        : c.usd != null
+        ? Number(c.usd) * 100
+        : 0;
+    return { latencyMs, tokens: Number(c.tokens), cents: Number(cents) };
+  }
+  function trySetCostMeta(c: any) {
+    const v = pickCostMeta(c);
+    if (v) setCostMeta(v);
+  }
+
   /** -------------------- compose paths -------------------- **/
   async function composeInstant() {
     const r = await fetch("/api/ai/instant", json({ prompt: pagePrompt, sessionId, breadth }));
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || "instant_failed");
+
+    // capture cost if present on response
+    trySetCostMeta((j as any)?.meta?.cost);
+
     setSpec(j.spec || null);
     setChips((j.chips || []) as string[]);
     const u = j.url || (j.result && (j.result.url || j.result.path)) || null;
@@ -797,10 +899,82 @@ export default function CursorCanvas() {
     };
     const r = await fetch("/api/ai/act", json({ sessionId, spec: s, action: composeAction }));
     const j = await r.json();
+
+    // capture cost if present on response
+    trySetCostMeta((j as any)?.meta?.cost || (j as any)?.result?.meta?.cost);
+
     const u = j?.result?.url || j?.result?.path || null;
     const pid = j?.result?.pageId || null;
     setPreview(u, pid);
     pushHistory({ url: u, pageId: pid, spec: j?.spec || s });
+  }
+
+  // Compose with pre-commit proof/a11y/CLS/LCP check
+  async function composeGuarded() {
+    const r = await fetch("/api/ai/instant", json({ prompt: pagePrompt, sessionId, breadth }));
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "instant_failed");
+
+    // capture cost if present on response
+    trySetCostMeta((j as any)?.meta?.cost);
+
+    const u = j.url || (j.result && (j.result.url || j.result.path)) || null;
+    const pid = j?.result?.pageId || null;
+    const ok = await passesBudgets(pid);
+
+    if (!ok) {
+      pushAutoLog("pilot", "Blocked by Contracts: proof/a11y/perf budgets not met.");
+      try {
+        say("Blocked. Budgets not met.");
+      } catch {}
+      return false;
+    }
+
+    setSpec(j.spec || null);
+    setChips((j.chips || []) as string[]);
+    setPreview(u, pid);
+    pushHistory({ url: u, pageId: pid, spec: j?.spec });
+    return true;
+  }
+
+  // Recompose a given spec with pre-commit check (no UI swap until pass)
+  async function recomposeGuarded(nextSpec: Spec) {
+    const brandPrimary = nextSpec?.brandColor || nextSpec?.brand?.primary || "#6d28d9";
+    const action = {
+      kind: "compose",
+      cost_est: 0,
+      gain_est: 20,
+      args: {
+        sections: nextSpec.layout.sections,
+        copy: nextSpec.copy || {},
+        brand: { primary: brandPrimary },
+        variantHints: VARIANT_HINTS,
+        breadth,
+        forceStripJS: forceNoJS,
+      },
+    };
+    const r = await fetch("/api/ai/act", json({ sessionId, spec: nextSpec, action }));
+    const j = await r.json();
+
+    // capture cost if present on response
+    trySetCostMeta((j as any)?.meta?.cost || (j as any)?.result?.meta?.cost);
+
+    const u = j?.result?.url || j?.result?.path || null;
+    const pid = j?.result?.pageId || null;
+
+    const ok = await passesBudgets(pid);
+    if (!ok) {
+      pushAutoLog("pilot", "Blocked by Contracts: change would violate budgets.");
+      try {
+        say("Blocked. Budgets not met.");
+      } catch {}
+      return false;
+    }
+
+    setSpec(nextSpec);
+    setPreview(u, pid);
+    pushHistory({ url: u, pageId: pid, spec: j?.spec || nextSpec });
+    return true;
   }
 
   async function applyChip(chip: string) {
@@ -811,6 +985,16 @@ export default function CursorCanvas() {
     if (!j.ok) return;
     setSpec(j.spec);
     await recompose(j.spec);
+  }
+
+  // Apply one chip with pre-commit guard
+  async function applyChipGuarded(chip: string) {
+    if (!spec) return false;
+    if (recording) recordingRef.current.push(`chip:${chip}`);
+    const r = await fetch("/api/ai/chips/apply", json({ sessionId, spec, chip }));
+    const j = await r.json();
+    if (!j.ok) return false;
+    return await recomposeGuarded(j.spec);
   }
 
   async function applyChipBatch(batch: string[]) {
@@ -826,6 +1010,18 @@ export default function CursorCanvas() {
     }
     setSpec(next);
     await recompose(next);
+  }
+
+  // Apply a batch of chips with guard (stops on first failure)
+  async function applyChipBatchGuarded(batch: string[]) {
+    if (!spec || batch.length === 0) return false;
+    let ok = true;
+    for (const raw of batch) {
+      const chip = raw.startsWith("chip:") ? raw.slice(5) : raw;
+      ok = await applyChipGuarded(chip);
+      if (!ok) break;
+    }
+    return ok;
   }
 
   async function swapVector(q = "") {
@@ -919,7 +1115,36 @@ export default function CursorCanvas() {
     })();
   }, [pageId]);
 
-  /** -------------------- A/B KPI poller + Auto-Stop -------------------- **/
+  /** -------------------- listen for compose_success signals (SSE) → cost chip & receipt -------------------- **/
+  useEffect(() => {
+    let es: EventSource | null = null;
+    try {
+      // session-scoped stream if available server-side; harmless if 404
+      const url = `/api/ai/signals?sessionId=${encodeURIComponent(sessionId)}`;
+      es = new EventSource(url);
+      es.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data || "{}");
+          const type = data?.type || data?.kind;
+          if (type === "compose_success") {
+            const c = data?.meta?.cost;
+            if (c && typeof c.tokens === "number") {
+              trySetCostMeta(c);
+            }
+            const r = data?.meta?.receipt;
+            if (r?.summary) setReceipt({ summary: String(r.summary) });
+          }
+        } catch {}
+      };
+    } catch {}
+    return () => {
+      try {
+        es?.close();
+      } catch {}
+    };
+  }, [sessionId]);
+
+  /** -------------------- A/B KPI poller + Auto-Stop (z-test or SPRT) -------------------- **/
   useEffect(() => {
     if (!ab.on || !ab.exp) {
       setAbKpi(null);
@@ -928,9 +1153,8 @@ export default function CursorCanvas() {
 
     let stop = false;
 
-    // ---- helpers: stats ----
+    // --- helpers: normal CDF for z-test mode ---
     function erf(x: number) {
-      // Numerical approximation
       const sign = x < 0 ? -1 : 1;
       x = Math.abs(x);
       const a1 = 0.254829592,
@@ -947,7 +1171,9 @@ export default function CursorCanvas() {
     function cdfStdNorm(z: number) {
       return 0.5 * (1 + erf(z / Math.SQRT2));
     }
-    function evalConfidence(
+
+    // --- helpers: one-sided z test (legacy mode) ---
+    function zTest(
       A: { views: number; conv: number },
       B: { views: number; conv: number }
     ) {
@@ -960,11 +1186,38 @@ export default function CursorCanvas() {
       const pooled = (cA + cB) / (vA + vB);
       const se = Math.sqrt(pooled * (1 - pooled) * (1 / vA + 1 / vB)) || 1e-9;
       const z = (pB - pA) / se;
-      // one-sided confidence that the higher CTR is truly higher
       const higherIsB = pB >= pA;
       const conf = higherIsB ? cdfStdNorm(z) : cdfStdNorm(-z);
       const lift = pA > 0 ? ((pB - pA) / pA) * 100 : pB > 0 ? 100 : 0;
       return { conf, pA, pB, lift, winner: higherIsB ? ("B" as const) : ("A" as const) };
+    }
+
+    // --- helpers: Wald SPRT (sequential) for B vs A with MDE (relative) ---
+    function sprt(
+      A: { views: number; conv: number },
+      B: { views: number; conv: number },
+      alpha = 0.05,
+      power = 0.8, // 1 - beta
+      relMDE = 0.05 // +5% relative CTR improvement
+    ) {
+      const vA = Math.max(1, A.views || 0);
+      const cA = Math.max(0, A.conv || 0);
+      const p0 = Math.min(0.999, Math.max(1e-6, cA / vA)); // baseline (control) CTR
+      const p1 = Math.min(0.999, Math.max(1e-6, p0 * (1 + relMDE))); // alternative CTR for B
+
+      const vB = Math.max(1, B.views || 0);
+      const cB = Math.max(0, B.conv || 0);
+
+      // LLR over aggregated binomial counts for B stream
+      const llr = cB * Math.log(p1 / p0) + (vB - cB) * Math.log((1 - p1) / (1 - p0));
+
+      const beta = Math.max(1e-6, 1 - power);
+      const A_th = Math.log(beta / (1 - alpha)); // lower bound → accept H0 (A wins)
+      const B_th = Math.log((1 - beta) / alpha); // upper bound → accept H1 (B wins)
+
+      if (llr <= A_th) return { decided: true, winner: "A" as const, llr, A_th, B_th, p0, p1 };
+      if (llr >= B_th) return { decided: true, winner: "B" as const, llr, A_th, B_th, p0, p1 };
+      return { decided: false, winner: null as any, llr, A_th, B_th, p0, p1 };
     }
 
     async function tick() {
@@ -992,28 +1245,57 @@ export default function CursorCanvas() {
         };
         if (!stop) setAbKpi(out);
 
-        // ---- Auto-stop rule ----
-        if (!stop && abAuto.enabled && ab.on) {
-          const viewsOK = out.A.views >= abAuto.minViews && out.B.views >= abAuto.minViews;
-          const convOK = out.A.conv >= abAuto.minConv || out.B.conv >= abAuto.minConv;
-          if (viewsOK && convOK) {
-            const { conf, pA, pB, lift, winner } = evalConfidence(out.A, out.B);
-            if (conf >= abAuto.confidence) {
-              // stop experiment, set winner, announce
-              setAb((a) => ({ ...a, on: false, arm: winner }));
-              setAbWinner(winner);
-              const confPct = Math.round(conf * 100);
-              const ctrA = (pA * 100).toFixed(2) + "%";
-              const ctrB = (pB * 100).toFixed(2) + "%";
-              const msg = `A/B auto-stop → ${winner} wins. conf≈${confPct}% · CTR A ${ctrA} vs B ${ctrB} · lift ${lift.toFixed(
-                1
-              )}%`;
-              pushAutoLog("pilot", msg);
-              try {
-                say(msg);
-              } catch {}
-            }
+        if (!abAuto.enabled || !ab.on) return;
+
+        // gates
+        const viewsOK = out.A.views >= abAuto.minViews && out.B.views >= abAuto.minViews;
+        const convOK = out.A.conv >= abAuto.minConv || out.B.conv >= abAuto.minConv;
+        if (!viewsOK || !convOK) return;
+
+        // Decide via mode
+        let winner: "A" | "B" | null = null;
+        let note = "";
+
+        if (abAuto.seq) {
+          const alpha = 0.05;
+          const { decided, winner: w, llr, A_th, B_th, p0, p1 } = sprt(
+            out.A,
+            out.B,
+            alpha,
+            abAuto.power,
+            0.05
+          );
+          if (decided) {
+            winner = w;
+            note = `SPRT llr=${llr.toFixed(3)} [${A_th.toFixed(3)}…${B_th.toFixed(3)}], p0~${(
+              p0 * 100
+            ).toFixed(2)}%, p1~${(p1 * 100).toFixed(2)}%`;
           }
+        } else {
+          const { conf, pA, pB, lift, winner: w } = zTest(out.A, out.B);
+          if (conf >= abAuto.confidence) {
+            winner = w;
+            note = `z≈ one-sided, conf≈${Math.round(conf * 100)}%, lift ${lift.toFixed(
+              1
+            )}%, CTR A ${(pA * 100).toFixed(2)}% vs B ${(pB * 100).toFixed(2)}%`;
+          }
+        }
+
+        if (winner) {
+          // stop experiment, promote winner
+          setAb((a) => ({ ...a, on: false, arm: winner }));
+          setAbWinner(winner);
+
+          const target = winner === "A" ? ab.A || {} : ab.B || {};
+          if (target?.url) setPreview(target.url, target.pageId || null);
+
+          const msg = `A/B auto-stop → ${winner} wins. ${note}`;
+          pushAutoLog("pilot", msg);
+          try {
+            say(msg);
+          } catch {}
+
+          stop = true;
         }
       } catch {
         if (!stop) setAbKpi(null);
@@ -1026,7 +1308,41 @@ export default function CursorCanvas() {
       stop = true;
       clearInterval(id);
     };
-  }, [ab.on, ab.exp, abAuto.enabled, abAuto.confidence, abAuto.minViews, abAuto.minConv]);
+  }, [
+    ab.on,
+    ab.exp,
+    abAuto.enabled,
+    abAuto.confidence,
+    abAuto.minViews,
+    abAuto.minConv,
+    abAuto.seq,
+    abAuto.power,
+  ]);
+
+  /** -------------------- Promote winner (A/B) -------------------- **/
+  async function promoteWinner(
+    sid: string,
+    winnerPatch: { sections?: string[]; copy?: any; brand?: any }
+  ) {
+    const r = await postJson("/api/ai/ab/promote", {
+      sessionId: sid,
+      winnerPatchVersion: "v1",
+      winner: winnerPatch,
+      audit: {
+        reason: "ab_auto_stop_winner",
+        user: (window as any).__user || "anon",
+      },
+    });
+    if (!r?.ok) throw new Error(r?.error || "promote failed");
+    pushAutoLog("pilot", "Promoted winner to live draft.");
+    try {
+      say("Winner promoted.");
+    } catch {}
+    // soft refresh the iframe view
+    try {
+      frameRef.current?.contentWindow?.location?.reload();
+    } catch {}
+  }
 
   /** -------------------- first load -------------------- **/
   useEffect(() => {
@@ -1133,7 +1449,7 @@ export default function CursorCanvas() {
           const parts: string[] = [];
           let cur: Element | null = el;
           let guard = 0;
-          while (cur && guard++ < 8 && cur !== doc.body) {
+          while (cur && guard++ < 12 && cur !== doc.body) {
             const tag = (cur as HTMLElement).tagName.toLowerCase();
             let idx = 1,
               sib = cur.previousElementSibling;
@@ -1180,6 +1496,9 @@ export default function CursorCanvas() {
           const el = doc.elementFromPoint(e.clientX, e.clientY);
           sendHover(el, e);
         };
+
+        // Declare commentArmed BEFORE click handler (fixes rare TS/runtime "use before init")
+        let commentArmed = false;
 
         const click = (e: MouseEvent) => {
           const el = doc.elementFromPoint(e.clientX, e.clientY);
@@ -1335,7 +1654,7 @@ export default function CursorCanvas() {
         }
 
         // NEW: listen for comment mode control
-        let commentArmed = false;
+        // (commentArmed declared above)
         const onCtl = (ev: MessageEvent) => {
           const d = ev.data as any;
           if (d && d.type === "yb_comment_mode") commentArmed = !!d.on;
@@ -1354,14 +1673,29 @@ export default function CursorCanvas() {
             const params = new URLSearchParams(win.location.search || "");
             const exp = params.get("__exp");
             const arm = params.get("__arm");
-            if (!exp || !arm || !navigator.sendBeacon) return;
+            if (!exp || !arm) return;
+
             const payload = JSON.stringify({
               experiment: exp,
               variant: arm === "B" ? "B" : "A",
               path: win.location.pathname || "/",
               ts: Date.now(),
             });
-            navigator.sendBeacon("/api/kpi/seen", new Blob([payload], { type: "application/json" }));
+
+            if (navigator.sendBeacon) {
+              const ok = navigator.sendBeacon(
+                "/api/kpi/seen",
+                new Blob([payload], { type: "application/json" })
+              );
+              if (ok) return;
+            }
+            // Fallback if sendBeacon is unavailable or fails
+            fetch("/api/kpi/seen", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: payload,
+              keepalive: true,
+            }).catch(() => {});
           } catch {}
         }
         // fire on load + SPA nav
@@ -1477,6 +1811,14 @@ export default function CursorCanvas() {
       const bg = bgR ? flattenOnWhite(bgR) : ([255, 255, 255] as [number, number, number]);
       const ratio = parseFloat(contrastRatio(fg, bg).toFixed(2));
       setContrastInfo({ ratio, passAA: ratio >= 4.5 });
+
+      // NEW: update Ledger truths on hover
+      const truths = classifyFromMeta(h.meta || null);
+      setLedger({
+        show: true,
+        rect: { x: h.rect.x, y: Math.max(0, h.rect.y - 1), w: h.rect.w, h: h.rect.h },
+        truths,
+      });
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
@@ -1584,7 +1926,7 @@ export default function CursorCanvas() {
   async function applyGoal(gOverride?: number) {
     const g = typeof gOverride === "number" ? gOverride : goal;
     const plan = chipsForGoal(g);
-    await applyChipBatch(plan);
+    await applyChipBatchGuarded(plan);
     if (g >= 67) {
       if (!forceNoJS) setForceNoJS(true);
       if (spec) await recompose(spec);
@@ -1649,8 +1991,7 @@ export default function CursorCanvas() {
   }
   function onMouseDown(e: React.MouseEvent) {
     if (!(e.buttons & 1)) return;
-    // B. Stop using getModifierState("Space") (micro-fix)
-    if (e.code !== "Space" && e.key !== " ") return;
+    if (!spaceDown) return; // FIX: only pan when Space held
     setPanning(true);
     panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
   }
@@ -1686,12 +2027,18 @@ export default function CursorCanvas() {
   const [modPerf, setModPerf] = useState(false);
   useEffect(() => {
     const kd = (e: KeyboardEvent) => {
+      if (e.key === " " || e.code === "Space" || e.key === "Spacebar") setSpaceDown(true);
       if (e.altKey) setModProof(true);
       if (e.ctrlKey || e.metaKey) setModPerf(true);
       if (e.shiftKey) setModMeasure(true); // NEW
       if (e.key === "Escape") setNoteArm(false);
     };
     const ku = (e: KeyboardEvent) => {
+      if (!(e.key === " " || e.code === "Space" || e.key === "Spacebar")) {
+        // noop
+      } else {
+        setSpaceDown(false);
+      }
       if (!e.altKey) setModProof(false);
       if (!(e.ctrlKey || e.metaKey)) setModPerf(false);
       if (!e.shiftKey) setModMeasure(false); // NEW
@@ -1886,7 +2233,7 @@ export default function CursorCanvas() {
     }
 
     // quick chips
-    if (/\bfix contrast\b|\bread(ability|able)\b/.test(t)) {
+    if (/\b(fix contrast)\b|\bread(ability|able)\b/.test(t)) {
       await applyChip("More minimal");
       return true;
     }
@@ -2099,10 +2446,10 @@ export default function CursorCanvas() {
       const now = Date.now();
       setPeers((p) => {
         const next: typeof p = {};
-        for (const [id, v] of Object.entries(p)) if (now - (v as any).ts < 10000) next[id] = v as any;
+        for (const [id, v] of Object.entries(p)) if (now - (v as any).ts < 8000) next[id] = v as any;
         return next;
       });
-    }, 4000);
+    }, 3000);
     pingPresence();
     return () => {
       bc.removeEventListener("message", onMessage);
@@ -2120,6 +2467,30 @@ export default function CursorCanvas() {
   /** -------------------- UI -------------------- **/
   return (
     <div className="w-full h-screen grid grid-rows-[auto,1fr] bg-gray-50">
+      {/* Cost chip (global HUD) */}
+      {costMeta && (
+        <div className="fixed top-3 right-3 z-50 rounded-xl px-3 py-1.5 shadow-sm bg-black/70 text-white text-xs backdrop-blur">
+          <span title="Estimated latency">{Math.round(costMeta.latencyMs)}ms</span>
+          <span className="mx-1.5">•</span>
+          <span title="Estimated tokens">{costMeta.tokens} tok</span>
+          <span className="mx-1.5">•</span>
+          <span title="Estimated cost">
+            ₹
+            {(
+              (costMeta.cents / 100) *
+              ((Number((import.meta as any)?.env?.VITE_FX_USD_INR) || 85))
+            ).toFixed(2)}
+          </span>
+        </div>
+      )}
+
+      {/* Receipt chip (from compose_success) */}
+      {receipt && (
+        <div className="fixed top-12 right-3 z-50 rounded-xl px-3 py-1.5 shadow-sm bg-black/60 text-white text-xs backdrop-blur">
+          {receipt.summary}
+        </div>
+      )}
+
       {/* Top bar */}
       <div className="flex items-center gap-2 p-3 border-b bg-white">
         <input
@@ -2219,11 +2590,11 @@ export default function CursorCanvas() {
           </button>
         </div>
 
-        <button onClick={() => composeInstant()} className="px-3 py-2 rounded bg-black text-white">
+        <button onClick={() => composeGuarded()} className="px-3 py-2 rounded bg-black text-white">
           Compose
         </button>
         <button
-          onClick={() => spec && recompose(spec)}
+          onClick={() => spec && recomposeGuarded(spec)}
           className="px-3 py-2 rounded bg-gray-900 text-white"
         >
           Recompose
@@ -2306,10 +2677,36 @@ export default function CursorCanvas() {
               className={`px-2 py-1 text-xs rounded border ${
                 abAuto.enabled ? "bg-black text-white" : ""
               }`}
-              title="Auto-stop when confident (one-sided z-test)"
+              title="Auto-stop when confident (one-sided z-test or SPRT)"
             >
               AutoStop {abAuto.enabled ? "ON" : "OFF"}
             </button>
+            {/* NEW: strict sequential toggle */}
+            <button
+              onClick={() => setAbAuto((x) => ({ ...x, seq: !x.seq }))}
+              className={`px-2 py-1 text-xs rounded border ${
+                abAuto.seq ? "bg-indigo-600 text-white" : ""
+              }`}
+              title="Strict sequential test (Wald SPRT)"
+            >
+              Strict seq {abAuto.seq ? "ON" : "OFF"}
+            </button>
+            {/* NEW: power input */}
+            <input
+              type="number"
+              min={0.5}
+              max={0.99}
+              step={0.01}
+              value={abAuto.power}
+              onChange={(e) =>
+                setAbAuto((x) => ({
+                  ...x,
+                  power: Math.max(0.5, Math.min(0.99, Number(e.target.value || 0.8))),
+                }))
+              }
+              className="px-2 py-1 text-xs rounded border w-20"
+              title="Target power for SPRT (1-β)"
+            />
             <button
               onClick={() => {
                 setAb((a) => {
@@ -2446,34 +2843,9 @@ export default function CursorCanvas() {
               </div>
             )}
 
-            {/* Magic cursor highlight */}
-            {(() => {
-              const layerColor =
-                layer === "Perf"
-                  ? "rgba(16,185,129,0.85)"
-                  : layer === "Proof"
-                  ? "rgba(239,68,68,0.85)"
-                  : layer === "Brand"
-                  ? "rgba(234,179,8,0.85)"
-                  : layer === "Variants"
-                  ? "rgba(59,130,246,0.85)"
-                  : layer === "Copy"
-                  ? "rgba(147,51,234,0.85)"
-                  : "rgba(99,102,241,0.85)";
-              return hoverBox ? (
-                <div
-                  className="absolute pointer-events-none rounded"
-                  style={{
-                    left: hoverBox.x,
-                    top: hoverBox.y,
-                    width: hoverBox.w,
-                    height: hoverBox.h,
-                    outline: `2px solid ${layerColor}`,
-                    boxShadow: `0 0 0 4px ${layerColor.replace("0.85", "0.18")} inset`,
-                  }}
-                />
-              ) : null;
-            })()}
+            {/* Magic cursor highlight (componentized) */}
+            <HoverHighlight hoverBox={hoverBox} layer={layer} />
+
             {hoverBox ? (
               <div
                 className="absolute pointer-events-none text-[11px] px-1.5 py-0.5 rounded bg-black/80 text-white"
@@ -2486,53 +2858,8 @@ export default function CursorCanvas() {
               </div>
             ) : null}
 
-            {/* Measurements overlay (to canvas edges) */}
-            {(measureOn || modMeasure) && hoverBox
-              ? (() => {
-                  const x = Math.max(0, hoverBox.x);
-                  const y = Math.max(0, hoverBox.y);
-                  const w = Math.max(0, hoverBox.w);
-                  const h = Math.max(0, hoverBox.h);
-                  const cw = 1280,
-                    ch = 800;
-                  const left = Math.round(x);
-                  const right = Math.round(cw - (x + w));
-                  const top = Math.round(y);
-                  const bottom = Math.round(ch - (y + h));
-                  const midY = y + h / 2;
-                  const midX = x + w / 2;
-                  const line = "absolute bg-emerald-500/70 pointer-events-none";
-                  const tag =
-                    "absolute text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 pointer-events-none";
-                  return (
-                    <>
-                      {/* horizontal to left */}
-                      <div className={`${line}`} style={{ left: 0, top: midY, width: left, height: 1 }} />
-                      <div className={`${tag}`} style={{ left: Math.max(2, left / 2 - 12), top: midY - 14 }}>
-                        {left}px
-                      </div>
-                      {/* horizontal to right */}
-                      <div className={`${line}`} style={{ left: x + w, top: midY, width: right, height: 1 }} />
-                      <div className={`${tag}`} style={{ left: x + w + Math.max(2, right / 2 - 12), top: midY - 14 }}>
-                        {right}px
-                      </div>
-                      {/* vertical to top */}
-                      <div className={`${line}`} style={{ left: midX, top: 0, width: 1, height: top }} />
-                      <div className={`${tag}`} style={{ left: midX + 4, top: Math.max(2, top / 2 - 8) }}>
-                        {top}px
-                      </div>
-                      {/* vertical to bottom */}
-                      <div className={`${line}`} style={{ left: midX, top: y + h, width: 1, height: bottom }} />
-                      <div className={`${tag}`} style={{ left: midX + 4, top: y + h + Math.max(2, bottom / 2 - 8) }}>
-                        {bottom}px
-                      </div>
-                      {/* center crosshair */}
-                      <div className={`${line}`} style={{ left: 0, top: midY, width: cw, height: 1, opacity: 0.35 }} />
-                      <div className={`${line}`} style={{ left: midX, top: 0, width: 1, height: ch, opacity: 0.35 }} />
-                    </>
-                  );
-                })()
-              : null}
+            {/* Measurements overlay (componentized) */}
+            <Measurements enabled={measureOn || modMeasure} box={hoverBox} />
 
             {/* Cursor Do-Palette */}
             {cursorPt && (
@@ -3115,6 +3442,39 @@ export default function CursorCanvas() {
                     : "OFF"}
                   {abWinner ? ` • Winner: ${abWinner}` : ""}
                 </div>
+                {/* NEW: Promote winner */}
+                <div className="mt-2">
+                  <button
+                    onClick={() => {
+                      // Choose the winner (prefer auto-stop winner; else current viewed arm)
+                      const winnerArm = abWinner || ab.arm;
+                      // Build a minimal patch from current spec (sections/copy/brand)
+                      const cur = specRef.current;
+                      const patch: { sections?: string[]; copy?: any; brand?: any } = {};
+                      const secs =
+                        (cur?.layout?.sections && Array.isArray(cur.layout.sections)
+                          ? cur.layout.sections
+                          : sectionOrder.length
+                          ? sectionOrder
+                          : undefined) || undefined;
+                      if (secs && secs.length) patch.sections = [...secs];
+                      if (cur?.copy) patch.copy = { ...cur.copy };
+                      if (cur?.brand) patch.brand = { ...cur.brand };
+                      else if (cur?.brandColor) patch.brand = { primary: cur.brandColor };
+
+                      promoteWinner(sessionId, patch).catch((err) => {
+                        pushAutoLog("pilot", `Promote failed: ${String(err?.message || err)}`);
+                      });
+
+                      // small log cue
+                      pushAutoLog("pilot", `Promote clicked for arm ${winnerArm}.`);
+                    }}
+                    className="px-2 py-1 text-xs rounded border bg-black text-white"
+                    title="Send winner patch to server"
+                  >
+                    Promote Winner
+                  </button>
+                </div>
               </div>
             ) : null}
 
@@ -3172,7 +3532,7 @@ export default function CursorCanvas() {
                           ↓
                         </button>
                         <select
-                          className="ml-1 px-1 py-0.5 text-xs rounded border max-w=[120px] max-w-[120px]"
+                          className="ml-1 px-1 py-0.5 text-xs rounded border max-w-[120px]"
                           value={s}
                           onChange={(e) =>
                             setSectionOrder((prev) => {
@@ -3205,6 +3565,21 @@ export default function CursorCanvas() {
                 </button>
               </div>
             </div>
+
+            {/* Ledger (hover truths) */}
+            {ledger.show && ledger.rect ? (
+              <div
+                className="absolute z-20 pointer-events-none"
+                style={{
+                  left: Math.max(0, Math.min(1280 - 300, ledger.rect.x)),
+                  top: Math.max(0, ledger.rect.y - 24),
+                }}
+              >
+                <div className="px-2 py-1 text-xs rounded border bg-white/95 shadow">
+                  {ledger.truths.join(" • ")}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -3259,6 +3634,95 @@ export default function CursorCanvas() {
         )}
       </div>
     </div>
+  );
+}
+
+// ——— Factored tiny components to avoid JSX/IIFE brace issues ———
+function HoverHighlight({
+  hoverBox,
+  layer,
+}: {
+  hoverBox: { x: number; y: number; w: number; h: number } | null;
+  layer: "Layout" | "Copy" | "Brand" | "Proof" | "Perf" | "Variants";
+}) {
+  if (!hoverBox) return null;
+  const layerColor =
+    layer === "Perf"
+      ? "rgba(16,185,129,0.85)"
+      : layer === "Proof"
+      ? "rgba(239,68,68,0.85)"
+      : layer === "Brand"
+      ? "rgba(234,179,8,0.85)"
+      : layer === "Variants"
+      ? "rgba(59,130,246,0.85)"
+      : layer === "Copy"
+      ? "rgba(147,51,234,0.85)"
+      : "rgba(99,102,241,0.85)";
+  const soft = layerColor.replace("0.85", "0.18");
+  return (
+    <div
+      className="absolute pointer-events-none rounded"
+      style={{
+        left: hoverBox.x,
+        top: hoverBox.y,
+        width: hoverBox.w,
+        height: hoverBox.h,
+        outline: `2px solid ${layerColor}`,
+        boxShadow: `0 0 0 4px ${soft} inset`,
+      }}
+    />
+  );
+}
+
+function Measurements({
+  enabled,
+  box,
+}: {
+  enabled: boolean;
+  box: { x: number; y: number; w: number; h: number } | null;
+}) {
+  if (!enabled || !box) return null;
+  const x = Math.max(0, box.x);
+  const y = Math.max(0, box.y);
+  const w = Math.max(0, box.w);
+  const h = Math.max(0, box.h);
+  const cw = 1280,
+    ch = 800;
+  const left = Math.round(x);
+  const right = Math.round(cw - (x + w));
+  const top = Math.round(y);
+  const bottom = Math.round(ch - (y + h));
+  const midY = y + h / 2;
+  const midX = x + w / 2;
+  const line = "absolute bg-emerald-500/70 pointer-events-none";
+  const tag =
+    "absolute text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 pointer-events-none";
+  return (
+    <>
+      {/* horizontal to left */}
+      <div className={line} style={{ left: 0, top: midY, width: left, height: 1 }} />
+      <div className={tag} style={{ left: Math.max(2, left / 2 - 12), top: midY - 14 }}>
+        {left}px
+      </div>
+      {/* horizontal to right */}
+      <div className={line} style={{ left: x + w, top: midY, width: right, height: 1 }} />
+      <div className={tag} style={{ left: x + w + Math.max(2, right / 2 - 12), top: midY - 14 }}>
+        {right}px
+      </div>
+      {/* vertical to top */}
+      <div className={line} style={{ left: midX, top: 0, width: 1, height: top }} />
+      <div className={tag} style={{ left: midX + 4, top: Math.max(2, top / 2 - 8) }}>
+        {top}px
+      </div>
+      {/* vertical to bottom */}
+      <div className={line} style={{ left: midX, top: y + h, width: 1, height: bottom }} />
+      <div className={tag} style={{ left: midX + 4, top: y + h + Math.max(2, bottom / 2 - 8) }}>
+        {bottom}px
+      </div>
+      {/* center crosshair */}
+      <div className={line} style={{ left: 0, top: midY, width: cw, height: 1, opacity: 0.35 }} />
+      <div className={line} style={{ left: midX, top: 0, width: 1, height: ch, opacity: 0.35 }} />
+    </>
   );
 }
 

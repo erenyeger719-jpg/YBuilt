@@ -1,3 +1,4 @@
+// server/routes/execute.sandbox.ts
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { runSandbox } from "../sandbox/index.ts";
@@ -13,6 +14,67 @@ function bad(res: Response, msg: string, code = 400) {
 function safePath(p: string) {
   return /^[a-z0-9/_\-.]+$/i.test(p) && !p.includes("..");
 }
+
+// ---------- BLOCK P: Sandbox Policy V1 ----------
+const ENV_MAX_MS = parseInt(process.env.SANDBOX_MAX_MS || "7000", 10);
+const ENV_MAX_MB = parseInt(process.env.SANDBOX_MAX_MB || "384", 10);
+const ENV_ALLOW_NET = process.env.SANDBOX_ALLOW_NET === "true"; // default off
+const ENV_ALLOW_FS = process.env.SANDBOX_ALLOW_FS !== "false"; // default on (guarded by safePath)
+
+type Policy = {
+  allowNet?: boolean;
+  allowFs?: boolean;
+  maxMs?: number;
+  maxMb?: number;
+  allowPaths?: string[]; // relative safe roots
+};
+
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function applyPolicy(
+  req: Request,
+  payload: any
+): { ok: true; payload: any } | { ok: false; error: string } {
+  const ip = String(
+    (req as any).ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "anon"
+  );
+  const userPol: Policy = (payload && payload.policy) || {};
+  const pol: Required<Policy> = {
+    allowNet: userPol.allowNet === true && ENV_ALLOW_NET,
+    allowFs: (userPol.allowFs ?? true) && ENV_ALLOW_FS,
+    maxMs: clamp(userPol.maxMs ?? ENV_MAX_MS, 100, ENV_MAX_MS),
+    maxMb: clamp(userPol.maxMb ?? ENV_MAX_MB, 32, ENV_MAX_MB),
+    allowPaths:
+      Array.isArray(userPol.allowPaths) && userPol.allowPaths.length
+        ? userPol.allowPaths
+        : ["sandbox", "tmp", ".scratch"],
+  };
+
+  // Validate files (names only; runner enforces true FS jail)
+  const files = Array.isArray(payload?.files) ? payload.files : [];
+  for (const f of files) {
+    const p = String(f?.path || "");
+    if (!p || !safePath(p)) return { ok: false, error: "bad_path" };
+    const okRoot = pol.allowPaths.some((root) => p.startsWith(root + "/") || p === root);
+    if (!okRoot) return { ok: false, error: "path_not_allowed" };
+  }
+
+  // Network default OFF unless env permits and user asks
+  if (payload?.opts?.net && !pol.allowNet) return { ok: false, error: "net_blocked" };
+  // FS default ON (jail) but can be disabled via env
+  if (!pol.allowFs && files.length) return { ok: false, error: "fs_blocked" };
+
+  // Clamp limits the runner can read
+  payload.timeoutMs = clamp(Number(payload?.timeoutMs || pol.maxMs), 100, pol.maxMs);
+  payload.memoryMb = clamp(Number(payload?.memoryMb || pol.maxMb), 32, pol.maxMb);
+  payload.opts = { ...(payload?.opts || {}), net: !!(payload?.opts?.net && pol.allowNet) };
+
+  (payload.meta ??= {}).policy = { ip, ...pol };
+  return { ok: true, payload };
+}
+// ---------- /BLOCK P ----------
 
 // --- GET /api/execute/health ---
 router.get("/health", (_req, res) => {
@@ -74,7 +136,11 @@ router.post("/run", async (req: Request, res: Response) => {
 
   // 3) run sandbox
   try {
-    const out = await runSandbox(body);
+    // Apply policy & clamps before execution
+    const pol = applyPolicy(req, body as any);
+    if (!pol.ok) return res.status(400).json({ ok: false, error: pol.error });
+
+    const out = await runSandbox(pol.payload);
 
     // Stream an audit row to the /logs namespace (best-effort)
     try {
@@ -111,7 +177,7 @@ router.post("/run", async (req: Request, res: Response) => {
           exitCode: out.exitCode ?? null,
           sizes: { code: body.code.length, files: (body.files || []).length },
         },
-      });
+      } as any);
     } catch {}
 
     return res.json(out);
