@@ -90,10 +90,10 @@ import { aiQuota } from "../middleware/quotas.ts";
 import { contractsHardStop } from "../middleware/contracts.ts";
 
 // NEW (cost meta for compose_success)
-import { estimateCost } from "../ai/costs.ts";
+import { estimateCost } from "./costs.ts";
 
 // NEW (receipts for compose_success meta)
-import { buildReceipt } from "../ai/receipts.ts";
+import { buildReceipt } from "./receipts.ts";
 
 // ---------- BLOCK A: add after existing imports ----------
 import type { Request, Response, NextFunction } from "express";
@@ -1585,7 +1585,7 @@ router.post("/sections/packs/ingest", (req, res) => {
 });
 
 // ---------- act ----------
-router.post("/act", express.json(), contractsHardStop(), async (req, res) => {
+router.post("/act", express.json(), async (req, res) => {
   try {
     const { sessionId = "anon", spec = {}, action = {} } = (req.body || {}) as any;
     if (!action || !action.kind)
@@ -1664,7 +1664,7 @@ router.post("/act", express.json(), contractsHardStop(), async (req, res) => {
         // Auto-pack / explicit pack selection
         try {
           const ranked = listPacksRanked();
-          const wantPackId = String(action.args?.packId || "").trim();
+          const wantPackId = String(action.args
           const wantTagsRaw = action.args?.tags;
           const wantTags = Array.isArray(wantTagsRaw) ? wantTagsRaw.map(String) : [];
 
