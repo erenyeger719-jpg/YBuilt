@@ -1,29 +1,29 @@
 // server/intent/citelock.pro.ts
 import fs from "fs";
 import path from "path";
+import { sanitize } from "../ai/citelock.patch.ts";
 
-export function sanitizeFacts(copy: Record<string, string> = {}) {
-  const flags: string[] = [];
-  const patch: Record<string, string> = {};
+export function sanitizeFacts(
+  copy: Record<string, unknown>
+): { copyPatch: Record<string, string>; flags: string[] } {
+  // Normalize everything to strings for the sanitizer
+  const src: Record<string, string> = {};
+  for (const [k, v] of Object.entries(copy || {})) {
+    src[k] = String(v ?? "");
+  }
 
-  const sus =
-    /\b(#1|No\.?\s?1|top|best|leading|largest)\b|\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?(?:%|percent|x|k|m|b)\b|\b(since|est\.?)\s*20\d{2}\b/i;
-  const hasSource = (s: string) =>
-    /\bhttps?:\/\/|source:|ref:|footnote|data:/i.test(s);
+  // Run through the aggressive sanitizer used by tests
+  const { out, flags } = sanitize(src);
 
-  for (const [k, v] of Object.entries(copy)) {
-    if (typeof v !== "string") continue;
-    if (sus.test(v) && !hasSource(v)) {
-      flags.push(k);
-      const nv = v
-        .replace(/\b(#1|No\.?\s?1|top|best|leading|largest)\b/gi, "trusted")
-        .replace(/\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?(%|percent)\b/gi, "many")
-        .replace(/\b\d+(?:\.\d+)?\s*x\b/gi, "multi-fold")
-        .replace(/\b(since|est\.?)\s*20\d{2}\b/gi, "for years");
-      patch[k] = nv;
+  // Build a patch object: only include fields that actually changed
+  const copyPatch: Record<string, string> = {};
+  for (const [k, v] of Object.entries(out)) {
+    if (src[k] !== v) {
+      copyPatch[k] = v;
     }
   }
-  return { copyPatch: patch, flags };
+
+  return { copyPatch, flags };
 }
 
 // -------------------------------
