@@ -10,17 +10,27 @@ type Key = string; // `${audience}|${baseId}`
 const FILE = path.resolve(".cache/sections.bandits.json");
 
 function readDB(): Record<Key, ArmDB> {
-  try { return JSON.parse(fs.readFileSync(FILE, "utf8")); } catch { return {}; }
+  try {
+    return JSON.parse(fs.readFileSync(FILE, "utf8"));
+  } catch {
+    return {};
+  }
 }
 function writeDB(db: Record<Key, ArmDB>) {
   try {
     fs.mkdirSync(path.dirname(FILE), { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(db, null, 2));
-  } catch {}
+    fs.writeFileSync(FILE, JSON.stringify(db, null, 2), "utf8");
+  } catch {
+    /* degrade silently */
+  }
 }
 
-function baseOf(id: string) { return String(id).split("@")[0]; }
-function now() { return Date.now(); }
+function baseOf(id: string) {
+  return String(id).split("@")[0];
+}
+function now() {
+  return Date.now();
+}
 
 function ensureArm(db: Record<Key, ArmDB>, key: Key, variant: string) {
   db[key] ||= {};
@@ -28,12 +38,11 @@ function ensureArm(db: Record<Key, ArmDB>, key: Key, variant: string) {
 }
 
 function sampleBeta(a: number, b: number) {
-  // quick-and-cheap gamma sampler via inverse-CDF approx
-  // for small a/b we jitter with Math.random
+  // quick-and-cheap sampler using inverse-CDF-ish trick
   const u1 = Math.random() || 0.0001;
   const u2 = Math.random() || 0.0001;
-  const x = Math.pow(u1, 1 / a);
-  const y = Math.pow(u2, 1 / b);
+  const x = Math.pow(u1, 1 / Math.max(0.0001, a));
+  const y = Math.pow(u2, 1 / Math.max(0.0001, b));
   return x / (x + y);
 }
 
@@ -44,7 +53,7 @@ function maybeDecay(s: Stats) {
   const elapsed = Math.max(0, now() - s.last);
   if (elapsed < 7 * DAYS) return;
   const halfLifeDays = 60;
-  const factor = Math.pow(0.5, (elapsed / DAYS) / halfLifeDays);
+  const factor = Math.pow(0.5, elapsed / DAYS / halfLifeDays);
   s.a = 1 + (s.a - 1) * factor;
   s.b = 1 + (s.b - 1) * factor;
   s.seen = Math.round(s.seen * factor);
@@ -77,8 +86,11 @@ export function pickVariant(id: string, audience: Audience): string {
     // exploration bonus for cold arms
     const priorMean = stats.a / (stats.a + stats.b);
     const exploration = 0.05 * Math.exp(-Math.min(20, stats.seen) / 6); // fades after ~6–10 trials
-    const draw = sampleBeta(stats.a, stats.b) + exploration + (priorMean * 0.02);
-    if (draw > bestScore) { bestScore = draw; best = variant; }
+    const draw = sampleBeta(stats.a, stats.b) + exploration + priorMean * 0.02;
+    if (draw > bestScore) {
+      bestScore = draw;
+      best = variant;
+    }
   }
   return best;
 }
@@ -97,8 +109,55 @@ export function recordSectionOutcome(sections: string[], audience: Audience, win
     st.seen += 1;
     if (win) st.win += 1;
     // Beta update
-    if (win) st.a += 1; else st.b += 1;
+    if (win) st.a += 1;
+    else st.b += 1;
     st.last = now();
   }
   writeDB(db);
+}
+
+// --- Minimal bandit counters for metrics/KPI -----------------
+// (Named exports expected by router.metrics.ts)
+
+// Separate lightweight store for token-level wins/seen
+type TokensCnt = { seen: number; wins: number };
+type TokensDB = Record<string, TokensCnt>;
+
+const TOKENS_FILE = path.join(".cache", "bandits.tokens.json");
+
+function readTokenDB(file: string): TokensDB {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return {};
+  }
+}
+function writeTokenDB(file: string, db: TokensDB) {
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(db, null, 2), "utf8");
+  } catch {
+    /* degrade silently */
+  }
+}
+
+/**
+ * Record a "win" for a token (e.g., palette/typography/motif token).
+ * Called by KPI routes after a conversion to feed section-level bandits.
+ */
+export function recordTokenWin(token: string, opts?: { pageId?: string; delta?: number }) {
+  if (!token) return;
+  const db = readTokenDB(TOKENS_FILE);
+  const row = (db[token] ||= { seen: 0, wins: 0 });
+  row.wins += Math.max(1, Math.floor(opts?.delta ?? 1));
+  writeTokenDB(TOKENS_FILE, db);
+}
+
+/** Optional helper to count impressions for a token. */
+export function recordTokenSeen(token: string) {
+  if (!token) return;
+  const db = readTokenDB(TOKENS_FILE);
+  const row = (db[token] ||= { seen: 0, wins: 0 });
+  row.seen += 1;
+  writeTokenDB(TOKENS_FILE, db);
 }
