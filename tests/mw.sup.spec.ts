@@ -105,12 +105,18 @@ describe("mw/sup – supGuard", () => {
         },
       },
     });
-    expect(body.fallback).toBeDefined();
-    expect(body.fallback.status).toBe("fallback");
-    expect(typeof body.fallback.code).toBe("string");
-    expect(body.fallback.code.startsWith("sup_block.")).toBe(true);
-    expect(typeof body.fallback.title).toBe("string");
-    expect(typeof body.fallback.body).toBe("string");
+
+    // fallback is nested under result
+    expect(body.result).toBeDefined();
+    expect(body.result.fallback).toBeDefined();
+
+    const fallback = body.result.fallback;
+    expect(fallback.status).toBe("fallback");
+    expect(typeof fallback.code).toBe("string");
+    expect(fallback.code.startsWith("sup_block.")).toBe(true);
+    expect(typeof fallback.title).toBe("string");
+    expect(typeof fallback.body).toBe("string");
+
     expect(res._headers["X-SUP-Mode"]).toBe("block");
     expect(res._headers["X-SUP-Reasons"]).toContain("unproven_claims");
     spy.mockRestore();
