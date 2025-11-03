@@ -251,8 +251,13 @@ router.post("/__ready", (req, res) => {
   }
   return res.status(401).json({ ok: false, error: "bad_prewarm_token" });
 });
+// Health endpoint for warm-up checks
+router.get("/__health", (_req, res) => res.json({ ok: true }));
+
 router.use((req, res, next) => {
   if (!__READY && process.env.PREWARM_TOKEN) {
+    if (req.path === "/__ready" || req.path === "/__health") return next();
+    res.setHeader("Retry-After", "5");
     return res.status(503).json({ ok: false, error: "not_ready" });
   }
   next();
@@ -261,7 +266,7 @@ router.use((req, res, next) => {
 // (A) Body parser with 1 MB cap
 router.use(express.json({ limit: "1mb" })); // ensure this appears once
 
-// Apply global middleware
+// Apply global middleware — quotas before handlers so Retry-After/limits surface properly
 router.use(aiQuota);
 
 // Bypass limiter for special cases (kept as-is)
@@ -305,6 +310,9 @@ router.use((req, res, next) => {
 router.use(quotaMiddleware);
 router.use(contractsGuard);
 
+// CiteLock wrapper (patches res.json and enforces soft/block) — mount early
+mountCiteLock(router);
+
 // Abuse intake
 router.post("/abuse/report", express.json(), (req, res) => {
   const day = new Date().toISOString().slice(0, 10);
@@ -322,9 +330,6 @@ router.post("/abuse/report", express.json(), (req, res) => {
   fs.appendFileSync(path.join(dir, `${day}.jsonl`), JSON.stringify(entry) + "\n");
   res.json({ ok: true });
 });
-
-// Mount CiteLock shim
-mountCiteLock(router);
 
 // Minimal OG/social endpoint
 router.get("/og", (req, res) => {

@@ -22,10 +22,10 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
   for (const [k, raw] of Object.entries(input || {})) {
     let v = String(raw ?? "");
     for (const p of riskyPatterns) {
-      if (p.rx.test(v)) {
-        flags.add(p.flag);
-        v = v.replace(p.rx, p.replacement);
-      }
+      // clone regex each pass to avoid global /g lastIndex bleed
+      const rx = new RegExp(p.rx.source, p.rx.flags);
+      if (rx.test(v)) flags.add(p.flag);
+      v = v.replace(rx, p.replacement);
     }
     out[k] = v;
   }
@@ -55,9 +55,6 @@ export function mountCiteLock(router: Router) {
               reasons: verdict.reasons,
             };
 
-            if (verdict.action === "soffen" && verdict.safeText) {
-              replaceText(body, verdict.safeText);
-            }
             if (verdict.action === "soften" && verdict.safeText) {
               replaceText(body, verdict.safeText);
             }
