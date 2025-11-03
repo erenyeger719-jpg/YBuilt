@@ -133,3 +133,91 @@ export function lastShipFor(pageId: string) {
   } catch {}
   return null;
 }
+
+// --- lightweight url cost tracking for /metrics ---
+
+export type UrlCostSnapshot = {
+  hits: number;
+  tokens: number;
+  cents: number;
+  conversions: number;
+};
+
+type UrlKey = string;
+
+const urlStats = new Map<UrlKey, UrlCostSnapshot>();
+
+function normalizeUrlKey(
+  url: string | null | undefined,
+  pageId: string | null | undefined
+): UrlKey | null {
+  const u = (url || "").trim();
+  const p = (pageId || "").trim();
+
+  if (p) return `page:${p}`;
+  if (u) return `url:${u}`;
+  return null;
+}
+
+// For /outcome: record a "ship" with basic cost info
+export function recordUrlCost(
+  url: string | null | undefined,
+  pageId: string | null | undefined,
+  tokens: number,
+  cents: number
+) {
+  const key = normalizeUrlKey(url, pageId);
+  if (!key) return;
+
+  const cur =
+    urlStats.get(key) || {
+      hits: 0,
+      tokens: 0,
+      cents: 0,
+      conversions: 0,
+    };
+
+  cur.hits += 1;
+  if (Number.isFinite(tokens)) cur.tokens += tokens;
+  if (Number.isFinite(cents)) cur.cents += cents;
+
+  urlStats.set(key, cur);
+}
+
+// For /kpi/convert: bump conversions for a pageId or URL
+export function recordUrlConversion(identifier: string | null | undefined) {
+  const raw = (identifier || "").trim();
+  if (!raw) return;
+
+  let key: UrlKey;
+  if (raw.startsWith("pg_")) {
+    key = `page:${raw}`;
+  } else {
+    key = `url:${raw}`;
+  }
+
+  const cur =
+    urlStats.get(key) || {
+      hits: 0,
+      tokens: 0,
+      cents: 0,
+      conversions: 0,
+    };
+
+  cur.conversions += 1;
+  urlStats.set(key, cur);
+}
+
+// Snapshot used by /metrics
+export function snapshotUrlCosts(): Record<string, UrlCostSnapshot> {
+  const out: Record<string, UrlCostSnapshot> = {};
+  for (const [k, v] of urlStats.entries()) {
+    out[k] = { ...v };
+  }
+  return out;
+}
+
+// Test helper
+export function resetOutcomeMetrics() {
+  urlStats.clear();
+}

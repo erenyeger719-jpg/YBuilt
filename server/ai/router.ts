@@ -23,6 +23,11 @@ import { sharedCache, makeKeyFromRequest } from "../intent/cache2.ts";
 import { aiQuota } from "../middleware/quotas.ts";
 import { contractsHardStop } from "../middleware/contracts.ts";
 import { abuseMesh } from "../middleware/abuse.mesh.ts";
+import {
+  snapshotUrlCosts,
+  recordUrlCost,
+  recordUrlConversion,
+} from "../metrics/outcome.ts";
 
 // Import shared helpers that will be exported
 import {
@@ -452,8 +457,27 @@ router.get("/og", (req, res) => {
   res.json({ ok: true, title, desc, image });
 });
 
-router.post("/outcome", (_req, res) => {
-  res.json({ ok: true });
+router.post("/outcome", (req, res) => {
+  const body: any = req.body || {};
+
+  const url = typeof body.url === "string" ? body.url : "";
+  const pageId = typeof body.pageId === "string" ? body.pageId : "";
+  const tokens =
+    typeof body.tokens === "number" && Number.isFinite(body.tokens)
+      ? body.tokens
+      : 0;
+  const cents =
+    typeof body.cents === "number" && Number.isFinite(body.cents)
+      ? body.cents
+      : 0;
+
+  try {
+    recordUrlCost(url || null, pageId || null, tokens, cents);
+  } catch {
+    // best-effort only; never throw
+  }
+
+  return res.json({ ok: true });
 });
 
 // Health pings (GET)
@@ -527,12 +551,20 @@ router.get("/proof/:id", (req, res) => {
 });
 
 router.get("/metrics", (_req, res) => {
-  return res.json({ ok: true, url_costs: {} });
+  const urlCosts = snapshotUrlCosts();
+  return res.json({ ok: true, url_costs: urlCosts });
 });
 
 // KPI conversion acknowledge (minimal deterministic)
 router.post("/kpi/convert", (req, res) => {
-  const _pageId = String(req.body?.pageId || "");
+  const pageId = String(req.body?.pageId || "");
+
+  try {
+    recordUrlConversion(pageId || null);
+  } catch {
+    // ignore logging/metrics failures
+  }
+
   return res.json({ ok: true });
 });
 
