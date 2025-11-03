@@ -219,6 +219,15 @@ function scoreExample(q: string, ex: Example): number {
   return base * boost;
 }
 
+// ADD: map slugs to sections for shaped hits
+function slugToSections(slug: string): string[] {
+  const s = String(slug || "");
+  const out = new Set<string>(["hero-basic", "cta-simple"]);
+  if (/features/i.test(s)) out.add("features-3col");
+  if (/pricing/i.test(s)) out.add("pricing-simple");
+  return Array.from(out);
+}
+
 /** -------------------- Public API -------------------- **/
 export function addExample(e: Example) {
   if (!e || !e.slug) return;
@@ -232,108 +241,67 @@ export function addExample(e: Example) {
   EXAMPLE_MAP.set(next.slug, next);
 }
 
-/**
- * Deterministic nearest with strict tie-breaks and near-tie re-ranking.
- * Back-compat:
- *   nearest(q, 5)
- * Extended:
- *   nearest(q, { k: 7, sections: [...], brand: { tone, dark } })
- */
-export function nearest(q: string, kOrOpts?: number | NearestOpts): Example[] {
-  let k = 5;
-  let opts: NearestOpts | undefined = undefined;
+// REPLACE the existing nearest(...) implementation with this shaped version
+export async function nearest(
+  q: string | { text?: string; tags?: string[] },
+  kOrOpts?: number | NearestOpts
+): Promise<{ sections: string[]; score: number; match?: Example }> {
+  // Keep your current ranking pipeline:
+  const list = ((): Example[] => {
+    // reuse your current scoring/sorting logic
+    const k =
+      typeof kOrOpts === "number"
+        ? kOrOpts
+        : typeof kOrOpts === "object" && kOrOpts?.k
+        ? kOrOpts.k
+        : 5;
 
-  if (typeof kOrOpts === "number") {
-    k = kOrOpts;
-  } else if (typeof kOrOpts === "object" && kOrOpts) {
-    opts = kOrOpts;
-    if (typeof opts.k === "number") k = opts.k;
+    const universe = Array.from(EXAMPLE_MAP.values());
+    const qStr = typeof q === "string" ? q : (q?.text || "");
+    const scored = universe.map((ex) => ({
+      item: ex,
+      score: scoreExample(qStr, ex),
+    }));
+
+    // your deterministic tie-breaks stay the same
+    const qLower = qStr.toLowerCase();
+    const epsPrimary = 0.02;
+    scored.sort((a, b) => {
+      if (Math.abs(b.score - a.score) > epsPrimary) return b.score - a.score;
+
+      const slA = qLower.includes(a.item.slug.toLowerCase());
+      const slB = qLower.includes(b.item.slug.toLowerCase());
+      if (slA !== slB) return slB ? 1 : -1;
+
+      const tA = (a.item.tags || []).filter((t) =>
+        qLower.includes(String(t).toLowerCase())
+      ).length;
+      const tB = (b.item.tags || []).filter((t) =>
+        qLower.includes(String(t).toLowerCase())
+      ).length;
+      if (tA !== tB) return tB - tA;
+
+      const rA = a.item.updatedAt || 0;
+      const rB = b.item.updatedAt || 0;
+      if (rA !== rB) return rB - rA;
+
+      const hA = stableHash(a.item.slug);
+      const hB = stableHash(b.item.slug);
+      return hA - hB;
+    });
+
+    return scored.slice(0, Math.max(1, k)).map((x) => x.item);
+  })();
+
+  const best = list[0];
+  if (best) {
+    const qStr = typeof q === "string" ? q : (q?.text || "");
+    return {
+      sections: slugToSections(best.slug),
+      score: scoreExample(qStr, best),
+      match: best,
+    };
   }
-
-  const universe = Array.from(EXAMPLE_MAP.values());
-
-  // cache for comparator helpers
-  const qLower = q.toLowerCase();
-
-  // score
-  const scored = universe.map((ex) => ({
-    item: ex,
-    score: scoreExample(q, ex),
-  }));
-
-  // Primary sort with deterministic tie-breaks (epsilon band)
-  const epsPrimary = 0.02;
-  scored.sort((a, b) => {
-    // primary: score (desc) with epsilon band
-    if (Math.abs(b.score - a.score) > epsPrimary) return b.score - a.score;
-
-    // tie-break 1: exact slug mention in query
-    const slA = qLower.includes(a.item.slug.toLowerCase());
-    const slB = qLower.includes(b.item.slug.toLowerCase());
-    if (slA !== slB) return slB ? 1 : -1;
-
-    // tie-break 2: tag overlap count with query
-    const tA = (a.item.tags || []).filter((t) => qLower.includes(String(t).toLowerCase())).length;
-    const tB = (b.item.tags || []).filter((t) => qLower.includes(String(t).toLowerCase())).length;
-    if (tA !== tB) return tB - tA;
-
-    // tie-break 3: recency (newer first)
-    const rA = a.item.updatedAt || 0;
-    const rB = b.item.updatedAt || 0;
-    if (rA !== rB) return rB - rA;
-
-    // final: stable hash on slug (ascending for stability)
-    const hA = stableHash(a.item.slug);
-    const hB = stableHash(b.item.slug);
-    return hA - hB;
-  });
-
-  if (scored.length === 0) return [];
-
-  // Near-tie re-ranking by context tags → tag overlap > weight > recency
-  const epsilon = 0.03;
-  const best = scored[0]?.score ?? 0;
-
-  const close = scored.filter((x) => best - x.score <= epsilon);
-  const far = scored.filter((x) => best - x.score > epsilon);
-
-  const contextTags = new Set<string>(
-    [
-      ...((opts?.sections || []).map((s: string) => s.split("@")[0]) || []),
-      String(opts?.brand?.tone || "").toLowerCase(),
-      opts?.brand?.dark ? "dark" : "light",
-    ].filter(Boolean)
-  );
-
-  const reranked = close.sort((a, b) => {
-    const A = a.item;
-    const B = b.item;
-
-    const overlapA = (A.tags || []).reduce(
-      (n, t) => n + (contextTags.has(String(t).toLowerCase()) ? 1 : 0),
-      0
-    );
-    const overlapB = (B.tags || []).reduce(
-      (n, t) => n + (contextTags.has(String(t).toLowerCase()) ? 1 : 0),
-      0
-    );
-
-    if (overlapA !== overlapB) return overlapB - overlapA;
-
-    const wA = A.weight ?? 1;
-    const wB = B.weight ?? 1;
-    if (wA !== wB) return wB - wA;
-
-    const rA = A.updatedAt ?? 0;
-    const rB = B.updatedAt ?? 0;
-    if (rA !== rB) return rB - rA;
-
-    // stable fallback
-    const hA = stableHash(A.slug);
-    const hB = stableHash(B.slug);
-    return hA - hB;
-  });
-
-  const finalOrder = [...reranked, ...far];
-  return finalOrder.slice(0, Math.max(1, k)).map((x) => x.item);
+  // cold-start default
+  return { sections: ["hero-basic", "cta-simple"], score: 0 };
 }
