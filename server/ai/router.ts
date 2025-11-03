@@ -6,10 +6,7 @@ import path from "path";
 import { nanoid } from "nanoid";
 
 // Import route modules (as sub-routers)
-import reviewRouter from "./router.review.ts";
-import { router as composeRouter } from "./router.compose.ts";
-import mediaRouter from "./router.media.ts";
-import metricsRouter from "./router.metrics.ts";
+import { reviewRouter, composeRouter, mediaRouter, metricsRouter } from "./subrouters.ts";
 
 // Import shared utilities and types
 import { mountCiteLock } from "./citelock.patch.ts";
