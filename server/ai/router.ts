@@ -505,3 +505,4 @@ router.use((err: any, _req: any, res: any, _next: any) => {
 
 // Export router and helpers
 export default router;
+export { router, ensureCache };
