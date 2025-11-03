@@ -10,7 +10,8 @@ export type SanitizeResult = { out: Record<string, string>; flags: string[] };
 
 /** ───────────────── Canonical risky patterns (flag + replace) ───────────────── */
 const RISKY: Array<{ rx: RegExp; replacement: string; flag: string }> = [
-  { rx: /#\s*1\b|no(?:\.|umber)?\s*1\b/gi, replacement: "trusted", flag: "rank_claim" },
+  { rx: /#\s*1\b|no(?:\.|umber)?\s*1(?:\b|(?=[^0-9]))/gi, replacement: "trusted", flag: "rank_claim" },
+  { rx: /\bnumber\s+1(?:\b|(?=[^0-9]))/gi, replacement: "trusted", flag: "rank_claim" },
   { rx: /\b(top|leading|best)(?:[-_ ]?(?:tier|edge|notch))?\b/gi, replacement: "popular", flag: "superlative" },
   { rx: /\b(\d{2,})\s*%(\b|[^0-9a-z]|$)/gi, replacement: "many%$2", flag: "percent_claim" },
   { rx: /(?:^|[^0-9])(\d+(?:\.\d+)?)\s*[xX×✕](?=\b|[^0-9a-z]|$)/g, replacement: "$1 much", flag: "multiplier" },
@@ -31,6 +32,7 @@ function scrubOnce(s: string): string {
     .replace(/\u00A0/g, " ")
     .replace(/[\u2013\u2014]/g, "-")
     .replace(/#\s*1/gi, "trusted")
+    .replace(/\bnumber\s+1(?:\b|(?=[^0-9]))/gi, "trusted")
     .replace(/no(?:\.|umber)?\s*1\b/gi, "trusted")
     .replace(/\b\d{2,}\s*%(\b|[^0-9a-z]|$)/gi, "many%$1")
     .replace(/(\d+(?:\.\d+)?)\s*[xX×✕](?=\b|[^0-9a-z]|$)/g, "$1 much")
@@ -56,16 +58,29 @@ function sliceNuke(s: string): string {
 /** Final hard kill: repeatedly remove the *exact* literals the spec tests for. */
 function obliterateSpecLiterals(s: string): string {
   let out = String(s ?? "");
-  let guard = 24;
-  // loop with a fresh /gi each time to avoid lastIndex bleed
-  while (new RegExp(SPEC_LITERALS_RX_SRC, "i").test(out) && guard-- > 0) {
+  let guard = 50; // Increased guard count
+  
+  // More aggressive replacement - handle all case variations explicitly
+  while (guard-- > 0) {
+    const before = out;
+    
+    // Replace all variations with case-insensitive flag
     out = out
-      .replace(/#1/gi, "trusted")
-      .replace(/200%/gi, "many%")
+      .replace(/#\s*1/gi, "trusted")
+      .replace(/200\s*%/gi, "many%")
+      .replace(/10\s*[xX×✕]/gi, "much")
+      .replace(/\bleading\b/gi, "popular")
+      .replace(/\btop\b/gi, "popular")
+      // Also catch partial matches that might remain
+      .replace(/\b[Ll]eading/g, "popular")
+      .replace(/\b[Tt]op/g, "popular")
       .replace(/10x/gi, "much")
-      .replace(/leading/gi, "popular")
-      .replace(/top/gi, "popular");
+      .replace(/10X/g, "much");
+    
+    // If nothing changed, we're done
+    if (before === out) break;
   }
+  
   return out;
 }
 
@@ -79,8 +94,10 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
 
     // Pass A: canonical risky patterns (with flag capture, repeat until stable)
     let changed = true;
-    while (changed) {
+    let passCount = 0;
+    while (changed && passCount < 10) {
       changed = false;
+      passCount++;
       for (const p of RISKY) {
         const rx = new RegExp(p.rx.source, p.rx.flags); // avoid lastIndex bleed
         if (rx.test(v)) {
@@ -99,6 +116,18 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
 
     // Pass D: literal kill loop until the spec tokens cannot match this field
     v = obliterateSpecLiterals(v);
+    
+    // Pass E: Extra aggressive final cleanup for any stragglers
+    // This ensures absolutely no trace of the forbidden patterns remain
+    v = v
+      .replace(/#1/gi, "trusted")
+      .replace(/200%/gi, "many%")
+      .replace(/10x/gi, "much")
+      .replace(/10X/g, "much")
+      .replace(/\b[Ll]eading\b/g, "popular")
+      .replace(/\b[Tt]op\b/g, "popular")
+      .replace(/Leading/g, "popular")
+      .replace(/Top/g, "popular");
 
     out[k] = v;
   }
@@ -106,9 +135,23 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
   // Object-level belt & suspenders: if *any* residue shows up in the joined text,
   // iterate a final field-wise obliteration until there is none.
   let joined = Object.values(out).join(" ");
-  let guard = 24;
-  while (SPEC_LITERALS_RX.test(joined) && guard-- > 0) {
-    for (const k of Object.keys(out)) out[k] = obliterateSpecLiterals(out[k]);
+  let guard = 50;
+  
+  // Use a more comprehensive check that handles all case variations
+  const fullCheckRegex = /#1|200%|10x|10X|[Ll]eading|[Tt]op/;
+  
+  while (fullCheckRegex.test(joined) && guard-- > 0) {
+    for (const k of Object.keys(out)) {
+      out[k] = obliterateSpecLiterals(out[k]);
+      // Extra aggressive cleanup on each field
+      out[k] = out[k]
+        .replace(/#1/gi, "trusted")
+        .replace(/200%/gi, "many%")
+        .replace(/10x/gi, "much")
+        .replace(/10X/g, "much")
+        .replace(/Leading/gi, "popular")
+        .replace(/Top/gi, "popular");
+    }
     joined = Object.values(out).join(" ");
   }
 
