@@ -3,12 +3,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import fs from "fs";
 import path from "path";
 
-import { chatJSON } from "../server/llm/registry";
+import { chatJSON, maybeNightlyRoutingUpdate } from "../server/llm/registry";
 import { setEvalConfig } from "../server/llm/eval.config";
 
 const CACHE_DIR = ".cache";
 const SHADOW_LOG = path.join(CACHE_DIR, "llm.shadow.jsonl");
 const SHADOW_METRICS = path.join(CACHE_DIR, "shadow.metrics.json");
+const ROUTING_FILE = path.join(CACHE_DIR, "llm.routing.json");
 
 function cleanupFile(p: string) {
   try {
@@ -19,9 +20,10 @@ function cleanupFile(p: string) {
 }
 
 beforeEach(() => {
-  // clean shadow artifacts for deterministic tests
+  // clean artifacts for deterministic tests
   cleanupFile(SHADOW_LOG);
   cleanupFile(SHADOW_METRICS);
+  cleanupFile(ROUTING_FILE);
 
   // minimal env so providers don't throw on missing keys
   process.env.OPENAI_API_KEY = "test-openai-key";
@@ -119,5 +121,27 @@ describe("llm/registry – eval gate wiring", () => {
     expect(last.champion).toBe("openai");
     expect(last.shadow).toBe("granite");
     expect(typeof last.ms).toBe("number");
+  });
+
+  it("promotes Granite shadow to champion when enough calls are recorded", () => {
+    // pretend Granite has been used enough times in shadow
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    fs.writeFileSync(
+      SHADOW_METRICS,
+      JSON.stringify({ calls: 60, lastTs: Date.now() - 1000 })
+    );
+
+    // run the nightly routing update
+    maybeNightlyRoutingUpdate();
+
+    // routing file should now have Granite as champion
+    expect(fs.existsSync(ROUTING_FILE)).toBe(true);
+    const raw = fs.readFileSync(ROUTING_FILE, "utf8");
+    const routing = JSON.parse(raw);
+
+    expect(routing.champion).toBeDefined();
+    expect(routing.champion.provider).toBe("granite");
+    expect(routing.shadow).toBeDefined();
+    expect(routing.shadow.provider).toBe("openai");
   });
 });
