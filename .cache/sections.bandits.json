@@ -1,25 +1,25 @@
 {
   "developers|hero-basic": {
     "hero-basic": {
-      "a": 10,
+      "a": 11,
       "b": 1,
-      "seen": 9,
-      "win": 9,
-      "last": 1762151406598
+      "seen": 10,
+      "win": 10,
+      "last": 1762151945694
     },
     "hero-basic@b": {
-      "a": 10,
+      "a": 11,
       "b": 1,
-      "seen": 9,
-      "win": 9,
-      "last": 1762151406598
+      "seen": 10,
+      "win": 10,
+      "last": 1762151945694
     },
     "hero-basic@c": {
-      "a": 10,
+      "a": 11,
       "b": 1,
-      "seen": 9,
-      "win": 9,
-      "last": 1762151406598
+      "seen": 10,
+      "win": 10,
+      "last": 1762151945694
     }
   }
 }

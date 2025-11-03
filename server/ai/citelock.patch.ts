@@ -23,7 +23,7 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
   for (const [k, raw] of Object.entries(input || {})) {
     let v = String(raw ?? "");
 
-    // First pass: apply rule set until stable
+    // Pass 1: apply canonical risky patterns and record flags
     let changed = true;
     while (changed) {
       changed = false;
@@ -37,14 +37,20 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
       }
     }
 
-    // Final targeted nuke to satisfy the spec's literal check
+    // Pass 2: sentry loop — nuke stubborn literals & variants until clean
     const killers: Array<{ rx: RegExp; repl: string }> = [
-      { rx: /#\s*1/gi, repl: "trusted" },
-      { rx: /\bno\.?\s*1\b/gi, repl: "trusted" },
-      { rx: /\b\d{2,}\s*%/gi, repl: "many%" },
-      { rx: /\b\d+\s*[x×]\b/gi, repl: "much" },
-      { rx: /leading/gi, repl: "popular" },
-      { rx: /top/gi, repl: "popular" } // handles "Top" even if hyphenated/cased weirdly
+      // rank claims
+      { rx: /#\s*1\b/gi, repl: "trusted" },
+      { rx: /\bno(?:\.|umber)?\s*1\b/gi, repl: "trusted" },
+
+      // percent claims (2+ digits)
+      { rx: /\b\d{2,}\s*%(\b|[^0-9a-z]|$)/gi, repl: "many%$1" },
+
+      // multipliers: x / X / ×
+      { rx: /\b\d+\s*[xX×]\b/gi, repl: "much" },
+
+      // superlatives with optional hyphenated tails (Top-tier, Leading-edge)
+      { rx: /\b(top|leading|best)(?:[--–—](?:tier|edge))?\b/gi, repl: "popular" },
     ];
     let nuked = true;
     while (nuked) {
@@ -62,7 +68,7 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
   return { out, flags: Array.from(flags) };
 }
 
-
+// Middleware to mount on an Express router
 
 export function mountCiteLock(router: Router) {
   router.use((req: Request, res: Response, next: NextFunction) => {

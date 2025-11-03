@@ -410,6 +410,12 @@ router.get("/metrics", (_req, res) => {
   return res.json({ ok: true, url_costs: {} });
 });
 
+// KPI conversion acknowledge (minimal deterministic)
+router.post("/kpi/convert", (req, res) => {
+  const _pageId = String(req.body?.pageId || "");
+  return res.json({ ok: true });
+});
+
 router.get("/previews/:file(*)", (req, res) => {
   const p = String(req.params.file || "");
   if (!safeJoin(PREVIEW_DIR, p)) return res.status(400).json({ ok: false, error: "path_traversal" });
@@ -430,6 +436,16 @@ router.post("/evidence/add", (req, res) => {
   const text = String(req.body?.text || "");
   MEMORY.evidence.push({ id, text });
   return res.json({ ok: true, id });
+});
+
+router.get("/evidence/search", (req, res) => {
+  const q = String(req.query.q || "").toLowerCase();
+  const hits = !q
+    ? []
+    : MEMORY.evidence
+        .filter((e) => e.text.toLowerCase().includes(q))
+        .map((e) => ({ id: e.id, score: 1 }));
+  return res.json({ ok: true, hits });
 });
 
 router.post("/evidence/reindex", (_req, res) => {
