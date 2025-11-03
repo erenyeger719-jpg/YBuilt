@@ -41,7 +41,9 @@ const CACHE_DIR = ".cache";
 const ROUTING_FILE = path.join(CACHE_DIR, "llm.routing.json");
 
 function ensureCache() {
-  try { fs.mkdirSync(CACHE_DIR, { recursive: true }); } catch {}
+  try {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+  } catch {}
 }
 function jsonl(file: string, row: any) {
   try {
@@ -49,7 +51,9 @@ function jsonl(file: string, row: any) {
     fs.appendFileSync(path.join(CACHE_DIR, file), JSON.stringify(row) + "\n");
   } catch {}
 }
-function nowIso() { return new Date().toISOString(); }
+function nowIso() {
+  return new Date().toISOString();
+}
 
 // ---------- Routing state (champion/challenger) ----------
 function readRouting(): { champion: Choice; shadow?: Choice; lastUpdateTs: number } {
@@ -69,18 +73,25 @@ function readRouting(): { champion: Choice; shadow?: Choice; lastUpdateTs: numbe
       },
       lastUpdateTs: 0,
     };
-    try { ensureCache(); fs.writeFileSync(ROUTING_FILE, JSON.stringify(def, null, 2)); } catch {}
+    try {
+      ensureCache();
+      fs.writeFileSync(ROUTING_FILE, JSON.stringify(def, null, 2));
+    } catch {}
     return def;
   }
 }
 function writeRouting(obj: any) {
-  try { ensureCache(); fs.writeFileSync(ROUTING_FILE, JSON.stringify(obj, null, 2)); } catch {}
+  try {
+    ensureCache();
+    fs.writeFileSync(ROUTING_FILE, JSON.stringify(obj, null, 2));
+  } catch {}
 }
 
 // ---------- Runtime helpers ----------
 function requireFetch(): (input: any, init?: any) => Promise<any> {
   const f = (globalThis as any).fetch;
-  if (typeof f !== "function") throw new Error("fetch_unavailable: Node 18+ (or a fetch polyfill) is required.");
+  if (typeof f !== "function")
+    throw new Error("fetch_unavailable: Node 18+ (or a fetch polyfill) is required.");
   return f as any;
 }
 
@@ -125,14 +136,10 @@ function pickChampion(req?: ReqLike): Choice {
 
   // Eval config primary model (if available)
   try {
-    const p: any = primaryModel?.();
-    if (p && p.provider) {
-      const choice: Choice = {
-        provider: (p.provider || "openai") as ProviderName,
-      };
-      if (p.model) choice.model = String(p.model);
-      if (p.key) choice.key = String(p.key);
-      return choice;
+    const p = primaryModel?.();
+    if (p && typeof p === "string") {
+      const cfgChoice = parseChoiceHeader(p);
+      if (cfgChoice) return cfgChoice;
     }
   } catch {
     // ignore eval config issues; fall back to env/routing
@@ -219,13 +226,15 @@ async function callOpenAI(args: ChatArgs, modelHint?: string): Promise<ChatRaw> 
     const data = JSON.parse(txt);
     const content = data?.choices?.[0]?.message?.content ?? "{}";
     return { raw: typeof content === "string" ? content : JSON.stringify(content) };
-  } finally { clearTimeout(to); }
+  } finally {
+    clearTimeout(to);
+  }
 }
 
 // Generic Granite gateway; configure via env. If missing, throw and let caller degrade.
 async function callGranite(args: ChatArgs, modelHint?: string): Promise<ChatRaw> {
   const f = requireFetch();
-  const url = process.env.GRANITE_API_URL || "";   // e.g., https://granite.example/v1/chat
+  const url = process.env.GRANITE_API_URL || ""; // e.g., https://granite.example/v1/chat
   const key = process.env.GRANITE_API_KEY || "";
   if (!url || !key) throw new Error("granite_unavailable");
 
@@ -265,7 +274,9 @@ async function callGranite(args: ChatArgs, modelHint?: string): Promise<ChatRaw>
       // If endpoint already returns direct JSON, pass-through
       return { raw: txt };
     }
-  } finally { clearTimeout(to); }
+  } finally {
+    clearTimeout(to);
+  }
 }
 
 async function callOllama(args: ChatArgs, modelHint?: string): Promise<ChatRaw> {
@@ -306,10 +317,15 @@ async function callOllama(args: ChatArgs, modelHint?: string): Promise<ChatRaw> 
       return { raw: JSON.stringify(content) };
     } catch {
       // Last resort: brace scrape
-      try { return { raw: extractJSON(txt) }; }
-      catch { return { raw: "{}" }; }
+      try {
+        return { raw: extractJSON(txt) };
+      } catch {
+        return { raw: "{}" };
+      }
     }
-  } finally { clearTimeout(to); }
+  } finally {
+    clearTimeout(to);
+  }
 }
 
 // ---------- Provider map + runner ----------
@@ -319,7 +335,10 @@ const PROVIDERS: Record<ProviderName, ProviderCall> = {
   ollama: callOllama,
 };
 
-async function runProvider(choice: Choice, args: ChatArgs): Promise<{ raw: string; provider: ProviderName }> {
+async function runProvider(
+  choice: Choice,
+  args: ChatArgs
+): Promise<{ raw: string; provider: ProviderName }> {
   const name = (choice.provider || "openai") as ProviderName;
   const model = choice.model;
   const fn = PROVIDERS[name] || PROVIDERS.openai;
@@ -355,14 +374,19 @@ function canonicalKey(args: ChatArgs, choice: { provider: string; model?: string
     p: choice.provider,
     m: choice.model || "",
     temp: args.temperature ?? 0,
-    max: args.max_tokens ?? 600
+    max: args.max_tokens ?? 600,
   });
 }
 
 // ---------- Public API ----------
 export async function chatJSON(
   args: ChatArgs
-): Promise<{ json: any; raw: string; provider: string; shadow?: { provider: string; scheduled: boolean; ok?: boolean } }> {
+): Promise<{
+  json: any;
+  raw: string;
+  provider: string;
+  shadow?: { provider: string; scheduled: boolean; ok?: boolean };
+}> {
   // Champion from legacy routing as a fallback
   const defaultChampion = pickChampion(args.req);
 
@@ -414,12 +438,17 @@ export async function chatJSON(
   try {
     parsed = JSON.parse(raw);
   } catch {
-    try { parsed = JSON.parse(extractJSON(raw)); }
-    catch { parsed = {}; }
+    try {
+      parsed = JSON.parse(extractJSON(raw));
+    } catch {
+      parsed = {};
+    }
   }
 
   // Fire-and-forget shadow (optional + safe)
-  let shadowMeta: { provider: string; scheduled: boolean; ok?: boolean } | undefined = undefined;
+  let shadowMeta:
+    | { provider: string; scheduled: boolean; ok?: boolean }
+    | undefined = undefined;
 
   // Explicit shadow override (header) still supported
   let shadowChoice: Choice | null = pickShadow(args.req);
@@ -440,7 +469,10 @@ export async function chatJSON(
     }
   }
 
-  if (shadowChoice && (shadowChoice.provider !== (champion.provider || "openai") || !!shadowChoice.model)) {
+  if (
+    shadowChoice &&
+    (shadowChoice.provider !== (champion.provider || "openai") || !!shadowChoice.model)
+  ) {
     shadowMeta = { provider: shadowChoice.provider, scheduled: true };
     (async () => {
       const t0 = Date.now();
@@ -449,9 +481,13 @@ export async function chatJSON(
         // lightweight metric counters without leaking prompts/copy
         try {
           const P = path.join(CACHE_DIR, "shadow.metrics.json");
-          const cur = fs.existsSync(P) ? JSON.parse(fs.readFileSync(P, "utf8")) : { calls: 0, lastTs: 0 };
-          cur.calls += 1; cur.lastTs = Date.now();
-          ensureCache(); fs.writeFileSync(P, JSON.stringify(cur, null, 2));
+          const cur = fs.existsSync(P)
+            ? JSON.parse(fs.readFileSync(P, "utf8"))
+            : { calls: 0, lastTs: 0 };
+          cur.calls += 1;
+          cur.lastTs = Date.now();
+          ensureCache();
+          fs.writeFileSync(P, JSON.stringify(cur, null, 2));
         } catch {}
         jsonl("llm.shadow.jsonl", {
           at: nowIso(),
@@ -487,7 +523,9 @@ export async function chatJSON(
 
   // Write to cache (skip if disabled)
   if (!args.tags?.no_cache) {
-    try { setJSON(ck, { json: parsed, raw, provider }); } catch {}
+    try {
+      setJSON(ck, { json: parsed, raw, provider });
+    } catch {}
   }
 
   return { json: parsed, raw, provider, shadow: shadowMeta };
