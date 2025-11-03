@@ -6,7 +6,8 @@ import {
   signProof,
   POLICY_VERSION,
   type RiskVector,
-} from "./policy.core";
+} from "../../server/sup/policy.core";
+
 
 describe("policy.core – computeRiskVector", () => {
   it("gives low risk for empty / safe inputs", () => {
