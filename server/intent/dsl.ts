@@ -72,16 +72,20 @@ export function defaultsForSections(ids: SectionId[]) {
 }
 
 // Add below existing exports
-export function hardenCopy(ids: SectionId[], copy: Record<string, string>) {
-  const allowed = allowedTokens(ids);
-  const defaults = defaultsForSections(ids);
-  const BAD = /lorem|ipsum|your product|insert/i;
+export function hardenCopy(ids: SectionId[], copy: Record<string, string> = {}) {
+  // Start from defaults for the selected sections (only allowed tokens)
+  const defs = defaultsForSections(ids);
+  const allowedKeys = Object.keys(defs);
+
   const out: Record<string, string> = {};
-  for (const k of Array.from(allowed)) {
-    const v = String(copy?.[k] ?? "").trim();
-    if (!v || v.length < 3 || BAD.test(v)) {
-      out[k] = defaults[k] || "";
+  for (const k of allowedKeys) {
+    const userVal = copy?.[k];
+    const v = String(userVal ?? "").trim();
+    if (!v) {
+      // empty or missing → use default if present
+      out[k] = defs[k] ?? "";
     } else {
+      // keep user value but cap length
       out[k] = v.slice(0, 300);
     }
   }
