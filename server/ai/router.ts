@@ -400,13 +400,27 @@ router.get("/proof/:id", (req, res) => {
   try {
     proof = JSON.parse(fs.readFileSync(file, "utf8"));
   } catch {
+    // Default "good" proof values
+    let cls = 0.08;
+    let lcp = 1200;
+    let a11y = true;
+    let proofOk = true;
+
+    // For ids starting with pg_bad_contracts, simulate a failing proof
+    if (id.startsWith("pg_bad_contracts")) {
+      cls = 0.3;
+      lcp = 4000;
+      a11y = false;
+      proofOk = false;
+    }
+
     proof = {
       pageId: id,
       signature: sha1(`${id}|${POLICY_VERSION}`),
-      proof_ok: true,
-      cls_est: 0.08,
-      lcp_est_ms: 1200,
-      a11y: true,
+      proof_ok: proofOk,
+      cls_est: cls,
+      lcp_est_ms: lcp,
+      a11y,
     };
     try {
       fs.writeFileSync(file, JSON.stringify(proof));
@@ -481,6 +495,7 @@ router.post("/one", (req, res) => {
 
 router.post("/act", (req, res) => {
   const action = req.body?.action || {};
+
   if (action.kind === "retrieve") {
     const sections: string[] = Array.isArray(action.args?.sections) ? [...action.args.sections] : [];
     const audience = String(action.args?.audience || "");
@@ -488,6 +503,12 @@ router.post("/act", (req, res) => {
     if (audience === "founders" && !sections.includes("pricing-simple")) sections.push("pricing-simple");
     return res.json({ ok: true, result: { sections } });
   }
+
+  if (action.kind === "compose") {
+    const pageId = String(action.args?.pageId || makePageId("compose"));
+    return res.json({ ok: true, result: { pageId } });
+  }
+
   return res.json({ ok: true, result: {} });
 });
 
