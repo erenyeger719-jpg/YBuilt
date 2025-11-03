@@ -244,7 +244,7 @@ function contractsGuard(req: express.Request, res: express.Response, next: expre
 }
 
 // Main router setup
-export const router = Router();
+const router = Router();
 
 // ---- Readiness endpoints + gate (dynamic) ----
 router.post("/__ready", (req, res) => {
