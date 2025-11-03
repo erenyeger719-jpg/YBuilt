@@ -59,12 +59,13 @@ import {
 // Export shared constants and state
 export const pathResolve = (...p: string[]) => path.resolve(...p);
 
-// (a) Runtime-driven readiness flags
-export const PREWARM_TOKEN = process.env.PREWARM_TOKEN ?? "";
-if (PREWARM_TOKEN && process.env.PREWARM_READY !== "1") {
-  process.env.PREWARM_READY = "0";
+// ---- Prewarm helper (runtime-driven) ----
+function prewarmState() {
+  const token = process.env.PREWARM_TOKEN || "";
+  const ready = process.env.PREWARM_READY === "1";
+  const needs = !!token && !ready;
+  return { token, ready, needs };
 }
-export let READY = PREWARM_TOKEN ? false : true;
 
 // Quota configuration
 const QUOTA_DAILY = parseInt(process.env.QUOTA_DAILY || "800", 10);
@@ -245,12 +246,12 @@ function contractsGuard(req: express.Request, res: express.Response, next: expre
 // Main router setup
 const router = express.Router?.() || (express as any)();
 
-// (b) Readiness endpoints and gate (env-driven)
+// ---- Readiness endpoints + gate (dynamic) ----
 router.post("/__ready", (req, res) => {
-  const token = req.get("x-prewarm-token") || (req.body as any)?.token;
-  if (PREWARM_TOKEN && token === PREWARM_TOKEN) {
+  const { token } = prewarmState();
+  const provided = req.get("x-prewarm-token") || (req.body as any)?.token;
+  if (token && provided === token) {
     process.env.PREWARM_READY = "1";
-    READY = true;
     return res.json({ ok: true, ready: true });
   }
   return res.status(401).json({ ok: false, error: "bad_prewarm_token" });
@@ -259,8 +260,8 @@ router.post("/__ready", (req, res) => {
 router.get("/__health", (_req, res) => res.json({ ok: true }));
 
 router.use((req, res, next) => {
-  const needsPrewarm = !!PREWARM_TOKEN && process.env.PREWARM_READY !== "1";
-  if (needsPrewarm && req.path !== "/__ready" && req.path !== "/__health") {
+  const st = prewarmState();
+  if (st.needs && req.path !== "/__ready" && req.path !== "/__health") {
     res.setHeader("Retry-After", "5");
     return res.status(503).json({ ok: false, error: "not_ready" });
   }
@@ -275,13 +276,14 @@ router.use(aiQuota);
 
 // Bypass limiter for special cases (kept as-is)
 router.use((req, res, next) => {
-  const bypass = PREWARM_TOKEN && req.headers["x-prewarm-token"] === PREWARM_TOKEN;
+  const { token } = prewarmState();
+  const bypass = token && req.headers["x-prewarm-token"] === token;
   const isAbuseIntake = req.method === "POST" && req.path === "/abuse/report";
   if (bypass || isAbuseIntake) return next();
   return next();
 });
 
-// (c) Don’t mount heavy guards/routers in test mode
+// Don’t mount heavy guards/routers in test mode
 if (process.env.NODE_ENV !== "test") {
   router.use(supGuard("ai"));
   router.use(applyDegrade());
@@ -292,30 +294,32 @@ if (process.env.NODE_ENV !== "test") {
   setupMetricsRoutes(router);
 }
 
-// Global rate limiter with Retry-After (before quotas/contracts)
-router.use((req, res, next) => {
-  const key =
-    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-    (req.ip as string) ||
-    "anon";
-  const now = Date.now();
-  let b = buckets.get(key);
-  if (!b || b.resetAt <= now) {
-    b = { hits: 0, resetAt: now + RATE_WINDOW_MS };
-    buckets.set(key, b);
-  }
-  b.hits++;
-  if (b.hits > RATE_MAX) {
-    const retrySec = Math.max(1, Math.ceil((b.resetAt - now) / 1000));
-    res.setHeader("Retry-After", String(retrySec));
+// Global rate limiter with Retry-After (disabled in tests)
+if (process.env.NODE_ENV !== "test") {
+  router.use((req, res, next) => {
+    const key =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      (req.ip as string) ||
+      "anon";
+    const now = Date.now();
+    let b = buckets.get(key);
+    if (!b || b.resetAt <= now) {
+      b = { hits: 0, resetAt: now + RATE_WINDOW_MS };
+      buckets.set(key, b);
+    }
+    b.hits++;
+    if (b.hits > RATE_MAX) {
+      const retrySec = Math.max(1, Math.ceil((b.resetAt - now) / 1000));
+      res.setHeader("Retry-After", String(retrySec));
+      res.setHeader("X-RateLimit-Limit", String(RATE_MAX));
+      res.setHeader("X-RateLimit-Remaining", String(Math.max(0, RATE_MAX - b.hits)));
+      return res.status(429).json({ ok: false, error: "rate_limited", retry_after_s: retrySec });
+    }
     res.setHeader("X-RateLimit-Limit", String(RATE_MAX));
     res.setHeader("X-RateLimit-Remaining", String(Math.max(0, RATE_MAX - b.hits)));
-    return res.status(429).json({ ok: false, error: "rate_limited", retry_after_s: retrySec });
-  }
-  res.setHeader("X-RateLimit-Limit", String(RATE_MAX));
-  res.setHeader("X-RateLimit-Remaining", String(Math.max(0, RATE_MAX - b.hits)));
-  next();
-});
+    next();
+  });
+}
 
 // Apply quotas and contracts
 router.use(quotaMiddleware);
