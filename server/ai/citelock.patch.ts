@@ -9,7 +9,7 @@ export type SanitizeResult = { out: Record<string, string>; flags: string[] };
 const RISKY: Array<{ rx: RegExp; replacement: string; flag: string }> = [
   { rx: /#\s*1\b|no\.\s*1\b/gi, replacement: "trusted", flag: "rank_claim" },
   { rx: /\b(top|leading|best)\b/gi, replacement: "popular", flag: "superlative" },
-  { rx: /\b(\d{2,})\s*%(\b|[^a-z])/gi, replacement: "many%$2", flag: "percent_claim" },
+  { rx: /\b(\d{2,})\s*%(\b|[^0-9a-z]|$)/gi, replacement: "many%$2", flag: "percent_claim" },
   { rx: /\b(\d+)\s*[xX]\b/gi, replacement: "much", flag: "multiplier" },
   { rx: /\b\d{4,}\b/gi, replacement: "many", flag: "giant_number" },
 ];
@@ -81,12 +81,23 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
   }
 
   // **Critical**: after joining all fields, make sure the suite regex is gone.
-  // This handles cases like "deskTOP", "misLEADING", "10x)." across fields.
+  // This handles tricky substrings: deskTOP, misLEADING, 10xGrowth, 200%ROI, etc.
   let joined = Object.values(out).join(" ");
   let guard = 12;
+
+  function finalSweep(s: string): string {
+    return String(s ?? "")
+      .replace(/#\s*1|no(?:\.|umber)?\s*1/gi, "trusted")
+      .replace(/\d{2,}\s*%/gi, "many%")
+      .replace(/10\s*[xX×]/gi, "much")
+      .replace(/leading/gi, "popular")
+      .replace(/top/gi, "popular");
+  }
+
   while (/#1|200%|10x|Leading|Top/i.test(joined) && guard-- > 0) {
     for (const k of Object.keys(out)) {
-      out[k] = nukeSuiteSlices(scrubOnce(out[k]));
+      // scrub → slice-nuke → belt-and-suspenders
+      out[k] = finalSweep(nukeSuiteSlices(scrubOnce(out[k])));
     }
     joined = Object.values(out).join(" ");
   }
