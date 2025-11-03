@@ -28,6 +28,7 @@ import {
   recordUrlCost,
   recordUrlConversion,
 } from "../metrics/outcome.ts";
+import { pickFailureFallback } from "../qa/failure.playbook.ts";
 
 // Import shared helpers that will be exported
 import {
@@ -264,7 +265,18 @@ function quotaMiddleware(req: express.Request, res: express.Response, next: expr
       res.setHeader("Retry-After", String(retrySec));
       res.setHeader("X-RateLimit-Limit", String(QUOTA_DAILY));
       res.setHeader("X-RateLimit-Remaining", String(Math.max(0, QUOTA_DAILY - q.count)));
-      return res.status(429).json({ ok: false, error: "rate_limited", retry_after_s: retrySec });
+
+      const fallback = pickFailureFallback({
+        kind: "quota_exceeded",
+        route: req.path || "",
+      });
+
+      return res.status(429).json({
+        ok: false,
+        error: "rate_limited",
+        retry_after_s: retrySec,
+        fallback,
+      });
     }
 
     res.setHeader("X-RateLimit-Limit", String(QUOTA_DAILY));
@@ -407,9 +419,15 @@ if (process.env.NODE_ENV !== "test") {
         "X-RateLimit-Remaining",
         String(Math.max(0, RATE_MAX - b.hits))
       );
+
+      const fallback = pickFailureFallback({
+        kind: "quota_exceeded",
+        route: req.path || "",
+      });
+
       return res
         .status(429)
-        .json({ ok: false, error: "rate_limited", retry_after_s: retrySec });
+        .json({ ok: false, error: "rate_limited", retry_after_s: retrySec, fallback });
     }
     res.setHeader("X-RateLimit-Limit", String(RATE_MAX));
     res.setHeader(
@@ -723,10 +741,16 @@ router.use(
     next: express.NextFunction
   ) => {
     if (err && (err.type === "entity.too.large" || err.status === 413)) {
+      const fallback = pickFailureFallback({
+        kind: "body_too_large",
+        route: req.path || "",
+      });
+
       return res.status(413).json({
         ok: false,
         error: "body_too_large",
         detail: "Request body exceeded 1MB JSON limit",
+        fallback,
       });
     }
     return next(err);

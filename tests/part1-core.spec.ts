@@ -25,6 +25,18 @@ describe("Part1: core router & middleware", () => {
       last = r.status;
       if (r.status === 429) {
         expect(r.headers["retry-after"]).toBeDefined();
+
+        // fallback expectations for quota/429
+        expect(r.body.ok).toBe(false);
+        expect(r.body.error).toBe("rate_limited");
+        expect(r.body.fallback).toBeDefined();
+        expect(r.body.fallback.status).toBe("fallback");
+        expect(typeof r.body.fallback.code).toBe("string");
+        // fallback is keyed by logical kind "quota_exceeded"
+        expect(r.body.fallback.code.startsWith("quota_exceeded.")).toBe(true);
+        expect(typeof r.body.fallback.title).toBe("string");
+        expect(typeof r.body.fallback.body).toBe("string");
+
         break;
       }
     }
@@ -45,5 +57,13 @@ describe("Part1: core router & middleware", () => {
     expect(res.status).toBe(413);
     expect(res.body.ok).toBe(false);
     expect(res.body.error).toBe("body_too_large");
+
+    // fallback expectations for 413
+    expect(res.body.fallback).toBeDefined();
+    expect(res.body.fallback.status).toBe("fallback");
+    expect(typeof res.body.fallback.code).toBe("string");
+    expect(res.body.fallback.code.startsWith("body_too_large.")).toBe(true);
+    expect(typeof res.body.fallback.title).toBe("string");
+    expect(typeof res.body.fallback.body).toBe("string");
   });
 });
