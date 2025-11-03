@@ -19,7 +19,7 @@ describe("citelock policy core", () => {
     const cleaned: Record<string, string> = { ...copy, ...copyPatch };
 
     // 2) build proof map from local corpus (or redacted if no evidence)
-    const { proof } = buildProof(cleaned);
+    const { proof } = buildProof(copy as any);
 
     // 3) compute risk vector
     const risk = computeRiskVector(cleaned, proof);
@@ -45,7 +45,7 @@ describe("citelock policy core", () => {
 
     const { copyPatch, flags } = sanitizeFacts(copy as any);
     const cleaned: Record<string, string> = { ...copy, ...copyPatch };
-    const { proof } = buildProof(cleaned);
+    const { proof } = buildProof(copy as any);
     const risk = computeRiskVector(cleaned, proof);
 
     // no risky flags
