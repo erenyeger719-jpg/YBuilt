@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { sanitizeFacts } from "../server/intent/citelock";
+import { sanitize } from "../server/ai/citelock.patch.ts";
+
 
 describe("citelock sanitize", () => {
   it("neutralizes risky claims and flags fields", () => {
