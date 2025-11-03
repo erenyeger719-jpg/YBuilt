@@ -52,8 +52,10 @@ describe("metrics/outcome – outcome brain", () => {
     recordUrlConversion("pg_test", "ws_alpha");
 
     const snap = snapshotUrlCosts();
-    const entry = snap["https://example.com"];
+    const key = "page:pg_test";
+    const entry: any = snap[key];
 
+    expect(entry).toBeDefined();
     expect(entry.hits).toBe(2);
     expect(entry.tokens).toBe(150);
     expect(entry.cents).toBe(7);
