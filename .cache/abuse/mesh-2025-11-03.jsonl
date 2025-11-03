@@ -1,1 +1,1 @@
-{"at":"2025-11-03T15:02:56.134Z","ip":"203.0.113.1","ua":"test-agent","path":"/instant","reasons":["sketchy_prompt"]}
+{"at":"2025-11-03T17:17:13.914Z","ip":"198.51.100.2","ua":"test-agent","path":"/instant","reasons":["sketchy_prompt"],"workspaceId":"ws_test"}
