@@ -147,6 +147,16 @@ type UrlKey = string;
 
 const urlStats = new Map<UrlKey, UrlCostSnapshot>();
 
+// per-workspace stats (workspaceId-scoped)
+type WorkspaceStats = {
+  hits: number;
+  tokens: number;
+  cents: number;
+  conversions: number;
+};
+
+const workspaceUrlCosts = new Map<string, WorkspaceStats>();
+
 function normalizeUrlKey(
   url: string | null | undefined,
   pageId: string | null | undefined
@@ -164,7 +174,8 @@ export function recordUrlCost(
   url: string | null | undefined,
   pageId: string | null | undefined,
   tokens: number,
-  cents: number
+  cents: number,
+  workspaceId?: string | null
 ) {
   const key = normalizeUrlKey(url, pageId);
   if (!key) return;
@@ -182,10 +193,29 @@ export function recordUrlCost(
   if (Number.isFinite(cents)) cur.cents += cents;
 
   urlStats.set(key, cur);
+
+  // --- per-workspace metrics (non-breaking) ---
+  if (workspaceId) {
+    const baseKey = url || pageId;
+    if (baseKey) {
+      const wkKey = `${workspaceId}::${baseKey}`;
+      let ws = workspaceUrlCosts.get(wkKey);
+      if (!ws) {
+        ws = { hits: 0, tokens: 0, cents: 0, conversions: 0 };
+        workspaceUrlCosts.set(wkKey, ws);
+      }
+      ws.hits += 1;
+      ws.tokens += tokens || 0;
+      ws.cents += cents || 0;
+    }
+  }
 }
 
 // For /kpi/convert: bump conversions for a pageId or URL
-export function recordUrlConversion(identifier: string | null | undefined) {
+export function recordUrlConversion(
+  identifier: string | null | undefined,
+  workspaceId?: string | null
+) {
   const raw = (identifier || "").trim();
   if (!raw) return;
 
@@ -206,6 +236,17 @@ export function recordUrlConversion(identifier: string | null | undefined) {
 
   cur.conversions += 1;
   urlStats.set(key, cur);
+
+  // --- per-workspace conversions ---
+  if (workspaceId && raw) {
+    const wkKey = `${workspaceId}::${raw}`;
+    let ws = workspaceUrlCosts.get(wkKey);
+    if (!ws) {
+      ws = { hits: 0, tokens: 0, cents: 0, conversions: 0 };
+      workspaceUrlCosts.set(wkKey, ws);
+    }
+    ws.conversions += 1;
+  }
 }
 
 // Snapshot used by /metrics
@@ -214,10 +255,31 @@ export function snapshotUrlCosts(): Record<string, UrlCostSnapshot> {
   for (const [k, v] of urlStats.entries()) {
     out[k] = { ...v };
   }
+
+  // --- attach per-workspace breakdown ---
+  const byKey: Record<string, Record<string, WorkspaceStats>> = {};
+
+  for (const [wkKey, stats] of workspaceUrlCosts.entries()) {
+    const sepIndex = wkKey.indexOf("::");
+    if (sepIndex <= 0) continue;
+    const workspaceId = wkKey.slice(0, sepIndex);
+    const key = wkKey.slice(sepIndex + 2);
+    if (!workspaceId || !key) continue;
+
+    if (!byKey[key]) byKey[key] = {};
+    byKey[key][workspaceId] = { ...stats };
+  }
+
+  for (const key of Object.keys(byKey)) {
+    if (!out[key]) continue; // only attach to keys that exist in base metrics
+    (out[key] as any).byWorkspace = byKey[key];
+  }
+
   return out;
 }
 
 // Test helper
 export function resetOutcomeMetrics() {
   urlStats.clear();
+  workspaceUrlCosts.clear();
 }

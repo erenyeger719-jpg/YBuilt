@@ -41,4 +41,28 @@ describe("metrics/outcome – outcome brain", () => {
     expect(snap[key].cents).toBe(1);
     expect(snap[key].conversions).toBe(1);
   });
+
+  it("tracks per-workspace url costs", () => {
+    resetOutcomeMetrics();
+
+    recordUrlCost("https://example.com", "pg_test", 100, 5, "ws_alpha");
+    recordUrlCost("https://example.com", "pg_test", 50, 2, "ws_beta");
+
+    // also simulate a conversion in one workspace
+    recordUrlConversion("pg_test", "ws_alpha");
+
+    const snap = snapshotUrlCosts();
+    const entry = snap["https://example.com"];
+
+    expect(entry.hits).toBe(2);
+    expect(entry.tokens).toBe(150);
+    expect(entry.cents).toBe(7);
+
+    expect(entry.byWorkspace).toBeDefined();
+    expect(entry.byWorkspace.ws_alpha.hits).toBe(1);
+    expect(entry.byWorkspace.ws_alpha.conversions).toBe(1);
+
+    expect(entry.byWorkspace.ws_beta.hits).toBe(1);
+    expect(entry.byWorkspace.ws_beta.conversions).toBe(0);
+  });
 });

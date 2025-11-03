@@ -29,6 +29,7 @@ import {
   recordUrlConversion,
 } from "../metrics/outcome.ts";
 import { pickFailureFallback } from "../qa/failure.playbook.ts";
+import piiScrub from "../mw/pii-scrub.ts";
 
 // Import shared helpers that will be exported
 import {
@@ -195,23 +196,23 @@ const CACHE_DIR = ".cache";
 function ensureCache() {
   try {
     if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
-  } catch {}
+  } catch { }
 }
 
 // Initialize preview directories
 try {
   fs.mkdirSync(PREVIEW_DIR, { recursive: true });
-} catch {}
+} catch { }
 
 // Nightly tasks (best-effort)
 import { maybeNightlyRetrain } from "../design/outcome.priors.ts";
 import { maybeNightlyMine as maybeVectorMine } from "../media/vector.miner.ts";
 try {
   maybeNightlyRetrain();
-} catch {}
+} catch { }
 try {
   maybeVectorMine();
-} catch {}
+} catch { }
 
 // Client key extraction
 function clientKey(req: express.Request) {
@@ -219,6 +220,16 @@ function clientKey(req: express.Request) {
   const ip = fwd || (req.ip as string) || "0.0.0.0";
   const sid = String(req.headers["x-session-id"] || (req.query as any).sessionId || "");
   return `${ip}|${sid}`;
+}
+
+// Workspace extraction (multi-tenant hint)
+function workspaceIdFrom(req: express.Request): string {
+  const raw = req.headers["x-workspace-id"];
+  if (!raw) return "";
+  if (Array.isArray(raw)) {
+    return (raw[0] || "").toString().trim();
+  }
+  return raw.toString().trim();
 }
 
 // Core middleware functions
@@ -229,9 +240,9 @@ function quotaMiddleware(req: express.Request, res: express.Response, next: expr
 
     const ip = String(
       (req as any).ip ||
-        req.headers["x-forwarded-for"] ||
-        (req.socket && req.socket.remoteAddress) ||
-        "anon"
+      req.headers["x-forwarded-for"] ||
+      (req.socket && req.socket.remoteAddress) ||
+      "anon"
     );
     const now = Date.now();
     let q = quotaState.get(ip);
@@ -253,7 +264,7 @@ function quotaMiddleware(req: express.Request, res: express.Response, next: expr
         if (q && q._burstTimer) {
           try {
             q._burstTimer.unref?.();
-          } catch {}
+          } catch { }
         }
         if (q) q._burstTimer = undefined;
       }, 120_000);
@@ -377,6 +388,9 @@ router.use((req, res, next) => {
 // Body parser with 1 MB cap
 router.use(express.json({ limit: "1mb" }));
 
+// PII scrub on ingress (safe clone + headers when redaction happens)
+router.use(piiScrub());
+
 // --- Global middlewares FIRST ---
 mountCiteLock(router); // CiteLock once for everything under /api/ai
 router.use(aiQuota); // quotas early
@@ -457,6 +471,7 @@ router.post("/abuse/report", express.json(), (req, res) => {
     reason: (req.body as any)?.reason || "unknown",
     sessionId: (req.body as any)?.sessionId || "",
     notes: (req.body as any)?.notes || "",
+    workspaceId: workspaceIdFrom(req),
   };
   fs.appendFileSync(
     path.join(dir, `${day}.jsonl`),
@@ -490,7 +505,13 @@ router.post("/outcome", (req, res) => {
       : 0;
 
   try {
-    recordUrlCost(url || null, pageId || null, tokens, cents);
+    recordUrlCost(
+      url || null,
+      pageId || null,
+      tokens,
+      cents,
+      workspaceIdFrom(req)
+    );
   } catch {
     // best-effort only; never throw
   }
@@ -517,13 +538,13 @@ router.use("/", metricsRouter);
 // Register self-tests
 try {
   registerSelfTest(router);
-} catch {}
+} catch { }
 
 // ---- Test shims: deterministic, zero-LLM paths ----
 const PROOF_DIR = path.join(".cache", "proof");
 try {
   fs.mkdirSync(PROOF_DIR, { recursive: true });
-} catch {}
+} catch { }
 
 function safeJoin(baseDir: string, p: string) {
   if (!p || p.includes("..") || p.startsWith("/")) return null;
@@ -563,7 +584,7 @@ router.get("/proof/:id", (req, res) => {
     };
     try {
       fs.writeFileSync(file, JSON.stringify(proof));
-    } catch {}
+    } catch { }
   }
   return res.json({ ok: true, proof });
 });
@@ -578,7 +599,7 @@ router.post("/kpi/convert", (req, res) => {
   const pageId = String(req.body?.pageId || "");
 
   try {
-    recordUrlConversion(pageId || null);
+    recordUrlConversion(pageId || null, workspaceIdFrom(req));
   } catch {
     // ignore logging/metrics failures
   }
