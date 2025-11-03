@@ -1,8 +1,9 @@
 // tests/abuse.mesh.spec.ts
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import type { Request, Response, NextFunction } from "express";
 import { abuseMesh } from "../server/middleware/abuse.mesh";
-import * as fs from "fs";
+import fs from "fs";
+import path from "path";
 
 function makeRes() {
   const headers: Record<string, string> = {};
@@ -43,8 +44,6 @@ function makeRes() {
 
 describe("abuse.mesh – abuseMesh", () => {
   it("passes through clean prompts without logging", () => {
-    const spy = vi.spyOn(fs, "appendFileSync").mockImplementation(() => {});
-
     const req = {
       method: "POST",
       path: "/instant",
@@ -64,12 +63,21 @@ describe("abuse.mesh – abuseMesh", () => {
     expect(calledNext).toBe(true);
     expect((res.locals as any).abuse).toBeUndefined();
     expect(res._headers["X-Abuse-Reasons"]).toBeUndefined();
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
   });
 
-  it("flags sketchy prompts and writes an audit entry", () => {
-    const spy = vi.spyOn(fs, "appendFileSync").mockImplementation(() => {});
+  it("flags sketchy prompts, sets locals/header, and writes JSONL audit", () => {
+    const day = new Date().toISOString().slice(0, 10);
+    const dir = path.join(".cache", "abuse");
+    const meshFile = path.join(dir, `mesh-${day}.jsonl`);
+
+    // Clean up any previous run for determinism
+    try {
+      if (fs.existsSync(meshFile)) {
+        fs.unlinkSync(meshFile);
+      }
+    } catch {
+      // ignore cleanup errors
+    }
 
     const req = {
       method: "POST",
@@ -103,13 +111,18 @@ describe("abuse.mesh – abuseMesh", () => {
     // header
     expect(res._headers["X-Abuse-Reasons"]).toContain("sketchy_prompt");
 
-    // audit log got a JSONL write
-    expect(spy).toHaveBeenCalled();
-    const [filePath, line] = spy.mock.calls[0] as [string, string];
-    expect(filePath).toContain(".cache");
-    expect(line).toContain('"path":"/instant"');
-    expect(line).toContain('"sketchy_prompt"');
+    // JSONL log
+    const exists = fs.existsSync(meshFile);
+    expect(exists).toBe(true);
 
-    spy.mockRestore();
+    const content = fs.readFileSync(meshFile, "utf8").trim();
+    expect(content.length).toBeGreaterThan(0);
+
+    const lines = content.split("\n");
+    const last = JSON.parse(lines[lines.length - 1]);
+
+    expect(last.path).toBe("/instant");
+    expect(last.reasons).toContain("sketchy_prompt");
+    expect(last.ip).toBe("203.0.113.1");
   });
 });
