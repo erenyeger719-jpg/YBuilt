@@ -196,18 +196,15 @@ export function recordUrlCost(
 
   // --- per-workspace metrics (non-breaking) ---
   if (workspaceId) {
-    const baseKey = url || pageId;
-    if (baseKey) {
-      const wkKey = `${workspaceId}::${baseKey}`;
-      let ws = workspaceUrlCosts.get(wkKey);
-      if (!ws) {
-        ws = { hits: 0, tokens: 0, cents: 0, conversions: 0 };
-        workspaceUrlCosts.set(wkKey, ws);
-      }
-      ws.hits += 1;
-      ws.tokens += tokens || 0;
-      ws.cents += cents || 0;
+    const wkKey = `${workspaceId}::${key}`;
+    let ws = workspaceUrlCosts.get(wkKey);
+    if (!ws) {
+      ws = { hits: 0, tokens: 0, cents: 0, conversions: 0 };
+      workspaceUrlCosts.set(wkKey, ws);
     }
+    if (Number.isFinite(tokens)) ws.tokens += tokens;
+    if (Number.isFinite(cents)) ws.cents += cents;
+    ws.hits += 1;
   }
 }
 
@@ -238,8 +235,8 @@ export function recordUrlConversion(
   urlStats.set(key, cur);
 
   // --- per-workspace conversions ---
-  if (workspaceId && raw) {
-    const wkKey = `${workspaceId}::${raw}`;
+  if (workspaceId) {
+    const wkKey = `${workspaceId}::${key}`;
     let ws = workspaceUrlCosts.get(wkKey);
     if (!ws) {
       ws = { hits: 0, tokens: 0, cents: 0, conversions: 0 };
