@@ -510,7 +510,7 @@ export function maybeNightlyRoutingUpdate() {
   try {
     const P = path.join(CACHE_DIR, "shadow.metrics.json");
     const hasGranite = !!process.env.GRANITE_API_KEY && !!process.env.GRANITE_API_URL;
-    const shadowCalls = fs.existsSync(P)
+    const shadowCalls = fs.existsExists(P)
       ? (JSON.parse(fs.readFileSync(P, "utf8")).calls || 0)
       : 0;
 
