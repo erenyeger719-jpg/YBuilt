@@ -125,4 +125,57 @@ describe("abuse.mesh – abuseMesh", () => {
     expect(last.reasons).toContain("sketchy_prompt");
     expect(last.ip).toBe("203.0.113.1");
   });
+
+  it("logs workspaceId when header is set", () => {
+    const day = new Date().toISOString().slice(0, 10);
+    const dir = path.join(".cache", "abuse");
+    const meshFile = path.join(dir, `mesh-${day}.jsonl`);
+
+    // Clean up any previous run for determinism
+    try {
+      if (fs.existsSync(meshFile)) {
+        fs.unlinkSync(meshFile);
+      }
+    } catch {
+      // ignore cleanup errors
+    }
+
+    const req = {
+      method: "POST",
+      path: "/instant",
+      body: {
+        prompt: "free money pump and dump", // will trigger sketchy_prompt
+      },
+      headers: {
+        "user-agent": "test-agent",
+        "x-forwarded-for": "198.51.100.2",
+        "x-workspace-id": "ws_test",
+      },
+    } as unknown as Request;
+
+    const res = makeRes();
+    let calledNext = false;
+    const next: NextFunction = () => {
+      calledNext = true;
+    };
+
+    const mw = abuseMesh();
+    mw(req, res, next);
+
+    expect(calledNext).toBe(true);
+
+    const exists = fs.existsSync(meshFile);
+    expect(exists).toBe(true);
+
+    const content = fs.readFileSync(meshFile, "utf8").trim();
+    const lines = content.split("\n");
+    const last = JSON.parse(lines[lines.length - 1]);
+
+    expect(last.path).toBe("/instant");
+    expect(last.reasons).toContain("sketchy_prompt");
+    expect(last.ip).toBe("198.51.100.2");
+
+    // new check: workspace awareness
+    expect(last.workspaceId).toBe("ws_test");
+  });
 });

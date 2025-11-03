@@ -11,6 +11,14 @@ type AbuseEntry = {
   reasons: string[];
 };
 
+// Workspace extraction helper (multi-tenant hint)
+function workspaceIdFrom(req: Request): string {
+  const raw = req.headers["x-workspace-id"];
+  if (!raw) return "";
+  if (Array.isArray(raw)) return (raw[0] || "").toString().trim();
+  return raw.toString().trim();
+}
+
 // Very simple prompt-based abuse detector.
 // We can make this smarter later; keep it explicit & deterministic for now.
 function detectAbuse(req: Request): string[] {
@@ -88,6 +96,11 @@ export function abuseMesh() {
         path: req.path || "",
         reasons,
       };
+
+      const workspaceId = workspaceIdFrom(req);
+      if (workspaceId) {
+        (entry as any).workspaceId = workspaceId;
+      }
 
       // Attach to locals for future decisions / logging
       (res.locals as any).abuse = { reasons };
