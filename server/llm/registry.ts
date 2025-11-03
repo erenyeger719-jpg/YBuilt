@@ -129,28 +129,42 @@ function parseChoiceHeader(h: string): Choice | null {
 }
 
 function pickChampion(req?: ReqLike): Choice {
-  // Explicit header override wins
-  const hdr = readHeader(req, "x-llm-provider") || readHeader(req, "x-llm-champion");
+  // 1) Header override always wins
+  const hdr =
+    readHeader(req, "x-llm-provider") ||
+    readHeader(req, "x-llm-champion");
   const parsed = hdr ? parseChoiceHeader(hdr) : null;
   if (parsed) return parsed;
 
-  // Eval config primary model (if available)
+  // 2) Eval config primary (supports string OR object)
   try {
-    const p = primaryModel?.();
-    if (p && typeof p === "string") {
-      const cfgChoice = parseChoiceHeader(p);
-      if (cfgChoice) return cfgChoice;
+    const p: any = primaryModel?.();
+    if (p) {
+      // Case A: string like "granite" or "openai:gpt-4o-mini"
+      if (typeof p === "string") {
+        const cfgChoice = parseChoiceHeader(p);
+        if (cfgChoice) return cfgChoice;
+      }
+      // Case B: object like { provider, model?, key? }
+      else if (p.provider) {
+        const choice: Choice = {
+          provider: (p.provider || "openai") as ProviderName,
+        };
+        if (p.model) choice.model = String(p.model);
+        if (p.key) choice.key = String(p.key);
+        return choice;
+      }
     }
   } catch {
-    // ignore eval config issues; fall back to env/routing
+    // ignore eval config issues; fall through to env/routing
   }
 
-  // Env fallback
+  // 3) Env fallback
   const env = String(process.env.LLM_CHAMPION || "").toLowerCase();
   const envChoice = env ? parseChoiceHeader(env) : null;
   if (envChoice) return envChoice;
 
-  // File routing default
+  // 4) Routing file default
   const r = readRouting();
   return r.champion;
 }

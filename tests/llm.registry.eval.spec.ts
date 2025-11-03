@@ -144,4 +144,40 @@ describe("llm/registry – eval gate wiring", () => {
     expect(routing.shadow).toBeDefined();
     expect(routing.shadow.provider).toBe("openai");
   });
+
+  it("uses eval primary as champion provider", async () => {
+    // Make Granite the primary via eval config
+    setEvalConfig({
+      primary: "granite",
+      challenger: null,
+      mode: "off",
+      sampleRate: 0,
+    });
+
+    const res = await chatJSON({
+      system: "You are a test system.",
+      user: "test prompt for eval primary",
+      task: "unit-test-primary",
+    });
+
+    // With our fake fetch, Granite calls report { from: "granite" }
+    expect(res.json.from).toBe("granite");
+  });
+
+  it("lets x-llm-provider header override everything", async () => {
+    // Even if eval/env/routing say something else,
+    // header "x-llm-provider: granite" should win.
+    const res = await chatJSON({
+      system: "You are a test system.",
+      user: "test prompt header override",
+      task: "unit-test-header",
+      req: {
+        headers: {
+          "x-llm-provider": "granite",
+        },
+      } as any,
+    });
+
+    expect(res.json.from).toBe("granite");
+  });
 });
