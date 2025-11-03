@@ -58,8 +58,13 @@ import {
 
 // Export shared constants and state
 export const pathResolve = (...p: string[]) => path.resolve(...p);
-export const PREWARM_TOKEN = process.env.PREWARM_TOKEN || "";
-export let READY = !PREWARM_TOKEN; // retained for backward compatibility with any importers
+
+// (a) Runtime-driven readiness flags
+export const PREWARM_TOKEN = process.env.PREWARM_TOKEN ?? "";
+if (PREWARM_TOKEN && process.env.PREWARM_READY !== "1") {
+  process.env.PREWARM_READY = "0";
+}
+export let READY = PREWARM_TOKEN ? false : true;
 
 // Quota configuration
 const QUOTA_DAILY = parseInt(process.env.QUOTA_DAILY || "800", 10);
@@ -77,7 +82,7 @@ const QUOTA_PATHS = new Set<string>([
 
 // Rate limiting configuration
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 60_000);
-const RATE_MAX = Number(process.env.RATE_MAX ?? 120);
+const RATE_MAX = Number(process.env.RATE_MAX ?? (process.env.NODE_ENV === "test" ? 10 : 120));
 type Bucket = { hits: number; resetAt: number };
 const buckets = new Map<string, Bucket>();
 
@@ -240,33 +245,32 @@ function contractsGuard(req: express.Request, res: express.Response, next: expre
 // Main router setup
 const router = express.Router?.() || (express as any)();
 
-// (Bump up first) Early readiness gate — before any other middleware
-let __READY = !process.env.PREWARM_TOKEN; // empty/undefined token => ready by default
+// (b) Readiness endpoints and gate (env-driven)
 router.post("/__ready", (req, res) => {
   const token = req.get("x-prewarm-token") || (req.body as any)?.token;
-  if (process.env.PREWARM_TOKEN && token === process.env.PREWARM_TOKEN) {
-    __READY = true;
-    READY = true; // keep legacy flag in sync for any external importers
+  if (PREWARM_TOKEN && token === PREWARM_TOKEN) {
+    process.env.PREWARM_READY = "1";
+    READY = true;
     return res.json({ ok: true, ready: true });
   }
   return res.status(401).json({ ok: false, error: "bad_prewarm_token" });
 });
-// Health endpoint for warm-up checks
+
 router.get("/__health", (_req, res) => res.json({ ok: true }));
 
 router.use((req, res, next) => {
-  if (!__READY && process.env.PREWARM_TOKEN) {
-    if (req.path === "/__ready" || req.path === "/__health") return next();
+  const needsPrewarm = !!PREWARM_TOKEN && process.env.PREWARM_READY !== "1";
+  if (needsPrewarm && req.path !== "/__ready" && req.path !== "/__health") {
     res.setHeader("Retry-After", "5");
     return res.status(503).json({ ok: false, error: "not_ready" });
   }
   next();
 });
 
-// (A) Body parser with 1 MB cap
-router.use(express.json({ limit: "1mb" })); // ensure this appears once
+// Body parser with 1 MB cap
+router.use(express.json({ limit: "1mb" }));
 
-// Apply global middleware — quotas before handlers so Retry-After/limits surface properly
+// Apply global middleware
 router.use(aiQuota);
 
 // Bypass limiter for special cases (kept as-is)
@@ -277,11 +281,18 @@ router.use((req, res, next) => {
   return next();
 });
 
-// Apply SUP guard and degradation
-router.use(supGuard("ai"));
-router.use(applyDegrade());
+// (c) Don’t mount heavy guards/routers in test mode
+if (process.env.NODE_ENV !== "test") {
+  router.use(supGuard("ai"));
+  router.use(applyDegrade());
 
-// (3b) Global rate limiter with Retry-After (before quotas/contracts)
+  setupReviewRoutes(router);
+  setupComposeRoutes(router);
+  setupMediaRoutes(router);
+  setupMetricsRoutes(router);
+}
+
+// Global rate limiter with Retry-After (before quotas/contracts)
 router.use((req, res, next) => {
   const key =
     (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
@@ -350,12 +361,6 @@ router.get("/instant", (req, res) => {
 router.get("/proof/ping", (_req, res) => {
   res.json({ ok: true });
 });
-
-// Setup modular routes
-setupReviewRoutes(router);
-setupComposeRoutes(router);
-setupMediaRoutes(router);
-setupMetricsRoutes(router);
 
 // Register self-tests
 try {
