@@ -7,7 +7,7 @@ export default defineConfig({
     hookTimeout: 20000,
     testTimeout: 20000,
     include: ["tests/**/*.spec.ts"],
-    pool: "threads",
+    pool: "forks",
     reporters: ["default"],
     coverage: { enabled: false },
   },

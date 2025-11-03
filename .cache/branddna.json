@@ -1,0 +1,11 @@
+{
+  "sess-dna": {
+    "n": 2,
+    "sections": {
+      "hero-basic": 2
+    },
+    "primary": "#6d28d9",
+    "tone": "minimal",
+    "dark": true
+  }
+}

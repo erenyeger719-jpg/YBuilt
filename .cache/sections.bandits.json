@@ -1,0 +1,25 @@
+{
+  "developers|hero-basic": {
+    "hero-basic": {
+      "a": 3,
+      "b": 1,
+      "seen": 2,
+      "win": 2,
+      "last": 1762147565898
+    },
+    "hero-basic@b": {
+      "a": 3,
+      "b": 1,
+      "seen": 2,
+      "win": 2,
+      "last": 1762147565898
+    },
+    "hero-basic@c": {
+      "a": 3,
+      "b": 1,
+      "seen": 2,
+      "win": 2,
+      "last": 1762147565898
+    }
+  }
+}

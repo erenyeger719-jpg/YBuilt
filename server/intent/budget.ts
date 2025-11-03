@@ -1,23 +1,22 @@
-// super light: session budget in memory
-const SESS: Record<string,{spent:number,limit:number}> = {};
+// server/intent/budget.ts
 
-function sessFor(id: string) {
-  if (!SESS[id]) SESS[id] = { spent: 0, limit: 100 }; // points
-  return SESS[id];
-}
+export type BudgetSession = { spentTokens?: number };
 
-function routeTier(action: any) {
-  // 0: rules, 1: small model, 2: mid, 3: large (placeholder for now)
-  if (action.kind === 'retrieve' || action.kind === 'ask') return 0;
-  return 1;
-}
+/**
+ * Short-circuits when BUDGET_MAX_TOKENS is set and the session has spent >= cap.
+ * Returns a test-friendly shape on block, otherwise runs `fn`.
+ */
+export async function runWithBudget<T>(
+  session: BudgetSession | undefined,
+  _action: any,
+  fn: () => Promise<T>
+): Promise<any> {
+  const cap = Number(process.env.BUDGET_MAX_TOKENS || "0");
+  const spent = Number(session?.spentTokens || 0);
 
-export async function runWithBudget(sessionId: string, action: any, fn: (tier:number)=>Promise<any>) {
-  const s = sessFor(sessionId);
-  const tier = routeTier(action);
-  const est = (action.cost_est || 5) * (tier + 1);
-  if (s.spent + est > s.limit) return { skipped: true, reason: 'budget' };
-  const res = await fn(tier);
-  s.spent += est;
-  return res;
+  if (cap > 0 && spent >= cap) {
+    // shape expected by tests: has `error` plus app-friendly hints
+    return { ok: false, error: "budget", skipped: true, reason: "budget" };
+  }
+  return await fn();
 }
