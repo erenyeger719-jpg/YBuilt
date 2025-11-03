@@ -387,23 +387,8 @@ export async function chatJSON(
   provider: string;
   shadow?: { provider: string; scheduled: boolean; ok?: boolean };
 }> {
-  // Champion from legacy routing as a fallback
-  const defaultChampion = pickChampion(args.req);
-
-  // Primary model from eval config (if available), otherwise fall back to legacy champion
-  let champion: Choice = defaultChampion;
-  try {
-    const p: any = primaryModel?.();
-    if (p && p.provider) {
-      champion = {
-        provider: (p.provider || defaultChampion.provider || "openai") as ProviderName,
-        model: p.model ?? defaultChampion.model,
-        key: p.key ?? defaultChampion.key,
-      };
-    }
-  } catch {
-    // ignore eval config errors, keep default champion
-  }
+  // Champion selection is centralized in pickChampion
+  const champion = pickChampion(args.req);
 
   // ---- CACHE: deterministic prompt+model key
   const ck = canonicalKey(args, { provider: champion.provider, model: champion.model });
@@ -450,24 +435,8 @@ export async function chatJSON(
     | { provider: string; scheduled: boolean; ok?: boolean }
     | undefined = undefined;
 
-  // Explicit shadow override (header) still supported
+  // Explicit shadow override (header) + eval gating live in pickShadow
   let shadowChoice: Choice | null = pickShadow(args.req);
-
-  // If no explicit shadow, use eval config challenger (gated)
-  if (!shadowChoice) {
-    try {
-      const c: any = challengerModel?.();
-      if (c && shouldRunChallenger?.()) {
-        shadowChoice = {
-          provider: (c.provider || "granite") as ProviderName,
-        };
-        if (c.model) shadowChoice.model = String(c.model);
-        if (c.key) shadowChoice.key = String(c.key);
-      }
-    } catch {
-      // ignore eval config issues
-    }
-  }
 
   if (
     shadowChoice &&
