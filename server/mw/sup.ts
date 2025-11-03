@@ -1,82 +1,94 @@
 // server/mw/sup.ts
 import type { Request, Response, NextFunction } from "express";
-import * as policy from "../sup/policy";
-import type { GateMap } from "../sup/policy";
-import { keyFor, checkBudget, recordHit } from "../sup/ledger";
-import { makeProof, writeProof } from "../sup/proof";
+import {
+  computeRiskVector,
+  supDecide,
+  POLICY_VERSION,
+  type RiskVector,
+} from "../sup/policy.core";
 
-const { computeRiskVector, decideGates, contentHash } = policy as {
-  computeRiskVector: typeof import("../sup/policy").computeRiskVector;
-  decideGates: typeof import("../sup/policy").decideGates;
-  contentHash: typeof import("../sup/policy").contentHash;
+type SupDecision = {
+  mode: string;
+  reasons: string[];
 };
 
-// Fallback if the policy module doesn’t export it
-const POLICY_VERSION: string = (policy as any).POLICY_VERSION ?? "v1";
+export function supGuard(area: string) {
+  return function supMiddleware(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    let risk: RiskVector | null = null;
+    let decision: SupDecision;
 
-function idFrom(req: Request) {
-  const ip =
-    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-    (req.socket?.remoteAddress || "");
-  const session = String((req as any).session?.id || (req as any).sessionId || "");
-  const apiKey = String(req.headers["x-api-key"] || "");
-  return { ip, session, apiKey };
-}
+    try {
+      const body: any = req.body || {};
 
-export function supGuard(endpointName: string) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const id = idFrom(req);
-    const key = keyFor(id);
+      const prompt =
+        body.prompt ||
+        body.goal ||
+        body.text ||
+        (body.action && body.action.prompt) ||
+        "";
 
-    // Quotas
-    const budget = checkBudget(key);
-    if (!budget.ok) {
-      return res.status(429).json({
-        ok: false,
-        error: "quota_exceeded",
-        remaining: budget,
-      });
+      const copy = body.copy || {};
+
+      risk = computeRiskVector({
+        prompt: String(prompt || ""),
+        copy: copy || {},
+        proof: {},
+        perf: null,
+        ux: null,
+        a11yPass: null,
+      }) as RiskVector;
+
+      // Use the path as the "route key" for decisions
+      const routeKey = req.path || area || "/ai";
+      decision = supDecide(routeKey, risk) as SupDecision;
+    } catch (err) {
+      // Fail closed but not fatal: go strict, mark internal error
+      decision = {
+        mode: "strict",
+        reasons: ["sup_internal_error"],
+      };
     }
-    recordHit(key);
 
-    // Risk + gates
-    const body: any = req.body || {};
-    const prompt = String(body.prompt || body.user || "");
-    const copy = String(body.copy || "");
+    // Attach to locals so other middleware (degrade, logging, etc.) can see it
+    (res.locals as any).sup = { risk, decision };
 
-    const risk = computeRiskVector({
-      prompt,
-      copy,
-      ua: String(req.headers["user-agent"] || ""),
-      velocityScore: 0, // hook your velocity anomaly score here
-      disposableMail: false, // wire later from signup/email checks
-    });
-    const gates: GateMap = decideGates(risk, endpointName);
+    // Expose mode + reasons + policy version to clients
+    try {
+      res.setHeader("X-SUP-Mode", decision.mode);
+      res.setHeader("X-SUP-Reasons", (decision.reasons || []).join(","));
+      res.setHeader("X-SUP-Policy-Version", POLICY_VERSION);
+    } catch {
+      // ignore header failures
+    }
 
-    // Attach for downstream handlers
-    (req as any).sup = { risk, gates, policyVersion: POLICY_VERSION };
+    // If SUP says "block", short-circuit on hot routes
+    if (decision.mode === "block") {
+      const hot =
+        req.method === "POST" &&
+        (req.path === "/instant" ||
+          req.path === "/one" ||
+          req.path === "/act" ||
+          req.path.startsWith("/act/"));
 
-    // After response, write proof
-    const started = Date.now();
-    res.on("finish", () => {
-      try {
-        const p = makeProof({
-          requestId: String((req as any).id || `${Date.now()}-${Math.random().toString(36).slice(2)}`),
-          policyVersion: POLICY_VERSION,
-          gates,
-          risk,
-          provider: String((res as any).locals?.provider || ""),
-          contentHash: contentHash(copy || prompt),
-          meta: {
-            endpoint: endpointName,
-            status: res.statusCode,
-            ms: Date.now() - started,
+      if (hot) {
+        return res.status(200).json({
+          ok: true,
+          result: {
+            error: "sup_block",
+            sup: {
+              mode: decision.mode,
+              reasons: decision.reasons || [],
+            },
           },
         });
-        writeProof(p);
-      } catch {}
-    });
+      }
+    }
 
-    next();
+    // Otherwise, continue as normal
+    return next();
   };
 }

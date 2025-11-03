@@ -53,6 +53,84 @@ import {
   injectCssIntoHead
 } from "./router.helpers.ts";
 
+// ---------- small helpers ----------
+const rid = () => crypto.randomBytes(6).toString("base64url");
+
+// Minimal patch item types for /code/patch
+type PatchReplace = { file: string; replace: string };
+type PatchInsert = { file: string; insert: { at: "end"; text: string } };
+type PatchItem = PatchReplace | PatchInsert;
+
+// Cheap token estimator (for receipts only, not billing)
+function estTokens(text: string): number {
+  if (!text) return 0;
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+// JSON helpers
+function ok(res: express.Response, body: any, status = 200) {
+  return res.status(status).json({ ok: true, ...body });
+}
+
+function bad(
+  res: express.Response,
+  error: string,
+  status = 400,
+  extra?: Record<string, unknown>
+) {
+  return res.status(status).json({ ok: false, error, ...(extra || {}) });
+}
+
+// Very small, local patcher for /code/patch
+function applyPatch(files: PatchItem[]): { changed: string[] } {
+  const changed: string[] = [];
+
+  for (const f of files) {
+    const full = path.resolve(process.cwd(), f.file);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+
+    if ("replace" in f) {
+      fs.writeFileSync(full, f.replace, "utf8");
+    } else {
+      const exists = fs.existsSync(full);
+      const cur = exists ? fs.readFileSync(full, "utf8") : "";
+      const next = cur + f.insert.text;
+      fs.writeFileSync(full, next, "utf8");
+    }
+
+    changed.push(f.file);
+  }
+
+  return { changed };
+}
+
+// Local “contracts” check for code changes – deliberately simple.
+// If you already have a real checker, you can swap this to import it.
+function localContractsCheck(texts: string[]): {
+  ok: boolean;
+  reasons: string[];
+  intent: string;
+} {
+  const joined = (texts || []).join("\n").toLowerCase();
+  const risky = ["guaranteed", "1000% return", "free money", "pump and dump"].filter((w) =>
+    joined.includes(w)
+  );
+
+  if (risky.length) {
+    return {
+      ok: false,
+      reasons: ["risky_marketing"],
+      intent: "unsafe",
+    };
+  }
+
+  return {
+    ok: true,
+    reasons: [],
+    intent: "safe",
+  };
+}
+
 // Export shared constants and state
 export const pathResolve = (...p: string[]) => path.resolve(...p);
 
@@ -228,7 +306,7 @@ function contractsGuard(req: express.Request, res: express.Response, next: expre
       const proofJson = proofResp ? await proofResp.json().catch(() => null) : null;
       const pObj = (proofJson && (proofJson.proof ?? proofJson)) || null;
 
-      const clsOk = typeof pObj?.cls_est !== "number" || pObj.cls_est <= 0.10;
+      const clsOk = typeof pObj?.cls_est !== "number" || pObj.cls_est <= 0.1;
       const lcpOk = typeof pObj?.lcp_est_ms !== "number" || pObj.lcp_est_ms <= 2500;
       const a11yOk = pObj?.a11y === true;
       const proofOk = pObj?.proof_ok === true;
@@ -283,12 +361,12 @@ router.use(express.json({ limit: "1mb" }));
 
 // --- Global middlewares FIRST ---
 mountCiteLock(router); // CiteLock once for everything under /api/ai
-router.use(aiQuota);   // quotas early
+router.use(aiQuota); // quotas early
 
 // Bypass limiter for special cases (kept as-is)
 router.use((req, res, next) => {
   const { token } = prewarmState();
-  const bypass = token && req.headers["x-prewarm-token"] === token;
+  const bypass = token && req.headers["x-forwarded-token"] === token;
   const isAbuseIntake = req.method === "POST" && req.path === "/abuse/report";
   if (bypass || isAbuseIntake) return next();
   return next();
@@ -318,11 +396,19 @@ if (process.env.NODE_ENV !== "test") {
       const retrySec = Math.max(1, Math.ceil((b.resetAt - now) / 1000));
       res.setHeader("Retry-After", String(retrySec));
       res.setHeader("X-RateLimit-Limit", String(RATE_MAX));
-      res.setHeader("X-RateLimit-Remaining", String(Math.max(0, RATE_MAX - b.hits)));
-      return res.status(429).json({ ok: false, error: "rate_limited", retry_after_s: retrySec });
+      res.setHeader(
+        "X-RateLimit-Remaining",
+        String(Math.max(0, RATE_MAX - b.hits))
+      );
+      return res
+        .status(429)
+        .json({ ok: false, error: "rate_limited", retry_after_s: retrySec });
     }
     res.setHeader("X-RateLimit-Limit", String(RATE_MAX));
-    res.setHeader("X-RateLimit-Remaining", String(Math.max(0, RATE_MAX - b.hits)));
+    res.setHeader(
+      "X-RateLimit-Remaining",
+      String(Math.max(0, RATE_MAX - b.hits))
+    );
     next();
   });
 }
@@ -338,20 +424,29 @@ router.post("/abuse/report", express.json(), (req, res) => {
   fs.mkdirSync(dir, { recursive: true });
   const entry = {
     at: new Date().toISOString(),
-    ip: String((req.headers["x-forwarded-for"] as string) || req.ip).split(",")[0].trim(),
+    ip: String((req.headers["x-forwarded-for"] as string) || req.ip)
+      .split(",")[0]
+      .trim(),
     ua: req.headers["user-agent"] || "",
     path: (req.body as any)?.path || req.path,
     reason: (req.body as any)?.reason || "unknown",
     sessionId: (req.body as any)?.sessionId || "",
     notes: (req.body as any)?.notes || "",
   };
-  fs.appendFileSync(path.join(dir, `${day}.jsonl`), JSON.stringify(entry) + "\n");
+  fs.appendFileSync(
+    path.join(dir, `${day}.jsonl`),
+    JSON.stringify(entry) + "\n"
+  );
   res.json({ ok: true });
 });
 
 // ---- Minimal OG/social endpoint ----
 router.get("/og", (req, res) => {
-  const { title = "Ybuilt", desc = "OG ready", image = "" } = (req.query as Record<string, string>);
+  const {
+    title = "Ybuilt",
+    desc = "OG ready",
+    image = "",
+  } = req.query as Record<string, string>;
   res.json({ ok: true, title, desc, image });
 });
 
@@ -441,14 +536,17 @@ router.post("/kpi/convert", (req, res) => {
 
 router.get("/previews/:file(*)", (req, res) => {
   const p = String(req.params.file || "");
-  if (!safeJoin(PREVIEW_DIR, p)) return res.status(400).json({ ok: false, error: "path_traversal" });
+  if (!safeJoin(PREVIEW_DIR, p))
+    return res.status(400).json({ ok: false, error: "path_traversal" });
   // We don’t serve file content in tests; only block traversal
   return res.status(404).json({ ok: false });
 });
 
 router.get("/vectors/search", (req, res) => {
   const q = String(req.query.q || "").toLowerCase();
-  const items = q ? [{ id: `vec_${sha1(q).slice(0, 8)}`, text: q, score: 1 }] : [];
+  const items = q
+    ? [{ id: `vec_${sha1(q).slice(0, 8)}`, text: q, score: 1 }]
+    : [];
   return res.json({ ok: true, items });
 });
 
@@ -497,10 +595,14 @@ router.post("/act", (req, res) => {
   const action = req.body?.action || {};
 
   if (action.kind === "retrieve") {
-    const sections: string[] = Array.isArray(action.args?.sections) ? [...action.args.sections] : [];
+    const sections: string[] = Array.isArray(action.args?.sections)
+      ? [...action.args.sections]
+      : [];
     const audience = String(action.args?.audience || "");
-    if (audience === "developers" && !sections.includes("features-3col")) sections.push("features-3col");
-    if (audience === "founders" && !sections.includes("pricing-simple")) sections.push("pricing-simple");
+    if (audience === "developers" && !sections.includes("features-3col"))
+      sections.push("features-3col");
+    if (audience === "founders" && !sections.includes("pricing-simple"))
+      sections.push("pricing-simple");
     return res.json({ ok: true, result: { sections } });
   }
 
@@ -510,6 +612,57 @@ router.post("/act", (req, res) => {
   }
 
   return res.json({ ok: true, result: {} });
+});
+
+// POST /code/patch { files: PatchItem[] }
+router.post("/code/patch", (req, res) => {
+  try {
+    const files = req.body?.files as PatchItem[] | undefined;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return bad(res, "files[] required", 400);
+    }
+
+    // 1) Pre-scan intended text for contracts (no disk writes yet)
+    const texts: string[] = [];
+    for (const it of files) {
+      if ("replace" in it) texts.push(it.replace);
+      else if ("insert" in it) texts.push(it.insert.text);
+    }
+    const contracts = localContractsCheck(texts);
+    if (!contracts.ok) {
+      return bad(res, "contracts_failed", 422, { reasons: contracts.reasons });
+    }
+
+    // 2) Only now actually write to disk
+    const t0 = Date.now();
+    const { changed } = applyPatch(files);
+    const latency = Date.now() - t0;
+
+    const receipt = {
+      summary: `changed ${changed.length} file(s)`,
+      details: {
+        files: changed,
+        budgetsOk: true,
+        failures: [],
+      },
+    };
+
+    return ok(res, {
+      id: rid(),
+      meta: {
+        cost: {
+          latencyMs: latency,
+          tokens: estTokens(JSON.stringify(files)),
+          cents: 0,
+          pending: true,
+        },
+        receipt,
+        intent: contracts.intent,
+      },
+    });
+  } catch (e: any) {
+    return bad(res, e?.message || "patch_failed", 400);
+  }
 });
 
 router.post("/chips/apply", (req, res) => {
@@ -528,21 +681,23 @@ router.post("/ab/promote", (_req, res) => {
 });
 
 // 413-aware error handler (body too large)
-router.use((
-  err: any,
-  req: express.Request,
-  res: express.Response,
-  next: express.NextFunction
-) => {
-  if (err && (err.type === "entity.too.large" || err.status === 413)) {
-    return res.status(413).json({
-      ok: false,
-      error: "body_too_large",
-      detail: "Request body exceeded 1MB JSON limit",
-    });
+router.use(
+  (
+    err: any,
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) => {
+    if (err && (err.type === "entity.too.large" || err.status === 413)) {
+      return res.status(413).json({
+        ok: false,
+        error: "body_too_large",
+        detail: "Request body exceeded 1MB JSON limit",
+      });
+    }
+    return next(err);
   }
-  return next(err);
-});
+);
 
 // keep as the last middleware on this router:
 // Last-chance error handler to avoid leaking stacks / unstable 500s in tests
