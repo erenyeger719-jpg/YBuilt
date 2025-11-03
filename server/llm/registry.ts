@@ -6,6 +6,11 @@
 import fs from "fs";
 import path from "path";
 import { getJSON, setJSON } from "./cache.ts";
+import {
+  primaryModel,
+  challengerModel,
+  shouldRunChallenger,
+} from "./eval.config.ts";
 
 // ---------- Types ----------
 export type ReqLike = {
@@ -118,6 +123,21 @@ function pickChampion(req?: ReqLike): Choice {
   const parsed = hdr ? parseChoiceHeader(hdr) : null;
   if (parsed) return parsed;
 
+  // Eval config primary model (if available)
+  try {
+    const p: any = primaryModel?.();
+    if (p && p.provider) {
+      const choice: Choice = {
+        provider: (p.provider || "openai") as ProviderName,
+      };
+      if (p.model) choice.model = String(p.model);
+      if (p.key) choice.key = String(p.key);
+      return choice;
+    }
+  } catch {
+    // ignore eval config issues; fall back to env/routing
+  }
+
   // Env fallback
   const env = String(process.env.LLM_CHAMPION || "").toLowerCase();
   const envChoice = env ? parseChoiceHeader(env) : null;
@@ -129,16 +149,28 @@ function pickChampion(req?: ReqLike): Choice {
 }
 
 function pickShadow(req?: ReqLike): Choice | null {
+  // Explicit header override still wins for shadow
   const hdr = readHeader(req, "x-llm-shadow");
   const parsed = hdr ? parseChoiceHeader(hdr) : null;
   if (parsed) return parsed;
 
-  const env = String(process.env.LLM_SHADOW || "");
-  const envChoice = env ? parseChoiceHeader(env) : null;
-  if (envChoice) return envChoice;
+  // Eval config challenger (gated by shouldRunChallenger)
+  try {
+    const c: any = challengerModel?.();
+    if (c && shouldRunChallenger?.()) {
+      const choice: Choice = {
+        provider: (c.provider || "granite") as ProviderName,
+      };
+      if (c.model) choice.model = String(c.model);
+      if (c.key) choice.key = String(c.key);
+      return choice;
+    }
+  } catch {
+    // ignore eval config issues; treat as "no challenger"
+  }
 
-  const r = readRouting();
-  return r.shadow || null;
+  // If eval mode is off or not configured, no challenger by default.
+  return null;
 }
 
 // ---------- Providers ----------
@@ -331,7 +363,23 @@ function canonicalKey(args: ChatArgs, choice: { provider: string; model?: string
 export async function chatJSON(
   args: ChatArgs
 ): Promise<{ json: any; raw: string; provider: string; shadow?: { provider: string; scheduled: boolean; ok?: boolean } }> {
-  const champion = pickChampion(args.req);
+  // Champion from legacy routing as a fallback
+  const defaultChampion = pickChampion(args.req);
+
+  // Primary model from eval config (if available), otherwise fall back to legacy champion
+  let champion: Choice = defaultChampion;
+  try {
+    const p: any = primaryModel?.();
+    if (p && p.provider) {
+      champion = {
+        provider: (p.provider || defaultChampion.provider || "openai") as ProviderName,
+        model: p.model ?? defaultChampion.model,
+        key: p.key ?? defaultChampion.key,
+      };
+    }
+  } catch {
+    // ignore eval config errors, keep default champion
+  }
 
   // ---- CACHE: deterministic prompt+model key
   const ck = canonicalKey(args, { provider: champion.provider, model: champion.model });
@@ -340,8 +388,13 @@ export async function chatJSON(
     if (hit) {
       // light log (optional): cached source
       jsonl("llm.runs.jsonl", {
-        at: nowIso(), task: args.task || "", provider: hit.provider || "cache", ms: 0, ok: true,
-        model_hint: args.tags?.model_hint || null, source: "cache"
+        at: nowIso(),
+        task: args.task || "",
+        provider: hit.provider || "cache",
+        ms: 0,
+        ok: true,
+        model_hint: args.tags?.model_hint || null,
+        source: "cache",
       });
       return hit;
     }
@@ -350,7 +403,7 @@ export async function chatJSON(
 
   const started = Date.now();
 
-  // Champion run (source of truth)
+  // Champion run (source of truth; always the primary model)
   const main = await runProvider(champion, args);
   let raw = main.raw;
   let provider = main.provider;
@@ -367,16 +420,32 @@ export async function chatJSON(
 
   // Fire-and-forget shadow (optional + safe)
   let shadowMeta: { provider: string; scheduled: boolean; ok?: boolean } | undefined = undefined;
-  const explicitShadow = pickShadow(args.req);
-  const defaultShadow: Choice = provider === "openai" ? { provider: "granite" } : { provider: "openai" };
-  const shadowChoice = explicitShadow || defaultShadow;
+
+  // Explicit shadow override (header) still supported
+  let shadowChoice: Choice | null = pickShadow(args.req);
+
+  // If no explicit shadow, use eval config challenger (gated)
+  if (!shadowChoice) {
+    try {
+      const c: any = challengerModel?.();
+      if (c && shouldRunChallenger?.()) {
+        shadowChoice = {
+          provider: (c.provider || "granite") as ProviderName,
+        };
+        if (c.model) shadowChoice.model = String(c.model);
+        if (c.key) shadowChoice.key = String(c.key);
+      }
+    } catch {
+      // ignore eval config issues
+    }
+  }
 
   if (shadowChoice && (shadowChoice.provider !== (champion.provider || "openai") || !!shadowChoice.model)) {
     shadowMeta = { provider: shadowChoice.provider, scheduled: true };
     (async () => {
       const t0 = Date.now();
       try {
-        const s = await runProvider(shadowChoice, args);
+        const s = await runProvider(shadowChoice!, args);
         // lightweight metric counters without leaking prompts/copy
         try {
           const P = path.join(CACHE_DIR, "shadow.metrics.json");
@@ -388,7 +457,7 @@ export async function chatJSON(
           at: nowIso(),
           task: args.task || "",
           champion: champion.provider || "openai",
-          shadow: shadowChoice.provider,
+          shadow: shadowChoice!.provider,
           ms: Date.now() - t0,
           ok: s.raw !== "{}",
           shadow_len: (s.raw || "").length,
@@ -398,7 +467,7 @@ export async function chatJSON(
           at: nowIso(),
           task: args.task || "",
           champion: champion.provider || "openai",
-          shadow: shadowChoice.provider,
+          shadow: shadowChoice!.provider,
           ms: Date.now() - t0,
           ok: false,
         });
@@ -434,7 +503,9 @@ export function maybeNightlyRoutingUpdate() {
   try {
     const P = path.join(CACHE_DIR, "shadow.metrics.json");
     const hasGranite = !!process.env.GRANITE_API_KEY && !!process.env.GRANITE_API_URL;
-    const shadowCalls = fs.existsSync(P) ? (JSON.parse(fs.readFileSync(P, "utf8")).calls || 0) : 0;
+    const shadowCalls = fs.existsSync(P)
+      ? (JSON.parse(fs.readFileSync(P, "utf8")).calls || 0)
+      : 0;
 
     if (hasGranite && shadowCalls >= 50) {
       // Promote shadow to champion (swap)
