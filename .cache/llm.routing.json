@@ -1,13 +1,13 @@
 {
   "champion": {
-    "provider": "granite",
-    "model": "granite-3.1-mini",
-    "key": "granite:granite-3.1-mini"
-  },
-  "shadow": {
     "provider": "openai",
     "model": "gpt-4o-mini",
     "key": "openai:gpt-4o-mini"
   },
-  "lastUpdateTs": 1762192778973
+  "shadow": {
+    "provider": "granite",
+    "model": "granite-3.1-mini",
+    "key": "granite:granite-3.1-mini"
+  },
+  "lastUpdateTs": 1762192926741
 }
