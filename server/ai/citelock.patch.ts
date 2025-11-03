@@ -14,8 +14,8 @@ const RISKY: Array<{ rx: RegExp; replacement: string; flag: string }> = [
   { rx: /\b\d{4,}\b/gi, replacement: "many", flag: "giant_number" },
 ];
 
-// suite literals (NO word boundaries — must kill substrings too)
-const SUITE_RX = /#\s*1|200\s*%|10\s*[xX×]|Leading|Top/gi;
+// use a NON-global detector to avoid lastIndex statefulness
+const SUITE_DETECT_RX = /#\s*1|200\s*%|10\s*[xX×]|Leading|Top/i;
 
 // one pass of aggressive replacements over a single string
 function scrubOnce(s: string): string {
@@ -35,9 +35,11 @@ function scrubOnce(s: string): string {
 
 // final belt & suspenders: remove suite tokens even when they’re slices inside words
 function nukeSuiteSlices(s: string): string {
-  let out = s;
+  let out = String(s ?? "");
   let guard = 12;
-  while (SUITE_RX.test(out) && guard-- > 0) {
+
+  while (SUITE_DETECT_RX.test(out) && guard-- > 0) {
+    // global replacements are fine (no .test() state)
     out = out
       .replace(/#\s*1/gi, "trusted")
       .replace(/200\s*%/gi, "many%")
@@ -60,7 +62,7 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
     while (changed) {
       changed = false;
       for (const p of RISKY) {
-        const rx = new RegExp(p.rx.source, p.rx.flags);
+        const rx = new RegExp(p.rx.source, p.rx.flags); // clone to avoid lastIndex bleed
         if (rx.test(v)) {
           flags.add(p.flag);
           v = v.replace(rx, p.replacement);

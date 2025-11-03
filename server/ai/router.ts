@@ -1,15 +1,15 @@
 // server/ai/router.ts - Part 1: Core Router & Middleware
-import express from "express";
+import express, { Router } from "express";
 import fs from "fs";
 import crypto from "crypto";
 import path from "path";
 import { nanoid } from "nanoid";
 
-// Import route modules
-import { setupReviewRoutes } from "./router.review.ts";
-import { setupComposeRoutes } from "./router.compose.ts";
-import { setupMediaRoutes } from "./router.media.ts";
-import { setupMetricsRoutes } from "./router.metrics.ts";
+// Import route modules (as sub-routers)
+import reviewRouter from "./router.review.ts";
+import composeRouter from "./router.compose.ts";
+import mediaRouter from "./router.media.ts";
+import metricsRouter from "./router.metrics.ts";
 
 // Import shared utilities and types
 import { mountCiteLock } from "./citelock.patch.ts";
@@ -244,7 +244,7 @@ function contractsGuard(req: express.Request, res: express.Response, next: expre
 }
 
 // Main router setup
-const router = express.Router?.() || (express as any)();
+export const router = Router();
 
 // ---- Readiness endpoints + gate (dynamic) ----
 router.post("/__ready", (req, res) => {
@@ -271,8 +271,9 @@ router.use((req, res, next) => {
 // Body parser with 1 MB cap
 router.use(express.json({ limit: "1mb" }));
 
-// Apply global middleware
-router.use(aiQuota);
+// --- Global middlewares FIRST ---
+mountCiteLock(router); // CiteLock once for everything under /api/ai
+router.use(aiQuota);   // quotas early
 
 // Bypass limiter for special cases (kept as-is)
 router.use((req, res, next) => {
@@ -287,11 +288,6 @@ router.use((req, res, next) => {
 if (process.env.NODE_ENV !== "test") {
   router.use(supGuard("ai"));
   router.use(applyDegrade());
-
-  setupReviewRoutes(router);
-  setupComposeRoutes(router);
-  setupMediaRoutes(router);
-  setupMetricsRoutes(router);
 }
 
 // Global rate limiter with Retry-After (disabled in tests)
@@ -325,10 +321,7 @@ if (process.env.NODE_ENV !== "test") {
 router.use(quotaMiddleware);
 router.use(contractsGuard);
 
-// CiteLock wrapper (patches res.json and enforces soft/block) — mount early
-mountCiteLock(router);
-
-// Abuse intake
+// ---- Abuse intake (simple JSONL sink) ----
 router.post("/abuse/report", express.json(), (req, res) => {
   const day = new Date().toISOString().slice(0, 10);
   const dir = path.join(".cache", "abuse");
@@ -346,7 +339,7 @@ router.post("/abuse/report", express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
-// Minimal OG/social endpoint
+// ---- Minimal OG/social endpoint ----
 router.get("/og", (req, res) => {
   const { title = "Ybuilt", desc = "OG ready", image = "" } = (req.query as Record<string, string>);
   res.json({ ok: true, title, desc, image });
@@ -365,6 +358,12 @@ router.get("/instant", (req, res) => {
 router.get("/proof/ping", (_req, res) => {
   res.json({ ok: true });
 });
+
+// ---- Sub-routers (CiteLock already mounted globally) ----
+router.use("/review", reviewRouter);
+router.use("/", composeRouter);
+router.use("/", mediaRouter);
+router.use("/", metricsRouter);
 
 // Register self-tests
 try {
