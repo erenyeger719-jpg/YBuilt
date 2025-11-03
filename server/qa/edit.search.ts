@@ -103,3 +103,92 @@ export async function editSearch(input: EditSearchIn): Promise<EditSearchOut> {
   const improved = best.s > baseScore + 1; // require a tiny real gain
   return { better: improved, spec: improved ? best.spec : startSpec, applied: improved ? best.actions : [] };
 }
+// ----- failure-aware search core -----
+
+export type EditAttempt = {
+  // which fix we tried (if any) for this attempt
+  fixId: string | null;
+  // whether that attempt passed all checks
+  success: boolean;
+  // optional high-level reason for failure, e.g. "a11y", "perf", "claims"
+  reason?: string | null;
+};
+
+export type EditCandidate = {
+  id: string;
+  // tags describing what this fix is good at, e.g. ["a11y", "layout"]
+  tags?: string[];
+  // lower = safer / preferred
+  risk?: number;
+};
+
+export type FailureAwareDecision = {
+  // next fix to try; null if we should stop and escalate
+  next: EditCandidate | null;
+  // true means "don't keep guessing, hand off to fallback"
+  stop: boolean;
+};
+
+/**
+ * Simple failure-aware search:
+ * - If we already have >= maxAttempts failed tries → stop.
+ * - Otherwise pick an untried fix:
+ *    - Prefer ones tagged for the last failure reason.
+ *    - Among those, pick the lowest-risk.
+ *    - If none are tagged, pick lowest-risk overall.
+ */
+export function failureAwareSearch(
+  attempts: EditAttempt[],
+  fixes: EditCandidate[],
+  maxAttempts: number = 3
+): FailureAwareDecision {
+  const failures = attempts.filter((a) => !a.success);
+
+  // Too many failures → stop trying to generate, caller should fallback.
+  if (failures.length >= maxAttempts) {
+    return { next: null, stop: true };
+  }
+
+  // Track which fixes we've already tried.
+  const tried = new Set<string>();
+  for (const a of attempts) {
+    if (a.fixId) tried.add(a.fixId);
+  }
+
+  // Only consider fixes we haven't tried yet.
+  const untried = fixes.filter((f) => !tried.has(f.id));
+  if (untried.length === 0) {
+    // Nothing left to try.
+    return { next: null, stop: true };
+  }
+
+  const lastFail = failures[failures.length - 1];
+  const lastReason = (lastFail?.reason || "").toLowerCase().trim();
+
+  const tagged: EditCandidate[] = [];
+  const others: EditCandidate[] = [];
+
+  for (const f of untried) {
+    const tags = (f.tags || []).map((t) => t.toLowerCase());
+    if (lastReason && tags.includes(lastReason)) {
+      tagged.push(f);
+    } else {
+      others.push(f);
+    }
+  }
+
+  // Prefer fixes that explicitly target the last failure reason.
+  const pool = tagged.length > 0 ? tagged : others;
+
+  // Within the chosen pool, prefer lowest-risk fix.
+  const sorted = [...pool].sort(
+    (a, b) => (a.risk ?? 0) - (b.risk ?? 0)
+  );
+
+  const next = sorted[0] || null;
+  if (!next) {
+    return { next: null, stop: true };
+  }
+
+  return { next, stop: false };
+}
