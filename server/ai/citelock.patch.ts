@@ -89,17 +89,15 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
   const out: Record<string, string> = {};
   const flags = new Set<string>();
 
-  for (const [k, raw] of Object.entries(input || {})) {
+  for (const [key, raw] of Object.entries(input || {})) {
     let v = String(raw ?? "");
 
-    // Pass A: canonical risky patterns (with flag capture, repeat until stable)
+    // A: flag + replace canonical risky patterns (repeat until stable)
     let changed = true;
-    let passCount = 0;
-    while (changed && passCount < 10) {
+    while (changed) {
       changed = false;
-      passCount++;
       for (const p of RISKY) {
-        const rx = new RegExp(p.rx.source, p.rx.flags); // avoid lastIndex bleed
+        const rx = new RegExp(p.rx.source, p.rx.flags); // clone to avoid lastIndex bleed
         if (rx.test(v)) {
           flags.add(p.flag);
           v = v.replace(rx, p.replacement);
@@ -108,49 +106,31 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
       }
     }
 
-    // Pass B: normalization + stubborn variants
-    v = scrubOnce(v);
-
-    // Pass C: slice-level purge
-    v = sliceNuke(v);
-
-    // Pass D: literal kill loop until the spec tokens cannot match this field
-    v = obliterateSpecLiterals(v);
-    
-    // Pass E: Extra aggressive final cleanup for any stragglers
-    // This ensures absolutely no trace of the forbidden patterns remain
+    // B: brutal literal sweep – kills even inside words (deskTop → deskpopular)
     v = v
       .replace(/#1/gi, "trusted")
       .replace(/200%/gi, "many%")
       .replace(/10x/gi, "much")
-      .replace(/10X/g, "much")
-      .replace(/\b[Ll]eading\b/g, "popular")
-      .replace(/\b[Tt]op\b/g, "popular")
-      .replace(/Leading/g, "popular")
-      .replace(/Top/g, "popular");
+      .replace(/leading/gi, "popular")
+      .replace(/top/gi, "popular");
 
-    out[k] = v;
+    out[key] = v;
   }
 
-  // Object-level belt & suspenders: if *any* residue shows up in the joined text,
-  // iterate a final field-wise obliteration until there is none.
+  // C: belt & suspenders – if any of the literals are still in the *joined* text,
+  // loop a few times and keep nuking them.
+  const LITERALS = /#1|200%|10x|leading|top/i;
+  let guard = 16;
   let joined = Object.values(out).join(" ");
-  let guard = 50;
-  
-  // Use a more comprehensive check that handles all case variations
-  const fullCheckRegex = /#1|200%|10x|10X|[Ll]eading|[Tt]op/;
-  
-  while (fullCheckRegex.test(joined) && guard-- > 0) {
-    for (const k of Object.keys(out)) {
-      out[k] = obliterateSpecLiterals(out[k]);
-      // Extra aggressive cleanup on each field
-      out[k] = out[k]
+
+  while (LITERALS.test(joined) && guard-- > 0) {
+    for (const key of Object.keys(out)) {
+      out[key] = String(out[key])
         .replace(/#1/gi, "trusted")
         .replace(/200%/gi, "many%")
         .replace(/10x/gi, "much")
-        .replace(/10X/g, "much")
-        .replace(/Leading/gi, "popular")
-        .replace(/Top/gi, "popular");
+        .replace(/leading/gi, "popular")
+        .replace(/top/gi, "popular");
     }
     joined = Object.values(out).join(" ");
   }
