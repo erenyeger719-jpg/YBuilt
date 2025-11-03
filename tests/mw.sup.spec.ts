@@ -92,9 +92,10 @@ describe("mw/sup – supGuard", () => {
     const mw = supGuard("ai");
     mw(req, res, next);
 
+    const body = res._body;
+
     expect(calledNext).toBe(false);
-    expect(res._statusCode).toBe(200);
-    expect(res._body).toMatchObject({
+    expect(body).toMatchObject({
       ok: true,
       result: {
         error: "sup_block",
@@ -104,6 +105,12 @@ describe("mw/sup – supGuard", () => {
         },
       },
     });
+    expect(body.fallback).toBeDefined();
+    expect(body.fallback.status).toBe("fallback");
+    expect(typeof body.fallback.code).toBe("string");
+    expect(body.fallback.code.startsWith("sup_block.")).toBe(true);
+    expect(typeof body.fallback.title).toBe("string");
+    expect(typeof body.fallback.body).toBe("string");
     expect(res._headers["X-SUP-Mode"]).toBe("block");
     expect(res._headers["X-SUP-Reasons"]).toContain("unproven_claims");
     spy.mockRestore();

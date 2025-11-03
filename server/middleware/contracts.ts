@@ -1,6 +1,7 @@
 // server/middleware/contracts.ts
 import type { Request, Response, NextFunction } from "express";
 import { verifyAndPrepare, lastGoodFor } from "../intent/dsl.ts";
+import { pickFailureFallback } from "../qa/failure.playbook.ts";
 
 type Patch = { sections?: string[]; copy?: Record<string, any>; brand?: Record<string, any> };
 
@@ -60,10 +61,16 @@ export function contractsHardStop() {
       const verdict = contractsFailed(prepared);
 
       if (!verdict.ok) {
+        const fallback = pickFailureFallback({
+          kind: "contracts_failed",
+          route: req.path,
+        });
+
         return res.status(422).json({
           ok: false,
           error: "contracts_failed",
           reasons: verdict.reasons.slice(0, 8),
+          fallback,
         });
       }
 

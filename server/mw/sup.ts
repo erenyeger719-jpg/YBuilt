@@ -6,6 +6,7 @@ import {
   POLICY_VERSION,
   type RiskVector,
 } from "../sup/policy.core";
+import { pickFailureFallback } from "../qa/failure.playbook.ts";
 
 type SupDecision = {
   mode: string;
@@ -45,7 +46,7 @@ export function supGuard(area: string) {
       // Use the path as the "route key" for decisions
       const routeKey = req.path || area || "/ai";
       decision = supDecide(routeKey, risk) as SupDecision;
-    } catch (err) {
+    } catch (_err) {
       // Fail closed but not fatal: go strict, mark internal error
       decision = {
         mode: "strict",
@@ -75,6 +76,13 @@ export function supGuard(area: string) {
           req.path.startsWith("/act/"));
 
       if (hot) {
+        const fallback = pickFailureFallback({
+          kind: "sup_block",
+          route: req.path,
+          // we only have `reasons` here; use the first as the primary reason
+          reason: (decision as any).reason || decision.reasons?.[0] || undefined,
+        });
+
         return res.status(200).json({
           ok: true,
           result: {
@@ -83,6 +91,7 @@ export function supGuard(area: string) {
               mode: decision.mode,
               reasons: decision.reasons || [],
             },
+            fallback,
           },
         });
       }
