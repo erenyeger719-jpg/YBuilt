@@ -1,8 +1,8 @@
 {
   "sess-dna": {
-    "n": 30,
+    "n": 31,
     "sections": {
-      "hero-basic": 30
+      "hero-basic": 31
     },
     "primary": "#6d28d9",
     "tone": "minimal",

@@ -22,6 +22,7 @@ import { applyDegrade } from "../mw/apply-degrade.ts";
 import { sharedCache, makeKeyFromRequest } from "../intent/cache2.ts";
 import { aiQuota } from "../middleware/quotas.ts";
 import { contractsHardStop } from "../middleware/contracts.ts";
+import { abuseMesh } from "../middleware/abuse.mesh.ts";
 
 // Import shared helpers that will be exported
 import {
@@ -362,6 +363,7 @@ router.use(express.json({ limit: "1mb" }));
 // --- Global middlewares FIRST ---
 mountCiteLock(router); // CiteLock once for everything under /api/ai
 router.use(aiQuota); // quotas early
+router.use(abuseMesh()); // log sketchy prompts + audit
 
 // Bypass limiter for special cases (kept as-is)
 router.use((req, res, next) => {
