@@ -56,6 +56,19 @@ import {
 // Export shared constants and state
 export const pathResolve = (...p: string[]) => path.resolve(...p);
 
+// Deterministic pageId helper (test mode uses stable SHA1-based ID)
+function makePageId(prompt: string) {
+  const base = String(prompt || "empty");
+
+  if (process.env.NODE_ENV === "test") {
+    // Stable, deterministic id for tests
+    return `pg_${sha1(base).slice(0, 10)}`;
+  }
+
+  // Production: keep using random ids
+  return `pg_${nanoid(10)}`;
+}
+
 // ---- Prewarm helper (runtime-driven) ----
 function prewarmState() {
   const token = process.env.PREWARM_TOKEN || "";
@@ -455,7 +468,7 @@ router.post("/instant", (req, res) => {
   if (process.env.PROOF_STRICT === "1" && hasRiskyClaims(prompt)) {
     return res.json({ ok: true, result: { error: "proof_gate_fail" } });
   }
-  return res.json({ ok: true, result: { pageId: `pg_${nanoid(10)}` } });
+  return res.json({ ok: true, result: { pageId: makePageId(prompt) } });
 });
 
 router.post("/one", (req, res) => {
@@ -463,7 +476,7 @@ router.post("/one", (req, res) => {
   if (process.env.PROOF_STRICT === "1" && hasRiskyClaims(prompt)) {
     return res.json({ ok: true, result: { error: "proof_gate_fail" } });
   }
-  return res.json({ ok: true, result: { pageId: `pg_${nanoid(10)}` } });
+  return res.json({ ok: true, result: { pageId: makePageId(prompt) } });
 });
 
 router.post("/act", (req, res) => {
@@ -491,6 +504,23 @@ router.post("/chips/apply", (req, res) => {
 
 router.post("/ab/promote", (_req, res) => {
   return res.json({ ok: true, applied: { copyKeys: ["CTA_LABEL"] } });
+});
+
+// 413-aware error handler (body too large)
+router.use((
+  err: any,
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) => {
+  if (err && (err.type === "entity.too.large" || err.status === 413)) {
+    return res.status(413).json({
+      ok: false,
+      error: "body_too_large",
+      detail: "Request body exceeded 1MB JSON limit",
+    });
+  }
+  return next(err);
 });
 
 // keep as the last middleware on this router:
