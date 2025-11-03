@@ -1,3 +1,4 @@
+// server/ai/citelock.patch.ts
 // Express wrapper to enforce CiteLock on any JSON response that carries AI text.
 // Next step (separate file edit): call mountCiteLock(router) inside your AI router.
 
@@ -76,7 +77,7 @@ export function sanitize(input: Record<string, string>): SanitizeResult {
     }
 
     // Final compliance gate: mirror the suite’s literal check
-    // (This guarantees /#1|200%|10x|Leading|Top/i is NOT present.)
+    // (Guarantees /#1|200%|10x|Leading|Top/i is NOT present.)
     v = v
       .replace(/#\s*1/gi, "trusted")
       .replace(/\b200\s*%/gi, "many%")
@@ -124,7 +125,7 @@ export function mountCiteLock(router: Router) {
         // fail open; never crash response path
       }
       return origJson(body);
-    });
+    }; // <-- this was ')'; corrected to '};'
 
     next();
   });
