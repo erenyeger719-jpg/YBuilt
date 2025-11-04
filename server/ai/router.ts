@@ -310,83 +310,6 @@ function quotaMiddleware(
   }
 }
 
-// NEW generic contractsGuard (no /act check inside)
-function contractsGuard(
-  _req: express.Request,
-  res: express.Response,
-  next: express.NextFunction
-) {
-  const originalJson = res.json.bind(res);
-
-  (res as any).json = async (body: any) => {
-    try {
-      if (!body) {
-        return originalJson(body);
-      }
-
-      let pid: string | null =
-        (body?.result && body.result.pageId) ||
-        body?.pageId ||
-        null;
-
-      const pullId = (s: string | null | undefined) => {
-        if (!s) return null;
-        const m = String(s).match(/(?:^|\/)(pg_[A-Za-z0-9_-]+)/);
-        return m ? m[1] : null;
-      };
-      if (!pid) pid = pullId(body?.result?.path);
-      if (!pid) pid = pullId(body?.result?.url);
-      if (!pid) pid = pullId(body?.path);
-      if (!pid) pid = pullId(body?.url);
-
-      // Still no pageId? Just return original response.
-      if (!pid) {
-        return originalJson(body);
-      }
-
-      const failById = pid.startsWith("pg_bad_contracts");
-
-      const pObj = loadProof(pid);
-
-      const clsOk =
-        typeof pObj?.cls_est !== "number" || pObj.cls_est <= 0.1;
-      const lcpOk =
-        typeof pObj?.lcp_est_ms !== "number" || pObj.lcp_est_ms <= 2500;
-      const a11yOk = pObj?.a11y === true;
-      const proofOk = pObj?.proof_ok === true;
-
-      res.setHeader(
-        "X-Guard-CLS",
-        pObj?.cls_est != null ? String(pObj.cls_est) : ""
-      );
-      res.setHeader(
-        "X-Guard-LCP",
-        pObj?.lcp_est_ms != null ? String(pObj.lcp_est_ms) : ""
-      );
-      res.setHeader("X-Guard-A11y", String(!!pObj?.a11y));
-      res.setHeader("X-Guard-Proof", String(!!pObj?.proof_ok));
-
-      const pass = clsOk && lcpOk && a11yOk && proofOk;
-
-      if (!pass || failById) {
-        res.status(200);
-        return originalJson({
-          ok: false,
-          error: "contracts_failed",
-          proof: pObj,
-        });
-      }
-    } catch {
-      // If guard itself breaks, don't alter the original response
-      return originalJson(body);
-    }
-
-    return originalJson(body);
-  };
-
-  next();
-}
-
 // Main router setup
 const router = Router();
 
@@ -484,9 +407,9 @@ if (process.env.NODE_ENV !== "test") {
 
 // Apply quotas and contracts
 router.use(quotaMiddleware);
-// Only apply contractsGuard on /act in this router.
+// Apply contracts guard only on /act in this router.
 // The middleware itself stays generic for tests that mount it elsewhere.
-router.use("/act", contractsGuard);
+router.use("/act", contractsHardStop());
 
 // ---- Abuse intake (simple JSONL sink) ----
 router.post("/abuse/report", express.json(), (req, res) => {
