@@ -6,6 +6,11 @@ import type { Request, Response, NextFunction } from "express";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { hitSignatures } from "./signatures.ts";
+import {
+  countClaimsFromCopy,
+  estimateEvidenceCoverage,
+  ClaimCounts,
+} from "./claims.ts";
 
 // ----- Versioning / Config ---------------------------------------------------
 
@@ -70,6 +75,17 @@ export type RiskVector = {
   pii: { present: boolean };
   abuse_signals: { sketchy: boolean; reasons: string[] };
   ux?: { score: number | null }; // LQR score (0..100), optional
+  // Claim taxonomy + evidence budget
+  claim_total?: number;
+  claim_kinds?: {
+    superlative?: number;
+    percent?: number;
+    multiplier?: number;
+    comparative?: number;
+    factual?: number;
+    testimonial?: number;
+  };
+  evidence_coverage?: number; // 0–1, 1 when no claims or fully proven
 };
 
 type ComputeArgs = {
@@ -126,7 +142,8 @@ function contentHash(s: string) {
 // map reasons → degrade hints for downstream (UI/runner)
 function pickDegrade(reasons: string[]) {
   const s = new Set<string>();
-  if (reasons.includes("unproven_claims") || reasons.includes("prompt_risk")) s.add("neutralize-claims");
+  if (reasons.includes("unproven_claims") || reasons.includes("prompt_risk"))
+    s.add("neutralize-claims");
   if (reasons.includes("high_cls") || reasons.includes("slow_lcp")) s.add("no-js");
   if (reasons.includes("lqr_low")) s.add("no-js");
   if (reasons.some((r) => r.startsWith("abuse:"))) s.add("shadow");
@@ -220,7 +237,7 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
     abuseReasons.push("abuse_terms");
   const abuse_signals = { sketchy: abuseReasons.length > 0, reasons: abuseReasons };
 
-  return {
+  const risk: RiskVector = {
     prompt_risk,
     copy_claims: {
       superlative,
@@ -238,6 +255,26 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
     abuse_signals,
     ux: { score: args.ux?.score ?? null },
   };
+
+  // ---- Claim taxonomy + evidence budget ----
+  const copyObj = args.copy || {};
+  const proofObj = args.proof || {};
+
+  const claimCounts: ClaimCounts = countClaimsFromCopy(copyObj);
+  const evidenceCoverage = estimateEvidenceCoverage(proofObj, claimCounts.total);
+
+  risk.claim_total = claimCounts.total;
+  risk.claim_kinds = {
+    superlative: claimCounts.byKind.superlative || 0,
+    percent: claimCounts.byKind.percent || 0,
+    multiplier: claimCounts.byKind.multiplier || 0,
+    comparative: claimCounts.byKind.comparative || 0,
+    factual: claimCounts.byKind.factual || 0,
+    testimonial: claimCounts.byKind.testimonial || 0,
+  };
+  risk.evidence_coverage = evidenceCoverage;
+
+  return risk;
 }
 
 // ----- Decision Engine -------------------------------------------------------
@@ -394,13 +431,14 @@ export function supGuard() {
     rec.hits += 1;
 
     // Light heuristics
-    if (/curl|python-requests|wget/i.test(String(req.headers["user-agent"] || ""))) rec.score += 0.1;
+    if (/curl|python-requests|wget/i.test(String(req.headers["user-agent"] || "")))
+      rec.score += 0.1;
     if (rec.hits > QUOTA.MAX_BURST) rec.score += 1;
 
     ledger.set(k, rec);
 
     // periodic prune to cap memory
-    if ((++_pruneTick % 1000) === 0) {
+    if (++_pruneTick % 1000 === 0) {
       const nowMs = Date.now();
       for (const [key, val] of ledger) {
         if (nowMs - val.windowStart > QUOTA.DECAY_MS * 6) ledger.delete(key);
@@ -419,22 +457,32 @@ export function supGuard() {
     // ------- Compute risk + decision
     const body: any = req.body || {};
     const prompt = String(body.prompt || body.user || "");
-    const copy = (body.copy && typeof body.copy === "object") ? body.copy : {};
+    const copy =
+      body && body.copy && typeof body.copy === "object" ? body.copy : {};
 
     // Accept optional UX/perf/a11y from the request
     const perf =
       body && typeof body.perf === "object"
         ? {
-            cls_est: typeof body.perf.cls_est === "number" ? body.perf.cls_est : null,
-            lcp_est_ms: typeof body.perf.lcp_est_ms === "number" ? body.perf.lcp_est_ms : null,
+            cls_est:
+              typeof body.perf.cls_est === "number"
+                ? body.perf.cls_est
+                : null,
+            lcp_est_ms:
+              typeof body.perf.lcp_est_ms === "number"
+                ? body.perf.lcp_est_ms
+                : null,
           }
         : null;
 
     const ux =
       body && typeof body.ux === "object"
         ? {
-            score: typeof body.ux.score === "number" ? body.ux.score : null,
-            issues: Array.isArray(body.ux.issues) ? body.ux.issues.slice(0, 20) : [],
+            score:
+              typeof body.ux.score === "number" ? body.ux.score : null,
+            issues: Array.isArray(body.ux.issues)
+              ? body.ux.issues.slice(0, 20)
+              : [],
           }
         : null;
 
@@ -452,14 +500,17 @@ export function supGuard() {
 
     // --- quick heuristics that raise score ---
     const ua = String(req.headers["user-agent"] || "");
-    const headlessHit = /(headless|puppeteer|playwright|phantomjs|selenium)/i.test(ua);
+    const headlessHit =
+      /(headless|puppeteer|playwright|phantomjs|selenium)/i.test(ua);
     if (headlessHit) rec.score += 0.5;
 
     // micro-burst inside current window
     if (rec.hits > Math.min(QUOTA.MAX_BURST * 0.5, 30)) rec.score += 0.5;
 
     // --- Honey + signature matches (Abuse Mesh v0.5) ---
-    const matchText = `${prompt} ${Object.values(copy).map(v => String(v ?? "")).join(" ")}`;
+    const matchText = `${prompt} ${Object.values(copy)
+      .map((v) => String(v ?? ""))
+      .join(" ")}`;
     const sigHits = hitSignatures(matchText);
     if (sigHits.length) {
       risk.abuse_signals.sketchy = true;
@@ -469,7 +520,8 @@ export function supGuard() {
         }
       }
       // tiny score bump to ensure strict/shadow kicks in consistently
-      const rec2 = (ledger.get(k) || { hits: 0, windowStart: Date.now(), score: 0 });
+      const rec2 =
+        ledger.get(k) || { hits: 0, windowStart: Date.now(), score: 0 };
       rec2.score += 0.5;
       ledger.set(k, rec2);
       rec.score = rec2.score; // keep local ref in sync
@@ -482,7 +534,8 @@ export function supGuard() {
     if (extraReasons.length) {
       risk.abuse_signals.sketchy = true;
       for (const r of extraReasons) {
-        if (!risk.abuse_signals.reasons.includes(r)) risk.abuse_signals.reasons.push(r);
+        if (!risk.abuse_signals.reasons.includes(r))
+          risk.abuse_signals.reasons.push(r);
       }
     }
 
@@ -491,13 +544,20 @@ export function supGuard() {
     res.setHeader("X-SUP-Mode", decision.mode);
     res.setHeader("X-SUP-Reasons", decision.reasons.join(","));
     // Echo perf/UX metrics for observability
-    if (risk.device_perf.cls_est != null) res.setHeader("X-Perf-CLS", String(risk.device_perf.cls_est));
-    if (risk.device_perf.lcp_est_ms != null) res.setHeader("X-Perf-LCP", String(risk.device_perf.lcp_est_ms));
-    if (typeof (risk as any).ux?.score === "number") res.setHeader("X-UX-LQR", String((risk as any).ux.score));
+    if (risk.device_perf.cls_est != null)
+      res.setHeader("X-Perf-CLS", String(risk.device_perf.cls_est));
+    if (risk.device_perf.lcp_est_ms != null)
+      res.setHeader("X-Perf-LCP", String(risk.device_perf.lcp_est_ms));
+    if (typeof (risk as any).ux?.score === "number")
+      res.setHeader("X-UX-LQR", String((risk as any).ux.score));
 
     // ---- Proof header (attestation)
     const pageId =
-      String((req.headers["x-page-id"] as string) || (req.body?.pageId as string) || "") || "anon";
+      String(
+        (req.headers["x-page-id"] as string) ||
+          (req.body?.pageId as string) ||
+          ""
+      ) || "anon";
     const proofSig = signProof({
       pageId,
       policy_version: POLICY_VERSION,
@@ -506,7 +566,9 @@ export function supGuard() {
     res.setHeader("X-SUP-Proof-Sig", proofSig);
 
     if (decision.mode === "block") {
-      return res.status(403).json({ ok: false, error: "sup_block", reasons: decision.reasons });
+      return res
+        .status(403)
+        .json({ ok: false, error: "sup_block", reasons: decision.reasons });
     }
     if (decision.mode === "strict") {
       // downstream can degrade behavior (retrieval-only, neutral tone, no-JS)
@@ -518,7 +580,11 @@ export function supGuard() {
       if (decision.reasons.some((r) => r.startsWith("abuse:"))) {
         res.setHeader("X-Challenge", "pow-v0");
       }
-      (res.locals as any).sup = { mode: "strict", reasons: decision.reasons, degrade };
+      (res.locals as any).sup = {
+        mode: "strict",
+        reasons: decision.reasons,
+        degrade,
+      };
     }
 
     // ---- Tamper-evident audit trail (JSONL)
@@ -547,7 +613,11 @@ export function supGuard() {
           ux_lqr: (risk as any).ux?.score ?? null,
         };
         fs.mkdirSync(".logs/sup", { recursive: true });
-        fs.appendFile(".logs/sup/audit.jsonl", JSON.stringify(row) + "\n", () => {});
+        fs.appendFile(
+          ".logs/sup/audit.jsonl",
+          JSON.stringify(row) + "\n",
+          () => {},
+        );
       } catch {
         /* no-op */
       }
