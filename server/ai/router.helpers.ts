@@ -101,11 +101,39 @@ export function escapeHtml(s: string) {
     .replace(/'/g, "&#39;");
 }
 
-// Mode detection
-export function drainMode(req: Request) {
-  const envOn = String(process.env.DRAIN_MODE || "").toLowerCase() === "1";
-  const hdrOn = String(req.get("x-drain") || "").toLowerCase() === "1";
-  return envOn || hdrOn;
+// Execution / drain helpers
+
+export type DrainLevel = "off" | "soft" | "hard";
+
+export function currentDrainLevel(req?: Request): DrainLevel {
+  // 1) Try header override first
+  let raw: string | undefined;
+
+  try {
+    raw =
+      (req as any)?.headers?.["x-drain-mode"] ||
+      (req as any)?.headers?.["X-Drain-Mode"];
+  } catch {
+    // ignore
+  }
+
+  // 2) Fallback to env
+  if (!raw || typeof raw !== "string") {
+    raw = process.env.DRAIN_MODE || "off";
+  }
+
+  let v = raw.toString().trim().toLowerCase();
+
+  // 3) Normalize some shortcuts
+  if (v === "1" || v === "true" || v === "on") v = "hard";
+  if (v !== "off" && v !== "soft" && v !== "hard") v = "off";
+
+  return v as DrainLevel;
+}
+
+// Keep the name drainMode so all existing imports still work
+export function drainMode(req?: Request): boolean {
+  return currentDrainLevel(req) !== "off";
 }
 
 // Make strict-mode decision from env and (optionally) request headers

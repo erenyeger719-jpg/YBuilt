@@ -6,11 +6,11 @@ import path from "path";
 import { nanoid } from "nanoid";
 
 // Import from main router
-import { 
+import {
   LAST_COMPOSE,
   DEV_PREVIEW_DIR,
   PREVIEW_DIR,
-  ensureCache
+  ensureCache,
 } from "./router.ts";
 
 // Import helpers
@@ -32,7 +32,7 @@ import {
   dslKey,
   applyChipLocal,
   auditUXFromHtml,
-  injectCssIntoHead
+  injectCssIntoHead,
 } from "./router.helpers.ts";
 
 // Import dependencies
@@ -62,7 +62,11 @@ import {
   recordConversionForPage,
 } from "../intent/router.brain.ts";
 import { queueShadowEval, rewardShadow } from "../intent/shadowEval.ts";
-import { synthesizeAssets, suggestVectorAssets, rememberVectorAssets } from "../intent/assets.ts";
+import {
+  synthesizeAssets,
+  suggestVectorAssets,
+  rememberVectorAssets,
+} from "../intent/assets.ts";
 import { tokenMixer } from "../design/tokens.ts";
 import { buildGrid } from "../design/grid.ts";
 import { evaluateDesign } from "../design/score.ts";
@@ -72,7 +76,11 @@ import { searchBestTokensCached as searchBestTokens } from "../design/search.mem
 import { recordShip, markConversion, lastShipFor } from "../metrics/outcome.ts";
 import { pickVariant, recordSectionOutcome, seedVariants } from "../sections/bandits.ts";
 import { buildProof } from "../intent/citelock.pro.ts";
-import { checkPerfBudget, downgradeSections, shouldStripJS } from "../perf/budgets.ts";
+import {
+  checkPerfBudget,
+  downgradeSections,
+  shouldStripJS,
+} from "../perf/budgets.ts";
 import { buildSEO } from "../seo/og.ts";
 import { suggestFromDNA, recordDNA, learnFromChip } from "../brand/dna.ts";
 import {
@@ -80,7 +88,11 @@ import {
   recordTokenWin,
   recordTokenSeen,
 } from "../design/outcome.priors.ts";
-import { quickLayoutSanity, quickPerfEst, matrixPerfEst } from "../qa/layout.sanity.ts";
+import {
+  quickLayoutSanity,
+  quickPerfEst,
+  matrixPerfEst,
+} from "../qa/layout.sanity.ts";
 import { checkCopyReadability } from "../qa/readability.guard.ts";
 import { editSearch } from "../qa/edit.search.ts";
 import { wideTokenSearch } from "../design/search.wide.ts";
@@ -93,7 +105,12 @@ import { normalizeLocale } from "../intent/locales.ts";
 import { contractsHardStop } from "../middleware/contracts.ts";
 import { estimateCost } from "../ai/costs.ts";
 import { buildReceipt } from "../ai/receipts.ts";
-import { computeRiskVector, supDecide, POLICY_VERSION, signProof } from "../sup/policy.core.ts";
+import {
+  computeRiskVector,
+  supDecide,
+  POLICY_VERSION,
+  signProof,
+} from "../sup/policy.core.ts";
 
 // Variant hints to seed bandits
 const VARIANT_HINTS: Record<string, string[]> = {
@@ -228,7 +245,11 @@ function writeSpecToCache(spec: any) {
     if (!id) return;
     const dir = path.resolve(".cache/specs");
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify(spec, null, 2), "utf8");
+    fs.writeFileSync(
+      path.join(dir, `${id}.json`),
+      JSON.stringify(spec, null, 2),
+      "utf8"
+    );
   } catch {}
 }
 
@@ -240,11 +261,23 @@ function stickyKeyFor(body: any) {
 
 // Setup function to mount composition routes
 export function setupComposeRoutes(router: Router) {
-  
   // ---------- /act ----------
   router.post("/act", express.json(), contractsHardStop(), async (req, res) => {
     try {
       const { sessionId = "anon", spec = {}, action = {} } = (req.body || {}) as any;
+
+      const drained = drainMode(req);
+
+      if (drained) {
+        // Simple safe fallback for now
+        return res.json({
+          ok: true,
+          mode: "drain",
+          message:
+            "System is in drain mode – serving simplified content to stay safe.",
+        });
+      }
+
       if (!action || !action.kind)
         return res.status(400).json({ ok: false, error: "missing_action" });
 
@@ -259,23 +292,30 @@ export function setupComposeRoutes(router: Router) {
               (req.headers as any)["x-audience"] ||
               (req.headers as any)["X-Audience"] ||
               ""
-          ).toLowerCase().trim();
+          )
+            .toLowerCase()
+            .trim();
           const argAud = String(action.args?.audience || "").toLowerCase().trim();
           const specAud = String(spec?.audience || "").toLowerCase().trim();
-          const specIntentAud = String(spec?.intent?.audience || "").toLowerCase().trim();
+          const specIntentAud = String(
+            spec?.intent?.audience || ""
+          ).toLowerCase().trim();
 
           const safeForInfer = {
             ...spec,
-            summary: String((spec as any)?.summary || (spec as any)?.lastSpec?.summary || ""),
-            copy: (spec as any)?.copy || (action as any)?.args?.copy || {},
+            summary: String(
+              (spec as any)?.summary || (spec as any)?.lastSpec?.summary || ""
+            ),
+            copy:
+              (spec as any)?.copy || (action as any)?.args?.copy || {},
           };
 
           const audienceKey =
-            headerAud
-            || argAud
-            || specAud
-            || specIntentAud
-            || inferAudience(safeForInfer);
+            headerAud ||
+            argAud ||
+            specAud ||
+            specIntentAud ||
+            inferAudience(safeForInfer);
 
           const sections = segmentSwapSections(sectionsIn, audienceKey);
           return { kind: "retrieve", sections };
@@ -311,7 +351,11 @@ export function setupComposeRoutes(router: Router) {
               Boolean((spec as any)?.__promptRisk) ||
               hasRiskyClaims(String((spec as any)?.summary || ""));
             if (risky) {
-              return { kind: "compose", error: "proof_gate_fail", via: "act_early" };
+              return {
+                kind: "compose",
+                error: "proof_gate_fail",
+                via: "act_early",
+              };
             }
           }
 
@@ -320,17 +364,19 @@ export function setupComposeRoutes(router: Router) {
             const ranked = listPacksRanked();
             const wantPackId = String(action.args?.packId || "").trim();
             const wantTagsRaw = action.args?.tags;
-            const wantTags = Array.isArray(wantTagsRaw) ? wantTagsRaw.map(String) : [];
+            const wantTags = Array.isArray(wantTagsRaw)
+              ? wantTagsRaw.map(String)
+              : [];
 
             if (wantPackId && Array.isArray(ranked) && ranked.length) {
-              const pick = ranked.find((p: any) => String(p.id || "") === wantPackId);
+              const pick = ranked.find(
+                (p: any) => String(p.id || "") === wantPackId
+              );
               if (pick?.sections?.length)
                 action.args = { ...(action.args || {}), sections: pick.sections };
             } else if (wantTags.length && Array.isArray(ranked) && ranked.length) {
               const pick = ranked.find((p: any) =>
-                (p.tags || []).some((t) =>
-                  wantTags.includes(String(t).toLowerCase())
-                )
+                (p.tags || []).some((t) => wantTags.includes(String(t).toLowerCase()))
               );
               if (pick?.sections?.length)
                 action.args = { ...(action.args || {}), sections: pick.sections };
@@ -381,10 +427,13 @@ export function setupComposeRoutes(router: Router) {
           }
 
           // Build copy with defaults
-          let copyWithDefaults: Record<string, any> = hardenCopy(prep.sections, {
-            ...defaultsForSections(prep.sections),
-            ...prep.copy,
-          });
+          let copyWithDefaults: Record<string, any> = hardenCopy(
+            prep.sections,
+            {
+              ...defaultsForSections(prep.sections),
+              ...prep.copy,
+            }
+          );
 
           // Locale handling
           const acceptLang = String(req.headers["accept-language"] || "");
@@ -403,7 +452,7 @@ export function setupComposeRoutes(router: Router) {
 
           // Placeholder return for compose
           const keyNow = dslKey(proposed);
-          
+
           return {
             kind: "compose",
             pageId: keyNow,
@@ -426,13 +475,18 @@ export function setupComposeRoutes(router: Router) {
 
         if (testMode && action?.kind === "retrieve" && out && typeof out === "object") {
           const fromArgs = (action as any)?.args?.audience;
-          const fromSpec = (spec as any)?.intent?.audience || (spec as any)?.audience;
+          const fromSpec =
+            (spec as any)?.intent?.audience || (spec as any)?.audience;
           const fromHeader =
-            ((req.headers as any)["x-audience"] || (req.headers as any)["X-Audience"]) as string | undefined;
-          const persona = String(fromArgs || fromSpec || fromHeader || "").toLowerCase();
+            ((req.headers as any)["x-audience"] ||
+              (req.headers as any)["X-Audience"]) as string | undefined;
+          const persona = String(
+            fromArgs || fromSpec || fromHeader || ""
+          ).toLowerCase();
 
           const incoming: string[] =
-            (Array.isArray((action as any)?.args?.sections) && (action as any).args.sections.length
+            (Array.isArray((action as any)?.args?.sections) &&
+              (action as any).args.sections.length
               ? (action as any).args.sections
               : Array.isArray((spec as any)?.layout?.sections)
               ? (spec as any).layout.sections
@@ -445,8 +499,12 @@ export function setupComposeRoutes(router: Router) {
               ? ["features-3col"]
               : [];
 
-          const produced = Array.isArray((out as any).sections) ? (out as any).sections : [];
-          const final = Array.from(new Set<string>([...incoming, ...add, ...produced]));
+          const produced = Array.isArray((out as any).sections)
+            ? (out as any).sections
+            : [];
+          const final = Array.from(
+            new Set<string>([...incoming, ...add, ...produced])
+          );
           (out as any).sections = final;
         }
       } catch {}
@@ -454,7 +512,9 @@ export function setupComposeRoutes(router: Router) {
       try {
         if ((out as any)?.sup) {
           res.setHeader("X-SUP-Mode", String(((out as any).sup.mode) || ""));
-          const reasons = Array.isArray((out as any).sup.reasons) ? (out as any).sup.reasons.join(",") : "";
+          const reasons = Array.isArray((out as any).sup.reasons)
+            ? (out as any).sup.reasons.join(",")
+            : "";
           res.setHeader("X-SUP-Reasons", reasons);
         }
       } catch {}
@@ -469,7 +529,8 @@ export function setupComposeRoutes(router: Router) {
   router.post("/one", express.json(), async (req, res) => {
     try {
       const t0 = Date.now();
-      const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
+      const { prompt = "", sessionId = "anon", breadth = "" } = (req.body ||
+        {}) as any;
       const key = normalizeKey(prompt);
 
       const testMode =
@@ -508,10 +569,15 @@ export function setupComposeRoutes(router: Router) {
                   chips: clarifyChips({
                     prompt,
                     spec: {
-                      brand: { dark: (lab as any).intent.color_scheme === "dark" },
+                      brand: {
+                        dark: (lab as any).intent.color_scheme === "dark",
+                      },
                       layout: {
                         sections:
-                          (lab as any).intent.sections || ["hero-basic", "cta-simple"],
+                          (lab as any).intent.sections || [
+                            "hero-basic",
+                            "cta-simple",
+                          ],
                       },
                     },
                   }),
@@ -560,9 +626,14 @@ export function setupComposeRoutes(router: Router) {
           typeof (prior as any).brand?.dark === "boolean" &&
           !(fit as any).intent.color_scheme
         ) {
-          (fit as any).intent.color_scheme = (prior as any).brand.dark ? "dark" : "light";
+          (fit as any).intent.color_scheme = (prior as any).brand.dark
+            ? "dark"
+            : "light";
         }
-        if (Array.isArray((prior as any).sections) && (prior as any).sections.length) {
+        if (
+          Array.isArray((prior as any).sections) &&
+          (prior as any).sections.length
+        ) {
           const cur = new Set(((fit as any).intent.sections || []) as string[]);
           for (const s of (prior as any).sections) cur.add(s);
           (fit as any).intent.sections = Array.from(cur);
@@ -609,7 +680,11 @@ export function setupComposeRoutes(router: Router) {
           spec,
           plan: [],
           ran: null,
-          result: { kind: "compose", error: "proof_gate_fail", promptRisk: true }
+          result: {
+            kind: "compose",
+            error: "proof_gate_fail",
+            promptRisk: true,
+          },
         });
       }
 
@@ -621,13 +696,15 @@ export function setupComposeRoutes(router: Router) {
       });
 
       let brandColor =
-        (prior as any)?.brand?.primary || (fit as any).brandColor || guessBrand((fit as any).intent);
-      
+        (prior as any)?.brand?.primary ||
+        (fit as any).brandColor ||
+        guessBrand((fit as any).intent);
+
       {
         const filled = fillSlots({ prompt, spec, copy });
         copy = (filled as any).copy;
       }
-      
+
       const actions = nextActions(spec, { chips });
 
       if (!actions.length)
@@ -641,7 +718,8 @@ export function setupComposeRoutes(router: Router) {
         const { pageId: dpid, relPath } = writePreview(tmpSpec);
 
         const sectionsUsed =
-          Array.isArray((top as any)?.args?.sections) && (top as any).args.sections.length
+          Array.isArray((top as any)?.args?.sections) &&
+          (top as any).args.sections.length
             ? (top as any).args.sections
             : (spec as any)?.layout?.sections || [];
 
@@ -698,17 +776,24 @@ export function setupComposeRoutes(router: Router) {
 
   // ---------- /instant (zero-LLM compose) ----------
   router.post("/instant", cacheMW("instant"), async (req, res) => {
+    const drained = drainMode(req);
+
     try {
-      const { prompt = "", sessionId = "anon", breadth = "" } = (req.body || {}) as any;
+      const { prompt = "", sessionId = "anon", breadth = "" } = (req.body ||
+        {}) as any;
 
       // Strict-proof gate
       if (isProofStrict(req) && hasRiskyClaims(prompt)) {
-        const noJs = shouldStripJS(null);
+        const noJs = drained || shouldStripJS(null);
         return res.json({
           ok: true,
           source: "instant",
           spec: {},
-          result: { kind: "compose", error: "proof_gate_fail", promptRisk: true },
+          result: {
+            kind: "compose",
+            error: "proof_gate_fail",
+            promptRisk: true,
+          },
           url: null,
           noJs,
         });
@@ -737,13 +822,20 @@ export function setupComposeRoutes(router: Router) {
             const decision = supDecide("/instant/sticky", risk);
             if (decision.mode === "block") {
               res.setHeader("X-SUP-Mode", decision.mode);
-              res.setHeader("X-SUP-Reasons", (decision.reasons || []).join(","));
-              const noJsBlock = shouldStripJS(null);
+              res.setHeader(
+                "X-SUP-Reasons",
+                (decision.reasons || []).join(",")
+              );
+              const noJsBlock = drained || shouldStripJS(null);
               return res.json({
                 ok: true,
                 source: "instant",
                 spec: specCached,
-                result: { kind: "compose", error: "sup_block", sup: decision },
+                result: {
+                  kind: "compose",
+                  error: "sup_block",
+                  sup: decision,
+                },
                 url: null,
                 noJs: noJsBlock,
               });
@@ -754,8 +846,8 @@ export function setupComposeRoutes(router: Router) {
           const newPageId = `pg_${nanoid(6)}`;
 
           // No concrete perf for sticky copies yet; env-only decision for now.
-          const noJs = shouldStripJS(null);
-          
+          const noJs = drained || shouldStripJS(null);
+
           try {
             const src = path.resolve(PREVIEW_DIR, `${origPageId}.html`);
             const dst = path.resolve(PREVIEW_DIR, `${newPageId}.html`);
@@ -803,7 +895,10 @@ export function setupComposeRoutes(router: Router) {
                 policy_version: card.policy_version,
                 risk: card.risk,
               });
-              fs.writeFileSync(`.cache/proof/${newPageId}.json`, JSON.stringify(card, null, 2));
+              fs.writeFileSync(
+                `.cache/proof/${newPageId}.json`,
+                JSON.stringify(card, null, 2)
+              );
             } catch {}
           } catch {}
 
@@ -811,7 +906,10 @@ export function setupComposeRoutes(router: Router) {
             ok: true,
             source: "instant",
             spec: specCached,
-            result: { pageId: newPageId, path: `/previews/pages/${newPageId}.html` },
+            result: {
+              pageId: newPageId,
+              path: `/previews/pages/${newPageId}.html`,
+            },
             url: `/api/ai/previews/${newPageId}`,
             noJs,
           });
@@ -821,7 +919,7 @@ export function setupComposeRoutes(router: Router) {
       // Continue with instant logic...
       // This is abbreviated - full instant logic is very long
 
-      const noJs = shouldStripJS(null);
+      const noJs = drained || shouldStripJS(null);
 
       return res.json({
         ok: true,
@@ -838,11 +936,16 @@ export function setupComposeRoutes(router: Router) {
         fs.mkdirSync(PREVIEW_DIR, { recursive: true });
         fs.mkdirSync(DEV_PREVIEW_DIR, { recursive: true });
 
-        const html = "<!doctype html><meta charset='utf-8'><title>Preview</title><h1>Preview</h1>";
+        const html =
+          "<!doctype html><meta charset='utf-8'><title>Preview</title><h1>Preview</h1>";
         fs.writeFileSync(path.join(PREVIEW_DIR, `${pageId}.html`), html, "utf8");
-        fs.writeFileSync(path.join(DEV_PREVIEW_DIR, `${pageId}.html`), html, "utf8");
+        fs.writeFileSync(
+          path.join(DEV_PREVIEW_DIR, `${pageId}.html`),
+          html,
+          "utf8"
+        );
 
-        const noJs = shouldStripJS(null);
+        const noJs = drained || shouldStripJS(null);
 
         return res.json({
           ok: true,
@@ -853,7 +956,7 @@ export function setupComposeRoutes(router: Router) {
           noJs,
         });
       } catch {
-        const noJs = shouldStripJS(null);
+        const noJs = drained || shouldStripJS(null);
         return res.json({
           ok: true,
           source: "instant",
@@ -877,19 +980,19 @@ export function setupComposeRoutes(router: Router) {
           message: "Contracts guard did not prepare the patch.",
         });
       }
-      
+
       // Note: ledgerFor import would be needed here
       const preview = cheapCopy(prepared.copy || prepared);
       const receipt = buildReceipt(prepared.before, prepared.patch, prepared);
       const intent = {}; // ledgerFor(prepared.patch?.copy || "");
       const cost = estimateCost(prepared);
-      
+
       return res.json({ ok: true, preview, meta: { cost, receipt, intent } });
     } catch (e) {
-      return res.status(500).json({ 
-        ok: false, 
-        error: "server_error", 
-        message: "Something went wrong on our side." 
+      return res.status(500).json({
+        ok: false,
+        error: "server_error",
+        message: "Something went wrong on our side.",
       });
     }
   });
@@ -897,7 +1000,8 @@ export function setupComposeRoutes(router: Router) {
   // ---------- /persona endpoints ----------
   router.post("/persona/add", express.json(), async (req, res) => {
     const { text, label } = (req.body || {}) as any;
-    if (!text) return res.status(400).json({ ok: false, error: "text required" });
+    if (!text)
+      return res.status(400).json({ ok: false, error: "text required" });
 
     await addExample("persona", String(text), {
       sections: [],
@@ -923,7 +1027,10 @@ export function setupComposeRoutes(router: Router) {
   router.post("/seed", async (_req, res) => {
     try {
       const seeds = [
-        { prompt: "dark saas waitlist for founders", sections: ["hero-basic", "cta-simple"] },
+        {
+          prompt: "dark saas waitlist for founders",
+          sections: ["hero-basic", "cta-simple"],
+        },
         {
           prompt: "light portfolio landing designer",
           sections: ["hero-basic", "features-3col", "cta-simple"],
@@ -961,66 +1068,80 @@ export function setupComposeRoutes(router: Router) {
   });
 
   // ---------- /ab/promote ----------
-  router.post("/ab/promote", express.json(), contractsHardStop(), async (req, res) => {
-    try {
-      const body = (req.body || {}) as any;
-      const sessionId = String(body.sessionId || "").trim();
-      const winner = (body.winner || {}) as {
-        sections?: string[];
-        copy?: Record<string, any>;
-        brand?: Record<string, any>;
-      };
-      const audit = body.audit || {};
-
-      if (!sessionId) return res.status(400).json({ ok: false, error: "missing sessionId" });
-      if (!winner || typeof winner !== "object")
-        return res.status(400).json({ ok: false, error: "missing winner patch" });
-
-      const base = (lastGoodFor(sessionId) as any) || {};
-      const merged = {
-        ...base,
-        sections: Array.isArray(winner.sections) ? winner.sections : (base.sections || []),
-        copy: { ...(base.copy || {}), ...(winner.copy || {}) },
-        brand: { ...(base.brand || {}), ...(winner.brand || {}) },
-      };
-
-      const prepared = verifyAndPrepare(merged);
-      rememberLastGood(sessionId, prepared);
-
-      const cost = estimateCost(prepared);
-      let receipt: any = null;
+  router.post(
+    "/ab/promote",
+    express.json(),
+    contractsHardStop(),
+    async (req, res) => {
       try {
-        const baseLG: any = lastGoodFor(sessionId) || {};
-        const hardened = (req as any).__prepared || prepared;
-        const patch = winner || {};
-        receipt = buildReceipt(baseLG, patch, hardened);
-      } catch {}
+        const body = (req.body || {}) as any;
+        const sessionId = String(body.sessionId || "").trim();
+        const winner = (body.winner || {}) as {
+          sections?: string[];
+          copy?: Record<string, any>;
+          brand?: Record<string, any>;
+        };
+        const audit = body.audit || {};
 
-      pushSignal(sessionId, {
-        ts: Date.now(),
-        kind: "compose_success",
-        data: {
-          promoted: true,
-          via: "ab_promote",
-          audit,
-          source: "ab_promote",
-          cost,
-          receipt,
-        },
-      });
+        if (!sessionId)
+          return res
+            .status(400)
+            .json({ ok: false, error: "missing sessionId" });
+        if (!winner || typeof winner !== "object")
+          return res
+            .status(400)
+            .json({ ok: false, error: "missing winner patch" });
 
-      return res.json({
-        ok: true,
-        applied: {
-          hasSections: Array.isArray(winner.sections),
-          copyKeys: Object.keys(winner.copy || {}),
-          brandKeys: Object.keys(winner.brand || {}),
-        },
-        spec: prepared,
-        note: "promoted",
-      });
-    } catch (err: any) {
-      return res.status(500).json({ ok: false, error: String(err?.message || err) });
+        const base = (lastGoodFor(sessionId) as any) || {};
+        const merged = {
+          ...base,
+          sections: Array.isArray(winner.sections)
+            ? winner.sections
+            : base.sections || [],
+          copy: { ...(base.copy || {}), ...(winner.copy || {}) },
+          brand: { ...(base.brand || {}), ...(winner.brand || {}) },
+        };
+
+        const prepared = verifyAndPrepare(merged);
+        rememberLastGood(sessionId, prepared);
+
+        const cost = estimateCost(prepared);
+        let receipt: any = null;
+        try {
+          const baseLG: any = lastGoodFor(sessionId) || {};
+          const hardened = (req as any).__prepared || prepared;
+          const patch = winner || {};
+          receipt = buildReceipt(baseLG, patch, hardened);
+        } catch {}
+
+        pushSignal(sessionId, {
+          ts: Date.now(),
+          kind: "compose_success",
+          data: {
+            promoted: true,
+            via: "ab_promote",
+            audit,
+            source: "ab_promote",
+            cost,
+            receipt,
+          },
+        });
+
+        return res.json({
+          ok: true,
+          applied: {
+            hasSections: Array.isArray(winner.sections),
+            copyKeys: Object.keys(winner.copy || {}),
+            brandKeys: Object.keys(winner.brand || {}),
+          },
+          spec: prepared,
+          note: "promoted",
+        });
+      } catch (err: any) {
+        return res
+          .status(500)
+          .json({ ok: false, error: String(err?.message || err) });
+      }
     }
-  });
+  );
 }
