@@ -194,3 +194,11 @@
 {"at":"2025-11-04T12:24:36.091Z","task":"unit-test-shadow","provider":"openai","ms":0,"ok":true,"model_hint":null}
 {"at":"2025-11-04T12:24:36.115Z","task":"unit-test-primary","provider":"granite","ms":0,"ok":true,"model_hint":null}
 {"at":"2025-11-04T12:24:36.116Z","task":"unit-test-header","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-04T12:31:49.613Z","task":"unit-test","provider":"openai","ms":1,"ok":true,"model_hint":null}
+{"at":"2025-11-04T12:31:49.615Z","task":"unit-test-shadow","provider":"openai","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-04T12:31:49.661Z","task":"unit-test-primary","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-04T12:31:49.662Z","task":"unit-test-header","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-04T12:32:25.017Z","task":"unit-test","provider":"openai","ms":1,"ok":true,"model_hint":null}
+{"at":"2025-11-04T12:32:25.022Z","task":"unit-test-shadow","provider":"openai","ms":1,"ok":true,"model_hint":null}
+{"at":"2025-11-04T12:32:25.061Z","task":"unit-test-primary","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-04T12:32:25.062Z","task":"unit-test-header","provider":"granite","ms":0,"ok":true,"model_hint":null}

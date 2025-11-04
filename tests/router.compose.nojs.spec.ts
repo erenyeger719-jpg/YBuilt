@@ -14,32 +14,18 @@ vi.mock("../server/ai/router.ts", () => {
   };
 });
 
-// Mock router helpers so cacheMW + proof stuff are safe and cheap in tests
-vi.mock("../server/ai/router.helpers.ts", () => {
+// Mock router helpers so cacheMW + proof stuff are safe and cheap in tests,
+// but let everything else come from the real module (including currentExecTier).
+vi.mock("../server/ai/router.helpers.ts", async () => {
+  const actual = await vi.importActual<
+    typeof import("../server/ai/router.helpers.ts")
+  >("../server/ai/router.helpers.ts");
+
   return {
-    requireFetch: () => (globalThis as any).fetch,
-    baseUrl: () => "http://localhost",
-    childHeaders: () => ({}),
-    sha1: () => "sha1-test",
-    escapeHtml: (s: string) => s,
-    drainMode: () => false,
-
-    // Important: make cacheMW a no-op middleware
-    cacheMW: () => (_req: any, _res: any, next: any) => next(),
-
-    // Keep SUP/Risk stuff off for this test
-    hasRiskyClaims: () => false,
-    isProofStrict: () => false,
-
-    fetchTextWithTimeout: async () => "",
-    segmentSwapSections: (sections: any) => sections,
-    inferAudience: () => "",
-    quickGuessIntent: () => null,
-    stableStringify: (v: any) => JSON.stringify(v),
-    dslKey: () => "dsl-key-test",
-    applyChipLocal: (x: any) => x,
-    auditUXFromHtml: () => ({ issues: [] }),
-    injectCssIntoHead: (html: string) => html,
+    ...actual,
+    cacheMW: vi.fn(() => (_req: any, _res: any, next: any) => next()),
+    drainMode: vi.fn(() => false),
+    currentExecTier: vi.fn(() => "safe-html" as const),
   };
 });
 

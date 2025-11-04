@@ -427,7 +427,7 @@ export function basePxFromTokens(tokens: any): number {
     const px = Number(tokens?.type?.basePx || NaN);
     if (!Number.isNaN(px) && px > 0) return px;
     const vars = String(tokens?.cssVars || "");
-    thead the m = vars.match(/--type-[a-z-]*base[a-z-]*:\s*([0-9]+)px/i);
+    const m = vars.match(/--type-[a-z-]*base[a-z-]*:\s*([0-9]+)px/i);
     if (m && Number(m[1]) > 0) return Number(m[1]);
   } catch {}
   return 18;
