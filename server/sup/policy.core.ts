@@ -139,11 +139,27 @@ function contentHash(s: string) {
 // map reasons → degrade hints for downstream (UI/runner)
 function pickDegrade(reasons: string[]) {
   const s = new Set<string>();
-  if (reasons.includes("unproven_claims") || reasons.includes("prompt_risk"))
+
+  if (
+    reasons.includes("unproven_claims") ||
+    reasons.includes("low_evidence_coverage") ||
+    reasons.includes("prompt_risk")
+  ) {
     s.add("neutralize-claims");
-  if (reasons.includes("high_cls") || reasons.includes("slow_lcp")) s.add("no-js");
-  if (reasons.includes("lqr_low")) s.add("no-js");
-  if (reasons.some((r) => r.startsWith("abuse:"))) s.add("shadow");
+  }
+
+  if (reasons.includes("high_cls") || reasons.includes("slow_lcp")) {
+    s.add("no-js");
+  }
+
+  if (reasons.includes("lqr_low")) {
+    s.add("no-js");
+  }
+
+  if (reasons.some((r) => r.startsWith("abuse:"))) {
+    s.add("shadow");
+  }
+
   return Array.from(s).join(",");
 }
 
