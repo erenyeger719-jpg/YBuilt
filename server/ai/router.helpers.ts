@@ -136,6 +136,32 @@ export function drainMode(req?: Request): boolean {
   return currentDrainLevel(req) !== "off";
 }
 
+// Execution tier helpers
+
+export type ExecTier = "safe-html" | "light-js" | "full";
+
+export function currentExecTier(req?: Request): ExecTier {
+  let raw: string | undefined;
+
+  try {
+    raw =
+      (req as any)?.headers?.["x-exec-tier"] ||
+      (req as any)?.headers?.["X-Exec-Tier"];
+  } catch {
+    // ignore
+  }
+
+  if (!raw || typeof raw !== "string") {
+    raw = process.env.EXEC_TIER_DEFAULT || "full";
+  }
+
+  const v = raw.toString().trim().toLowerCase();
+
+  if (v === "safe-html" || v === "safe" || v === "html") return "safe-html";
+  if (v === "light-js" || v === "light" || v === "lite") return "light-js";
+  return "full";
+}
+
 // Make strict-mode decision from env and (optionally) request headers
 export function isProofStrict(req?: { headers?: any }): boolean {
   // Env always wins
@@ -401,7 +427,7 @@ export function basePxFromTokens(tokens: any): number {
     const px = Number(tokens?.type?.basePx || NaN);
     if (!Number.isNaN(px) && px > 0) return px;
     const vars = String(tokens?.cssVars || "");
-    const m = vars.match(/--type-[a-z-]*base[a-z-]*:\s*([0-9]+)px/i);
+    thead the m = vars.match(/--type-[a-z-]*base[a-z-]*:\s*([0-9]+)px/i);
     if (m && Number(m[1]) > 0) return Number(m[1]);
   } catch {}
   return 18;

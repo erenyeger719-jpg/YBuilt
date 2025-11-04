@@ -21,6 +21,7 @@ import {
   sha1,
   escapeHtml,
   drainMode,
+  currentExecTier,
   cacheMW,
   hasRiskyClaims,
   isProofStrict,
@@ -724,7 +725,7 @@ export function setupComposeRoutes(router: Router) {
             : (spec as any)?.layout?.sections || [];
 
         // We don't have real perf here yet; env-only decision.
-        const noJs = shouldStripJS(null);
+        const noJsDrain = shouldStripJS(null);
 
         return res.json({
           ok: true,
@@ -735,7 +736,7 @@ export function setupComposeRoutes(router: Router) {
           url: `/api/ai/previews/${dpid}`,
           chips,
           signals: summarize(sessionId),
-          noJs,
+          noJs: noJsDrain,
         });
       }
 
@@ -755,8 +756,8 @@ export function setupComposeRoutes(router: Router) {
 
       recordTTU(Date.now() - t0);
 
-      // No perf object here yet; keep shouldStripJS wired for env flag.
-      const noJs = shouldStripJS(null);
+      const execTier = currentExecTier(req);
+      const noJs = execTier === "safe-html" || shouldStripJS(null);
 
       return res.json({
         ok: true,
@@ -777,6 +778,7 @@ export function setupComposeRoutes(router: Router) {
   // ---------- /instant (zero-LLM compose) ----------
   router.post("/instant", cacheMW("instant"), async (req, res) => {
     const drained = drainMode(req);
+    const execTier = currentExecTier(req);
 
     try {
       const { prompt = "", sessionId = "anon", breadth = "" } = (req.body ||
@@ -784,7 +786,7 @@ export function setupComposeRoutes(router: Router) {
 
       // Strict-proof gate
       if (isProofStrict(req) && hasRiskyClaims(prompt)) {
-        const noJs = drained || shouldStripJS(null);
+        const noJs = drained || execTier === "safe-html" || shouldStripJS(null);
         return res.json({
           ok: true,
           source: "instant",
@@ -826,7 +828,8 @@ export function setupComposeRoutes(router: Router) {
                 "X-SUP-Reasons",
                 (decision.reasons || []).join(",")
               );
-              const noJsBlock = drained || shouldStripJS(null);
+              const noJsBlock =
+                drained || execTier === "safe-html" || shouldStripJS(null);
               return res.json({
                 ok: true,
                 source: "instant",
@@ -846,7 +849,8 @@ export function setupComposeRoutes(router: Router) {
           const newPageId = `pg_${nanoid(6)}`;
 
           // No concrete perf for sticky copies yet; env-only decision for now.
-          const noJs = drained || shouldStripJS(null);
+          const noJs =
+            drained || execTier === "safe-html" || shouldStripJS(null);
 
           try {
             const src = path.resolve(PREVIEW_DIR, `${origPageId}.html`);
@@ -919,7 +923,7 @@ export function setupComposeRoutes(router: Router) {
       // Continue with instant logic...
       // This is abbreviated - full instant logic is very long
 
-      const noJs = drained || shouldStripJS(null);
+      const noJs = drained || execTier === "safe-html" || shouldStripJS(null);
 
       return res.json({
         ok: true,
@@ -945,7 +949,8 @@ export function setupComposeRoutes(router: Router) {
           "utf8"
         );
 
-        const noJs = drained || shouldStripJS(null);
+        const noJs =
+          drained || execTier === "safe-html" || shouldStripJS(null);
 
         return res.json({
           ok: true,
@@ -956,7 +961,8 @@ export function setupComposeRoutes(router: Router) {
           noJs,
         });
       } catch {
-        const noJs = drained || shouldStripJS(null);
+        const noJs =
+          drained || execTier === "safe-html" || shouldStripJS(null);
         return res.json({
           ok: true,
           source: "instant",
