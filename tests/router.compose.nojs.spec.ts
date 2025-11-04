@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 
+// --- Mocks ---
 // Mock server/ai/router.ts so we don't pull in subrouters (and avoid circular router.use issues)
 vi.mock("../server/ai/router.ts", () => {
   return {
@@ -13,7 +14,45 @@ vi.mock("../server/ai/router.ts", () => {
   };
 });
 
-// Now import the compose setup function
+// Mock router helpers so cacheMW + proof stuff are safe and cheap in tests
+vi.mock("../server/ai/router.helpers.ts", () => {
+  return {
+    requireFetch: () => (globalThis as any).fetch,
+    baseUrl: () => "http://localhost",
+    childHeaders: () => ({}),
+    sha1: () => "sha1-test",
+    escapeHtml: (s: string) => s,
+    drainMode: () => false,
+
+    // Important: make cacheMW a no-op middleware
+    cacheMW: () => (_req: any, _res: any, next: any) => next(),
+
+    // Keep SUP/Risk stuff off for this test
+    hasRiskyClaims: () => false,
+    isProofStrict: () => false,
+
+    fetchTextWithTimeout: async () => "",
+    segmentSwapSections: (sections: any) => sections,
+    inferAudience: () => "",
+    quickGuessIntent: () => null,
+    stableStringify: (v: any) => JSON.stringify(v),
+    dslKey: () => "dsl-key-test",
+    applyChipLocal: (x: any) => x,
+    auditUXFromHtml: () => ({ issues: [] }),
+    injectCssIntoHead: (html: string) => html,
+  };
+});
+
+// Mock cache so /instant never hits any "sticky" branches
+vi.mock("../server/intent/cache.ts", () => {
+  return {
+    cacheGet: () => null,
+    cacheSet: () => {},
+    normalizeKey: (s: string) => s,
+  };
+});
+
+// Now import the compose setup function (after mocks)
 import { setupComposeRoutes } from "../server/ai/router.compose";
 
 describe("ai/router.compose – noJs flag wiring", () => {
