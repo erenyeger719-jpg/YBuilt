@@ -17,7 +17,7 @@ import {
 } from "./router.ts";
 
 // Import dependencies
-import { 
+import {
   recordShip,
   markConversion,
   kpiSummary,
@@ -41,6 +41,10 @@ import {
   POLICY_VERSION,
   signProof,
 } from "../sup/policy.core.ts";
+import {
+  summarizeSupAudit,
+  type SupAuditRow,
+} from "../metrics/sup.summary.ts";
 
 const pathResolve = (...p: string[]) => path.resolve(...p);
 
@@ -64,11 +68,10 @@ function saveJSON(p: string, obj: any) {
 }
 
 function loadKpiCounter() {
-  try { 
-    return JSON.parse(fs.readFileSync(KPI_COUNTER, "utf8")); 
-  }
-  catch { 
-    return { conversions_total: 0, last_convert_ts: 0 }; 
+  try {
+    return JSON.parse(fs.readFileSync(KPI_COUNTER, "utf8"));
+  } catch {
+    return { conversions_total: 0, last_convert_ts: 0 };
   }
 }
 
@@ -88,9 +91,54 @@ function stripScripts(html: string) {
   return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
 }
 
+// Load SUP audit summary (best-effort, last N rows)
+function loadSupSummary(): ReturnType<typeof summarizeSupAudit> | null {
+  const auditPath = path.join(".logs", "sup", "audit.jsonl");
+
+  try {
+    if (!fs.existsSync(auditPath)) {
+      return null;
+    }
+
+    const raw = fs.readFileSync(auditPath, "utf8");
+    const lines = raw.split("\n");
+
+    // Cap to the last N rows so we don’t blow up on huge logs.
+    const WINDOW = 1000;
+    const start = Math.max(0, lines.length - WINDOW);
+
+    const rows: SupAuditRow[] = [];
+
+    for (let i = start; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      try {
+        const obj = JSON.parse(line);
+
+        rows.push({
+          mode: typeof obj.mode === "string" ? obj.mode : undefined,
+          ms: typeof obj.ms === "number" ? obj.ms : undefined,
+          pii_present: !!obj.pii_present,
+          abuse_reasons: Array.isArray(obj.abuse_reasons)
+            ? obj.abuse_reasons
+            : undefined,
+        });
+      } catch {
+        // ignore malformed rows
+      }
+    }
+
+    return summarizeSupAudit(rows);
+  } catch {
+    // If anything goes wrong reading/parse, just skip SUP summary
+    return null;
+  }
+}
+
 // Setup function to mount all metrics & KPI routes
 export function setupMetricsRoutes(router: Router) {
-  
+
   // ---------- Metrics snapshot ----------
   router.get("/metrics", (_req, res) => {
     const safe = () => ({
@@ -104,14 +152,19 @@ export function setupMetricsRoutes(router: Router) {
       shadow_agreement_pct: null,
       url_costs: { pages: 0, cents_total: 0, tokens_total: 0 },
       taste_top: null,
+      sup: null as ReturnType<typeof summarizeSupAudit> | null,
     });
 
     try {
       const base = safe();
       try {
         if (fs.existsSync(".cache/url.costs.json")) {
-          const data = JSON.parse(fs.readFileSync(".cache/url.costs.json", "utf8"));
-          let pages = 0, cents_total = 0, tokens_total = 0;
+          const data = JSON.parse(
+            fs.readFileSync(".cache/url.costs.json", "utf8"),
+          );
+          let pages = 0,
+            cents_total = 0,
+            tokens_total = 0;
           for (const v of Object.values<any>(data)) {
             pages += 1;
             cents_total += Number(v?.cents || 0);
@@ -123,7 +176,17 @@ export function setupMetricsRoutes(router: Router) {
             tokens_total,
           };
         }
-      } catch { /* keep defaults */ }
+      } catch {
+        /* keep defaults */
+      }
+
+      // Attach SUP summary (best-effort)
+      try {
+        (base as any).sup = loadSupSummary();
+      } catch {
+        (base as any).sup = null;
+      }
+
       return res.json(base);
     } catch {
       return res.json(safe());
@@ -134,14 +197,25 @@ export function setupMetricsRoutes(router: Router) {
   router.post("/kpi/convert", (req, res) => {
     try {
       const { pageId = "" } = (req.body || {}) as any;
-      if (!pageId) return res.status(400).json({ ok: false, error: "missing_pageId" });
+      if (!pageId)
+        return res.status(400).json({ ok: false, error: "missing_pageId" });
 
-      try { markConversion(String(pageId)); } catch {}
-      try { recordPackWinForPage(String(pageId)); } catch {}
+      try {
+        markConversion(String(pageId));
+      } catch {}
+      try {
+        recordPackWinForPage(String(pageId));
+      } catch {}
       try {
         const last = lastShipFor(String(pageId));
         if (last) {
-          try { recordSectionOutcome((last as any).sections || [], "all", true); } catch {}
+          try {
+            recordSectionOutcome(
+              (last as any).sections || [],
+              "all",
+              true,
+            );
+          } catch {}
           try {
             if ((last as any)?.brand) {
               recordTokenWin({
@@ -156,9 +230,15 @@ export function setupMetricsRoutes(router: Router) {
           } catch {}
         }
       } catch {}
-      try { recordConversionForPage(String(pageId)); } catch {}
-      try { rewardShadow(String(pageId)); } catch {}
-      try { bumpKpiCounter(); } catch {}
+      try {
+        recordConversionForPage(String(pageId));
+      } catch {}
+      try {
+        rewardShadow(String(pageId));
+      } catch {}
+      try {
+        bumpKpiCounter();
+      } catch {}
 
       return res.json({ ok: true });
     } catch {
@@ -175,7 +255,8 @@ export function setupMetricsRoutes(router: Router) {
       let bandits: any = {};
       try {
         const P = pathResolve(".cache/sections.bandits.json");
-        if (fs.existsSync(P)) bandits = JSON.parse(fs.readFileSync(P, "utf8")) || {};
+        if (fs.existsSync(P))
+          bandits = JSON.parse(fs.readFileSync(P, "utf8")) || {};
       } catch {}
 
       const kc = loadKpiCounter();
@@ -194,12 +275,17 @@ export function setupMetricsRoutes(router: Router) {
   // ---------- Narrative (Pro) ----------
   router.get("/narrative/:pageId", async (req, res) => {
     const pid = String(req.params.pageId || "").trim();
-    if (!pid) return res.status(400).json({ ok: false, error: "missing_pageId" });
+    if (!pid)
+      return res.status(400).json({ ok: false, error: "missing_pageId" });
     try {
       const base = `${req.protocol}://${req.get("host")}`;
       const f = requireFetch();
-      const proofResp = await f(`${base}/api/ai/proof/${encodeURIComponent(pid)}`).catch(() => null);
-      const proofJson = proofResp ? await proofResp.json().catch(() => null) : null;
+      const proofResp = await f(
+        `${base}/api/ai/proof/${encodeURIComponent(pid)}`,
+      ).catch(() => null);
+      const proofJson = proofResp
+        ? await proofResp.json().catch(() => null)
+        : null;
       const p = (proofJson?.proof ?? proofJson ?? {}) as any;
 
       const cls = typeof p?.cls_est === "number" ? p.cls_est : null;
@@ -209,24 +295,54 @@ export function setupMetricsRoutes(router: Router) {
 
       // Summary bullets
       const bullets: string[] = [];
-      bullets.push(proof_ok ? "Proof: ✓ evidence attached" : "Proof: ✗ gaps found");
-      bullets.push(a11y ? "A11y: ✓ passes checks" : "A11y: ✗ issues remain");
-      if (cls != null) bullets.push(`CLS: ${cls.toFixed(3)} ${cls <= 0.10 ? "✓" : "⚠︎ >0.10 → reserve heights, lock ratios"}`);
-      if (lcp != null) bullets.push(`LCP: ${Math.round(lcp)}ms ${lcp <= 2500 ? "✓" : "⚠︎ >2500ms → Zero-JS or image size cut"}`);
+      bullets.push(
+        proof_ok ? "Proof: ✓ evidence attached" : "Proof: ✗ gaps found",
+      );
+      bullets.push(
+        a11y ? "A11y: ✓ passes checks" : "A11y: ✗ issues remain",
+      );
+      if (cls != null)
+        bullets.push(
+          `CLS: ${cls.toFixed(3)} ${
+            cls <= 0.1
+              ? "✓"
+              : "⚠︎ >0.10 → reserve heights, lock ratios"
+          }`,
+        );
+      if (lcp != null)
+        bullets.push(
+          `LCP: ${Math.round(lcp)}ms ${
+            lcp <= 2500
+              ? "✓"
+              : "⚠︎ >2500ms → Zero-JS or image size cut"
+          }`,
+        );
 
       // Next moves (deterministic suggestions)
       const next: string[] = [];
       if (!proof_ok) next.push("Attach receipts to risky claims (Proof Passport).");
       if (!a11y) next.push("Fix contrast/labels; re-run guard (A11y).");
-      if (cls != null && cls > 0.10) next.push("Reserve image/video height; avoid lazy layout shifts.");
-      if (lcp != null && lcp > 2500) next.push("Swap heavy widget → static HTML; defer non-critical JS.");
+      if (cls != null && cls > 0.1)
+        next.push("Reserve image/video height; avoid lazy layout shifts.");
+      if (lcp != null && lcp > 2500)
+        next.push("Swap heavy widget → static HTML; defer non-critical JS.");
 
       // Status line
-      const text = `Change summary — proof ${proof_ok ? "OK" : "needs work"}, a11y ${a11y ? "OK" : "needs work"}, LCP ${lcp != null ? Math.round(lcp) + "ms" : "n/a"}, CLS ${cls != null ? cls.toFixed(3) : "n/a"}.`;
+      const text = `Change summary — proof ${
+        proof_ok ? "OK" : "needs work"
+      }, a11y ${a11y ? "OK" : "needs work"}, LCP ${
+        lcp != null ? Math.round(lcp) + "ms" : "n/a"
+      }, CLS ${cls != null ? cls.toFixed(3) : "n/a"}.`;
 
-      return res.json({ ok: true, narrative: { text, bullets, next }, proof: p });
+      return res.json({
+        ok: true,
+        narrative: { text, bullets, next },
+        proof: p,
+      });
     } catch {
-      return res.status(500).json({ ok: false, error: "narrative_error" });
+      return res
+        .status(500)
+        .json({ ok: false, error: "narrative_error" });
     }
   });
 
@@ -244,24 +360,26 @@ export function setupMetricsRoutes(router: Router) {
       const proofPath = `${proofDir}/${id}.json`;
 
       // Ensure directory exists
-      try { fs.mkdirSync(proofDir, { recursive: true }); } catch {}
+      try {
+        fs.mkdirSync(proofDir, { recursive: true });
+      } catch {}
 
       if (!fs.existsSync(proofPath)) {
         // Create a minimal proof card if missing
         let _risk: any;
-        try { 
-          _risk = computeRiskVector({ 
-            prompt: "", 
-            copy: {}, 
-            proof: {}, 
-            perf: null, 
-            ux: null, 
-            a11yPass: null 
-          }); 
-        } catch { 
-          _risk = {}; 
+        try {
+          _risk = computeRiskVector({
+            prompt: "",
+            copy: {},
+            proof: {},
+            perf: null,
+            ux: null,
+            a11yPass: null,
+          });
+        } catch {
+          _risk = {};
         }
-        
+
         const minimal = {
           pageId: id,
           url: `/api/ai/previews/${id}`,
@@ -275,13 +393,13 @@ export function setupMetricsRoutes(router: Router) {
           ux_issues: [],
           policy_version: POLICY_VERSION,
           risk: _risk,
-          signature: signProof({ 
-            pageId: id, 
-            policy_version: POLICY_VERSION, 
-            risk: _risk 
+          signature: signProof({
+            pageId: id,
+            policy_version: POLICY_VERSION,
+            risk: _risk,
           }),
         };
-        
+
         try {
           fs.writeFileSync(proofPath, JSON.stringify(minimal, null, 2));
         } catch {}
@@ -293,19 +411,19 @@ export function setupMetricsRoutes(router: Router) {
       } catch {
         // Fallback to a minimal object if read fails
         let _risk: any;
-        try { 
-          _risk = computeRiskVector({ 
-            prompt: "", 
-            copy: {}, 
-            proof: {}, 
-            perf: null, 
-            ux: null, 
-            a11yPass: null 
-          }); 
-        } catch { 
-          _risk = {}; 
+        try {
+          _risk = computeRiskVector({
+            prompt: "",
+            copy: {},
+            proof: {},
+            perf: null,
+            ux: null,
+            a11yPass: null,
+          });
+        } catch {
+          _risk = {};
         }
-        
+
         obj = {
           pageId: id,
           url: `/api/ai/previews/${id}`,
@@ -319,10 +437,10 @@ export function setupMetricsRoutes(router: Router) {
           ux_issues: [],
           policy_version: POLICY_VERSION,
           risk: _risk,
-          signature: signProof({ 
-            pageId: id, 
-            policy_version: POLICY_VERSION, 
-            risk: _risk 
+          signature: signProof({
+            pageId: id,
+            policy_version: POLICY_VERSION,
+            risk: _risk,
           }),
         };
       }
@@ -349,13 +467,14 @@ export function setupMetricsRoutes(router: Router) {
   router.get("/previews/:id", (req, res) => {
     try {
       const idRaw = String(req.params.id || "");
-      if (!/^[A-Za-z0-9._-]+$/.test(idRaw)) return res.status(400).send("bad id");
-      
+      if (!/^[A-Za-z0-9._-]+$/.test(idRaw))
+        return res.status(400).send("bad id");
+
       const names = [
         path.join(PREVIEW_DIR, `${idRaw}.html`),
         path.join(DEV_PREVIEW_DIR, `${idRaw}.html`),
       ];
-      
+
       let html: string | null = null;
       for (const f of names) {
         if (fs.existsSync(f)) {
@@ -365,7 +484,7 @@ export function setupMetricsRoutes(router: Router) {
           } catch {}
         }
       }
-      
+
       if (!html) return res.status(404).send("not found");
 
       const stripped = stripScripts(html);
@@ -380,15 +499,17 @@ export function setupMetricsRoutes(router: Router) {
   router.get("/previews/:id/raw", (req, res) => {
     try {
       const idRaw = String(req.params.id || "");
-      if (!/^[A-Za-z0-9._-]+$/.test(idRaw)) return res.status(400).send("bad id");
-      
-      const filePath =
-        fs.existsSync(path.join(PREVIEW_DIR, `${idRaw}.html`))
-          ? path.join(PREVIEW_DIR, `${idRaw}.html`)
-          : path.join(DEV_PREVIEW_DIR, `${idRaw}.html`);
-      
+      if (!/^[A-Za-z0-9._-]+$/.test(idRaw))
+        return res.status(400).send("bad id");
+
+      const filePath = fs.existsSync(
+        path.join(PREVIEW_DIR, `${idRaw}.html`),
+      )
+        ? path.join(PREVIEW_DIR, `${idRaw}.html`)
+        : path.join(DEV_PREVIEW_DIR, `${idRaw}.html`);
+
       if (!fs.existsSync(filePath)) return res.status(404).send("not found");
-      
+
       res.setHeader("content-type", "text/html; charset=utf-8");
       return res.status(200).send(fs.readFileSync(filePath, "utf8"));
     } catch {
@@ -400,11 +521,12 @@ export function setupMetricsRoutes(router: Router) {
   router.get("/previews/pages/:file", (req, res) => {
     try {
       const file = String(req.params.file || "");
-      if (!/^[A-Za-z0-9._-]+$/.test(file)) return res.status(400).send("bad file");
-      
+      if (!/^[A-Za-z0-9._-]+$/.test(file))
+        return res.status(400).send("bad file");
+
       const fp = path.join(DEV_PREVIEW_DIR, file);
       if (!fs.existsSync(fp)) return res.status(404).send("not found");
-      
+
       const stripped = stripScripts(fs.readFileSync(fp, "utf8"));
       res.setHeader("content-type", "text/html; charset=utf-8");
       return res.status(200).send(stripped);
