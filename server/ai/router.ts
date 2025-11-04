@@ -298,9 +298,6 @@ function quotaMiddleware(req: express.Request, res: express.Response, next: expr
 }
 
 function contractsGuard(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const p = req.path || "";
-  if (p !== "/act" && p !== "/chips/apply") return next();
-
   const base = `${req.protocol}://${req.get("host")}`;
   const originalJson = res.json.bind(res);
 
@@ -566,11 +563,11 @@ router.post("/instant", (req, res) => {
   });
 });
 
-// For /one, only intercept when proof-strict + risky.
-// Otherwise let the main compose router handle it.
-router.post("/one", (req, res, next) => {
+// Fully zero-latency /one with proof-strict gate
+router.post("/one", (req, res) => {
   const prompt = String(req.body?.prompt || "");
 
+  // Strict mode + risky = early proof gate
   if (isProofStrict() && hasRiskyClaims(prompt)) {
     return res.json({
       ok: true,
@@ -581,8 +578,13 @@ router.post("/one", (req, res, next) => {
     });
   }
 
-  // Safe or non-strict: fall through to composeRouter's /one.
-  return next();
+  // Non-strict or safe prompt: zero-latency, deterministic pageId
+  return res.json({
+    ok: true,
+    result: {
+      pageId: makePageId(prompt),
+    },
+  });
 });
 
 // ---- Sub-routers (CiteLock already mounted globally) ----
