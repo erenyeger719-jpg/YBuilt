@@ -6,7 +6,12 @@ import path from "path";
 import { nanoid } from "nanoid";
 
 // Import route modules (as sub-routers)
-import { reviewRouter, composeRouter, mediaRouter, metricsRouter } from "./subrouters.ts";
+import {
+  reviewRouter,
+  composeRouter,
+  mediaRouter,
+  metricsRouter,
+} from "./subrouters.ts";
 
 // Import shared utilities and types
 import { mountCiteLock } from "./citelock.patch.ts";
@@ -119,8 +124,8 @@ function localContractsCheck(texts: string[]): {
   intent: string;
 } {
   const joined = (texts || []).join("\n").toLowerCase();
-  const risky = ["guaranteed", "1000% return", "free money", "pump and dump"].filter((w) =>
-    joined.includes(w)
+  const risky = ["guaranteed", "1000% return", "free money", "pump and dump"].filter(
+    (w) => joined.includes(w)
   );
 
   if (risky.length) {
@@ -178,7 +183,9 @@ const QUOTA_PATHS = new Set<string>([
 
 // Rate limiting configuration
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 60_000);
-const RATE_MAX = Number(process.env.RATE_MAX ?? (process.env.NODE_ENV === "test" ? 10 : 120));
+const RATE_MAX = Number(
+  process.env.RATE_MAX ?? (process.env.NODE_ENV === "test" ? 10 : 120)
+);
 type Bucket = { hits: number; resetAt: number };
 const buckets = new Map<string, Bucket>();
 
@@ -217,7 +224,9 @@ try {
 function clientKey(req: express.Request) {
   const fwd = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
   const ip = fwd || (req.ip as string) || "0.0.0.0";
-  const sid = String(req.headers["x-session-id"] || (req.query as any).sessionId || "");
+  const sid = String(
+    req.headers["x-session-id"] || (req.query as any).sessionId || ""
+  );
   return `${ip}|${sid}`;
 }
 
@@ -232,7 +241,11 @@ function workspaceIdFrom(req: express.Request): string {
 }
 
 // Core middleware functions
-function quotaMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+function quotaMiddleware(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
   try {
     const p = req.path || "";
     if (!QUOTA_PATHS.has(p)) return next();
@@ -297,6 +310,7 @@ function quotaMiddleware(req: express.Request, res: express.Response, next: expr
   }
 }
 
+// NEW generic contractsGuard (no /act check inside)
 function contractsGuard(
   _req: express.Request,
   res: express.Response,
@@ -817,7 +831,7 @@ router.use(
 // keep as the last middleware on this router:
 // Last-chance error handler to avoid leaking stacks / unstable 500s in tests
 router.use((err: any, _req: any, res: any, _next: any) => {
-  console.error("LAST ERROR HANDLER HIT:", err);
+  console.error("LAST ERROR HANDLER HIT:", err); // <— debug hook
   const msg = err?.message || String(err || "unknown_error");
   if (!res.headersSent) res.status(200).json({ ok: false, error: msg });
 });
