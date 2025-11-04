@@ -568,7 +568,7 @@ router.post("/instant", (req, res) => {
   const prompt = String(req.body?.prompt || "");
 
   // In strict mode, block risky marketing claims.
-  if (isProofStrict() && hasRiskyClaims(prompt)) {
+  if (isProofStrict(req as any) && hasRiskyClaims(prompt)) {
     return res.json({
       ok: true,
       result: {
@@ -595,7 +595,7 @@ router.post("/one", (req, res) => {
   const prompt = String(req.body?.prompt || "");
 
   // Strict mode + risky = early proof gate
-  if (isProofStrict() && hasRiskyClaims(prompt)) {
+  if (isProofStrict(req as any) && hasRiskyClaims(prompt)) {
     return res.json({
       ok: true,
       result: {

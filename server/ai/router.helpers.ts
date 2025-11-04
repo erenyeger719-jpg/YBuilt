@@ -108,9 +108,31 @@ export function drainMode(req: Request) {
   return envOn || hdrOn;
 }
 
-export function isProofStrict(req: Request) {
-  return process.env.PROOF_STRICT === "1" ||
-    String(req.headers["x-proof-strict"] || "").toLowerCase() === "1";
+// Make strict-mode decision from env and (optionally) request headers
+export function isProofStrict(req?: { headers?: any }): boolean {
+  // Env always wins
+  const env = (process.env.PROOF_STRICT || "").toString().trim();
+  if (env === "1" || env.toLowerCase() === "true" || env.toLowerCase() === "strict") {
+    return true;
+  }
+  if (env === "0") {
+    return false;
+  }
+
+  // Then headers, if we got a req
+  const headers = (req as any)?.headers || {};
+  const raw =
+    headers["x-proof-strict"] ??
+    headers["x-proof-mode"] ??
+    headers["x-proof"] ??
+    "";
+
+  if (!raw) return false;
+
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  const s = String(v).toLowerCase().trim();
+
+  return s === "1" || s === "true" || s === "strict";
 }
 
 // Caching middleware helper
