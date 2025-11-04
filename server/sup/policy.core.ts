@@ -6,11 +6,8 @@ import type { Request, Response, NextFunction } from "express";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { hitSignatures } from "./signatures.ts";
-import {
-  countClaimsFromCopy,
-  estimateEvidenceCoverage,
-  ClaimCounts,
-} from "./claims.ts";
+import { countClaimsFromCopy, estimateEvidenceCoverage } from "./claims.ts";
+// (Type can be inferred; no need to import ClaimCounts)
 
 // ----- Versioning / Config ---------------------------------------------------
 
@@ -260,7 +257,7 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
   const copyObj = args.copy || {};
   const proofObj = args.proof || {};
 
-  const claimCounts: ClaimCounts = countClaimsFromCopy(copyObj);
+  const claimCounts = countClaimsFromCopy(copyObj);
   const evidenceCoverage = estimateEvidenceCoverage(proofObj, claimCounts.total);
 
   risk.claim_total = claimCounts.total;
@@ -307,6 +304,20 @@ export function supDecide(
   if (risk.copy_claims.missing_proof >= THRESH.CLAIMS_BLOCK_STRICT)
     reasons.push("unproven_claims");
 
+  // New: evidence coverage based guard
+  const coverage =
+    typeof risk.evidence_coverage === "number"
+      ? risk.evidence_coverage
+      : null;
+
+  if (
+    coverage !== null &&
+    (risk.claim_total || 0) > 0 &&
+    coverage < 0.5
+  ) {
+    reasons.push("low_evidence_coverage");
+  }
+
   // A11y
   if (THRESH.REQUIRE_A11Y && risk.a11y.pass === false)
     reasons.push("a11y_fail");
@@ -340,7 +351,11 @@ export function supDecide(
   if (reasons.some((r) => r.startsWith("abuse:"))) {
     return { mode: "strict", reasons };
   }
-  if (reasons.includes("unproven_claims") || reasons.includes("prompt_risk")) {
+  if (
+    reasons.includes("unproven_claims") ||
+    reasons.includes("low_evidence_coverage") ||
+    reasons.includes("prompt_risk")
+  ) {
     return { mode: "strict", reasons };
   }
   if (reasons.includes("high_cls") || reasons.includes("slow_lcp")) {
