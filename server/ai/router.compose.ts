@@ -370,9 +370,7 @@ export function setupComposeRoutes(router: Router) {
           )
             .toLowerCase()
             .trim();
-          const argAud = String(
-            action.args?.audience || ""
-          )
+          const argAud = String(action.args?.audience || "")
             .toLowerCase()
             .trim();
           const specAud = String(spec?.audience || "").toLowerCase().trim();
@@ -534,6 +532,26 @@ export function setupComposeRoutes(router: Router) {
               "en"
           );
           copyWithDefaults = localizeCopy(copyWithDefaults, locale);
+
+          // Design search warmup / cache: mutate tokens → score → cache by (goal, industry, DNA)
+          try {
+            const designIntent = (spec as any)?.intent || intentFromSpec || {};
+            const designGoal = String(designIntent.goal || "");
+            const designIndustry = String(designIntent.industry || "");
+
+            // Brand DNA as an extra conditioning key
+            const dna = suggestFromDNA(String(sessionId)) || {};
+
+            // Fire-and-forget cached design search. We treat searchBestTokens as a black box
+            // that does: wide search → scoring → keep top-K → cache.
+            await (searchBestTokens as any)({
+              goal: designGoal,
+              industry: designIndustry,
+              dna,
+            });
+          } catch {
+            // Design search must never break compose; failure just means "no warm cache"
+          }
 
           // Continue with compose logic...
           // This is abbreviated - the full compose logic is very long
