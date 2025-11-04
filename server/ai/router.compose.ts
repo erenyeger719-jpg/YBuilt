@@ -195,6 +195,15 @@ function recordEditsMetric(k: number) {
   saveJSON(FILE_EDITS_METR, m);
 }
 
+// Centralized no-JS decision helper
+function decideNoJs(req: express.Request, perf: any | null = null): boolean {
+  const drained = drainMode(req);
+  const tier = currentExecTier(req);
+  const caps = execCapabilitiesForTier(tier);
+  const perfNoJs = shouldStripJS(perf);
+  return drained || !caps.allowJs || perfNoJs;
+}
+
 // Preview helpers
 function makeHtml(spec: any) {
   const t = (k: string, d = "") => spec?.copy?.[k] ?? d;
@@ -737,8 +746,7 @@ export function setupComposeRoutes(router: Router) {
             ? (top as any).args.sections
             : (spec as any)?.layout?.sections || [];
 
-        // We don't have real perf here yet; env-only decision.
-        const noJsDrain = shouldStripJS(null);
+        const noJsDrain = decideNoJs(req, null);
 
         return res.json({
           ok: true,
@@ -769,9 +777,7 @@ export function setupComposeRoutes(router: Router) {
 
       recordTTU(Date.now() - t0);
 
-      const execTier = currentExecTier(req);
-      const caps = execCapabilitiesForTier(execTier);
-      const noJs = !caps.allowJs || shouldStripJS(null);
+      const noJs = decideNoJs(req, null);
 
       return res.json({
         ok: true,
@@ -791,17 +797,13 @@ export function setupComposeRoutes(router: Router) {
 
   // ---------- /instant (zero-LLM compose) ----------
   router.post("/instant", cacheMW("instant"), async (req, res) => {
-    const drained = drainMode(req);
-    const execTier = currentExecTier(req);
-    const caps = execCapabilitiesForTier(execTier);
-
     try {
       const { prompt = "", sessionId = "anon", breadth = "" } = (req.body ||
         {}) as any;
 
       // Strict-proof gate
       if (isProofStrict(req) && hasRiskyClaims(prompt)) {
-        const noJs = drained || !caps.allowJs || shouldStripJS(null);
+        const noJs = decideNoJs(req, null);
         return res.json({
           ok: true,
           source: "instant",
@@ -843,8 +845,7 @@ export function setupComposeRoutes(router: Router) {
                 "X-SUP-Reasons",
                 (decision.reasons || []).join(",")
               );
-              const noJsBlock =
-                drained || !caps.allowJs || shouldStripJS(null);
+              const noJsBlock = decideNoJs(req, null);
               return res.json({
                 ok: true,
                 source: "instant",
@@ -863,9 +864,7 @@ export function setupComposeRoutes(router: Router) {
           const origPageId = `pg_${String(sticky.specId).replace(/^spec_?/, "")}`;
           const newPageId = `pg_${nanoid(6)}`;
 
-          // No concrete perf for sticky copies yet; env-only decision for now.
-          const noJs =
-            drained || !caps.allowJs || shouldStripJS(null);
+          const noJs = decideNoJs(req, null);
 
           try {
             const src = path.resolve(PREVIEW_DIR, `${origPageId}.html`);
@@ -958,7 +957,7 @@ export function setupComposeRoutes(router: Router) {
       // Continue with instant logic...
       // This is abbreviated - full instant logic is very long
 
-      const noJs = drained || !caps.allowJs || shouldStripJS(null);
+      const noJs = decideNoJs(req, null);
 
       return res.json({
         ok: true,
@@ -984,8 +983,7 @@ export function setupComposeRoutes(router: Router) {
           "utf8"
         );
 
-        const noJs =
-          drained || !caps.allowJs || shouldStripJS(null);
+        const noJs = decideNoJs(req, null);
 
         return res.json({
           ok: true,
@@ -996,8 +994,7 @@ export function setupComposeRoutes(router: Router) {
           noJs,
         });
       } catch {
-        const noJs =
-          drained || !caps.allowJs || shouldStripJS(null);
+        const noJs = decideNoJs(req, null);
         return res.json({
           ok: true,
           source: "instant",
