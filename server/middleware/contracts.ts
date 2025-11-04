@@ -68,7 +68,7 @@ export function contractsHardStop() {
           return originalJson(body);
         }
 
-        // Helper to pull a pageId out of common fields
+        // Helper to pull a pageId out of common fields or paths
         const pullId = (s: string | null | undefined) => {
           if (!s) return null;
           const m = String(s).match(/(?:^|\/)(pg_[A-Za-z0-9_-]+)/);
@@ -76,17 +76,43 @@ export function contractsHardStop() {
         };
 
         // 1) Derive proof + pageId
-        let proof: any = body.proof || null;
+
+        // First try explicit proof field
+        let proof: any = (body as any).proof || null;
+
+        // If no explicit proof, but the *body itself* looks like a proof
+        // (has CLS/LCP/a11y-ish fields), treat the body as the proof.
+        if (
+          !proof &&
+          body &&
+          typeof body === "object" &&
+          !Array.isArray(body)
+        ) {
+          const maybeProofLike =
+            "cls_est" in body ||
+            "cls" in body ||
+            "lcp_est_ms" in body ||
+            "lcp_ms" in body ||
+            "lcp" in body ||
+            "a11y" in body ||
+            "accessible" in body;
+
+          if (maybeProofLike) {
+            proof = body;
+          }
+        }
+
+        // Derive pageId from common places
         let pid: string | null =
           (body?.result && body.result.pageId) ||
-          body?.pageId ||
-          (proof && proof.pageId) ||
+          (body as any)?.pageId ||
+          (proof && (proof as any).pageId) ||
           null;
 
         if (!pid) pid = pullId(body?.result?.path);
         if (!pid) pid = pullId(body?.result?.url);
-        if (!pid) pid = pullId(body?.path);
-        if (!pid) pid = pullId(body?.url);
+        if (!pid) pid = pullId((body as any)?.path);
+        if (!pid) pid = pullId((body as any)?.url);
 
         // If we weren't given a proof object, try to load one from disk when we have a pageId
         if (!proof && pid) {
@@ -98,8 +124,8 @@ export function contractsHardStop() {
           return originalJson(body);
         }
 
-        if (!pid && proof.pageId) {
-          pid = String(proof.pageId);
+        if (!pid && (proof as any).pageId) {
+          pid = String((proof as any).pageId);
         }
 
         // 2) Read metrics from proof (tolerant to key naming)
