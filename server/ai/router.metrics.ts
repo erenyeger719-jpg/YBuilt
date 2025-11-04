@@ -45,6 +45,7 @@ import {
   summarizeSupAudit,
   type SupAuditRow,
 } from "../metrics/sup.summary.ts";
+import { GUARDRAILS } from "../config/guardrails.ts";
 
 const pathResolve = (...p: string[]) => path.resolve(...p);
 
@@ -372,20 +373,27 @@ export function setupMetricsRoutes(router: Router) {
       bullets.push(
         a11y ? "A11y: ✓ passes checks" : "A11y: ✗ issues remain",
       );
+
+      const clsBudget = GUARDRAILS.perf.clsGoodMax;
+      const lcpBudget = GUARDRAILS.perf.lcpGoodMs;
+
       if (cls != null)
         bullets.push(
           `CLS: ${cls.toFixed(3)} ${
-            cls <= 0.1
+            cls <= clsBudget
               ? "✓"
-              : "⚠︎ >0.10 → reserve heights, lock ratios"
+              : `⚠︎ >${clsBudget.toFixed(
+                  2,
+                )} → reserve heights, lock ratios`
           }`,
         );
+
       if (lcp != null)
         bullets.push(
           `LCP: ${Math.round(lcp)}ms ${
-            lcp <= 2500
+            lcp <= lcpBudget
               ? "✓"
-              : "⚠︎ >2500ms → Zero-JS or image size cut"
+              : `⚠︎ >${lcpBudget}ms → Zero-JS or image size cut`
           }`,
         );
 
@@ -393,9 +401,9 @@ export function setupMetricsRoutes(router: Router) {
       const next: string[] = [];
       if (!proof_ok) next.push("Attach receipts to risky claims (Proof Passport).");
       if (!a11y) next.push("Fix contrast/labels; re-run guard (A11y).");
-      if (cls != null && cls > 0.1)
+      if (cls != null && cls > clsBudget)
         next.push("Reserve image/video height; avoid lazy layout shifts.");
-      if (lcp != null && lcp > 2500)
+      if (lcp != null && lcp > lcpBudget)
         next.push("Swap heavy widget → static HTML; defer non-critical JS.");
 
       // Status line
@@ -584,7 +592,7 @@ export function setupMetricsRoutes(router: Router) {
       res.setHeader("content-type", "text/html; charset=utf-8");
       return res.status(200).send(fs.readFileSync(filePath, "utf8"));
     } catch {
-      return res.status(500).send("preview_failed");
+      return res.status(500).json({ ok: false, error: "preview_failed" });
     }
   });
 
