@@ -1,6 +1,7 @@
 // tests/design.search.wide.spec.ts
 import { describe, it, expect } from "vitest";
-import wideTokenSearch from "../server/design/search.wide";
+import { wideTokenSearch } from "../server/design/search.wide.ts";
+import { searchBestTokensCached } from "../server/design/search.memo.ts";
 
 describe("design/search.wide – wideTokenSearch", () => {
   it("returns a structured result and never throws", () => {
@@ -63,5 +64,19 @@ describe("design/search.wide – wideTokenSearch", () => {
 
     // normalizeTone should make these equivalent
     expect(lower.picked.tone).toBe(mixedCase.picked.tone);
+  });
+
+  it("searchBestTokensCached is stable for the same (goal, industry, dna)", async () => {
+    const args = {
+      goal: "waitlist",
+      industry: "saas",
+      dna: { brand: { tone: "minimal" } },
+    };
+
+    const first = await searchBestTokensCached(args);
+    const second = await searchBestTokensCached(args);
+
+    expect(first).toBeTruthy();
+    expect(second).toEqual(first);
   });
 });

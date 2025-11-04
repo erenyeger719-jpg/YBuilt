@@ -804,6 +804,19 @@ export function setupComposeRoutes(router: Router) {
         });
       }
 
+      // Design search warmup / cache: mutate tokens → score → cache by (goal, industry, DNA)
+      try {
+        const dna = suggestFromDNA(String(sessionId)) || {};
+
+        await (searchBestTokens as any)({
+          goal: String(intent.goal || ""),
+          industry: String(intent.industry || ""),
+          dna,
+        });
+      } catch {
+        // Design search must never break /one; warm cache is best-effort only
+      }
+
       let copy = (fit as any).copy || cheapCopy(prompt, (fit as any).intent);
       (spec as any).audience = inferAudience({
         summary: prompt,
@@ -1006,9 +1019,10 @@ export function setupComposeRoutes(router: Router) {
                 copy: (specCached as any)?.copy || {},
                 proof: {},
                 perf: null,
-                ux: uxScore != null
-                  ? { score: uxScore, issues: uxIssues }
-                  : null,
+                ux:
+                  uxScore != null
+                    ? { score: uxScore, issues: uxIssues }
+                    : null,
                 a11yPass: null,
               });
 
