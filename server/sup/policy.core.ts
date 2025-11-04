@@ -451,7 +451,7 @@ export function supGuard() {
       return next();
     }
 
-    // ------- Quota bucket (IP|session|api-key)
+    // ------- Quota bucket (IP|session|api-key|workspace)
     const k = keyFrom(req);
     const now = Date.now();
     const rec = ledger.get(k) || { hits: 0, windowStart: now, score: 0 };
@@ -495,175 +495,189 @@ export function supGuard() {
       return res.status(429).json({ ok: false, error: "rate_limited" });
     }
 
-    // ------- Compute risk + decision
-    const body: any = req.body || {};
-    const prompt = String(body.prompt || body.user || "");
-    const copy =
-      body && body.copy && typeof body.copy === "object" ? body.copy : {};
+    // ------- Compute risk + decision + audit (hardened)
+    try {
+      const body: any = req.body || {};
+      const prompt = String(body.prompt || body.user || "");
+      const copy =
+        body && body.copy && typeof body.copy === "object" ? body.copy : {};
 
-    // Accept optional UX/perf/a11y from the request
-    const perf =
-      body && typeof body.perf === "object"
-        ? {
-            cls_est:
-              typeof body.perf.cls_est === "number"
-                ? body.perf.cls_est
-                : null,
-            lcp_est_ms:
-              typeof body.perf.lcp_est_ms === "number"
-                ? body.perf.lcp_est_ms
-                : null,
+      // Accept optional UX/perf/a11y from the request
+      const perf =
+        body && typeof body.perf === "object"
+          ? {
+              cls_est:
+                typeof body.perf.cls_est === "number"
+                  ? body.perf.cls_est
+                  : null,
+              lcp_est_ms:
+                typeof body.perf.lcp_est_ms === "number"
+                  ? body.perf.lcp_est_ms
+                  : null,
+            }
+          : null;
+
+      const ux =
+        body && typeof body.ux === "object"
+          ? {
+              score:
+                typeof body.ux.score === "number" ? body.ux.score : null,
+              issues: Array.isArray(body.ux.issues)
+                ? body.ux.issues.slice(0, 20)
+                : [],
+            }
+          : null;
+
+      const a11yPass =
+        typeof body.a11yPass === "boolean" ? body.a11yPass : null;
+
+      const risk = computeRiskVector({
+        prompt,
+        copy,
+        proof: {},
+        perf,
+        ux,
+        a11yPass,
+      });
+
+      // --- quick heuristics that raise score ---
+      const ua = String(req.headers["user-agent"] || "");
+      const headlessHit =
+        /(headless|puppeteer|playwright|phantomjs|selenium)/i.test(ua);
+      if (headlessHit) rec.score += 0.5;
+
+      // micro-burst inside current window
+      if (rec.hits > Math.min(QUOTA.MAX_BURST * 0.5, 30)) rec.score += 0.5;
+
+      // --- Honey + signature matches (Abuse Mesh v0.5) ---
+      const matchText = `${prompt} ${Object.values(copy)
+        .map((v) => String(v ?? ""))
+        .join(" ")}`;
+      const sigHits = hitSignatures(matchText);
+      if (sigHits.length) {
+        risk.abuse_signals.sketchy = true;
+        for (const r of sigHits) {
+          if (!risk.abuse_signals.reasons.includes(r)) {
+            risk.abuse_signals.reasons.push(r); // e.g. "honey:..." or "sig:..."
           }
-        : null;
+        }
+        // tiny score bump to ensure strict/shadow kicks in consistently
+        const rec2 =
+          ledger.get(k) || { hits: 0, windowStart: Date.now(), score: 0 };
+        rec2.score += 0.5;
+        ledger.set(k, rec2);
+        rec.score = rec2.score; // keep local ref in sync
+      }
 
-    const ux =
-      body && typeof body.ux === "object"
-        ? {
-            score:
-              typeof body.ux.score === "number" ? body.ux.score : null,
-            issues: Array.isArray(body.ux.issues)
-              ? body.ux.issues.slice(0, 20)
-              : [],
-          }
-        : null;
-
-    const a11yPass =
-      typeof body.a11yPass === "boolean" ? body.a11yPass : null;
-
-    const risk = computeRiskVector({
-      prompt,
-      copy,
-      proof: {},
-      perf,
-      ux,
-      a11yPass,
-    });
-
-    // --- quick heuristics that raise score ---
-    const ua = String(req.headers["user-agent"] || "");
-    const headlessHit =
-      /(headless|puppeteer|playwright|phantomjs|selenium)/i.test(ua);
-    if (headlessHit) rec.score += 0.5;
-
-    // micro-burst inside current window
-    if (rec.hits > Math.min(QUOTA.MAX_BURST * 0.5, 30)) rec.score += 0.5;
-
-    // --- Honey + signature matches (Abuse Mesh v0.5) ---
-    const matchText = `${prompt} ${Object.values(copy)
-      .map((v) => String(v ?? ""))
-      .join(" ")}`;
-    const sigHits = hitSignatures(matchText);
-    if (sigHits.length) {
-      risk.abuse_signals.sketchy = true;
-      for (const r of sigHits) {
-        if (!risk.abuse_signals.reasons.includes(r)) {
-          risk.abuse_signals.reasons.push(r); // e.g. "honey:..." or "sig:..."
+      // fold into risk BEFORE decision so it goes to strict
+      const extraReasons: string[] = [];
+      if (rec.score >= 1) extraReasons.push("abuse:velocity");
+      if (headlessHit) extraReasons.push("abuse:ua_entropy");
+      if (extraReasons.length) {
+        risk.abuse_signals.sketchy = true;
+        for (const r of extraReasons) {
+          if (!risk.abuse_signals.reasons.includes(r))
+            risk.abuse_signals.reasons.push(r);
         }
       }
-      // tiny score bump to ensure strict/shadow kicks in consistently
-      const rec2 =
-        ledger.get(k) || { hits: 0, windowStart: Date.now(), score: 0 };
-      rec2.score += 0.5;
-      ledger.set(k, rec2);
-      rec.score = rec2.score; // keep local ref in sync
-    }
 
-    // fold into risk BEFORE decision so it goes to strict
-    const extraReasons: string[] = [];
-    if (rec.score >= 1) extraReasons.push("abuse:velocity");
-    if (headlessHit) extraReasons.push("abuse:ua_entropy");
-    if (extraReasons.length) {
-      risk.abuse_signals.sketchy = true;
-      for (const r of extraReasons) {
-        if (!risk.abuse_signals.reasons.includes(r))
-          risk.abuse_signals.reasons.push(r);
+      const decision = supDecide((req.path as any) || "default", risk);
+
+      res.setHeader("X-SUP-Mode", decision.mode);
+      res.setHeader("X-SUP-Reasons", decision.reasons.join(","));
+      // Echo perf/UX metrics for observability
+      if (risk.device_perf.cls_est != null)
+        res.setHeader("X-Perf-CLS", String(risk.device_perf.cls_est));
+      if (risk.device_perf.lcp_est_ms != null)
+        res.setHeader("X-Perf-LCP", String(risk.device_perf.lcp_est_ms));
+      if (typeof (risk as any).ux?.score === "number")
+        res.setHeader("X-UX-LQR", String((risk as any).ux.score));
+
+      // ---- Proof header (attestation)
+      const pageId =
+        String(
+          (req.headers["x-page-id"] as string) ||
+            (req.body?.pageId as string) ||
+            ""
+        ) || "anon";
+      const proofSig = signProof({
+        pageId,
+        policy_version: POLICY_VERSION,
+        risk,
+      });
+      res.setHeader("X-SUP-Proof-Sig", proofSig);
+
+      if (decision.mode === "block") {
+        return res
+          .status(403)
+          .json({ ok: false, error: "sup_block", reasons: decision.reasons });
       }
-    }
+      if (decision.mode === "strict") {
+        // downstream can degrade behavior (retrieval-only, neutral tone, no-JS)
+        (req.headers as any)["x-drain"] = "1";
+        res.setHeader("X-Drain", "1");
+        const degrade = pickDegrade(decision.reasons);
+        if (degrade) res.setHeader("X-Degrade", degrade);
+        // If strict due to abuse, advertise a POW challenge (no UI dependency)
+        if (decision.reasons.some((r) => r.startsWith("abuse:"))) {
+          res.setHeader("X-Challenge", "pow-v0");
+        }
+        (res.locals as any).sup = {
+          mode: "strict",
+          reasons: decision.reasons,
+          degrade,
+        };
+      }
 
-    const decision = supDecide((req.path as any) || "default", risk);
+      // ---- Tamper-evident audit trail (JSONL)
+      const started = Date.now();
+      const reqHash = contentHash(
+        String((req.body?.prompt as string) || "") +
+          JSON.stringify((req.body?.copy as any) || {})
+      );
 
-    res.setHeader("X-SUP-Mode", decision.mode);
-    res.setHeader("X-SUP-Reasons", decision.reasons.join(","));
-    // Echo perf/UX metrics for observability
-    if (risk.device_perf.cls_est != null)
-      res.setHeader("X-Perf-CLS", String(risk.device_perf.cls_est));
-    if (risk.device_perf.lcp_est_ms != null)
-      res.setHeader("X-Perf-LCP", String(risk.device_perf.lcp_est_ms));
-    if (typeof (risk as any).ux?.score === "number")
-      res.setHeader("X-UX-LQR", String((risk as any).ux.score));
-
-    // ---- Proof header (attestation)
-    const pageId =
-      String(
-        (req.headers["x-page-id"] as string) ||
-          (req.body?.pageId as string) ||
-          ""
-      ) || "anon";
-    const proofSig = signProof({
-      pageId,
-      policy_version: POLICY_VERSION,
-      risk,
-    });
-    res.setHeader("X-SUP-Proof-Sig", proofSig);
-
-    if (decision.mode === "block") {
-      return res
-        .status(403)
-        .json({ ok: false, error: "sup_block", reasons: decision.reasons });
-    }
-    if (decision.mode === "strict") {
-      // downstream can degrade behavior (retrieval-only, neutral tone, no-JS)
+      res.on("finish", () => {
+        try {
+          const outHash = String(res.getHeader("X-Content-Hash") || "");
+          const row = {
+            ts: new Date().toISOString(),
+            endpoint: req.path,
+            pageId,
+            policy_version: POLICY_VERSION,
+            mode: decision.mode,
+            reasons: decision.reasons,
+            status: res.statusCode,
+            ms: Date.now() - started,
+            req_hash: reqHash,
+            res_hash: outHash || undefined,
+            workspace_id: workspaceIdFromReq(req),
+            // risk snapshot
+            perf: risk.device_perf,
+            ux_lqr: (risk as any).ux?.score ?? null,
+          };
+          fs.mkdirSync(".logs/sup", { recursive: true });
+          fs.appendFile(
+            ".logs/sup/audit.jsonl",
+            JSON.stringify(row) + "\n",
+            () => {},
+          );
+        } catch {
+          /* no-op */
+        }
+      });
+    } catch {
+      // Fail-closed: strict + drain + shadow, but no crash
+      res.setHeader("X-SUP-Mode", "strict");
+      res.setHeader("X-SUP-Reasons", "sup_internal_error");
       (req.headers as any)["x-drain"] = "1";
       res.setHeader("X-Drain", "1");
-      const degrade = pickDegrade(decision.reasons);
-      if (degrade) res.setHeader("X-Degrade", degrade);
-      // If strict due to abuse, advertise a POW challenge (no UI dependency)
-      if (decision.reasons.some((r) => r.startsWith("abuse:"))) {
-        res.setHeader("X-Challenge", "pow-v0");
-      }
+      res.setHeader("X-Degrade", "shadow");
       (res.locals as any).sup = {
         mode: "strict",
-        reasons: decision.reasons,
-        degrade,
+        reasons: ["sup_internal_error"],
+        degrade: "shadow",
       };
     }
-
-    // ---- Tamper-evident audit trail (JSONL)
-    const started = Date.now();
-    const reqHash = contentHash(
-      String((req.body?.prompt as string) || "") +
-        JSON.stringify((req.body?.copy as any) || {})
-    );
-
-    res.on("finish", () => {
-      try {
-        const outHash = String(res.getHeader("X-Content-Hash") || "");
-        const row = {
-          ts: new Date().toISOString(),
-          endpoint: req.path,
-          pageId,
-          policy_version: POLICY_VERSION,
-          mode: decision.mode,
-          reasons: decision.reasons,
-          status: res.statusCode,
-          ms: Date.now() - started,
-          req_hash: reqHash,
-          res_hash: outHash || undefined,
-          workspace_id: workspaceIdFromReq(req),
-          // risk snapshot
-          perf: risk.device_perf,
-          ux_lqr: (risk as any).ux?.score ?? null,
-        };
-        fs.mkdirSync(".logs/sup", { recursive: true });
-        fs.appendFile(
-          ".logs/sup/audit.jsonl",
-          JSON.stringify(row) + "\n",
-          () => {},
-        );
-      } catch {
-        /* no-op */
-      }
-    });
 
     return next();
   };
