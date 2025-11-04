@@ -163,6 +163,35 @@ function pickDegrade(reasons: string[]) {
   return Array.from(s).join(",");
 }
 
+function pickExecTier(
+  reasons: string[],
+  score: number
+): "safe-html" | "light-js" | "full" {
+  // Hard lock: serious abuse or PII → safest tier
+  if (
+    reasons.some((r) => r.startsWith("abuse:")) ||
+    reasons.includes("pii_present")
+  ) {
+    return "safe-html";
+  }
+
+  // Medium risk: claims, bad perf/UX, or elevated score → light JS
+  if (
+    reasons.includes("unproven_claims") ||
+    reasons.includes("low_evidence_coverage") ||
+    reasons.includes("prompt_risk") ||
+    reasons.includes("high_cls") ||
+    reasons.includes("slow_lcp") ||
+    reasons.includes("lqr_low") ||
+    score >= 1
+  ) {
+    return "light-js";
+  }
+
+  // Everything else is fine
+  return "full";
+}
+
 export function computeRiskVector(args: ComputeArgs): RiskVector {
   const promptTxt = String(args.prompt || "");
   const copy = args.copy || {};
@@ -217,7 +246,10 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
     if (CLAIMY_KEYS.has(k)) {
       const p = (proof as any)[k];
       const ok = p && p.status === "evidenced";
-      if (!ok && (c.superlative || c.percent || c.multiplier || c.comparative)) {
+      if (
+        !ok &&
+        (c.superlative || c.percent || c.multiplier || c.comparative)
+      ) {
         missing_proof++;
       }
     }
@@ -274,7 +306,10 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
   const proofObj = args.proof || {};
 
   const claimCounts = countClaimsFromCopy(copyObj);
-  const evidenceCoverage = estimateEvidenceCoverage(proofObj, claimCounts.total);
+  const evidenceCoverage = estimateEvidenceCoverage(
+    proofObj,
+    claimCounts.total
+  );
 
   risk.claim_total = claimCounts.total;
   risk.claim_kinds = {
@@ -326,11 +361,7 @@ export function supDecide(
       ? risk.evidence_coverage
       : null;
 
-  if (
-    coverage !== null &&
-    (risk.claim_total || 0) > 0 &&
-    coverage < 0.5
-  ) {
+  if (coverage !== null && (risk.claim_total || 0) > 0 && coverage < 0.5) {
     reasons.push("low_evidence_coverage");
   }
 
@@ -475,7 +506,11 @@ export function supGuard() {
     rec.hits += 1;
 
     // Light heuristics
-    if (/curl|python-requests|wget/i.test(String(req.headers["user-agent"] || "")))
+    if (
+      /curl|python-requests|wget/i.test(
+        String(req.headers["user-agent"] || "")
+      )
+    )
       rec.score += 0.1;
     if (rec.hits > QUOTA.MAX_BURST) rec.score += 1;
 
@@ -598,6 +633,8 @@ export function supGuard() {
 
       res.setHeader("X-SUP-Mode", decision.mode);
       res.setHeader("X-SUP-Reasons", decision.reasons.join(","));
+      const execTier = pickExecTier(decision.reasons, rec.score);
+      res.setHeader("X-Exec-Tier", execTier);
       // Echo perf/UX metrics for observability
       if (risk.device_perf.cls_est != null)
         res.setHeader("X-Perf-CLS", String(risk.device_perf.cls_est));
@@ -655,6 +692,7 @@ export function supGuard() {
           const degradeHdr = String(res.getHeader("X-Degrade") || "");
           const challengeHdr = String(res.getHeader("X-Challenge") || "");
           const drainHdr = String(res.getHeader("X-Drain") || "");
+          const execTierHdr = String(res.getHeader("X-Exec-Tier") || "");
           const row = {
             ts: new Date().toISOString(),
             endpoint: req.path,
@@ -669,6 +707,7 @@ export function supGuard() {
             drain: drainHdr === "1",
             degrade: degradeHdr || undefined,
             challenge: challengeHdr || undefined,
+            exec_tier: execTierHdr || undefined,
             req_hash: reqHash,
             res_hash: outHash || undefined,
             workspace_id: workspaceIdFromReq(req),
