@@ -297,8 +297,15 @@ function quotaMiddleware(req: express.Request, res: express.Response, next: expr
   }
 }
 
-function contractsGuard(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const base = `${req.protocol}://${req.get("host")}`;
+function contractsGuard(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
+  const p = req.path || "";
+  // Only guard compose-ish routes, never /instant or /one
+  if (p !== "/act" && p !== "/chips/apply") return next();
+
   const originalJson = res.json.bind(res);
 
   (res as any).json = async (body: any) => {
@@ -326,18 +333,24 @@ function contractsGuard(req: express.Request, res: express.Response, next: expre
         return originalJson(body);
       }
 
-      const f = requireFetch();
-      const proofResp = await f(`${base}/api/ai/proof/${encodeURIComponent(pid)}`).catch(() => null);
-      const proofJson = proofResp ? await proofResp.json().catch(() => null) : null;
-      const pObj = (proofJson && (proofJson.proof ?? proofJson)) || null;
+      // Use local proof loader instead of HTTP fetch
+      const pObj = loadProof(pid);
 
-      const clsOk = typeof pObj?.cls_est !== "number" || pObj.cls_est <= 0.1;
-      const lcpOk = typeof pObj?.lcp_est_ms !== "number" || pObj.lcp_est_ms <= 2500;
+      const clsOk =
+        typeof pObj?.cls_est !== "number" || pObj.cls_est <= 0.1;
+      const lcpOk =
+        typeof pObj?.lcp_est_ms !== "number" || pObj.lcp_est_ms <= 2500;
       const a11yOk = pObj?.a11y === true;
       const proofOk = pObj?.proof_ok === true;
 
-      res.setHeader("X-Guard-CLS", pObj?.cls_est != null ? String(pObj.cls_est) : "");
-      res.setHeader("X-Guard-LCP", pObj?.lcp_est_ms != null ? String(pObj.lcp_est_ms) : "");
+      res.setHeader(
+        "X-Guard-CLS",
+        pObj?.cls_est != null ? String(pObj.cls_est) : ""
+      );
+      res.setHeader(
+        "X-Guard-LCP",
+        pObj?.lcp_est_ms != null ? String(pObj.lcp_est_ms) : ""
+      );
       res.setHeader("X-Guard-A11y", String(!!pObj?.a11y));
       res.setHeader("X-Guard-Proof", String(!!pObj?.proof_ok));
 
@@ -611,8 +624,7 @@ function safeJoin(baseDir: string, p: string) {
   return full;
 }
 
-router.get("/proof/:id", (req, res) => {
-  const id = String(req.params.id || "");
+function loadProof(id: string) {
   const file = path.join(PROOF_DIR, `${id}.json`);
   let proof: any;
   try {
@@ -644,6 +656,12 @@ router.get("/proof/:id", (req, res) => {
       fs.writeFileSync(file, JSON.stringify(proof));
     } catch {}
   }
+  return proof;
+}
+
+router.get("/proof/:id", (req, res) => {
+  const id = String(req.params.id || "");
+  const proof = loadProof(id);
   return res.json({ ok: true, proof });
 });
 
