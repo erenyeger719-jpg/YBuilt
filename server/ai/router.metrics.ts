@@ -136,6 +136,35 @@ function loadSupSummary(): ReturnType<typeof summarizeSupAudit> | null {
   }
 }
 
+function deriveSupRates(
+  summary: ReturnType<typeof summarizeSupAudit> | null,
+) {
+  if (!summary || summary.total === 0) {
+    return {
+      allow_pct: null,
+      strict_pct: null,
+      block_pct: null,
+      other_pct: null,
+      pii_pct: null,
+      abuse_pct: null,
+    };
+  }
+
+  const total = summary.total || 1;
+
+  const pct = (n: number) =>
+    Number(((n / total) * 100).toFixed(2));
+
+  return {
+    allow_pct: pct(summary.modes.allow),
+    strict_pct: pct(summary.modes.strict),
+    block_pct: pct(summary.modes.block),
+    other_pct: pct(summary.modes.other),
+    pii_pct: pct(summary.pii_present),
+    abuse_pct: pct(summary.abuse_with_reasons),
+  };
+}
+
 // Setup function to mount all metrics & KPI routes
 export function setupMetricsRoutes(router: Router) {
 
@@ -190,6 +219,48 @@ export function setupMetricsRoutes(router: Router) {
       return res.json(base);
     } catch {
       return res.json(safe());
+    }
+  });
+
+  // ---------- Guardrail (SUP + KPI) snapshot ----------
+  router.get("/metrics/guardrail", (_req, res) => {
+    try {
+      const sup = loadSupSummary();
+      const sup_rates = deriveSupRates(sup);
+
+      let kpi: any = null;
+      try {
+        kpi = kpiSummary();
+      } catch {
+        kpi = null;
+      }
+
+      const kc = loadKpiCounter();
+
+      return res.json({
+        ok: true,
+        sup,
+        sup_rates,
+        kpi,
+        conversions_total: kc.conversions_total,
+        last_convert_ts: kc.last_convert_ts,
+      });
+    } catch {
+      return res.json({
+        ok: true,
+        sup: null,
+        sup_rates: {
+          allow_pct: null,
+          strict_pct: null,
+          block_pct: null,
+          other_pct: null,
+          pii_pct: null,
+          abuse_pct: null,
+        },
+        kpi: null,
+        conversions_total: 0,
+        last_convert_ts: 0,
+      });
     }
   });
 
