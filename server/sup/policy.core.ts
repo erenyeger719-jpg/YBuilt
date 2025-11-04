@@ -400,7 +400,7 @@ export function signProof(payload: {
 // ----- SUP Guard (Quotas + Basic Abuse) -------------------------------------
 
 type LedgerRec = { hits: number; windowStart: number; score: number };
-const ledger = new Map<string, LedgerRec>();
+const ledger = new Map<string, LedgerRec>>();
 let _pruneTick = 0;
 
 const QUOTA = {
@@ -667,6 +667,16 @@ export function supGuard() {
             // risk snapshot
             perf: risk.device_perf,
             ux_lqr: (risk as any).ux?.score ?? null,
+            // new: claims + evidence + pii snapshot
+            claims_total: risk.claim_total ?? null,
+            evidence_coverage:
+              typeof risk.evidence_coverage === "number"
+                ? risk.evidence_coverage
+                : null,
+            pii_present: !!risk.pii?.present,
+            abuse_reasons: Array.isArray(risk.abuse_signals?.reasons)
+              ? risk.abuse_signals.reasons.slice(0, 20)
+              : [],
           };
           fs.mkdirSync(".logs/sup", { recursive: true });
           fs.appendFile(
