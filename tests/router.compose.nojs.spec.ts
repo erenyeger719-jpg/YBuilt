@@ -1,10 +1,20 @@
 // tests/router.compose.nojs.spec.ts
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 
-// Import the *actual* compose router (as used in production)
-import { composeRouter } from "../server/ai/subrouters";
+// Mock server/ai/router.ts so we don't pull in subrouters (and avoid circular router.use issues)
+vi.mock("../server/ai/router.ts", () => {
+  return {
+    LAST_COMPOSE: null,
+    DEV_PREVIEW_DIR: ".cache/dev-previews",
+    PREVIEW_DIR: ".cache/previews",
+    ensureCache: () => {},
+  };
+});
+
+// Now import the compose setup function
+import { setupComposeRoutes } from "../server/ai/router.compose";
 
 describe("ai/router.compose – noJs flag wiring", () => {
   let app: express.Express;
@@ -13,8 +23,12 @@ describe("ai/router.compose – noJs flag wiring", () => {
     app = express();
     app.use(express.json());
 
-    // Mount compose router under /ai, like main router does
-    app.use("/ai", composeRouter);
+    // Create a router just for compose routes
+    const compose = express.Router();
+    setupComposeRoutes(compose);
+
+    // Mount it where the main app would
+    app.use("/ai", compose);
   });
 
   it("includes a boolean noJs flag in the /instant JSON response", async () => {
@@ -26,7 +40,7 @@ describe("ai/router.compose – noJs flag wiring", () => {
       })
       .expect(200);
 
-    // Check that the noJs flag is present and boolean
+    // The route should always include noJs
     expect(res.body).toHaveProperty("noJs");
     expect(typeof res.body.noJs).toBe("boolean");
   });
