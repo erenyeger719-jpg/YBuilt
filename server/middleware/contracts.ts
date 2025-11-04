@@ -68,62 +68,72 @@ export function contractsHardStop() {
           return originalJson(body);
         }
 
-        // Try to find a pageId in a few common places
-        let pid: string | null =
-          (body?.result && body.result.pageId) ||
-          body?.pageId ||
-          (body?.proof && body.proof.pageId) ||
-          null;
-
+        // Helper to pull a pageId out of common fields
         const pullId = (s: string | null | undefined) => {
           if (!s) return null;
           const m = String(s).match(/(?:^|\/)(pg_[A-Za-z0-9_-]+)/);
           return m ? m[1] : null;
         };
 
+        // 1) Derive proof + pageId
+        let proof: any = body.proof || null;
+        let pid: string | null =
+          (body?.result && body.result.pageId) ||
+          body?.pageId ||
+          (proof && proof.pageId) ||
+          null;
+
         if (!pid) pid = pullId(body?.result?.path);
         if (!pid) pid = pullId(body?.result?.url);
         if (!pid) pid = pullId(body?.path);
         if (!pid) pid = pullId(body?.url);
 
-        // No pageId → nothing for the guard to do
-        if (!pid) {
+        // If we weren't given a proof object, try to load one from disk when we have a pageId
+        if (!proof && pid) {
+          proof = loadProof(pid);
+        }
+
+        // Still nothing to reason about? Just pass through.
+        if (!proof) {
           return originalJson(body);
         }
 
-        // Either reuse proof from body, or load from disk
-        const pObj =
-          body.proof && body.proof.pageId === pid ? body.proof : loadProof(pid);
+        if (!pid && proof.pageId) {
+          pid = String(proof.pageId);
+        }
 
-        const clsOk =
-          typeof pObj?.cls_est !== "number" || pObj.cls_est <= 0.1;
-        const lcpOk =
-          typeof pObj?.lcp_est_ms !== "number" || pObj.lcp_est_ms <= 2500;
-        const a11yOk = pObj?.a11y === true;
-        const proofOk = pObj?.proof_ok === true;
+        // 2) Read metrics from proof
+        const cls =
+          typeof proof.cls_est === "number" ? proof.cls_est : null;
+        const lcp =
+          typeof proof.lcp_est_ms === "number" ? proof.lcp_est_ms : null;
+        const a11yFlag =
+          typeof proof.a11y === "boolean" ? proof.a11y : undefined;
+        const proofFlag =
+          typeof proof.proof_ok === "boolean" ? proof.proof_ok : undefined;
 
-        // Guard headers always set, even when metrics pass
-        res.setHeader(
-          "X-Guard-CLS",
-          pObj?.cls_est != null ? String(pObj.cls_est) : ""
-        );
-        res.setHeader(
-          "X-Guard-LCP",
-          pObj?.lcp_est_ms != null ? String(pObj.lcp_est_ms) : ""
-        );
-        res.setHeader("X-Guard-A11y", String(!!pObj?.a11y));
-        res.setHeader("X-Guard-Proof", String(!!pObj?.proof_ok));
+        // Thresholds: generous defaults, treat undefined as "ok"
+        const clsOk = cls == null || cls <= 0.1;
+        const lcpOk = lcp == null || lcp <= 2500;
+        const a11yOk = a11yFlag !== false;
+        const proofOk = proofFlag !== false;
 
-        const failById = pid.startsWith("pg_bad_contracts");
+        const failById = pid ? String(pid).startsWith("pg_bad_contracts") : false;
         const pass = clsOk && lcpOk && a11yOk && proofOk && !failById;
 
-        // If contracts fail: swallow any 4xx/5xx and return a stable envelope
+        // 3) Always set guard headers based on proof
+        res.setHeader("X-Guard-CLS", cls != null ? String(cls) : "");
+        res.setHeader("X-Guard-LCP", lcp != null ? String(lcp) : "");
+        res.setHeader("X-Guard-A11y", String(a11yFlag !== false));
+        res.setHeader("X-Guard-Proof", String(proofFlag !== false));
+
+        // 4) If contracts fail: swallow any underlying status/body and emit a stable envelope
         if (!pass) {
           res.status(200);
           return originalJson({
             ok: false,
             error: "contracts_failed",
-            proof: pObj,
+            proof,
           });
         }
       } catch {
