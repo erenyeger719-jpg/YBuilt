@@ -221,7 +221,19 @@ function writePreview(spec: any) {
   fs.mkdirSync(DEV_PREVIEW_DIR, { recursive: true });
   fs.mkdirSync(PREVIEW_DIR, { recursive: true });
 
-  const html = makeHtml(spec);
+  // Build base HTML
+  let html = makeHtml(spec);
+
+  // Auto rhythm/UX patch: if layout looks cramped, inject fix CSS
+  try {
+    const ux = auditUXFromHtml(html, (spec as any)?.tokens || null);
+    if (!ux.pass && ux.cssFix) {
+      html = injectCssIntoHead(html, ux.cssFix);
+    }
+  } catch {
+    // Never break preview on UX audit errors
+  }
+
   fs.writeFileSync(path.join(DEV_PREVIEW_DIR, `${pageId}.html`), html, "utf8");
   fs.writeFileSync(path.join(PREVIEW_DIR, `${pageId}.html`), html, "utf8");
   fs.writeFileSync(path.join(PREVIEW_DIR, `${specId}.html`), html, "utf8");
@@ -874,14 +886,32 @@ export function setupComposeRoutes(router: Router) {
             // Create proof card
             try {
               fs.mkdirSync(".cache/proof", { recursive: true });
+
+              let uxScore: number | null = null;
+              let uxIssues: string[] = [];
+
+              // Try to read the rendered HTML and audit UX
+              try {
+                const html = fs.readFileSync(
+                  path.resolve(PREVIEW_DIR, `${newPageId}.html`),
+                  "utf8"
+                );
+                const ux = auditUXFromHtml(html, null);
+                uxScore = ux.score;
+                uxIssues = Array.isArray(ux.issues) ? ux.issues : [];
+              } catch {
+                // If preview read/audit fails, we keep UX fields null/empty
+              }
+
               const risk = computeRiskVector({
                 prompt,
                 copy: (specCached as any)?.copy || {},
                 proof: {},
                 perf: null,
-                ux: null,
+                ux: uxScore != null ? { score: uxScore, issues: uxIssues } : null,
                 a11yPass: null,
               });
+
               const card = {
                 pageId: newPageId,
                 url: `/api/ai/previews/${newPageId}`,
@@ -891,17 +921,19 @@ export function setupComposeRoutes(router: Router) {
                 cls_est: null,
                 lcp_est_ms: null,
                 perf_matrix: null,
-                ux_score: null,
-                ux_issues: [],
+                ux_score: uxScore,
+                ux_issues: uxIssues,
                 policy_version: POLICY_VERSION,
                 risk,
                 no_js: noJs,
               };
+
               (card as any).signature = signProof({
                 pageId: card.pageId,
                 policy_version: card.policy_version,
                 risk: card.risk,
               });
+
               fs.writeFileSync(
                 `.cache/proof/${newPageId}.json`,
                 JSON.stringify(card, null, 2)
