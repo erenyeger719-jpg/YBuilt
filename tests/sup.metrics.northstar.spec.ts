@@ -116,8 +116,9 @@ describe("sup/metrics – northstar aggregator", () => {
 
     const summary = summarizeNorthstarMetrics(events);
 
-    // Latencies considered: 100, 300 -> p95 between them -> index 1 -> 300
-    expect(summary.p95LatencyMs).toBe(300);
+    // Latencies considered: 100, 300
+    // p95 index = floor(0.95 * (2 - 1)) = 0 -> 100
+    expect(summary.p95LatencyMs).toBe(100);
 
     // Costs considered: 1, 2 -> avg = 1.5
     expect(summary.avgCostCents).toBeCloseTo(1.5);
