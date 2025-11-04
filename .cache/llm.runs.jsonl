@@ -294,3 +294,7 @@
 {"at":"2025-11-04T17:43:43.279Z","task":"unit-test-shadow","provider":"openai","ms":0,"ok":true,"model_hint":null}
 {"at":"2025-11-04T17:43:43.305Z","task":"unit-test-primary","provider":"granite","ms":1,"ok":true,"model_hint":null}
 {"at":"2025-11-04T17:43:43.305Z","task":"unit-test-header","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-04T18:00:50.901Z","task":"unit-test","provider":"openai","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-04T18:00:50.904Z","task":"unit-test-shadow","provider":"openai","ms":1,"ok":true,"model_hint":null}
+{"at":"2025-11-04T18:00:50.929Z","task":"unit-test-primary","provider":"granite","ms":1,"ok":true,"model_hint":null}
+{"at":"2025-11-04T18:00:50.929Z","task":"unit-test-header","provider":"granite","ms":0,"ok":true,"model_hint":null}
