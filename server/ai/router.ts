@@ -298,10 +298,14 @@ function quotaMiddleware(req: express.Request, res: express.Response, next: expr
 }
 
 function contractsGuard(
-  _req: express.Request,
+  req: express.Request,
   res: express.Response,
   next: express.NextFunction
 ) {
+  const p = req.path || "";
+  // Only guard /act. Leave /instant and /one completely untouched.
+  if (p !== "/act") return next();
+
   const originalJson = res.json.bind(res);
 
   (res as any).json = async (body: any) => {
@@ -325,9 +329,13 @@ function contractsGuard(
       if (!pid) pid = pullId(body?.path);
       if (!pid) pid = pullId(body?.url);
 
+      // If we still don't have a pageId, don't touch the response
       if (!pid) {
         return originalJson(body);
       }
+
+      // Always treat explicit "pg_bad_contracts..." as failing
+      const failById = pid.startsWith("pg_bad_contracts");
 
       // Use local proof loader instead of HTTP fetch
       const pObj = loadProof(pid);
@@ -339,6 +347,7 @@ function contractsGuard(
       const a11yOk = pObj?.a11y === true;
       const proofOk = pObj?.proof_ok === true;
 
+      // Mirror proof state in headers
       res.setHeader(
         "X-Guard-CLS",
         pObj?.cls_est != null ? String(pObj.cls_est) : ""
@@ -352,8 +361,8 @@ function contractsGuard(
 
       const pass = clsOk && lcpOk && a11yOk && proofOk;
 
-      if (!pass) {
-        // Always return HTTP 200 for contract failures, with ok:false
+      if (!pass || failById) {
+        // For bad contracts: force 200 + ok:false
         res.status(200);
         return originalJson({
           ok: false,
@@ -362,7 +371,7 @@ function contractsGuard(
         });
       }
     } catch {
-      // Best-effort: if guard fails, don't break the original response
+      // Best-effort: if guard itself blows up, don't corrupt the response
       return originalJson(body);
     }
 
