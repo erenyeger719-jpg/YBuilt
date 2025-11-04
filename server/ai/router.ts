@@ -34,6 +34,7 @@ import {
 } from "../metrics/outcome.ts";
 import { pickFailureFallback } from "../qa/failure.playbook.ts";
 import piiScrub from "../mw/pii-scrub.ts";
+import { execTierMiddleware } from "../middleware/exec-tier.ts";
 
 // Import shared helpers that will be exported
 import {
@@ -202,23 +203,23 @@ const CACHE_DIR = ".cache";
 function ensureCache() {
   try {
     if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
-  } catch { }
+  } catch {}
 }
 
 // Initialize preview directories
 try {
   fs.mkdirSync(PREVIEW_DIR, { recursive: true });
-} catch { }
+} catch {}
 
 // Nightly tasks (best-effort)
 import { maybeNightlyRetrain } from "../design/outcome.priors.ts";
 import { maybeNightlyMine as maybeVectorMine } from "../media/vector.miner.ts";
 try {
   maybeNightlyRetrain();
-} catch { }
+} catch {}
 try {
   maybeVectorMine();
-} catch { }
+} catch {}
 
 // Client key extraction
 function clientKey(req: express.Request) {
@@ -252,9 +253,9 @@ function quotaMiddleware(
 
     const ip = String(
       (req as any).ip ||
-      req.headers["x-forwarded-for"] ||
-      (req.socket && req.socket.remoteAddress) ||
-      "anon"
+        req.headers["x-forwarded-for"] ||
+        (req.socket && req.socket.remoteAddress) ||
+        "anon"
     );
     const now = Date.now();
     let q = quotaState.get(ip);
@@ -276,7 +277,7 @@ function quotaMiddleware(
         if (q && q._burstTimer) {
           try {
             q._burstTimer.unref?.();
-          } catch { }
+          } catch {}
         }
         if (q) q._burstTimer = undefined;
       }, 120_000);
@@ -312,6 +313,7 @@ function quotaMiddleware(
 
 // Main router setup
 const router = Router();
+router.use(execTierMiddleware);
 
 // ---- Readiness endpoints + gate (dynamic) ----
 router.post("/__ready", (req, res) => {
@@ -546,13 +548,13 @@ router.use("/", metricsRouter);
 // Register self-tests
 try {
   registerSelfTest(router);
-} catch { }
+} catch {}
 
 // ---- Test shims: deterministic, zero-LLM paths ----
 const PROOF_DIR = path.join(".cache", "proof");
 try {
   fs.mkdirSync(PROOF_DIR, { recursive: true });
-} catch { }
+} catch {}
 
 function safeJoin(baseDir: string, p: string) {
   if (!p || p.includes("..") || p.startsWith("/")) return null;
@@ -591,7 +593,7 @@ function loadProof(id: string) {
     };
     try {
       fs.writeFileSync(file, JSON.stringify(proof));
-    } catch { }
+    } catch {}
   }
   return proof;
 }
@@ -650,8 +652,8 @@ router.get("/evidence/search", (req, res) => {
   const hits = !q
     ? []
     : MEMORY.evidence
-      .filter((e) => e.text.toLowerCase().includes(q))
-      .map((e) => ({ id: e.id, score: 1 }));
+        .filter((e) => e.text.toLowerCase().includes(q))
+        .map((e) => ({ id: e.id, score: 1 }));
   return res.json({ ok: true, hits });
 });
 
