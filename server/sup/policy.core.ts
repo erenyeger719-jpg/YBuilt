@@ -400,7 +400,7 @@ export function signProof(payload: {
 // ----- SUP Guard (Quotas + Basic Abuse) -------------------------------------
 
 type LedgerRec = { hits: number; windowStart: number; score: number };
-const ledger = new Map<string, LedgerRec>>();
+const ledger = new Map<string, LedgerRec>();
 let _pruneTick = 0;
 
 const QUOTA = {
