@@ -454,6 +454,9 @@ export function supGuard() {
     // ------- Quota bucket (IP|session|api-key|workspace)
     const k = keyFrom(req);
     const now = Date.now();
+    const workspaceId = workspaceIdFromReq(req);
+    res.setHeader("X-SUP-Workspace", workspaceId || "");
+
     const rec = ledger.get(k) || { hits: 0, windowStart: now, score: 0 };
 
     const elapsed = now - rec.windowStart;
@@ -491,7 +494,13 @@ export function supGuard() {
     res.setHeader("X-SUP-Policy-Version", POLICY_VERSION);
 
     if (rec.hits > QUOTA.MAX_BURST) {
+      // How long until this quota window resets (in seconds)
+      const retryMs = rec.windowStart + QUOTA.WINDOW_MS - now;
+      const retrySec = Math.max(1, Math.ceil(retryMs / 1000));
+
+      res.setHeader("Retry-After", String(retrySec));
       res.setHeader("X-SUP-Mode", "block");
+
       return res.status(429).json({ ok: false, error: "rate_limited" });
     }
 
