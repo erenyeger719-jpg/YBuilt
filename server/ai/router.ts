@@ -387,8 +387,10 @@ router.use((req, res, next) => {
 // Body parser with 1 MB cap
 router.use(express.json({ limit: "1mb" }));
 
-// PII scrub on ingress (safe clone + headers when redaction happens)
-router.use(piiScrub());
+// PII scrub on ingress in test; in non-test, SUP runs first then piiScrub below
+if (process.env.NODE_ENV === "test") {
+  router.use(piiScrub());
+}
 
 // --- Global middlewares FIRST ---
 mountCiteLock(router); // CiteLock once for everything under /api/ai
@@ -407,6 +409,7 @@ router.use((req, res, next) => {
 // Don’t mount heavy guards/routers in test mode
 if (process.env.NODE_ENV !== "test") {
   router.use(supGuard());
+  router.use(piiScrub());
   router.use(applyDegrade());
 }
 
