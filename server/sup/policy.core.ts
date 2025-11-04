@@ -652,6 +652,9 @@ export function supGuard() {
       res.on("finish", () => {
         try {
           const outHash = String(res.getHeader("X-Content-Hash") || "");
+          const degradeHdr = String(res.getHeader("X-Degrade") || "");
+          const challengeHdr = String(res.getHeader("X-Challenge") || "");
+          const drainHdr = String(res.getHeader("X-Drain") || "");
           const row = {
             ts: new Date().toISOString(),
             endpoint: req.path,
@@ -661,13 +664,18 @@ export function supGuard() {
             reasons: decision.reasons,
             status: res.statusCode,
             ms: Date.now() - started,
+            quota_hits: rec.hits,
+            quota_score: rec.score,
+            drain: drainHdr === "1",
+            degrade: degradeHdr || undefined,
+            challenge: challengeHdr || undefined,
             req_hash: reqHash,
             res_hash: outHash || undefined,
             workspace_id: workspaceIdFromReq(req),
             // risk snapshot
             perf: risk.device_perf,
             ux_lqr: (risk as any).ux?.score ?? null,
-            // new: claims + evidence + pii snapshot
+            // claims + evidence + pii snapshot
             claims_total: risk.claim_total ?? null,
             evidence_coverage:
               typeof risk.evidence_coverage === "number"
