@@ -162,6 +162,23 @@ export function currentExecTier(req?: Request): ExecTier {
   return "full";
 }
 
+export type ExecCapabilities = {
+  allowJs: boolean;
+  allowInteractive: boolean;
+};
+
+export function execCapabilitiesForTier(tier: ExecTier): ExecCapabilities {
+  switch (tier) {
+    case "safe-html":
+      return { allowJs: false, allowInteractive: false };
+    case "light-js":
+      return { allowJs: true, allowInteractive: false };
+    case "full":
+    default:
+      return { allowJs: true, allowInteractive: true };
+  }
+}
+
 // Make strict-mode decision from env and (optionally) request headers
 export function isProofStrict(req?: { headers?: any }): boolean {
   // Env always wins

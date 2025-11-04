@@ -68,5 +68,8 @@ describe("ai/router.compose – noJs flag wiring", () => {
     // The route should always include noJs
     expect(res.body).toHaveProperty("noJs");
     expect(typeof res.body.noJs).toBe("boolean");
+
+    // With drainMode=false and execTier='safe-html', noJs should be forced true
+    expect(res.body.noJs).toBe(true);
   });
 });

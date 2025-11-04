@@ -34,6 +34,7 @@ import {
   applyChipLocal,
   auditUXFromHtml,
   injectCssIntoHead,
+  execCapabilitiesForTier,
 } from "./router.helpers.ts";
 
 // Import dependencies
@@ -757,7 +758,8 @@ export function setupComposeRoutes(router: Router) {
       recordTTU(Date.now() - t0);
 
       const execTier = currentExecTier(req);
-      const noJs = execTier === "safe-html" || shouldStripJS(null);
+      const caps = execCapabilitiesForTier(execTier);
+      const noJs = !caps.allowJs || shouldStripJS(null);
 
       return res.json({
         ok: true,
@@ -779,6 +781,7 @@ export function setupComposeRoutes(router: Router) {
   router.post("/instant", cacheMW("instant"), async (req, res) => {
     const drained = drainMode(req);
     const execTier = currentExecTier(req);
+    const caps = execCapabilitiesForTier(execTier);
 
     try {
       const { prompt = "", sessionId = "anon", breadth = "" } = (req.body ||
@@ -786,7 +789,7 @@ export function setupComposeRoutes(router: Router) {
 
       // Strict-proof gate
       if (isProofStrict(req) && hasRiskyClaims(prompt)) {
-        const noJs = drained || execTier === "safe-html" || shouldStripJS(null);
+        const noJs = drained || !caps.allowJs || shouldStripJS(null);
         return res.json({
           ok: true,
           source: "instant",
@@ -829,7 +832,7 @@ export function setupComposeRoutes(router: Router) {
                 (decision.reasons || []).join(",")
               );
               const noJsBlock =
-                drained || execTier === "safe-html" || shouldStripJS(null);
+                drained || !caps.allowJs || shouldStripJS(null);
               return res.json({
                 ok: true,
                 source: "instant",
@@ -850,7 +853,7 @@ export function setupComposeRoutes(router: Router) {
 
           // No concrete perf for sticky copies yet; env-only decision for now.
           const noJs =
-            drained || execTier === "safe-html" || shouldStripJS(null);
+            drained || !caps.allowJs || shouldStripJS(null);
 
           try {
             const src = path.resolve(PREVIEW_DIR, `${origPageId}.html`);
@@ -923,7 +926,7 @@ export function setupComposeRoutes(router: Router) {
       // Continue with instant logic...
       // This is abbreviated - full instant logic is very long
 
-      const noJs = drained || execTier === "safe-html" || shouldStripJS(null);
+      const noJs = drained || !caps.allowJs || shouldStripJS(null);
 
       return res.json({
         ok: true,
@@ -950,7 +953,7 @@ export function setupComposeRoutes(router: Router) {
         );
 
         const noJs =
-          drained || execTier === "safe-html" || shouldStripJS(null);
+          drained || !caps.allowJs || shouldStripJS(null);
 
         return res.json({
           ok: true,
@@ -962,7 +965,7 @@ export function setupComposeRoutes(router: Router) {
         });
       } catch {
         const noJs =
-          drained || execTier === "safe-html" || shouldStripJS(null);
+          drained || !caps.allowJs || shouldStripJS(null);
         return res.json({
           ok: true,
           source: "instant",
