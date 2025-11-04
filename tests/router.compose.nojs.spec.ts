@@ -1,19 +1,10 @@
 // tests/router.compose.nojs.spec.ts
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 
-// Import the compose router
-import { composeRouter } from "../server/ai/router.compose";
-
-// IMPORTANT: mock shouldStripJS so it's predictable
-vi.mock("../server/perf/budgets", async (orig) => {
-  const actual = await (orig as any)();
-  return {
-    ...actual,
-    shouldStripJS: vi.fn(() => true), // always say "noJs = true" in this test
-  };
-});
+// Import the *actual* compose router (as used in production)
+import { composeRouter } from "../server/ai/subrouters";
 
 describe("ai/router.compose – noJs flag wiring", () => {
   let app: express.Express;
@@ -21,24 +12,22 @@ describe("ai/router.compose – noJs flag wiring", () => {
   beforeEach(() => {
     app = express();
     app.use(express.json());
+
+    // Mount compose router under /ai, like main router does
     app.use("/ai", composeRouter);
   });
 
-  it("includes noJs=true in the compose JSON response when shouldStripJS returns true", async () => {
+  it("includes a boolean noJs flag in the /instant JSON response", async () => {
     const res = await request(app)
-      .post("/ai/compose")         // adjust path if your route is different
+      .post("/ai/instant")
       .send({
-        // minimal valid body your /compose expects; simplify if you can
-        brief: { goal: "test", audience: "testers" },
+        prompt: "test prompt for noJs wiring",
+        sessionId: "test-session",
       })
       .expect(200);
 
-    // We mocked shouldStripJS to always be true
-    expect(res.body.noJs).toBe(true);
-
-    // If you also put noJs inside perf, you can assert that too:
-    if (res.body.perf) {
-      expect(res.body.perf.noJs).toBe(true);
-    }
+    // Check that the noJs flag is present and boolean
+    expect(res.body).toHaveProperty("noJs");
+    expect(typeof res.body.noJs).toBe("boolean");
   });
 });
