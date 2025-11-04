@@ -76,7 +76,11 @@ import { motionVars } from "../design/motion.ts";
 import { sanitizeFacts } from "../intent/citelock.ts";
 import { searchBestTokensCached as searchBestTokens } from "../design/search.memo.ts";
 import { recordShip, markConversion, lastShipFor } from "../metrics/outcome.ts";
-import { pickVariant, recordSectionOutcome, seedVariants } from "../sections/bandits.ts";
+import {
+  pickVariant,
+  recordSectionOutcome,
+  seedVariants,
+} from "../sections/bandits.ts";
 import { buildProof } from "../intent/citelock.pro.ts";
 import {
   checkPerfBudget,
@@ -100,8 +104,11 @@ import { editSearch } from "../qa/edit.search.ts";
 import { wideTokenSearch } from "../design/search.wide.ts";
 import { runSnapshots } from "../qa/snapshots.ts";
 import { runDeviceGate } from "../qa/device.gate.ts";
-import { recordPackSeenForPage, recordPackWinForPage } from "../sections/packs.ts";
-import { listPacksRanked } from "../sections/packs.ts";
+import {
+  recordPackSeenForPage,
+  recordPackWinForPage,
+  listPacksRanked,
+} from "../sections/packs.ts";
 import { localizeCopy } from "../intent/phrases.ts";
 import { normalizeLocale } from "../intent/locales.ts";
 import { contractsHardStop } from "../middleware/contracts.ts";
@@ -195,13 +202,54 @@ function recordEditsMetric(k: number) {
   saveJSON(FILE_EDITS_METR, m);
 }
 
+// No-JS / JS-allowlist config
+const NO_JS_DEFAULT_FLAG =
+  String(process.env.NO_JS_DEFAULT || "").trim() === "1";
+
+const JS_ALLOWLIST: string[] = String(process.env.JS_ALLOWLIST || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function isRouteJsAllowed(req: express.Request): boolean {
+  const path = String(
+    (req as any).path || (req as any).originalUrl || ""
+  ).trim();
+  if (!path) return false;
+  if (!JS_ALLOWLIST.length) return false;
+  return JS_ALLOWLIST.some(
+    (prefix) => path === prefix || path.startsWith(prefix)
+  );
+}
+
 // Centralized no-JS decision helper
 function decideNoJs(req: express.Request, perf: any | null = null): boolean {
   const drained = drainMode(req);
   const tier = currentExecTier(req);
   const caps = execCapabilitiesForTier(tier);
   const perfNoJs = shouldStripJS(perf);
-  return drained || !caps.allowJs || perfNoJs;
+
+  // Hard safety rails first: drain mode always forces no-JS
+  if (drained) return true;
+
+  // If env says "no-JS by default", allow JS only on whitelisted routes
+  if (NO_JS_DEFAULT_FLAG) {
+    const whitelisted = isRouteJsAllowed(req);
+
+    // To actually allow JS:
+    // - route must be whitelisted
+    // - tier must allow JS
+    // - perf budget must not scream "strip JS"
+    if (whitelisted && caps.allowJs && !perfNoJs) {
+      return false;
+    }
+
+    // Otherwise: default to no-JS
+    return true;
+  }
+
+  // Normal mode: let perf+caps decide
+  return !caps.allowJs || perfNoJs;
 }
 
 // Preview helpers
@@ -287,7 +335,11 @@ export function setupComposeRoutes(router: Router) {
   // ---------- /act ----------
   router.post("/act", express.json(), contractsHardStop(), async (req, res) => {
     try {
-      const { sessionId = "anon", spec = {}, action = {} } = (req.body || {}) as any;
+      const {
+        sessionId = "anon",
+        spec = {},
+        action = {},
+      } = (req.body || {}) as any;
 
       const drained = drainMode(req);
 
@@ -318,19 +370,24 @@ export function setupComposeRoutes(router: Router) {
           )
             .toLowerCase()
             .trim();
-          const argAud = String(action.args?.audience || "").toLowerCase().trim();
+          const argAud = String(
+            action.args?.audience || ""
+          )
+            .toLowerCase()
+            .trim();
           const specAud = String(spec?.audience || "").toLowerCase().trim();
           const specIntentAud = String(
             spec?.intent?.audience || ""
-          ).toLowerCase().trim();
+          )
+            .toLowerCase()
+            .trim();
 
           const safeForInfer = {
             ...spec,
             summary: String(
               (spec as any)?.summary || (spec as any)?.lastSpec?.summary || ""
             ),
-            copy:
-              (spec as any)?.copy || (action as any)?.args?.copy || {},
+            copy: (spec as any)?.copy || (action as any)?.args?.copy || {},
           };
 
           const audienceKey =
@@ -399,11 +456,17 @@ export function setupComposeRoutes(router: Router) {
                 action.args = { ...(action.args || {}), sections: pick.sections };
             } else if (wantTags.length && Array.isArray(ranked) && ranked.length) {
               const pick = ranked.find((p: any) =>
-                (p.tags || []).some((t) => wantTags.includes(String(t).toLowerCase()))
+                (p.tags || []).some((t) =>
+                  wantTags.includes(String(t).toLowerCase())
+                )
               );
               if (pick?.sections?.length)
                 action.args = { ...(action.args || {}), sections: pick.sections };
-            } else if (!sectionsIn.length && Array.isArray(ranked) && ranked.length) {
+            } else if (
+              !sectionsIn.length &&
+              Array.isArray(ranked) &&
+              ranked.length
+            ) {
               const best = ranked[0];
               action.args = { ...(action.args || {}), sections: best.sections };
             }
@@ -422,7 +485,8 @@ export function setupComposeRoutes(router: Router) {
                 for (const id of sectionsIn) {
                   const base = String(id).split("@")[0];
                   const siblings = Array.isArray(hints[base]) ? hints[base] : [];
-                  if (siblings.length) seedVariants(base, audienceKey, siblings);
+                  if (siblings.length)
+                    seedVariants(base, audienceKey, siblings);
                 }
               }
             } catch {}
@@ -431,7 +495,9 @@ export function setupComposeRoutes(router: Router) {
           // Pick variants
           const banditSections = testMode
             ? sectionsPersonal.map((id: string) => String(id).split("@")[0])
-            : sectionsPersonal.map((id: string) => pickVariant(id, audienceKey));
+            : sectionsPersonal.map((id: string) =>
+                pickVariant(id, audienceKey)
+              );
 
           const proposed = {
             sections: banditSections,
@@ -496,7 +562,12 @@ export function setupComposeRoutes(router: Router) {
           process.env.NODE_ENV === "test" ||
           String((req.query as any)?.__test ?? "").toLowerCase() === "1";
 
-        if (testMode && action?.kind === "retrieve" && out && typeof out === "object") {
+        if (
+          testMode &&
+          action?.kind === "retrieve" &&
+          out &&
+          typeof out === "object"
+        ) {
           const fromArgs = (action as any)?.args?.audience;
           const fromSpec =
             (spec as any)?.intent?.audience || (spec as any)?.audience;
@@ -507,13 +578,14 @@ export function setupComposeRoutes(router: Router) {
             fromArgs || fromSpec || fromHeader || ""
           ).toLowerCase();
 
-          const incoming: string[] =
-            (Array.isArray((action as any)?.args?.sections) &&
-              (action as any).args.sections.length
+          const incoming: string[] = (
+            Array.isArray((action as any)?.args?.sections) &&
+            (action as any).args.sections.length
               ? (action as any).args.sections
               : Array.isArray((spec as any)?.layout?.sections)
               ? (spec as any).layout.sections
-              : []) as string[];
+              : []
+          ) as string[];
 
           const add =
             persona === "founders"
@@ -534,7 +606,7 @@ export function setupComposeRoutes(router: Router) {
 
       try {
         if ((out as any)?.sup) {
-          res.setHeader("X-SUP-Mode", String(((out as any).sup.mode) || ""));
+          res.setHeader("X-SUP-Mode", String((out as any).sup.mode || ""));
           const reasons = Array.isArray((out as any).sup.reasons)
             ? (out as any).sup.reasons.join(",")
             : "";
@@ -552,8 +624,11 @@ export function setupComposeRoutes(router: Router) {
   router.post("/one", express.json(), async (req, res) => {
     try {
       const t0 = Date.now();
-      const { prompt = "", sessionId = "anon", breadth = "" } = (req.body ||
-        {}) as any;
+      const {
+        prompt = "",
+        sessionId = "anon",
+        breadth = "",
+      } = (req.body || {}) as any;
       const key = normalizeKey(prompt);
 
       const testMode =
@@ -798,8 +873,11 @@ export function setupComposeRoutes(router: Router) {
   // ---------- /instant (zero-LLM compose) ----------
   router.post("/instant", cacheMW("instant"), async (req, res) => {
     try {
-      const { prompt = "", sessionId = "anon", breadth = "" } = (req.body ||
-        {}) as any;
+      const {
+        prompt = "",
+        sessionId = "anon",
+        breadth = "",
+      } = (req.body || {}) as any;
 
       // Strict-proof gate
       if (isProofStrict(req) && hasRiskyClaims(prompt)) {
@@ -861,7 +939,10 @@ export function setupComposeRoutes(router: Router) {
             }
           } catch {}
 
-          const origPageId = `pg_${String(sticky.specId).replace(/^spec_?/, "")}`;
+          const origPageId = `pg_${String(sticky.specId).replace(
+            /^spec_?/,
+            ""
+          )}`;
           const newPageId = `pg_${nanoid(6)}`;
 
           const noJs = decideNoJs(req, null);
@@ -907,7 +988,9 @@ export function setupComposeRoutes(router: Router) {
                 copy: (specCached as any)?.copy || {},
                 proof: {},
                 perf: null,
-                ux: uxScore != null ? { score: uxScore, issues: uxIssues } : null,
+                ux: uxScore != null
+                  ? { score: uxScore, issues: uxIssues }
+                  : null,
                 a11yPass: null,
               });
 
@@ -976,7 +1059,11 @@ export function setupComposeRoutes(router: Router) {
 
         const html =
           "<!doctype html><meta charset='utf-8'><title>Preview</title><h1>Preview</h1>";
-        fs.writeFileSync(path.join(PREVIEW_DIR, `${pageId}.html`), html, "utf8");
+        fs.writeFileSync(
+          path.join(PREVIEW_DIR, `${pageId}.html`),
+          html,
+          "utf8"
+        );
         fs.writeFileSync(
           path.join(DEV_PREVIEW_DIR, `${pageId}.html`),
           html,
@@ -1052,7 +1139,10 @@ export function setupComposeRoutes(router: Router) {
 
   router.get("/persona/retrieve", async (req, res) => {
     const q = String(req.query.q || "");
-    const k = Math.min(parseInt(String(req.query.k || "5"), 10) || 5, 20);
+    const k = Math.min(
+      parseInt(String(req.query.k || "5"), 10) || 5,
+      20
+    );
     try {
       const items = await nearest("persona" as any, q as any, k as any);
       return res.json({ ok: true, items });
@@ -1176,9 +1266,10 @@ export function setupComposeRoutes(router: Router) {
           note: "promoted",
         });
       } catch (err: any) {
-        return res
-          .status(500)
-          .json({ ok: false, error: String(err?.message || err) });
+        return res.status(500).json({
+          ok: false,
+          error: String(err?.message || err),
+        });
       }
     }
   );
