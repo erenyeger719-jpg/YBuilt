@@ -502,6 +502,10 @@ export function supGuard() {
       const copy =
         body && body.copy && typeof body.copy === "object" ? body.copy : {};
 
+      // Optional proof object from client (CiteLock / evidence map)
+      const proof =
+        body && body.proof && typeof body.proof === "object" ? body.proof : {};
+
       // Accept optional UX/perf/a11y from the request
       const perf =
         body && typeof body.perf === "object"
@@ -534,7 +538,7 @@ export function supGuard() {
       const risk = computeRiskVector({
         prompt,
         copy,
-        proof: {},
+        proof,
         perf,
         ux,
         a11yPass,
