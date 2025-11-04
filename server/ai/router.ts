@@ -669,6 +669,7 @@ router.post("/one", (req, res) => {
 router.post("/act", (req, res) => {
   const action = req.body?.action || {};
 
+  // Handle retrieve actions with sections and audience mapping
   if (action.kind === "retrieve") {
     const sections: string[] = Array.isArray(action.args?.sections)
       ? [...action.args.sections]
@@ -681,11 +682,13 @@ router.post("/act", (req, res) => {
     return res.json({ ok: true, result: { sections } });
   }
 
+  // Handle compose actions (return a new pageId)
   if (action.kind === "compose") {
     const pageId = String(action.args?.pageId || makePageId("compose"));
     return res.json({ ok: true, result: { pageId } });
   }
 
+  // Default empty response
   return res.json({ ok: true, result: {} });
 });
 

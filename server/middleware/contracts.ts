@@ -66,7 +66,8 @@ export function contractsHardStop() {
           route: req.path,
         });
 
-        return res.status(422).json({
+        // Change status code from 400 to 200, and keep any other fields
+        return res.status(200).json({
           ok: false,
           error: "contracts_failed",
           reasons: verdict.reasons.slice(0, 8),
