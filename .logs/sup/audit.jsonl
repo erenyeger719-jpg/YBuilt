@@ -1,0 +1,2 @@
+{"mode":"allow","ms":100,"pii_present":false,"abuse_reasons":[]}
+{"mode":"block","ms":300,"pii_present":true,"abuse_reasons":["spam"]}
