@@ -72,9 +72,12 @@ export function summarizeSupAudit(rows: SupAuditRow[]): SupSummary {
     avg_ms = sum / durations.length;
 
     const sorted = [...durations].sort((a, b) => a - b);
-    const idx = Math.floor(0.95 * (sorted.length - 1));
-    p95_ms = sorted[idx];
+    // p95 ≈ element at rank floor(0.95 * n), pessimistic for small n
+    const idx = Math.floor(0.95 * sorted.length);
+    const safeIdx = Math.min(sorted.length - 1, Math.max(0, idx));
+    p95_ms = sorted[safeIdx];
   }
+
 
   return {
     total,
