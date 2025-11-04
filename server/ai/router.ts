@@ -306,7 +306,7 @@ function contractsGuard(req: express.Request, res: express.Response, next: expre
 
   (res as any).json = async (body: any) => {
     try {
-      if (!body || body.ok === false) {
+      if (!body) {
         return originalJson(body);
       }
 
@@ -545,7 +545,14 @@ router.post("/instant", (req, res) => {
 
   // In strict mode, block risky marketing claims.
   if (isProofStrict() && hasRiskyClaims(prompt)) {
-    return res.json({ ok: true, result: { error: "proof_gate_fail" } });
+    return res.json({
+      ok: true,
+      result: {
+        error: "proof_gate_fail",
+        pageId: makePageId(prompt),
+        noJs: false,
+      },
+    });
   }
 
   // Deterministic pageId in tests, random-ish otherwise.
@@ -565,7 +572,13 @@ router.post("/one", (req, res, next) => {
   const prompt = String(req.body?.prompt || "");
 
   if (isProofStrict() && hasRiskyClaims(prompt)) {
-    return res.json({ ok: true, result: { error: "proof_gate_fail" } });
+    return res.json({
+      ok: true,
+      result: {
+        error: "proof_gate_fail",
+        pageId: makePageId(prompt),
+      },
+    });
   }
 
   // Safe or non-strict: fall through to composeRouter's /one.
