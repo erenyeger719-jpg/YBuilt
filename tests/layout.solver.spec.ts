@@ -73,7 +73,7 @@ describe("qa/layout.solver – rhythm solver loop", () => {
     expect(result.appliedPatches[0].id).toBe("increase-spacing");
   });
 
-  it("leaves the page downgraded when no patch can rescue LQR", () => {
+  it("leaves the page downgraded when no patch clears the improvement threshold", () => {
     const initial: LayoutGateInput = {
       lqrScore: 40,
       hasA11yIssues: true,
@@ -81,7 +81,7 @@ describe("qa/layout.solver – rhythm solver loop", () => {
     };
 
     const propose = (): LayoutPatchProposal[] => {
-      // We try some patch, but it won't be enough.
+      // We try some patch, but it won't be strong enough.
       return [
         {
           id: "minor-tweak",
@@ -94,10 +94,10 @@ describe("qa/layout.solver – rhythm solver loop", () => {
       state: LayoutGateInput,
       _patch: LayoutPatchProposal
     ): LayoutGateInput => {
-      // Improve slightly, but still below hard fail.
+      // Slight improvement, but not enough to pass minLqrDelta.
       return {
         ...state,
-        lqrScore:  Fifty,
+        lqrScore: state.lqrScore + 2,
       };
     };
 
@@ -107,7 +107,7 @@ describe("qa/layout.solver – rhythm solver loop", () => {
       minLqrDelta: 5, // requires a meaningful jump
     });
 
-    // We might have evaluated patches, but none met the delta+decision criteria.
+    // Solver looked at the patch, saw it's too weak, and owns the downgrade.
     expect(result.initial.decision).toBe("downgrade");
     expect(result.final.decision).toBe("downgrade");
     expect(result.appliedPatches.length).toBe(0);
