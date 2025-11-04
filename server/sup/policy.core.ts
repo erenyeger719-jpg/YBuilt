@@ -410,6 +410,15 @@ const QUOTA = {
   BYPASS_TEST: true,
 };
 
+function workspaceIdFromReq(req: Request): string {
+  const raw = req.headers["x-workspace-id"];
+  if (!raw) return "";
+  if (Array.isArray(raw)) {
+    return (raw[0] || "").toString().trim();
+  }
+  return raw.toString().trim();
+}
+
 function keyFrom(req: Request) {
   const fwd = String(req.headers["x-forwarded-for"] || "")
     .split(",")[0]
@@ -419,7 +428,8 @@ function keyFrom(req: Request) {
     String(req.headers["x-session-id"] || (req.query as any)?.sessionId || "") ||
     "";
   const api = String(req.headers["x-api-key"] || "");
-  return `${ip}|${sid}|${api}`;
+  const ws = workspaceIdFromReq(req);
+  return `${ip}|${sid}|${api}|${ws}`;
 }
 
 export function supGuard() {
@@ -639,6 +649,7 @@ export function supGuard() {
           ms: Date.now() - started,
           req_hash: reqHash,
           res_hash: outHash || undefined,
+          workspace_id: workspaceIdFromReq(req),
           // risk snapshot
           perf: risk.device_perf,
           ux_lqr: (risk as any).ux?.score ?? null,
