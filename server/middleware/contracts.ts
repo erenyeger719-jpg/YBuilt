@@ -54,7 +54,8 @@ function loadProof(id: string) {
 }
 
 // Generic contracts guard, exported for both router + tests
-export function contractsHardStop() {
+
+function makeContractsGuard() {
   return function contractsGuard(
     _req: Request,
     res: Response,
@@ -114,6 +115,15 @@ export function contractsHardStop() {
         if (!pid) pid = pullId((body as any)?.path);
         if (!pid) pid = pullId((body as any)?.url);
 
+        // Fallback: scan whole body string for a pg_ id (helps tests / odd shapes)
+        if (!pid) {
+          try {
+            pid = pullId(JSON.stringify(body));
+          } catch {
+            // ignore
+          }
+        }
+
         // If we weren't given a proof object, try to load one from disk when we have a pageId
         if (!proof && pid) {
           proof = loadProof(pid);
@@ -167,7 +177,8 @@ export function contractsHardStop() {
         const proofOk = proofFlag !== false;
 
         const failById = pid ? String(pid).startsWith("pg_bad_contracts") : false;
-        const pass = !explicitBad && clsOk && lcpOk && a11yOk && proofOk && !failById;
+        const pass =
+          !explicitBad && clsOk && lcpOk && a11yOk && proofOk && !failById;
 
         // 3) Always set guard headers based on proof
         res.setHeader("X-Guard-CLS", cls != null ? String(cls) : "");
@@ -195,4 +206,21 @@ export function contractsHardStop() {
 
     next();
   };
+}
+
+// Export that guard so it works both as a factory *and* directly as middleware
+export function contractsHardStop(
+  req?: Request,
+  res?: Response,
+  next?: NextFunction
+) {
+  const guard = makeContractsGuard();
+
+  // If called as contractsHardStop(req, res, next), behave like middleware
+  if (req && res && next) {
+    return guard(req, res, next);
+  }
+
+  // If called as contractsHardStop(), behave like a factory
+  return guard;
 }
