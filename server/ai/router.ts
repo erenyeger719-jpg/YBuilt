@@ -298,14 +298,10 @@ function quotaMiddleware(req: express.Request, res: express.Response, next: expr
 }
 
 function contractsGuard(
-  req: express.Request,
+  _req: express.Request,
   res: express.Response,
   next: express.NextFunction
 ) {
-  const p = req.path || "";
-  // Only guard /act. Leave /instant and /one completely untouched.
-  if (p !== "/act") return next();
-
   const originalJson = res.json.bind(res);
 
   (res as any).json = async (body: any) => {
@@ -329,15 +325,13 @@ function contractsGuard(
       if (!pid) pid = pullId(body?.path);
       if (!pid) pid = pullId(body?.url);
 
-      // If we still don't have a pageId, don't touch the response
+      // Still no pageId? Just return original response.
       if (!pid) {
         return originalJson(body);
       }
 
-      // Always treat explicit "pg_bad_contracts..." as failing
       const failById = pid.startsWith("pg_bad_contracts");
 
-      // Use local proof loader instead of HTTP fetch
       const pObj = loadProof(pid);
 
       const clsOk =
@@ -347,7 +341,6 @@ function contractsGuard(
       const a11yOk = pObj?.a11y === true;
       const proofOk = pObj?.proof_ok === true;
 
-      // Mirror proof state in headers
       res.setHeader(
         "X-Guard-CLS",
         pObj?.cls_est != null ? String(pObj.cls_est) : ""
@@ -362,7 +355,6 @@ function contractsGuard(
       const pass = clsOk && lcpOk && a11yOk && proofOk;
 
       if (!pass || failById) {
-        // For bad contracts: force 200 + ok:false
         res.status(200);
         return originalJson({
           ok: false,
@@ -371,7 +363,7 @@ function contractsGuard(
         });
       }
     } catch {
-      // Best-effort: if guard itself blows up, don't corrupt the response
+      // If guard itself breaks, don't alter the original response
       return originalJson(body);
     }
 
@@ -478,7 +470,9 @@ if (process.env.NODE_ENV !== "test") {
 
 // Apply quotas and contracts
 router.use(quotaMiddleware);
-router.use(contractsGuard);
+// Only apply contractsGuard on /act in this router.
+// The middleware itself stays generic for tests that mount it elsewhere.
+router.use("/act", contractsGuard);
 
 // ---- Abuse intake (simple JSONL sink) ----
 router.post("/abuse/report", express.json(), (req, res) => {
@@ -823,6 +817,7 @@ router.use(
 // keep as the last middleware on this router:
 // Last-chance error handler to avoid leaking stacks / unstable 500s in tests
 router.use((err: any, _req: any, res: any, _next: any) => {
+  console.error("LAST ERROR HANDLER HIT:", err);
   const msg = err?.message || String(err || "unknown_error");
   if (!res.headersSent) res.status(200).json({ ok: false, error: msg });
 });
