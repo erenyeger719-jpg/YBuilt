@@ -522,6 +522,7 @@ router.post("/instant", (req, res) => {
 // Fully zero-latency /one with proof-strict gate
 router.post("/one", (req, res) => {
   const prompt = String(req.body?.prompt || "");
+  const drained = drainMode(req as any);
 
   // Strict mode + risky = early proof gate
   if (isProofStrict(req as any) && hasRiskyClaims(prompt)) {
@@ -530,6 +531,7 @@ router.post("/one", (req, res) => {
       result: {
         error: "proof_gate_fail",
         pageId: makePageId(prompt),
+        noJs: drained,
       },
     });
   }
@@ -539,6 +541,7 @@ router.post("/one", (req, res) => {
     ok: true,
     result: {
       pageId: makePageId(prompt),
+      noJs: drained,
     },
   });
 });
