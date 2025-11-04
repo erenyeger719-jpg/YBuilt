@@ -645,6 +645,9 @@ export function setupComposeRoutes(router: Router) {
             ? (top as any).args.sections
             : (spec as any)?.layout?.sections || [];
 
+        // We don't have real perf here yet; env-only decision.
+        const noJs = shouldStripJS(null);
+
         return res.json({
           ok: true,
           spec: { ...spec, layout: { sections: sectionsUsed }, copy, brandColor },
@@ -654,6 +657,7 @@ export function setupComposeRoutes(router: Router) {
           url: `/api/ai/previews/${dpid}`,
           chips,
           signals: summarize(sessionId),
+          noJs,
         });
       }
 
@@ -673,6 +677,9 @@ export function setupComposeRoutes(router: Router) {
 
       recordTTU(Date.now() - t0);
 
+      // No perf object here yet; keep shouldStripJS wired for env flag.
+      const noJs = shouldStripJS(null);
+
       return res.json({
         ok: true,
         spec,
@@ -682,6 +689,7 @@ export function setupComposeRoutes(router: Router) {
         url: null,
         chips,
         signals: summarize(sessionId),
+        noJs,
       });
     } catch (e) {
       return res.status(500).json({ ok: false, error: "one_failed" });
@@ -695,12 +703,14 @@ export function setupComposeRoutes(router: Router) {
 
       // Strict-proof gate
       if (isProofStrict(req) && hasRiskyClaims(prompt)) {
+        const noJs = shouldStripJS(null);
         return res.json({
           ok: true,
           source: "instant",
           spec: {},
           result: { kind: "compose", error: "proof_gate_fail", promptRisk: true },
           url: null,
+          noJs,
         });
       }
 
@@ -728,18 +738,23 @@ export function setupComposeRoutes(router: Router) {
             if (decision.mode === "block") {
               res.setHeader("X-SUP-Mode", decision.mode);
               res.setHeader("X-SUP-Reasons", (decision.reasons || []).join(","));
+              const noJsBlock = shouldStripJS(null);
               return res.json({
                 ok: true,
                 source: "instant",
                 spec: specCached,
                 result: { kind: "compose", error: "sup_block", sup: decision },
                 url: null,
+                noJs: noJsBlock,
               });
             }
           } catch {}
 
           const origPageId = `pg_${String(sticky.specId).replace(/^spec_?/, "")}`;
           const newPageId = `pg_${nanoid(6)}`;
+
+          // No concrete perf for sticky copies yet; env-only decision for now.
+          const noJs = shouldStripJS(null);
           
           try {
             const src = path.resolve(PREVIEW_DIR, `${origPageId}.html`);
@@ -781,6 +796,7 @@ export function setupComposeRoutes(router: Router) {
                 ux_issues: [],
                 policy_version: POLICY_VERSION,
                 risk,
+                no_js: noJs,
               };
               (card as any).signature = signProof({
                 pageId: card.pageId,
@@ -797,6 +813,7 @@ export function setupComposeRoutes(router: Router) {
             spec: specCached,
             result: { pageId: newPageId, path: `/previews/pages/${newPageId}.html` },
             url: `/api/ai/previews/${newPageId}`,
+            noJs,
           });
         }
       }
@@ -804,12 +821,15 @@ export function setupComposeRoutes(router: Router) {
       // Continue with instant logic...
       // This is abbreviated - full instant logic is very long
 
+      const noJs = shouldStripJS(null);
+
       return res.json({
         ok: true,
         source: "instant",
         spec: {},
         result: { pageId: "placeholder", path: "" },
         url: "",
+        noJs,
       });
     } catch (e) {
       // Last-ditch: never 500 on /instant
@@ -822,20 +842,25 @@ export function setupComposeRoutes(router: Router) {
         fs.writeFileSync(path.join(PREVIEW_DIR, `${pageId}.html`), html, "utf8");
         fs.writeFileSync(path.join(DEV_PREVIEW_DIR, `${pageId}.html`), html, "utf8");
 
+        const noJs = shouldStripJS(null);
+
         return res.json({
           ok: true,
           source: "instant",
           spec: {},
           result: { pageId, path: `/previews/pages/${pageId}.html` },
           url: `/api/ai/previews/${pageId}`,
+          noJs,
         });
       } catch {
+        const noJs = shouldStripJS(null);
         return res.json({
           ok: true,
           source: "instant",
           spec: {},
           result: { pageId: "pg_fallback", path: "" },
           url: "",
+          noJs,
         });
       }
     }
