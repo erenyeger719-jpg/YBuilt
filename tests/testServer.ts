@@ -1,25 +1,29 @@
 // tests/testServer.ts
 import express from "express";
 import request from "supertest";
-
-// IMPORTANT: keep mount path as in prod
-import aiRouter from "../server/ai/router.ts";
+import { vi } from "vitest";
 
 /**
- * Build an app wired like production:
+ * Build an app wired like production, but with per-test env:
  * - applies env overrides
- * - trusts proxy so x-forwarded-for works
+ * - resets module graph so router sees fresh env
  * - mounts the full AI router under /api/ai
  */
 export function makeApp(env: Record<string, string | undefined> = {}) {
-  // apply test-specific env vars
+  // Make sure router.ts re-reads env for each test
+  vi.resetModules();
+
+  // Apply test-specific env vars
   Object.assign(process.env, env);
 
   const app = express();
-  // trust proxy so x-forwarded-for works in quota tests
   app.set("trust proxy", true);
 
-  // Mount the full AI router (includes metrics, guardrails, etc.)
+  // Import router *after* env + reset, so it picks up test flags
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const aiRouterModule = require("../server/ai/router.ts");
+  const aiRouter = aiRouterModule.default ?? aiRouterModule.aiRouter;
+
   app.use("/api/ai", aiRouter);
 
   return app;

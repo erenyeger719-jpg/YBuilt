@@ -1,0 +1,22 @@
+{
+  "paragraphs": [
+    {
+      "id": "dbdb6a91fab2dfe34765d9f8215f203c7a406028",
+      "docId": "ev1",
+      "text": "Ybuilt ships calm pages.",
+      "tokens": {
+        "ybuilt": 1,
+        "ships": 1,
+        "calm": 1,
+        "pages.": 1
+      }
+    }
+  ],
+  "idf": {
+    "ybuilt": 0.28768207245178085,
+    "ships": 0.28768207245178085,
+    "calm": 0.28768207245178085,
+    "pages.": 0.28768207245178085
+  },
+  "vocabSize": 4
+}
