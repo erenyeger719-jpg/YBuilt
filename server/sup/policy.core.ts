@@ -7,6 +7,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { hitSignatures } from "./signatures.ts";
 import { countClaimsFromCopy, estimateEvidenceCoverage } from "./claims.ts";
+import { CLAIM_POLICY } from "./claims.config.ts";
 // (Type can be inferred; no need to import ClaimCounts)
 
 // ----- Versioning / Config ---------------------------------------------------
@@ -46,7 +47,10 @@ const THRESH = {
   CLS_MAX: parseFloat(process.env.SUP_MAX_CLS || "0.25"),
   LCP_MS_MAX: parseInt(process.env.SUP_MAX_LCP_MS || "4000", 10),
   // claims
-  CLAIMS_BLOCK_STRICT: parseInt(process.env.SUP_CLAIMS_BLOCK_STRICT || "1", 10), // ≥1 critical claim w/o proof
+  CLAIMS_BLOCK_STRICT: parseInt(
+    process.env.SUP_CLAIMS_BLOCK_STRICT || "1",
+    10,
+  ), // ≥1 critical claim w/o proof
   // a11y
   REQUIRE_A11Y: (process.env.SUP_REQUIRE_A11Y || "0") === "1",
   // pii
@@ -83,6 +87,17 @@ export type RiskVector = {
     testimonial?: number;
   };
   evidence_coverage?: number; // 0–1, 1 when no claims or fully proven
+
+  // New: snapshot of policy + simple budget state
+  claim_policy?: Record<
+    string,
+    {
+      behavior: "allow" | "warn" | "block";
+      requireEvidence: boolean;
+      count: number;
+    }
+  >;
+  claim_budget_state?: "ok" | "warn" | "block";
 };
 
 type ComputeArgs = {
@@ -165,7 +180,7 @@ function pickDegrade(reasons: string[]) {
 
 function pickExecTier(
   reasons: string[],
-  score: number
+  score: number,
 ): "safe-html" | "light-js" | "full" {
   // Hard lock: serious abuse or PII → safest tier
   if (
@@ -280,7 +295,10 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
     abuseReasons.push("scam_lang");
   if (/(deepfake|impersonate|bypass|jailbreak)/i.test(allText))
     abuseReasons.push("abuse_terms");
-  const abuse_signals = { sketchy: abuseReasons.length > 0, reasons: abuseReasons };
+  const abuse_signals = {
+    sketchy: abuseReasons.length > 0,
+    reasons: abuseReasons,
+  };
 
   const risk: RiskVector = {
     prompt_risk,
@@ -308,7 +326,7 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
   const claimCounts = countClaimsFromCopy(copyObj);
   const evidenceCoverage = estimateEvidenceCoverage(
     proofObj,
-    claimCounts.total
+    claimCounts.total,
   );
 
   risk.claim_total = claimCounts.total;
@@ -322,6 +340,53 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
   };
   risk.evidence_coverage = evidenceCoverage;
 
+  // ---- New: claim policy snapshot + budget state (OK / warn / block) ----
+  const policySnapshot: Record<
+    string,
+    {
+      behavior: "allow" | "warn" | "block";
+      requireEvidence: boolean;
+      count: number;
+    }
+  > = {};
+
+  let budgetState: "ok" | "warn" | "block" = "ok";
+
+  if (claimCounts.total > 0) {
+    // Fill snapshot per claim kind
+    for (const [kind, cfg] of Object.entries(CLAIM_POLICY)) {
+      const k = kind as keyof NonNullable<RiskVector["claim_kinds"]>;
+      const count = (risk.claim_kinds?.[k] as number) || 0;
+      policySnapshot[kind] = {
+        behavior: cfg.behavior,
+        requireEvidence: cfg.requireEvidence,
+        count,
+      };
+    }
+
+    const cov =
+      typeof evidenceCoverage === "number" ? evidenceCoverage : null;
+
+    const hasBlockyClaims = Object.entries(CLAIM_POLICY).some(
+      ([kind, cfg]) => {
+        const k = kind as keyof NonNullable<RiskVector["claim_kinds"]>;
+        const count = (risk.claim_kinds?.[k] as number) || 0;
+        return cfg.behavior === "block" && count > 0;
+      },
+    );
+
+    if (cov !== null) {
+      if (hasBlockyClaims && cov < 0.8) {
+        budgetState = "block";
+      } else if (cov < 0.5) {
+        budgetState = "warn";
+      }
+    }
+  }
+
+  risk.claim_policy = policySnapshot;
+  risk.claim_budget_state = budgetState;
+
   return risk;
 }
 
@@ -329,7 +394,7 @@ export function computeRiskVector(args: ComputeArgs): RiskVector {
 
 export function supDecide(
   endpoint: EndpointKey | string,
-  risk: RiskVector
+  risk: RiskVector,
 ): { mode: "allow" | "strict" | "block"; reasons: string[] } {
   const gate =
     (DEFAULT_GATES as any)[endpoint as EndpointKey] ??
@@ -508,7 +573,7 @@ export function supGuard() {
     // Light heuristics
     if (
       /curl|python-requests|wget/i.test(
-        String(req.headers["user-agent"] || "")
+        String(req.headers["user-agent"] || ""),
       )
     )
       rec.score += 0.1;
@@ -648,7 +713,7 @@ export function supGuard() {
         String(
           (req.headers["x-page-id"] as string) ||
             (req.body?.pageId as string) ||
-            ""
+            "",
         ) || "anon";
       const proofSig = signProof({
         pageId,
@@ -683,7 +748,7 @@ export function supGuard() {
       const started = Date.now();
       const reqHash = contentHash(
         String((req.body?.prompt as string) || "") +
-          JSON.stringify((req.body?.copy as any) || {})
+          JSON.stringify((req.body?.copy as any) || {}),
       );
 
       res.on("finish", () => {
