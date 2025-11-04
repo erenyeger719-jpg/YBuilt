@@ -494,15 +494,19 @@ router.post("/instant", (req, res) => {
 
   // In strict mode, block risky marketing claims.
   if (isProofStrict(req as any) && hasRiskyClaims(prompt)) {
+    const drained = drainMode(req as any);
+
     return res.json({
       ok: true,
       result: {
         error: "proof_gate_fail",
         pageId: makePageId(prompt),
-        noJs: false,
+        noJs: drained,
       },
     });
   }
+
+  const drained = drainMode(req as any);
 
   // Deterministic pageId in tests, random-ish otherwise.
   return res.json({
@@ -510,7 +514,7 @@ router.post("/instant", (req, res) => {
     result: {
       pageId: makePageId(prompt),
       // Tests only care that this is a boolean.
-      noJs: false,
+      noJs: drained,
     },
   });
 });
