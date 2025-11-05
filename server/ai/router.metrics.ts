@@ -4,38 +4,22 @@ import fs from "fs";
 import path from "path";
 
 // Import helpers
-import {
-  requireFetch,
-  hasRiskyClaims,
-} from "./router.helpers.ts";
+import { requireFetch, hasRiskyClaims } from "./router.helpers.ts";
 
 // Import from main router
-import {
-  PREVIEW_DIR,
-  DEV_PREVIEW_DIR,
-  ensureCache
-} from "./router.ts";
+import { PREVIEW_DIR, DEV_PREVIEW_DIR, ensureCache } from "./router.ts";
 
 // Import dependencies
 import {
   recordShip,
   markConversion,
   kpiSummary,
-  lastShipFor
+  lastShipFor,
 } from "../metrics/outcome.ts";
-import {
-  recordSectionOutcome,
-  recordTokenWin,
-} from "../sections/bandits.ts";
-import {
-  recordPackWinForPage,
-} from "../sections/packs.ts";
-import {
-  recordConversionForPage,
-} from "../intent/router.brain.ts";
-import {
-  rewardShadow,
-} from "../intent/shadowEval.ts";
+import { recordSectionOutcome, recordTokenWin } from "../sections/bandits.ts";
+import { recordPackWinForPage } from "../sections/packs.ts";
+import { recordConversionForPage } from "../intent/router.brain.ts";
+import { rewardShadow } from "../intent/shadowEval.ts";
 import {
   computeRiskVector,
   POLICY_VERSION,
@@ -443,52 +427,29 @@ export function setupMetricsRoutes(router: Router) {
         fs.mkdirSync(proofDir, { recursive: true });
       } catch {}
 
-      if (!fs.existsSync(proofPath)) {
-        // Create a minimal proof card if missing
-        let _risk: any;
-        try {
-          _risk = computeRiskVector({
-            prompt: "",
-            copy: {},
-            proof: {},
-            perf: null,
-            ux: null,
-            a11yPass: null,
-          });
-        } catch {
-          _risk = {};
+      let obj: any = null;
+
+      // Try to read + parse existing proof file
+      try {
+        if (fs.existsSync(proofPath)) {
+          const raw = fs.readFileSync(proofPath, "utf8");
+          obj = JSON.parse(raw);
         }
-
-        const minimal = {
-          pageId: id,
-          url: `/api/ai/previews/${id}`,
-          proof_ok: true,
-          fact_counts: {},
-          facts: {},
-          cls_est: null,
-          lcp_est_ms: null,
-          perf_matrix: null,
-          ux_score: null,
-          ux_issues: [],
-          policy_version: POLICY_VERSION,
-          risk: _risk,
-          signature: signProof({
-            pageId: id,
-            policy_version: POLICY_VERSION,
-            risk: _risk,
-          }),
-        };
-
-        try {
-          fs.writeFileSync(proofPath, JSON.stringify(minimal, null, 2));
-        } catch {}
+      } catch (err: any) {
+        // Corrupt or unreadable proof file: treat as missing
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[router.metrics] corrupt or unreadable proof file, regenerating",
+          {
+            id,
+            error: err?.message || String(err),
+          },
+        );
+        obj = null;
       }
 
-      let obj: any = null;
-      try {
-        obj = JSON.parse(fs.readFileSync(proofPath, "utf8"));
-      } catch {
-        // Fallback to a minimal object if read fails
+      // If no proof exists (missing or bad), build a minimal card
+      if (!obj) {
         let _risk: any;
         try {
           _risk = computeRiskVector({
@@ -516,12 +477,20 @@ export function setupMetricsRoutes(router: Router) {
           ux_issues: [],
           policy_version: POLICY_VERSION,
           risk: _risk,
-          signature: signProof({
-            pageId: id,
-            policy_version: POLICY_VERSION,
-            risk: _risk,
-          }),
         };
+
+        try {
+          (obj as any).signature = signProof({
+            pageId: obj.pageId || id,
+            policy_version: obj.policy_version,
+            risk: obj.risk || {},
+          });
+        } catch {}
+
+        // Best-effort: persist the regenerated minimal proof
+        try {
+          fs.writeFileSync(proofPath, JSON.stringify(obj, null, 2));
+        } catch {}
       }
 
       // Harden policy metadata
@@ -587,7 +556,7 @@ export function setupMetricsRoutes(router: Router) {
         ? path.join(PREVIEW_DIR, `${idRaw}.html`)
         : path.join(DEV_PREVIEW_DIR, `${idRaw}.html`);
 
-      if (!fs.existsSync(filePath)) return res.status(404).send("not found");
+      if (!fs.existsExists(filePath)) return res.status(404).send("not found");
 
       res.setHeader("content-type", "text/html; charset=utf-8");
       return res.status(200).send(fs.readFileSync(filePath, "utf8"));

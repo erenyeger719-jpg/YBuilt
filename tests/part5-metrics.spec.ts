@@ -12,6 +12,29 @@ describe("Part5: metrics & proof & previews", () => {
     expect(r.body.proof.signature).toBeDefined();
   });
 
+  it("regenerates a minimal proof card when the on-disk proof JSON is corrupt", async () => {
+    const a = agent({ PREWARM_TOKEN: "" });
+
+    const id = "pg_corrupt_proof";
+    const proofDir = path.join(".cache", "proof");
+    const proofPath = path.join(proofDir, `${id}.json`);
+
+    // Ensure the proof directory exists
+    fs.mkdirSync(proofDir, { recursive: true });
+
+    // Write invalid JSON to simulate a corrupt proof card
+    fs.writeFileSync(proofPath, "{ this is not valid json", "utf8");
+
+    const r = await a.get(`/api/ai/proof/${id}`);
+
+    // Should not 500, and should return a sane minimal proof card
+    expect(r.status).toBe(200);
+    expect(r.body.ok).toBe(true);
+    expect(r.body.proof).toBeTruthy();
+    expect(r.body.proof.pageId).toBe(id);
+    expect(r.body.proof.signature).toBeDefined();
+  });
+
   it("preview path traversal is blocked", async () => {
     const a = agent({ PREWARM_TOKEN: "" });
     const r = await a.get("/api/ai/previews/../../../etc/passwd");
