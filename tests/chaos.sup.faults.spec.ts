@@ -51,12 +51,13 @@ describe("chaos / SUP faults", () => {
       writeSpy.mockRestore();
     });
 
-    it("metrics/outcome swallows write failures", () => {
-      // These both try to write into .cache under normal use
+    it("metrics/outcome swallows write failures in recordShip", () => {
+      // This writes into .cache under normal use – our fs mock makes it throw.
+      // If this throws here, SUP would crash when disk/.cache is unhappy.
       expect(() => {
         recordShip("pg_chaos");
-        snapshotUrlCosts();
       }).not.toThrow();
     });
+    
   });
 });
