@@ -48,6 +48,31 @@ describe("Part5: metrics & proof & previews", () => {
     expect(r.body.url_costs).toBeDefined();
   });
 
+  it("/metrics tolerates a corrupt url.costs cache file", async () => {
+    const a = agent({ PREWARM_TOKEN: "" });
+
+    const cacheDir = path.join(".cache");
+    const costsPath = path.join(cacheDir, "url.costs.json");
+
+    fs.mkdirSync(cacheDir, { recursive: true });
+
+    // Write invalid JSON to simulate a corrupt cache file
+    fs.writeFileSync(costsPath, "{ not valid json", "utf8");
+
+    const r = await a.get("/api/ai/metrics");
+
+    expect(r.status).toBe(200);
+    expect(r.body.ok).toBe(true);
+
+    const { url_costs } = r.body;
+
+    // Shape checks: even with corrupt cache, we should still expose url_costs
+    expect(url_costs).toBeDefined();
+    expect(url_costs).toHaveProperty("pages");
+    expect(url_costs).toHaveProperty("cents_total");
+    expect(url_costs).toHaveProperty("tokens_total");
+  });
+
   it("/metrics/guardrail returns SUP + KPI guardrail snapshot", async () => {
     const a = agent({ PREWARM_TOKEN: "" });
 

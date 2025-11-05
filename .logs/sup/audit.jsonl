@@ -1,2 +1,5 @@
-{"mode":"allow","ms":100,"pii_present":false,"abuse_reasons":[]}
-{"mode":"block","ms":300,"pii_present":true,"abuse_reasons":["spam"]}
+this is not json at all
+{"mode":"allow","ms":120,"pii_present":false,"abuse_reasons":[]}
+{ bad json line
+{"mode":"strict","ms":250,"pii_present":true,"abuse_reasons":["abuse"]}
+
