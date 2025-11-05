@@ -103,4 +103,52 @@ describe("Part5: metrics & proof & previews", () => {
     expect(typeof conversions_total).toBe("number");
     expect(typeof last_convert_ts).toBe("number");
   });
+
+  it("/metrics/guardrail tolerates corrupt or mixed SUP audit logs", async () => {
+    const a = agent({ PREWARM_TOKEN: "" });
+
+    const logsDir = path.join(".logs", "sup");
+    const auditPath = path.join(logsDir, "audit.jsonl");
+    fs.mkdirSync(logsDir, { recursive: true });
+
+    const lines = [
+      "this is not json at all",
+      JSON.stringify({
+        mode: "allow",
+        ms: 120,
+        pii_present: false,
+        abuse_reasons: [],
+      }),
+      "{ bad json line",
+      JSON.stringify({
+        mode: "strict",
+        ms: 250,
+        pii_present: true,
+        abuse_reasons: ["abuse"],
+      }),
+      "", // blank line
+    ];
+
+    fs.writeFileSync(auditPath, lines.join("\n") + "\n", "utf8");
+
+    const r = await a.get("/api/ai/metrics/guardrail");
+
+    expect(r.status).toBe(200);
+    expect(r.body.ok).toBe(true);
+
+    const { sup, sup_rates } = r.body;
+
+    // SUP summary should exist and have a numeric total
+    expect(sup).toBeTruthy();
+    expect(typeof sup.total).toBe("number");
+    expect(sup.total).toBeGreaterThan(0); // at least the valid rows
+
+    // Rates object shape should still be present
+    expect(sup_rates).toBeTruthy();
+    expect(sup_rates).toHaveProperty("allow_pct");
+    expect(sup_rates).toHaveProperty("strict_pct");
+    expect(sup_rates).toHaveProperty("block_pct");
+    expect(sup_rates).toHaveProperty("pii_pct");
+    expect(sup_rates).toHaveProperty("abuse_pct");
+  });
 });
