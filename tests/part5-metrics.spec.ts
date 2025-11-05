@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 import { agent } from "./testServer";
@@ -211,5 +211,37 @@ describe("Part5: metrics & proof & previews", () => {
     expect(sup_rates).toHaveProperty("block_pct");
     expect(sup_rates).toHaveProperty("pii_pct");
     expect(sup_rates).toHaveProperty("abuse_pct");
+  });
+
+  it("/metrics survives fs.readFileSync throwing on url.costs.json", async () => {
+    const a = agent({ PREWARM_TOKEN: "" });
+
+    // Capture the real readFileSync
+    const realReadFileSync = fs.readFileSync;
+
+    const spy = vi
+      .spyOn(fs, "readFileSync")
+      .mockImplementation((...args: any[]) => {
+        const filePath = String(args[0]);
+
+        // Only break url.costs.json reads, let everything else work
+        if (filePath.includes("url.costs.json")) {
+          throw new Error("simulated read failure");
+        }
+
+        return realReadFileSync.apply(fs, args as any);
+      });
+
+    let r;
+    try {
+      r = await a.get("/api/ai/metrics");
+    } finally {
+      // Always restore, even if the request throws
+      spy.mockRestore();
+    }
+
+    expect(r.status).toBe(200);
+    expect(r.body.ok).toBe(true);
+    expect(r.body.url_costs).toBeDefined();
   });
 });
