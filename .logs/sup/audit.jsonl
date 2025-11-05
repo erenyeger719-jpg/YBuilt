@@ -3,5 +3,3 @@ this is not json at all
 { bad json line
 {"mode":"strict","ms":250,"pii_present":true,"abuse_reasons":["abuse"]}
 
-{"ts":"2025-11-05T08:54:28.084Z","endpoint":"/instant","pageId":"anon","policy_version":"2.0.0","mode":"allow","reasons":[],"status":200,"ms":2,"quota_hits":1,"quota_score":0.1,"drain":false,"exec_tier":"full","req_hash":"f0f0d49c2e776496c0cb92fae042daff498ed477ec67da8528b356ee9a2c8337","res_hash":"bf12f734181651e3ccb64583298dd4c653c500ca64a5ded77198a35153d43a7a","workspace_id":"","perf":{"cls_est":null,"lcp_est_ms":null},"ux_lqr":null,"claims_total":0,"evidence_coverage":1,"pii_present":false,"abuse_reasons":[]}
-{"ts":"2025-11-05T08:54:40.217Z","endpoint":"/one","pageId":"anon","policy_version":"2.0.0","mode":"allow","reasons":[],"status":200,"ms":0,"quota_hits":2,"quota_score":0.2,"drain":false,"exec_tier":"full","req_hash":"f0f0d49c2e776496c0cb92fae042daff498ed477ec67da8528b356ee9a2c8337","res_hash":"ea965f582fedb9d8b21f0dfe92f18fde3cf61e3980e00d8030f1a1ea3f12ee69","workspace_id":"","perf":{"cls_est":null,"lcp_est_ms":null},"ux_lqr":null,"claims_total":0,"evidence_coverage":1,"pii_present":false,"abuse_reasons":[]}
