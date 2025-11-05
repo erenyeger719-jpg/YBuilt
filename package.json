@@ -38,6 +38,7 @@
     "test:cov": "vitest run --coverage",
     "load:instant": "k6 run k6/instant-smoke.js",
     "load:act": "k6 run k6/act-compose.js",
+    "soak:instant": "tsx scripts/soak.instant.ts",
     "chaos": "node --loader ts-node/esm scripts/chaos.ts"
   },
   "dependencies": {
