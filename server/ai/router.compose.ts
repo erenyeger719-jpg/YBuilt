@@ -99,7 +99,7 @@ import {
   quickPerfEst,
   matrixPerfEst,
 } from "../qa/layout.sanity.ts";
-import { checkCopyReadability } from "../qa/readability.guard.ts";
+import { checkCopyReadabilityForLocale } from "../qa/readability.guard.ts";
 import { editSearch } from "../qa/edit.search.ts";
 import { wideTokenSearch } from "../design/search.wide.ts";
 import { runSnapshots } from "../qa/snapshots.ts";
