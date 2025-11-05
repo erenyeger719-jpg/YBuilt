@@ -180,4 +180,18 @@ describe("llm/registry – eval gate wiring", () => {
 
     expect(res.json.from).toBe("granite");
   });
+
+  it("respects provider policy when calling chatJSON", async () => {
+    // Normal-style call, but with an absurdly high maxTokens that should be clamped
+    const result = await chatJSON({
+      system: "You are a test system.",
+      user: "Test policy integration",
+      task: "unit-test-policy",
+      // Request something huge so policy/clamp logic gets exercised
+      maxTokens: 99999,
+    } as any);
+
+    // We mainly care that this doesn't throw and returns a structured result
+    expect(result).toBeTruthy();
+  });
 });

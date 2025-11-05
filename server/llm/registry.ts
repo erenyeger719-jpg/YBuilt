@@ -11,6 +11,7 @@ import {
   challengerModel,
   shouldRunChallenger,
 } from "./eval.config.ts";
+import { decideProviderEnvelope } from "./provider.envelope.ts";
 
 // ---------- Types ----------
 export type ReqLike = {
@@ -404,19 +405,65 @@ export async function chatJSON(
   // Champion selection is centralized in pickChampion
   const champion = pickChampion(args.req);
 
+  // --- Provider envelope policy: clamp tokens / allow or block call ---
+  const providerName = champion.provider || "openai";
+
+  const requestedMaxTokens =
+    typeof args.max_tokens === "number" && Number.isFinite(args.max_tokens)
+      ? args.max_tokens
+      : 4096;
+
+  // Try to pick up a more specific route hint if present; otherwise fall back.
+  const routeHintFromHeader =
+    readHeader(args.req, "x-llm-route") || readHeader(args.req, "x-route");
+  const routeHintFromTags = (args.tags && args.tags.route) || (args.tags && args.tags.path);
+  const route =
+    (typeof routeHintFromTags === "string" && routeHintFromTags) ||
+    routeHintFromHeader ||
+    (args.task ? String(args.task) : "compose");
+
+  const policyDecision = decideProviderEnvelope({
+    providerName,
+    route,
+    requestedMaxTokens,
+    // For now: assume no known PII, JSON response, citations allowed.
+    containsPII: false,
+    responseHasCitations: true,
+    responseIsJson: true,
+  });
+
+  if (policyDecision.mode === "block") {
+    throw new Error(
+      `LLM provider policy blocked call: ${policyDecision.reason ?? "unknown_reason"}`
+    );
+  }
+
+  const finalMaxTokens =
+    typeof policyDecision.maxTokens === "number" && Number.isFinite(policyDecision.maxTokens)
+      ? policyDecision.maxTokens
+      : requestedMaxTokens;
+
+  const effectiveArgs: ChatArgs = {
+    ...args,
+    max_tokens: finalMaxTokens,
+  };
+
   // ---- CACHE: deterministic prompt+model key
-  const ck = canonicalKey(args, { provider: champion.provider, model: champion.model });
-  if (!args.tags?.no_cache) {
+  const ck = canonicalKey(effectiveArgs, {
+    provider: champion.provider,
+    model: champion.model,
+  });
+  if (!effectiveArgs.tags?.no_cache) {
     const hit = getJSON<{ json: any; raw: string; provider: string }>(ck);
     if (hit) {
       // light log (optional): cached source
       jsonl("llm.runs.jsonl", {
         at: nowIso(),
-        task: args.task || "",
+        task: effectiveArgs.task || "",
         provider: hit.provider || "cache",
         ms: 0,
         ok: true,
-        model_hint: args.tags?.model_hint || null,
+        model_hint: effectiveArgs.tags?.model_hint || null,
         source: "cache",
       });
       return hit;
@@ -427,7 +474,7 @@ export async function chatJSON(
   const started = Date.now();
 
   // Champion run (source of truth; always the primary model)
-  const main = await runProvider(champion, args);
+  const main = await runProvider(champion, effectiveArgs);
   let raw = main.raw;
   let provider = main.provider;
   let ok = raw !== "{}";
@@ -450,7 +497,7 @@ export async function chatJSON(
     | undefined = undefined;
 
   // Explicit shadow override (header) + eval gating live in pickShadow
-  let shadowChoice: Choice | null = pickShadow(args.req);
+  let shadowChoice: Choice | null = pickShadow(effectiveArgs.req);
 
   if (
     shadowChoice &&
@@ -460,7 +507,7 @@ export async function chatJSON(
     (async () => {
       const t0 = Date.now();
       try {
-        const s = await runProvider(shadowChoice!, args);
+        const s = await runProvider(shadowChoice!, effectiveArgs);
         // lightweight metric counters without leaking prompts/copy
         try {
           const P = path.join(CACHE_DIR, "shadow.metrics.json");
@@ -474,7 +521,7 @@ export async function chatJSON(
         } catch {}
         jsonl("llm.shadow.jsonl", {
           at: nowIso(),
-          task: args.task || "",
+          task: effectiveArgs.task || "",
           champion: champion.provider || "openai",
           shadow: shadowChoice!.provider,
           ms: Date.now() - t0,
@@ -484,7 +531,7 @@ export async function chatJSON(
       } catch {
         jsonl("llm.shadow.jsonl", {
           at: nowIso(),
-          task: args.task || "",
+          task: effectiveArgs.task || "",
           champion: champion.provider || "openai",
           shadow: shadowChoice!.provider,
           ms: Date.now() - t0,
@@ -497,15 +544,15 @@ export async function chatJSON(
   // Log champion run (privacy-aware)
   jsonl("llm.runs.jsonl", {
     at: nowIso(),
-    task: args.task || "",
+    task: effectiveArgs.task || "",
     provider,
     ms: Date.now() - started,
     ok,
-    model_hint: args.tags?.model_hint || null,
+    model_hint: effectiveArgs.tags?.model_hint || null,
   });
 
   // Write to cache (skip if disabled)
-  if (!args.tags?.no_cache) {
+  if (!effectiveArgs.tags?.no_cache) {
     try {
       setJSON(ck, { json: parsed, raw, provider });
     } catch {}
@@ -524,7 +571,7 @@ export function maybeNightlyRoutingUpdate() {
   try {
     const P = path.join(CACHE_DIR, "shadow.metrics.json");
     const hasGranite = !!process.env.GRANITE_API_KEY && !!process.env.GRANITE_API_URL;
-    const shadowCalls = fs.existsSync(P)
+    const shadowCalls = fs.existsExists(P)
       ? (JSON.parse(fs.readFileSync(P, "utf8")).calls || 0)
       : 0;
 
