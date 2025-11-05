@@ -413,14 +413,19 @@ export async function chatJSON(
       ? args.max_tokens
       : 4096;
 
-  // Try to pick up a more specific route hint if present; otherwise fall back.
+  // Optional hint from headers/tags; otherwise treat as generic "compose".
   const routeHintFromHeader =
     readHeader(args.req, "x-llm-route") || readHeader(args.req, "x-route");
-  const routeHintFromTags = (args.tags && args.tags.route) || (args.tags && args.tags.path);
-  const route =
-    (typeof routeHintFromTags === "string" && routeHintFromTags) ||
-    routeHintFromHeader ||
-    (args.task ? String(args.task) : "compose");
+
+  const routeHintFromTags =
+    (args.tags &&
+      typeof (args.tags as any).route === "string" &&
+      (args.tags as any).route) ||
+    (args.tags &&
+      typeof (args.tags as any).path === "string" &&
+      (args.tags as any).path);
+
+  const route = routeHintFromTags || routeHintFromHeader || "compose";
 
   const policyDecision = decideProviderEnvelope({
     providerName,
@@ -439,7 +444,8 @@ export async function chatJSON(
   }
 
   const finalMaxTokens =
-    typeof policyDecision.maxTokens === "number" && Number.isFinite(policyDecision.maxTokens)
+    typeof policyDecision.maxTokens === "number" &&
+    Number.isFinite(policyDecision.maxTokens)
       ? policyDecision.maxTokens
       : requestedMaxTokens;
 
@@ -571,7 +577,7 @@ export function maybeNightlyRoutingUpdate() {
   try {
     const P = path.join(CACHE_DIR, "shadow.metrics.json");
     const hasGranite = !!process.env.GRANITE_API_KEY && !!process.env.GRANITE_API_URL;
-    const shadowCalls = fs.existsExists(P)
+    const shadowCalls = fs.existsSync(P)
       ? (JSON.parse(fs.readFileSync(P, "utf8")).calls || 0)
       : 0;
 
