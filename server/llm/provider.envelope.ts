@@ -1,5 +1,11 @@
 // server/llm/provider.envelope.ts
 
+import {
+  enforceProviderPolicy,
+  type ProviderCallContext,
+  type ProviderPolicyDecision,
+} from "./provider.policy";
+
 export type ProviderId = string;
 
 export interface ProviderPolicy {
@@ -108,4 +114,16 @@ export function enforceProviderRequestPolicy(
     maxTokens,
     evidenceRequired,
   };
+}
+
+/**
+ * Thin wrapper so the rest of the codebase can ask:
+ * "Given this provider + route + context, what should SUP do?"
+ *
+ * It just delegates to enforceProviderPolicy from provider.policy.ts.
+ */
+export function decideProviderEnvelope(
+  ctx: ProviderCallContext
+): ProviderPolicyDecision {
+  return enforceProviderPolicy(ctx);
 }

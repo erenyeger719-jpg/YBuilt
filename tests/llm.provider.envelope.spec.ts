@@ -1,63 +1,99 @@
 // tests/llm.provider.envelope.spec.ts
 import { describe, it, expect } from "vitest";
-import {
-  providerPolicyFor,
-  enforceProviderRequestPolicy,
-  type ProviderRequestContext,
-} from "../server/llm/provider.envelope";
 
-describe("llm/provider – compliance envelope", () => {
-  it("returns a minimal policy for unknown providers", () => {
-    const policy = providerPolicyFor("weird-provider");
+import { decideProviderEnvelope } from "../server/llm/provider.envelope";
 
-    expect(policy.id).toBe("weird-provider");
-    expect(policy.maxTokens).toBeUndefined();
-    expect(policy.allowedRoutes).toBeUndefined();
-    expect(policy.piiAllowed).toBeUndefined();
-    expect(policy.evidenceRequired).toBeUndefined();
-  });
-
-  it("clamps maxTokens and allows only configured routes", () => {
-    const okCtx: ProviderRequestContext = {
-      providerId: "granite",
-      route: "/act",
+describe("llm/provider.envelope – bridge to provider policy", () => {
+  it("allows a compliant Granite call and clamps max tokens", () => {
+    const decision = decideProviderEnvelope({
+      providerName: "granite",
+      route: "compose",
       requestedMaxTokens: 99999,
       containsPII: false,
-    };
+      responseHasCitations: true,
+      responseIsJson: true,
+    });
 
-    const okDecision = enforceProviderRequestPolicy(okCtx);
+    expect(decision.provider).toBe("granite");
+    expect(decision.mode).toBe("allow");
+    // should clamp to provider's maxTokens, but never above requestedMaxTokens
+    expect(decision.maxTokens).toBeGreaterThan(0);
+    expect(decision.maxTokens).toBeLessThanOrEqual(99999);
+  });
 
-    expect(okDecision.ok).toBe(true);
-    // granite policy maxTokens = 4096
-    expect(okDecision.maxTokens).toBe(4096);
-    expect(okDecision.evidenceRequired).toBe(true);
-
-    const badRouteCtx: ProviderRequestContext = {
-      providerId: "granite",
-      route: "/totally-weird",
-      requestedMaxTokens: 100,
+  it("blocks calls on routes not allowed for the provider", () => {
+    const decision = decideProviderEnvelope({
+      providerName: "granite",
+      route: "totally_fake_route",
+      requestedMaxTokens: 1000,
       containsPII: false,
-    };
+      responseHasCitations: true,
+      responseIsJson: true,
+    });
 
-    const badDecision = enforceProviderRequestPolicy(badRouteCtx);
-
-    expect(badDecision.ok).toBe(false);
-    expect(badDecision.reason).toBe("route_not_allowed");
+    expect(decision.mode).toBe("block");
+    expect(decision.maxTokens).toBe(0);
+    expect(decision.reason).toBe("route_not_allowed");
   });
 
   it("blocks PII when provider does not allow it", () => {
-    const ctx: ProviderRequestContext = {
-      providerId: "ollama",
-      route: "/act",
-      requestedMaxTokens: 512,
+    const decision = decideProviderEnvelope({
+      providerName: "openai",
+      route: "compose",
+      requestedMaxTokens: 500,
       containsPII: true,
-    };
+      responseHasCitations: false,
+      responseIsJson: true,
+    });
 
-    const decision = enforceProviderRequestPolicy(ctx);
-
-    expect(decision.ok).toBe(false);
+    expect(decision.provider).toBe("openai");
+    expect(decision.mode).toBe("block");
     expect(decision.reason).toBe("pii_not_allowed");
-    // ollama policy: evidenceRequired = false
-    expect(decision.evidenceRequired).toBe(false);
+    expect(decision.maxTokens).toBe(0);
+  });
+
+  it("neutralizes responses that violate json-only or citation requirements", () => {
+    // Missing JSON → json_only_required
+    const jsonDecision = decideProviderEnvelope({
+      providerName: "granite",
+      route: "compose",
+      requestedMaxTokens: 500,
+      containsPII: false,
+      responseHasCitations: true,
+      responseIsJson: false,
+    });
+
+    expect(jsonDecision.mode).toBe("neutralize");
+    expect(jsonDecision.reason).toBe("json_only_required");
+    expect(jsonDecision.maxTokens).toBeGreaterThan(0);
+
+    // Missing citations → citations_required_missing
+    const citationDecision = decideProviderEnvelope({
+      providerName: "granite",
+      route: "compose",
+      requestedMaxTokens: 500,
+      containsPII: false,
+      responseHasCitations: false,
+      responseIsJson: true,
+    });
+
+    expect(citationDecision.mode).toBe("neutralize");
+    expect(citationDecision.reason).toBe("citations_required_missing");
+    expect(citationDecision.maxTokens).toBeGreaterThan(0);
+  });
+
+  it("treats unknown providers as blocked by default", () => {
+    const decision = decideProviderEnvelope({
+      providerName: "some-new-thing",
+      route: "compose",
+      requestedMaxTokens: 1000,
+      containsPII: false,
+      responseHasCitations: true,
+      responseIsJson: true,
+    });
+
+    expect(decision.provider).toBe("unknown");
+    expect(decision.mode).toBe("block");
+    expect(decision.maxTokens).toBe(0);
   });
 });
