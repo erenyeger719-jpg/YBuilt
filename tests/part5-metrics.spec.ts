@@ -244,4 +244,50 @@ describe("Part5: metrics & proof & previews", () => {
     expect(r.body.ok).toBe(true);
     expect(r.body.url_costs).toBeDefined();
   });
+
+  it("/proof/:id survives fs.readFileSync throwing when loading proof file", async () => {
+    const a = agent({ PREWARM_TOKEN: "" });
+
+    const id = "pg_fs_error_proof";
+    const proofDir = path.join(".cache", "proof");
+    const proofPath = path.join(proofDir, `${id}.json`);
+
+    // Ensure the proof file exists so that existsSync passes
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(proofPath, '{"ok":true}', "utf8");
+
+    // Capture the real implementation so we can delegate for non-proof reads
+    const realReadFileSync = fs.readFileSync;
+
+    const spy = vi
+      .spyOn(fs, "readFileSync")
+      .mockImplementation((...args: any[]) => {
+        const filePath = String(args[0]);
+
+        // Only break reads for this specific proof JSON, let everything else work
+        if (filePath.includes(path.join(".cache", "proof")) && filePath.endsWith(`${id}.json`)) {
+          throw new Error("simulated proof read failure");
+        }
+
+        return realReadFileSync.apply(fs, args as any);
+      });
+
+    let r;
+    try {
+      r = await a.get(`/api/ai/proof/${id}`);
+    } finally {
+      // Always restore, even if the request fails
+      spy.mockRestore();
+    }
+
+    // Endpoint must not 500 even if the proof file read fails.
+    expect(r.status).toBe(200);
+    expect(r.body).toBeTruthy();
+    expect(r.body.ok).toBe(true);
+
+    // We should still get a sane minimal proof card back.
+    expect(r.body.proof).toBeTruthy();
+    expect(r.body.proof.pageId).toBe(id);
+    expect(r.body.proof.signature).toBeDefined();
+  });
 });
