@@ -73,6 +73,42 @@ describe("Part5: metrics & proof & previews", () => {
     expect(url_costs).toHaveProperty("tokens_total");
   });
 
+  it("/kpi returns a KPI snapshot without 500s", async () => {
+    const a = agent({ PREWARM_TOKEN: "" });
+
+    const r = await a.get("/api/ai/kpi");
+
+    expect(r.status).toBe(200);
+    expect(r.body.ok).toBe(true);
+
+    // Basic KPI counters should always be present
+    expect(r.body).toHaveProperty("conversions_total");
+    expect(r.body).toHaveProperty("last_convert_ts");
+    expect(typeof r.body.conversions_total).toBe("number");
+    expect(typeof r.body.last_convert_ts).toBe("number");
+
+    // Bandit state should be an object (possibly empty)
+    expect(r.body).toHaveProperty("bandits");
+    expect(typeof r.body.bandits).toBe("object");
+  });
+
+  it("/risk returns a risk flag for a prompt without crashing", async () => {
+    const a = agent({ PREWARM_TOKEN: "" });
+
+    const prompt = "This is a harmless test prompt";
+
+    const r = await a.get(
+      `/api/ai/risk?prompt=${encodeURIComponent(prompt)}`,
+    );
+
+    expect(r.status).toBe(200);
+    expect(r.body.ok).toBe(true);
+
+    // Echoed prompt + boolean risky flag
+    expect(r.body.prompt).toBe(prompt);
+    expect(typeof r.body.risky).toBe("boolean");
+  });
+
   it("/metrics/guardrail returns SUP + KPI guardrail snapshot", async () => {
     const a = agent({ PREWARM_TOKEN: "" });
 
