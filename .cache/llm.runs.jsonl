@@ -448,3 +448,8 @@
 {"at":"2025-11-05T07:47:14.019Z","task":"unit-test-primary","provider":"granite","ms":0,"ok":true,"model_hint":null}
 {"at":"2025-11-05T07:47:14.020Z","task":"unit-test-header","provider":"granite","ms":0,"ok":true,"model_hint":null}
 {"at":"2025-11-05T07:47:14.020Z","task":"unit-test-policy","provider":"openai","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-05T08:36:06.264Z","task":"unit-test","provider":"openai","ms":1,"ok":true,"model_hint":null}
+{"at":"2025-11-05T08:36:06.266Z","task":"unit-test-shadow","provider":"openai","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-05T08:36:06.290Z","task":"unit-test-primary","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-05T08:36:06.290Z","task":"unit-test-header","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-05T08:36:06.291Z","task":"unit-test-policy","provider":"openai","ms":0,"ok":true,"model_hint":null}
