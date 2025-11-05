@@ -53,4 +53,31 @@ describe("Determinism: /instant and /one", () => {
       expect(pageIds.size).toBe(1);
     }
   });
+
+  it("keeps /one deterministic and healthy under repeated calls in test mode", async () => {
+    const a = agent({ PREWARM_TOKEN: "" });
+
+    // Reuse the same known-safe prompt
+    const prompt = "deterministic prompt for SUP";
+    const N = 40;
+
+    const pageIds = new Set<string>();
+
+    for (let i = 0; i < N; i++) {
+      const r = await a.post("/api/ai/one").send({ prompt });
+
+      // Endpoint must not 500, even if quotas/guards kick in.
+      expect(r.status).not.toBe(500);
+
+      // Only record pageIds when the result is present
+      if (r.body?.result?.pageId) {
+        pageIds.add(r.body.result.pageId);
+      }
+    }
+
+    // If we ever get a successful /one, it should be deterministic.
+    if (pageIds.size > 0) {
+      expect(pageIds.size).toBe(1);
+    }
+  });
 });
