@@ -35,7 +35,13 @@ function readAgg(): Agg {
 }
 function writeAgg(a: Agg) {
   ensure();
-  fs.writeFileSync(FILE_AGG, JSON.stringify(a, null, 2));
+  try {
+    fs.writeFileSync(FILE_AGG, JSON.stringify(a, null, 2));
+  } catch (err) {
+    // We NEVER want metrics to crash SUP
+    // eslint-disable-next-line no-console
+    console.warn("[metrics/outcome] failed to write metrics snapshot", err);
+  }
 }
 function brandSig(b: ShipEvent["brand"]) {
   return [
@@ -48,15 +54,22 @@ function brandSig(b: ShipEvent["brand"]) {
 export function recordShip(ev: ShipEvent) {
   ensure();
   try {
-    fs.appendFileSync(FILE_EVENTS, JSON.stringify({ kind: "ship", ...ev }) + "\n");
+    fs.appendFileSync(
+      FILE_EVENTS,
+      JSON.stringify({ kind: "ship", ...ev }) + "\n"
+    );
   } catch {}
   const agg = readAgg();
   const bsig = brandSig(ev.brand);
-  for (const sec of ev.sections) {
-    const s = agg.bySection[sec] || (agg.bySection[sec] = { ships: 0, convs: 0 });
+  const sections = Array.isArray(ev.sections) ? ev.sections : [];
+  for (const sec of sections) {
+    const s =
+      agg.bySection[sec] || (agg.bySection[sec] = { ships: 0, convs: 0 });
     s.ships += 1;
   }
-  const b = agg.byBrandSig[bsig] || (agg.byBrandSig[bsig] = { ships: 0, convs: 0 });
+  const b =
+    agg.byBrandSig[bsig] ||
+    (agg.byBrandSig[bsig] = { ships: 0, convs: 0 });
   b.ships += 1;
   writeAgg(agg);
 }
@@ -72,12 +85,19 @@ export function markConversion(pageId: string) {
   const agg = readAgg();
   // naive: award 1 conv to all sections/brandSig seen in last ship for this pageId
   try {
-    const lines = fs.readFileSync(FILE_EVENTS, "utf8").trim().split(/\r?\n/).slice(-500);
+    const lines = fs
+      .readFileSync(FILE_EVENTS, "utf8")
+      .trim()
+      .split(/\r?\n/)
+      .slice(-500);
     const lastShipLine = [...lines]
       .reverse()
       .find((l) => {
         try {
-          return JSON.parse(l).kind === "ship" && JSON.parse(l).pageId === pageId;
+          return (
+            JSON.parse(l).kind === "ship" &&
+            JSON.parse(l).pageId === pageId
+          );
         } catch {
           return false;
         }
@@ -85,12 +105,16 @@ export function markConversion(pageId: string) {
     if (lastShipLine) {
       const ship = JSON.parse(lastShipLine) as any;
       const bsig = brandSig(ship.brand);
-      for (const sec of ship.sections) {
-        const s = agg.bySection[sec] || (agg.bySection[sec] = { ships: 0, convs: 0 });
+      const sections = Array.isArray(ship.sections) ? ship.sections : [];
+      for (const sec of sections) {
+        const s =
+          agg.bySection[sec] ||
+          (agg.bySection[sec] = { ships: 0, convs: 0 });
         s.convs += 1;
       }
       const b =
-        agg.byBrandSig[bsig] || (agg.byBrandSig[bsig] = { ships: 0, convs: 0 });
+        agg.byBrandSig[bsig] ||
+        (agg.byBrandSig[bsig] = { ships: 0, convs: 0 });
       b.convs += 1;
     }
   } catch {}
