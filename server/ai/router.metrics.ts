@@ -556,7 +556,7 @@ export function setupMetricsRoutes(router: Router) {
         ? path.join(PREVIEW_DIR, `${idRaw}.html`)
         : path.join(DEV_PREVIEW_DIR, `${idRaw}.html`);
 
-      if (!fs.existsExists(filePath)) return res.status(404).send("not found");
+      if (!fs.existsSync(filePath)) return res.status(404).send("not found");
 
       res.setHeader("content-type", "text/html; charset=utf-8");
       return res.status(200).send(fs.readFileSync(filePath, "utf8"));
