@@ -37,6 +37,10 @@ import {
   execCapabilitiesForTier,
 } from "./router.helpers.ts";
 
+// LLM routing
+import { getProviderForRole } from "../llm/routing.roles.ts";
+import { PROVIDERS } from "../llm/provider.config.ts";
+
 // Import dependencies
 import { runWithBudget } from "../intent/budget.ts";
 import { buildSpec } from "../intent/brief.ts";
@@ -653,6 +657,10 @@ export function setupComposeRoutes(router: Router) {
         String((req.headers as any)["x-test"] || "").toLowerCase() === "1" ||
         process.env.NODE_ENV === "test";
 
+      // Resolve compose provider for this role (selection only; wiring into calls is handled elsewhere)
+      const composeProvider_one = PROVIDERS[getProviderForRole("compose_main")];
+      void composeProvider_one;
+
       let labelPath: "rules" | "local" | "cloud" = "rules";
       let cloudUsed = false;
       const startedAt = Date.now();
@@ -930,6 +938,11 @@ export function setupComposeRoutes(router: Router) {
       const testMode =
         String(req.get("x-test") || "").toLowerCase() === "1" ||
         process.env.NODE_ENV === "test";
+
+      // Resolve compose provider for this role (selection only; wiring into calls is handled elsewhere)
+      const composeProvider_instant =
+        PROVIDERS[getProviderForRole("compose_main")];
+      void composeProvider_instant;
 
       // Sticky precheck
       const stickyKey = stickyKeyFor(req.body || {});
