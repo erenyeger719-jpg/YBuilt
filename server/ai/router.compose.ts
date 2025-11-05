@@ -353,7 +353,7 @@ export function setupComposeRoutes(router: Router) {
         });
       }
 
-      if (!action || !action.kind)
+      if (!action or !action.kind)
         return res.status(400).json({ ok: false, error: "missing_action" });
 
       const out = await runWithBudget(sessionId, action, async (_tier) => {

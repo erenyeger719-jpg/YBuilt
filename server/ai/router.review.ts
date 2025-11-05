@@ -1,7 +1,7 @@
 // server/ai/router.review.ts - Part 2: Review & Planning Routes
 import { Router } from "express";
 import express from "express";
-import { 
+import {
   pickModel,
   pickTierByConfidence,
   issuesKeyset,
@@ -10,7 +10,7 @@ import {
   quickGuessIntent,
   applyChipLocal,
   requireFetch,
-  baseUrl
+  baseUrl,
 } from "./router.helpers.ts";
 import { LAST_REVIEW_SIG } from "./router.ts";
 
@@ -19,7 +19,11 @@ import { buildSpec } from "../intent/brief.ts";
 import { nextActions } from "../intent/planner.ts";
 import { filterIntent } from "../intent/filter.ts";
 import { clarifyChips } from "../intent/clarify.ts";
-import { pickExpertFor, recordExpertOutcome, expertsForTask } from "../intent/experts.ts";
+import {
+  pickExpertFor,
+  recordExpertOutcome,
+  expertsForTask,
+} from "../intent/experts.ts";
 import { chatJSON } from "../llm/registry.ts";
 import { pickFromPlaybook } from "../intent/playbook.ts";
 import { pushSignal, summarize } from "../intent/signals.ts";
@@ -28,21 +32,27 @@ import { fillSlots } from "../intent/slots.ts";
 
 // Setup function to mount all review/planning routes
 export function setupReviewRoutes(router: Router) {
-  
   // ---------- /review ----------
   router.post("/review", express.json(), async (req, res) => {
     try {
-      let { code = "", tier = "balanced", sessionId = "anon" } = (req.body || {}) as any;
+      let { code = "", tier = "balanced", sessionId = "anon" } = (req.body ||
+        {}) as any;
       if (!code || typeof code !== "string")
         return res.status(400).json({ ok: false, error: "Missing code" });
       if (!process.env.OPENAI_API_KEY)
-        return res.status(500).json({ ok: false, error: "OPENAI_API_KEY not set" });
+        return res
+          .status(500)
+          .json({ ok: false, error: "OPENAI_API_KEY not set" });
 
       // Trim gigantic inputs (cost guard)
       const codeTrim = String(code).slice(0, 60_000);
       const sig = sha1(codeTrim);
       if (LAST_REVIEW_SIG.get(sessionId) === sig) {
-        return res.json({ ok: true, review: { issues: [] }, note: "skipped_same_code" });
+        return res.json({
+          ok: true,
+          review: { issues: [] },
+          note: "skipped_same_code",
+        });
       }
 
       const system = `
@@ -69,7 +79,7 @@ Rules:
           temperature: 0,
           max_tokens: Number(process.env.OPENAI_REVIEW_MAXTOKENS || 600),
           timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS || 20000),
-          tags: { model_hint: exp.model },
+          tags: { model_hint: exp.model, route: "review" },
           req, // allow header overrides: x-llm-provider, x-llm-shadow
         });
 
@@ -95,7 +105,9 @@ Rules:
         } catch {}
       }
       if (!cheapA || !cheapB)
-        return res.status(500).json({ ok: false, error: "no_critic_available" });
+        return res
+          .status(500)
+          .json({ ok: false, error: "no_critic_available" });
 
       const issuesA = await runCritic(cheapA);
       const issuesB = await runCritic(cheapB);
@@ -117,7 +129,11 @@ Rules:
         fix: it.fix ? String(it.fix).slice(0, 4000) : undefined,
         ops: Array.isArray(it.ops)
           ? it.ops
-              .filter((op: any) => ["index.html", "styles.css", "app.js"].includes(String(op.file)))
+              .filter((op: any) =>
+                ["index.html", "styles.css", "app.js"].includes(
+                  String(op.file)
+                )
+              )
               .map((op: any) => ({
                 file: String(op.file),
                 find: String(op.find ?? ""),
@@ -130,7 +146,9 @@ Rules:
       LAST_REVIEW_SIG.set(sessionId, sig);
       return res.json({ ok: true, review: { issues: cleaned } });
     } catch (e: any) {
-      return res.status(500).json({ ok: false, error: e?.message || "review_failed" });
+      return res
+        .status(500)
+        .json({ ok: false, error: e?.message || "review_failed" });
     }
   });
 
@@ -181,7 +199,11 @@ Rules:
   // ---------- /clarify/compose (zero-LLM) ----------
   router.post("/clarify/compose", async (req, res) => {
     try {
-      const { prompt = "", sessionId = "anon", spec: specIn = {} } = (req.body || {}) as any;
+      const {
+        prompt = "",
+        sessionId = "anon",
+        spec: specIn = {},
+      } = (req.body || {}) as any;
 
       // Base spec: use existing sections/mode if present, else no-LLM guess
       let base = { ...specIn, brand: { ...(specIn as any).brand || {} } };
@@ -194,14 +216,17 @@ Rules:
           quickGuessIntent(prompt) || {
             intent: {
               sections: ["hero-basic", "cta-simple"],
-              color_scheme: /(^|\s)dark(\s|$)/i.test(String(prompt)) ? "dark" : "light",
+              color_scheme: /(^|\s)dark(\s|$)/i.test(String(prompt))
+                ? "dark"
+                : "light",
               vibe: "minimal",
               audience: "",
             },
           };
         (base as any).layout = { sections: (fit as any).intent.sections };
         if ((base as any).brand.dark == null)
-          (base as any).brand.dark = (fit as any).intent.color_scheme === "dark";
+          (base as any).brand.dark =
+            (fit as any).intent.color_scheme === "dark";
         if (!(base as any).brand.tone)
           (base as any).brand.tone =
             (fit as any).intent.vibe === "minimal" ? "minimal" : "serious";
@@ -213,7 +238,7 @@ Rules:
       // Get clarifier chips and apply them locally
       const chips = clarifyChips({ prompt, spec: base as any });
       let s: any = base;
-      for (const c of (chips as any[])) s = applyChipLocal(s, c);
+      for (const c of chips as any[]) s = applyChipLocal(s, c);
 
       // Compose using the existing budgeted pipeline
       let copy =
@@ -235,14 +260,19 @@ Rules:
 
       // Import inferAudience when needed
       const { inferAudience, childHeaders } = await import("./router.helpers.ts");
-      
+
       // Set audience on s using prompt + copy before /act
       s.audience = inferAudience({ summary: prompt, intent: s.intent, copy });
 
       // retrieve → compose
       const retrieve = {
         kind: "retrieve",
-        args: { sections: s.layout.sections, audience: String(s.audience || (s.intent?.audience ?? "")) },
+        args: {
+          sections: s.layout.sections,
+          audience: String(
+            s.audience || (s.intent?.audience ?? "")
+          ),
+        },
       };
       const f3 = requireFetch();
       const actResR = await f3(`${baseUrl(req)}/api/ai/act`, {
@@ -254,7 +284,7 @@ Rules:
 
       let url: string | null = null;
       let result = (actData as any)?.result;
-      
+
       // Variant hints for bandits
       const VARIANT_HINTS: Record<string, string[]> = {
         "hero-basic": ["hero-basic", "hero-basic@b"],
@@ -263,7 +293,10 @@ Rules:
         "faq-accordion": ["faq-accordion", "faq-accordion@dense"],
       };
 
-      if ((result as any)?.kind === "retrieve" && Array.isArray((result as any).sections)) {
+      if (
+        (result as any)?.kind === "retrieve" &&
+        Array.isArray((result as any).sections)
+      ) {
         const composeAction = {
           kind: "compose",
           cost_est: 0,
@@ -294,79 +327,130 @@ Rules:
       }
 
       const sectionsUsed =
-        (result as any)?.sections ||
-        ((s as any)?.layout?.sections || []);
+        (result as any)?.sections || (s as any)?.layout?.sections || [];
 
-      const brandOut =
-        (result as any)?.brand
-          ? { ...(s as any).brand, ...(result as any).brand }
-          : (s as any).brand;
+      const brandOut = (result as any)?.brand
+        ? { ...(s as any).brand, ...(result as any).brand }
+        : (s as any).brand;
 
       pushSignal(sessionId, {
         ts: Date.now(),
         kind: "clarify_compose",
         data: { chips },
       });
-      
+
       try {
         if ((result as any)?.sup) {
-          res.setHeader("X-SUP-Mode", String(((result as any).sup.mode) || ""));
-          const reasons = Array.isArray((result as any).sup.reasons) ? (result as any).sup.reasons.join(",") : "";
+          res.setHeader(
+            "X-SUP-Mode",
+            String(((result as any).sup.mode) || "")
+          );
+          const reasons = Array.isArray((result as any).sup.reasons)
+            ? (result as any).sup.reasons.join(",")
+            : "";
           res.setHeader("X-SUP-Reasons", reasons);
         }
       } catch {}
-      
+
       return res.json({
         ok: true,
         url,
         result,
-        spec: { ...s, brand: brandOut, copy, brandColor, layout: { sections: sectionsUsed } },
+        spec: {
+          ...s,
+          brand: brandOut,
+          copy,
+          brandColor,
+          layout: { sections: sectionsUsed },
+        },
         chips,
       });
     } catch (e) {
-      return res.status(500).json({ ok: false, error: "clarify_compose_failed" });
+      return res
+        .status(500)
+        .json({ ok: false, error: "clarify_compose_failed" });
     }
   });
 
   // ---------- /signals ----------
   router.post("/signals", (req, res) => {
-    const { sessionId = "anon", kind = "", data = {} } = (req.body || {}) as any;
-    if (!kind) return res.status(400).json({ ok: false, error: "missing_kind" });
+    const {
+      sessionId = "anon",
+      kind = "",
+      data = {},
+    } = (req.body || {}) as any;
+    if (!kind)
+      return res.status(400).json({ ok: false, error: "missing_kind" });
     pushSignal(sessionId, { ts: Date.now(), kind, data });
     return res.json({ ok: true });
   });
 
   router.get("/signals/:sessionId", (req, res) => {
-    return res.json({ ok: true, summary: summarize(req.params.sessionId || "anon") });
+    return res.json({
+      ok: true,
+      summary: summarize(req.params.sessionId || "anon"),
+    });
   });
 
   // ---------- /build (ship + test) ----------
   router.post("/build", async (req, res) => {
     try {
-      const { prompt = "", sessionId = "anon", autofix = false } = (req.body || {}) as any;
-      if (!prompt) return res.status(400).json({ ok: false, error: "missing_prompt" });
-      
-      const base = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+      const {
+        prompt = "",
+        sessionId = "anon",
+        autofix = false,
+      } = (req.body || {}) as any;
+      if (!prompt)
+        return res
+          .status(400)
+          .json({ ok: false, error: "missing_prompt" });
+
+      const base =
+        process.env.APP_BASE_URL ||
+        `${req.protocol}://${req.get("host")}`;
       const { runBuilder } = await import("../intent/builder.ts");
-      const out = await runBuilder({ prompt, sessionId, baseUrl: base, autofix });
+      const out = await runBuilder({
+        prompt,
+        sessionId,
+        baseUrl: base,
+        autofix,
+      });
       return res.json(out);
     } catch (e) {
-      return res.status(500).json({ ok: false, error: "build_failed" });
+      return res
+        .status(500)
+        .json({ ok: false, error: "build_failed" });
     }
   });
 
   // ---------- /army (20-plan orchestrator) ----------
   router.post("/army", async (req, res) => {
     try {
-      const { prompt = "", sessionId = "anon", concurrency = 4 } = (req.body || {}) as any;
-      if (!prompt) return res.status(400).json({ ok: false, error: "missing_prompt" });
+      const {
+        prompt = "",
+        sessionId = "anon",
+        concurrency = 4,
+      } = (req.body || {}) as any;
+      if (!prompt)
+        return res
+          .status(400)
+          .json({ ok: false, error: "missing_prompt" });
 
-      const base = process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+      const base =
+        process.env.APP_BASE_URL ||
+        `${req.protocol}://${req.get("host")}`;
       const { runArmy } = await import("./army.ts");
-      const out = await runArmy({ prompt, sessionId, baseUrl: base, concurrency });
+      const out = await runArmy({
+        prompt,
+        sessionId,
+        baseUrl: base,
+        concurrency,
+      });
       return res.json({ ok: true, ...out });
     } catch (e: any) {
-      return res.status(500).json({ ok: false, error: "army_failed" });
+      return res
+        .status(500)
+        .json({ ok: false, error: "army_failed" });
     }
   });
 }
