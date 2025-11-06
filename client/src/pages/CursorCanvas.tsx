@@ -832,13 +832,8 @@ export default function CursorCanvas() {
   }
 
   async function applyChip(chip: string) {
-    if (!spec) return;
-    if (recording) recordingRef.current.push(`chip:${chip}`);
-    const r = await fetch("/api/ai/chips/apply", json({ sessionId, spec, chip }));
-    const j = await r.json();
-    if (!j.ok) return;
-    setSpec(j.spec);
-    await recompose(j.spec);
+    // Route all chip actions through the SUP + budget-aware path.
+    await applyChipGuarded(chip);
   }
 
   async function applyChipGuarded(chip: string) {
