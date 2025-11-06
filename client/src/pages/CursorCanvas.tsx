@@ -40,50 +40,177 @@ import {
   contrastRatio,
   relLum,
   colorFor,
-  clamp01,
   blendSections,
 } from "./types-and-helpers";
+import { chipsForGoal } from "./magicCursorLogic";
 
 export default function CursorCanvas() {
   // Use custom hooks for state management
   const state = useCanvasState();
   const refs = useCanvasRefs();
-  
+
   const {
-    sessionId, pagePrompt, setPagePrompt, spec, setSpec, chips, setChips,
-    url, setUrl, pageId, setPageId, breadth, setBreadth, forceNoJS, setForceNoJS,
-    showProof, setShowProof, showPerf, setShowPerf, proof, setProof,
-    measureOn, setMeasureOn, modMeasure, setModMeasure, freezeHover, setFreezeHover,
-    armyBusy, setArmyBusy, armyTop, setArmyTop, showUnsafe, setShowUnsafe,
-    zoom, setZoom, pan, setPan, panning, setPanning, spaceDown, setSpaceDown,
-    dataSkin, setDataSkin, ab, setAb, abKpi, setAbKpi, abAuto, setAbAuto,
-    abWinner, setAbWinner, history, setHistory, showHistory, setShowHistory,
-    showNarrative, setShowNarrative, narrative, setNarrative, comments, setComments,
-    showComments, setShowComments, noteArm, setNoteArm, commentMode, setCommentMode,
-    sectionOrder, setSectionOrder, costMeta, setCostMeta, receipt, setReceipt,
-    macros, setMacros, showMacros, setShowMacros, recording, setRecording,
-    macroName, setMacroName, role, setRole, peers, setPeers, layer, setLayer,
-    autopilotOn, setAutopilotOn, persona, setPersona, listening, setListening,
-    autoLog, setAutoLog, hoverBox, setHoverBox, hoverMeta, setHoverMeta,
-    cursorPt, setCursorPt, contrastInfo, setContrastInfo, ledger, setLedger,
-    dragId, setDragId, goal, setGoal, scrubIdx, setScrubIdx,
-    modProof, setModProof, modPerf, setModPerf,
+    sessionId,
+    pagePrompt,
+    setPagePrompt,
+    spec,
+    setSpec,
+    chips,
+    setChips,
+    url,
+    setUrl,
+    pageId,
+    setPageId,
+    breadth,
+    setBreadth,
+    forceNoJS,
+    setForceNoJS,
+    showProof,
+    setShowProof,
+    showPerf,
+    setShowPerf,
+    proof,
+    setProof,
+    measureOn,
+    setMeasureOn,
+    modMeasure,
+    setModMeasure,
+    freezeHover,
+    setFreezeHover,
+    armyBusy,
+    setArmyBusy,
+    armyTop,
+    setArmyTop,
+    showUnsafe,
+    setShowUnsafe,
+    zoom,
+    setZoom,
+    pan,
+    setPan,
+    panning,
+    setPanning,
+    spaceDown,
+    setSpaceDown,
+    dataSkin,
+    setDataSkin,
+    ab,
+    setAb,
+    abKpi,
+    setAbKpi,
+    abAuto,
+    setAbAuto,
+    abWinner,
+    setAbWinner,
+    history,
+    setHistory,
+    showHistory,
+    setShowHistory,
+    showNarrative,
+    setShowNarrative,
+    narrative,
+    setNarrative,
+    comments,
+    setComments,
+    showComments,
+    setShowComments,
+    noteArm,
+    setNoteArm,
+    commentMode,
+    setCommentMode,
+    sectionOrder,
+    setSectionOrder,
+    costMeta,
+    setCostMeta,
+    receipt,
+    setReceipt,
+    macros,
+    setMacros,
+    showMacros,
+    setShowMacros,
+    recording,
+    setRecording,
+    macroName,
+    setMacroName,
+    role,
+    setRole,
+    peers,
+    setPeers,
+    layer,
+    setLayer,
+    autopilotOn,
+    setAutopilotOn,
+    persona,
+    setPersona,
+    listening,
+    setListening,
+    autoLog,
+    setAutoLog,
+    hoverBox,
+    setHoverBox,
+    hoverMeta,
+    setHoverMeta,
+    cursorPt,
+    setCursorPt,
+    contrastInfo,
+    setContrastInfo,
+    ledger,
+    setLedger,
+    dragId,
+    setDragId,
+    goal,
+    setGoal,
+    scrubIdx,
+    setScrubIdx,
+    modProof,
+    setModProof,
+    modPerf,
+    setModPerf,
   } = state;
 
   const {
-    frameRef, surfaceRef, canvasWrapRef, panStart, dragOffRef, dragFromRef,
-    goalRef, bcRef, yDocRef, yProvRef, ySectionsRef, yMuteRef, recordingRef,
-    autopilotRef, specRef, armyTopRef, historyRef, proofRef, commentsRef,
-    personaRef, prevProofRef, secretsRef,
+    frameRef,
+    surfaceRef,
+    canvasWrapRef,
+    panStart,
+    dragOffRef,
+    dragFromRef,
+    goalRef,
+    bcRef,
+    yDocRef,
+    yProvRef,
+    ySectionsRef,
+    yMuteRef,
+    recordingRef,
+    autopilotRef,
+    specRef,
+    armyTopRef,
+    historyRef,
+    proofRef,
+    commentsRef,
+    personaRef,
+    prevProofRef,
+    secretsRef,
   } = refs;
 
   // Update refs when state changes
-  useEffect(() => { specRef.current = spec; }, [spec]);
-  useEffect(() => { armyTopRef.current = armyTop; }, [armyTop]);
-  useEffect(() => { historyRef.current = history; }, [history]);
-  useEffect(() => { proofRef.current = proof; }, [proof]);
-  useEffect(() => { commentsRef.current = comments; }, [comments]);
-  useEffect(() => { personaRef.current = persona; }, [persona]);
+  useEffect(() => {
+    specRef.current = spec;
+  }, [spec]);
+  useEffect(() => {
+    armyTopRef.current = armyTop;
+  }, [armyTop]);
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+  useEffect(() => {
+    proofRef.current = proof;
+  }, [proof]);
+  useEffect(() => {
+    commentsRef.current = comments;
+  }, [comments]);
+  useEffect(() => {
+    personaRef.current = persona;
+  }, [persona]);
 
   // Load comments when pageId changes
   useEffect(() => {
@@ -367,7 +494,8 @@ export default function CursorCanvas() {
           return `CLS ${cls} · LCP ${lcp} · A11y ${a11y} · Proof ${proofOk}`;
         },
         setGoalAndApply: async (n: number) => {
-          const g = clamp01(n);
+          // keep goal between 0 and 100
+          const g = Math.max(0, Math.min(100, n));
           setGoal(g);
           await applyGoal(g);
         },
@@ -482,7 +610,13 @@ export default function CursorCanvas() {
   function pushHistory(entry: { url: string | null; pageId: string | null; spec?: Spec }) {
     setHistory((h) =>
       [
-        { ts: Date.now(), url: entry.url, pageId: entry.pageId, prompt: pagePrompt, spec: entry.spec },
+        {
+          ts: Date.now(),
+          url: entry.url,
+          pageId: entry.pageId,
+          prompt: pagePrompt,
+          spec: entry.spec,
+        },
         ...h,
       ].slice(0, 50)
     );
@@ -813,7 +947,10 @@ export default function CursorCanvas() {
 
     const onAwChange = () => {
       const states = Array.from(aw.getStates().values()) as any[];
-      const m: Record<string, { x: number; y: number; layer: string; role: Role; ts: number }> = {};
+      const m: Record<
+        string,
+        { x: number; y: number; layer: string; role: Role; ts: number }
+      > = {};
       for (const s of states) {
         if (!s?.id || s.id === sessionId) continue;
         m[s.id] = {
@@ -873,13 +1010,6 @@ export default function CursorCanvas() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageId]);
-
-  // Goal simulator
-  function chipsForGoal(g: number) {
-    if (g < 34) return ["More minimal"];
-    if (g < 67) return ["Use email signup CTA"];
-    return ["Use email signup CTA", "More minimal"];
-  }
 
   async function applyGoal(gOverride?: number) {
     const g = typeof gOverride === "number" ? gOverride : goal;
@@ -1081,7 +1211,9 @@ export default function CursorCanvas() {
         setListening(false);
       }
     }
-    const t = window.prompt('Type a command (e.g., "make a dark waitlist", "run army", "undo"):');
+    const t = window.prompt(
+      'Type a command (e.g., "make a dark waitlist", "run army", "undo"):'
+    );
     return (t && t.trim()) || null;
   }
 
@@ -1171,7 +1303,9 @@ export default function CursorCanvas() {
     // Wire email
     if (/\b(wire|connect|enable)\b.*\b(email)\b/.test(t) || /\bwelcome email\b/.test(t)) {
       pushAutoLog("pilot", "I need a provider key to wire email. Opening secure input…");
-      try { say("I need your email API key. I opened a secure drawer."); } catch {}
+      try {
+        say("I need your email API key. I opened a secure drawer.");
+      } catch {}
       const key = await securePrompt({
         title: "Secure input — Email provider key",
         label: "API key",
@@ -1179,12 +1313,16 @@ export default function CursorCanvas() {
       });
       if (!key) {
         pushAutoLog("pilot", "Secure input cancelled. Nothing stored.");
-        try { say("Cancelled. I didn't store anything."); } catch {}
+        try {
+          say("Cancelled. I didn't store anything.");
+        } catch {}
         return true;
       }
       secretsRef.current.emailApiKey = key;
       pushAutoLog("pilot", "Key received (ephemeral). I will never store or speak it.");
-      try { say("Got it. Key held in memory for this tab only."); } catch {}
+      try {
+        say("Got it. Key held in memory for this tab only.");
+      } catch {}
       return true;
     }
 
@@ -1205,7 +1343,9 @@ export default function CursorCanvas() {
         const proofOk = p.proof_ok ? "OK" : "BLOCKED";
         const msg = `CLS ${cls} · LCP ${lcp} · A11y ${a11y} · Proof ${proofOk}`;
         pushAutoLog("pilot", msg);
-        try { say(msg); } catch {}
+        try {
+          say(msg);
+        } catch {}
       }
       return true;
     }
@@ -1244,7 +1384,9 @@ export default function CursorCanvas() {
         act: () => {
           const sel = hoverMeta?.sel || "";
           if (!sel) return;
-          try { navigator.clipboard?.writeText(sel); } catch {}
+          try {
+            navigator.clipboard?.writeText(sel);
+          } catch {}
         },
       },
       { label: "More minimal", act: () => applyChip("More minimal") },
@@ -1298,7 +1440,8 @@ export default function CursorCanvas() {
       const now = Date.now();
       setPeers((p) => {
         const next: typeof p = {};
-        for (const [id, v] of Object.entries(p)) if (now - (v as any).ts < 8000) next[id] = v as any;
+        for (const [id, v] of Object.entries(p))
+          if (now - (v as any).ts < 8000) next[id] = v as any;
         return next;
       });
     }, 3000);
@@ -1311,18 +1454,24 @@ export default function CursorCanvas() {
     };
   }, [sessionId]);
 
-  useEffect(() => { pingPresence(); }, [role, layer]);
+  useEffect(() => {
+    pingPresence();
+  }, [role, layer]);
 
   // Push data skin to iframe
   useEffect(() => {
     const win = frameRef.current?.contentWindow;
-    try { win?.postMessage({ type: "yb_skin", skin: dataSkin }, "*"); } catch {}
+    try {
+      win?.postMessage({ type: "yb_skin", skin: dataSkin }, "*");
+    } catch {}
   }, [dataSkin, url]);
 
   // Sync comment mode to iframe
   useEffect(() => {
     const win = frameRef.current?.contentWindow;
-    try { win?.postMessage({ type: "yb_comment_mode", on: commentMode }, "*"); } catch {}
+    try {
+      win?.postMessage({ type: "yb_comment_mode", on: commentMode }, "*");
+    } catch {}
   }, [commentMode, url]);
 
   // Inject probe into iframe
@@ -1443,7 +1592,9 @@ export default function CursorCanvas() {
             );
           } catch {}
 
-          const clickableEl = (el as HTMLElement)?.closest?.("a,button,[role=\"button\"]") as HTMLElement | null;
+          const clickableEl = (el as HTMLElement)?.closest?.(
+            'a,button,[role="button"]'
+          ) as HTMLElement | null;
           const clickable = !!clickableEl;
 
           const params = new URLSearchParams(win.location.search || "");
@@ -1487,7 +1638,11 @@ export default function CursorCanvas() {
         }
         function ensureOrig(el: HTMLElement) {
           if (!(el as any).dataset) return;
-          const ds = (el as any).dataset as DOMStringMap & { ybOrig?: string; ybVal?: string; ybPh?: string };
+          const ds = (el as any).dataset as DOMStringMap & {
+            ybOrig?: string;
+            ybVal?: string;
+            ybPh?: string;
+          };
           if (ds.ybOrig == null) ds.ybOrig = el.textContent || "";
         }
         function applyEmpty() {
@@ -1495,7 +1650,9 @@ export default function CursorCanvas() {
             ensureOrig(el);
             el.textContent = "";
           });
-          Array.from(doc.images || []).forEach((img) => ((img as HTMLImageElement).style.opacity = "0.25"));
+          Array.from(doc.images || []).forEach(
+            (img) => ((img as HTMLImageElement).style.opacity = "0.25")
+          );
           selectAll("input,textarea").forEach((el) => {
             const i = el as HTMLInputElement | HTMLTextAreaElement;
             const ds = (i as any).dataset as DOMStringMap & { ybVal?: string; ybPh?: string };
@@ -1535,7 +1692,9 @@ export default function CursorCanvas() {
             }
             el.classList.remove("yb-skel");
           });
-          Array.from(doc.images || []).forEach((img) => ((img as HTMLImageElement).style.opacity = ""));
+          Array.from(doc.images || []).forEach(
+            (img) => ((img as HTMLImageElement).style.opacity = "")
+          );
           selectAll("input,textarea").forEach((el) => {
             const i = el as HTMLInputElement | HTMLTextAreaElement;
             const ds = (i as any).dataset as DOMStringMap & { ybVal?: string; ybPh?: string };
@@ -1609,7 +1768,9 @@ export default function CursorCanvas() {
         if (_ps) {
           win.history.pushState = function (...args: any[]) {
             const ret = _ps(...args);
-            try { sendSeenBeacon(); } catch {}
+            try {
+              sendSeenBeacon();
+            } catch {}
             return ret;
           } as typeof win.history.pushState;
         }
@@ -1720,8 +1881,12 @@ export default function CursorCanvas() {
     });
     if (!r?.ok) throw new Error(r?.error || "promote failed");
     pushAutoLog("pilot", "Promoted winner to live draft.");
-    try { say("Winner promoted."); } catch {}
-    try { frameRef.current?.contentWindow?.location?.reload(); } catch {}
+    try {
+      say("Winner promoted.");
+    } catch {}
+    try {
+      frameRef.current?.contentWindow?.location?.reload();
+    } catch {}
   }
 
   // First load
@@ -1744,7 +1909,7 @@ export default function CursorCanvas() {
             ₹
             {(
               (costMeta.cents / 100) *
-              ((Number((import.meta as any)?.env?.VITE_FX_USD_INR) || 85))
+              (Number((import.meta as any)?.env?.VITE_FX_USD_INR) || 85)
             ).toFixed(2)}
           </span>
         </div>
