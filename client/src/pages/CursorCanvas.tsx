@@ -5,6 +5,7 @@ import * as Y from "yjs";
 // @ts-ignore
 import { WebrtcProvider } from "y-webrtc";
 import { Autopilot } from "@/lib/autopilot";
+import { supPost, type SupResponse } from "@/lib/supClient";
 import { securePrompt } from "@/components/SecureDrawer";
 import { HoverHighlight, Measurements, Row } from "./components";
 import {
@@ -226,6 +227,36 @@ export default function CursorCanvas() {
   function trySetCostMeta(c: any) {
     const v = pickCostMeta(c);
     if (v) setCostMeta(v);
+  }
+
+  function handleSupError(kind: string, res: SupResponse<any>) {
+    const body: any = res.body;
+    const rawReason =
+      res.supReasons ||
+      (body && (body.reason || body.error || body.code)) ||
+      (res.status === 0 ? "network_error" : null);
+
+    const prettyReason =
+      typeof rawReason === "string" && rawReason.trim()
+        ? rawReason.replace(/_/g, " ")
+        : "guardrail blocked this action";
+
+    const blocked =
+      res.supMode === "block" ||
+      res.status === 422 ||
+      (body && body.error === "sup_block");
+
+    const msg = blocked
+      ? `${kind} blocked by SUP: ${prettyReason}`
+      : `${kind} failed: ${prettyReason}`;
+
+    // Log to the little autopilot HUD
+    pushAutoLog("pilot", msg);
+
+    // Best-effort voice line; ignore if speech API is unavailable
+    try {
+      say(msg);
+    } catch {}
   }
 
   function classifyFromMeta(meta: HoverMsg["meta"] | null): string[] {
@@ -725,17 +756,27 @@ export default function CursorCanvas() {
   }
 
   async function composeGuarded() {
-    const r = await fetch("/api/ai/instant", json({ prompt: pagePrompt, sessionId, breadth }));
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || "instant_failed");
+    const res = await supPost("/api/ai/instant", {
+      prompt: pagePrompt,
+      sessionId,
+      breadth,
+    });
 
-    trySetCostMeta((j as any)?.meta?.cost);
+    const j: any = res.body;
+
+    if (!res.ok || !j) {
+      handleSupError("Compose", res);
+      return false;
+    }
+
+    trySetCostMeta(j?.meta?.cost);
 
     const u = j.url || (j.result && (j.result.url || j.result.path)) || null;
     const pid = j?.result?.pageId || null;
-    const ok = await passesBudgets(pid);
 
-    if (!ok) {
+    const okBudgets = await passesBudgets(pid);
+
+    if (!okBudgets) {
       pushAutoLog("pilot", "Blocked by Contracts: proof/a11y/perf budgets not met.");
       try {
         say("Blocked. Budgets not met.");
@@ -765,16 +806,27 @@ export default function CursorCanvas() {
         forceStripJS: forceNoJS,
       },
     };
-    const r = await fetch("/api/ai/act", json({ sessionId, spec: nextSpec, action }));
-    const j = await r.json();
 
-    trySetCostMeta((j as any)?.meta?.cost || (j as any)?.result?.meta?.cost);
+    const res = await supPost("/api/ai/act", {
+      sessionId,
+      spec: nextSpec,
+      action,
+    });
+
+    const j: any = res.body;
+
+    if (!res.ok || !j) {
+      handleSupError("Re-compose", res);
+      return false;
+    }
+
+    trySetCostMeta(j?.meta?.cost || j?.result?.meta?.cost);
 
     const u = j?.result?.url || j?.result?.path || null;
     const pid = j?.result?.pageId || null;
 
-    const ok = await passesBudgets(pid);
-    if (!ok) {
+    const okBudgets = await passesBudgets(pid);
+    if (!okBudgets) {
       pushAutoLog("pilot", "Blocked by Contracts: change would violate budgets.");
       try {
         say("Blocked. Budgets not met.");
@@ -801,9 +853,20 @@ export default function CursorCanvas() {
   async function applyChipGuarded(chip: string) {
     if (!spec) return false;
     if (recording) recordingRef.current.push(`chip:${chip}`);
-    const r = await fetch("/api/ai/chips/apply", json({ sessionId, spec, chip }));
-    const j = await r.json();
-    if (!j.ok) return false;
+
+    const res = await supPost("/api/ai/chips/apply", {
+      sessionId,
+      spec,
+      chip,
+    });
+
+    const j: any = res.body;
+
+    if (!res.ok || !j || j.ok === false) {
+      handleSupError(`Chip "${chip}"`, res);
+      return false;
+    }
+
     return await recomposeGuarded(j.spec);
   }
 
