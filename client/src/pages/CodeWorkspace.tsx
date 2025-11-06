@@ -14,11 +14,15 @@ async function readFile(path: string) {
   if (!r.ok) throw new Error("read_fetch_failed");
   return r.json();
 }
-async function propose(path: string, instruction: string) {
+async function propose(
+  path: string,
+  instruction: string,
+  selection?: { start: number; end: number }
+) {
   const r = await fetch("/api/code/propose", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ path, instruction }),
+    body: JSON.stringify({ path, instruction, selection }),
   });
   if (!r.ok) throw new Error("propose_fetch_failed");
   return r.json();
@@ -92,7 +96,9 @@ async function migratePreview(params: {
   dirPrefix?: string; find: string; replace?: string; regex?: boolean; caseSensitive?: boolean; maxFiles?: number;
 }) {
   const r = await fetch("/api/code/migrate/preview", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(params),
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
   });
   if (!r.ok) throw new Error("migrate_preview_failed");
   return r.json();
@@ -101,7 +107,9 @@ async function migrateApply(params: {
   dirPrefix?: string; find: string; replace?: string; regex?: boolean; caseSensitive?: boolean; maxFiles?: number;
 }) {
   const r = await fetch("/api/code/migrate/apply", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(params),
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
   });
   if (!r.ok) throw new Error("migrate_apply_failed");
   return r.json();
@@ -122,7 +130,9 @@ function computeIntentSummary(base: string, next: string): IntentSummary {
   const cta = hit(/\b(sign up|get started|start trial|join (now|waitlist)|buy now|request demo|subscribe)\b/g);
   const price = hit(/₹|\$|\b(rs\.?|inr|usd)\b|\b(per month|\/mo|monthly|price|pricing)\b/g);
   const riskyClaims = hit(/\b(best|#1|number\s*one|guaranteed|unlimited|fastest)\b/g) + hit(/\b\d{1,3}%\b/g);
-  const claim = riskyClaims + hit(/\b(revolutionary|industry-leading|no\.?1|breakthrough|game[- ]changing|prove|evidence)\b/g);
+  const claim =
+    riskyClaims +
+    hit(/\b(revolutionary|industry-leading|no\.?1|breakthrough|game[- ]changing|prove|evidence)\b/g);
   const feature = hit(/\b(feature|supports|integrates|includes|dark mode|offline|api|sdk|webhooks|a11y)\b/g);
 
   return { cta, claim, price, feature, riskyClaims };
@@ -210,14 +220,22 @@ function lcsOps(a: string[], b: string[]): Op[] {
       ops.push({ t: "equal", lines: buf });
     } else if (dp[i + 1][j] >= dp[i][j + 1]) {
       const buf: string[] = [];
-      while (i < n && (j >= m || dp[i + 1][j] >= dp[i][j + 1]) && !(i < n && j < m && a[i] === b[j])) {
+      while (
+        i < n &&
+        (j >= m || dp[i + 1][j] >= dp[i][j + 1]) &&
+        !(i < n && j < m && a[i] === b[j])
+      ) {
         buf.push(a[i]);
         i++;
       }
       ops.push({ t: "del", lines: buf });
     } else {
       const buf: string[] = [];
-      while (j < m && (i >= n || dp[i][j + 1] > dp[i + 1][j]) && !(i < n && j < m && a[i] === b[j])) {
+      while (
+        j < m &&
+        (i >= n || dp[i][j + 1] > dp[i + 1][j]) &&
+        !(i < n && j < m && a[i] === b[j])
+      ) {
         buf.push(b[j]);
         j++;
       }
@@ -362,6 +380,7 @@ export default function CodeWorkspace() {
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [activePath, setActivePath] = useState<string>("");
   const [content, setContent] = useState<string>("");
+  const [editorText, setEditorText] = useState<string>("");
   const [proposal, setProposal] = useState<{ newContent: string; summary: string[] } | null>(null);
   const [instruction, setInstruction] = useState<string>("");
   const [status, setStatus] = useState<string>("");
@@ -381,7 +400,11 @@ export default function CodeWorkspace() {
   const [abNote, setAbNote] = useState<string>("");
 
   // Tests state
-  const [testProposal, setTestProposal] = useState<{ path: string; newContent: string; summary: string[] } | null>(null);
+  const [testProposal, setTestProposal] = useState<{
+    path: string;
+    newContent: string;
+    summary: string[];
+  } | null>(null);
   const [testStatus, setTestStatus] = useState<string>("");
 
   // Migration state
@@ -390,7 +413,11 @@ export default function CodeWorkspace() {
   const [migRegex, setMigRegex] = useState(false);
   const [migCase, setMigCase] = useState(false);
   const [migDir, setMigDir] = useState("");
-  const [migPrev, setMigPrev] = useState<{ total: number; changed: number; items: { path: string; hits: number }[] } | null>(null);
+  const [migPrev, setMigPrev] = useState<{
+    total: number;
+    changed: number;
+    items: { path: string; hits: number }[];
+  } | null>(null);
   const [migStatus, setMigStatus] = useState<string>("");
 
   // History state
@@ -429,6 +456,15 @@ export default function CodeWorkspace() {
       .map((x) => x.f);
     return ranked;
   }, [flat, qoQuery]);
+
+  // NEW: diff hunks for current proposal vs current content
+  const proposalHunks = useMemo(() => {
+    if (!proposal) return [];
+    const baseLines = content.split("\n");
+    const nextLines = proposal.newContent.split("\n");
+    // if too big, we could fall back later; for now just diff
+    return toHunks(baseLines, nextLines);
+  }, [proposal, content]);
 
   // load tree on mount
   useEffect(() => {
@@ -495,12 +531,14 @@ export default function CodeWorkspace() {
         else {
           setActivePath("");
           setContent("");
+          setEditorText("");
           setProposal(null);
           setExplainLines([]);
           setTestProposal(null);
           setSelectedSnap(null);
           setDiffHunksState(null);
           setSelectedHunks({});
+          setOutcomeHint(null);
         }
       }
       return nextTabs;
@@ -514,6 +552,7 @@ export default function CodeWorkspace() {
         ensureTab(d.path);
         setActivePath(d.path);
         setContent(d.content);
+        setEditorText(d.content);
         setProposal(null);
         setIntent(null);
         setExplainLines([]);
@@ -541,7 +580,8 @@ export default function CodeWorkspace() {
     if (!activePath || !instruction.trim()) return;
     setStatus("Proposing…");
     try {
-      const d = await propose(activePath, instruction);
+      const selLines = selectionRangeLines(); // may be undefined
+      const d = await propose(activePath, instruction, selLines);
       if (d.ok) {
         const intentNow = computeIntentSummary(content, d.newContent);
         setProposal({ newContent: d.newContent, summary: d.summary });
@@ -559,7 +599,11 @@ export default function CodeWorkspace() {
     setStatus("Dry-run…");
     try {
       const d = await applyFile(activePath, proposal.newContent, true);
-      setStatus(d.ok ? "Dry-run OK (contracts next)" : (d.error + (Array.isArray(d.reasons) ? ": " + d.reasons.join("; ") : "")));
+      setStatus(
+        d.ok
+          ? "Dry-run OK (contracts next)"
+          : d.error + (Array.isArray(d.reasons) ? ": " + d.reasons.join("; ") : "")
+      );
     } catch {
       setStatus("dry-run failed");
     }
@@ -592,6 +636,7 @@ export default function CodeWorkspace() {
       if (d.ok) {
         const before = content;
         setContent(newContent);
+        setEditorText(newContent);
         setProposal(null);
         setInstruction("");
         setExplainLines([]);
@@ -644,6 +689,11 @@ export default function CodeWorkspace() {
     await commitContent(proposal.newContent, add, "commit");
   }
 
+  async function handleManualSave() {
+    if (!activePath) return;
+    await commitContent(editorText, ["manual edit"], "manual");
+  }
+
   // voice input
   function toggleMic() {
     // @ts-ignore
@@ -663,7 +713,8 @@ export default function CodeWorkspace() {
           const res = e.results[i];
           if (res.isFinal) finalText += res[0].transcript;
         }
-        if (finalText.trim()) setInstruction((prev) => (prev ? prev + " " : "") + finalText.trim());
+        if (finalText.trim())
+          setInstruction((prev) => (prev ? prev + " " : "") + finalText.trim());
       };
       recognitionRef.current.onend = () => setListening(false);
       recognitionRef.current.onerror = () => setListening(false);
@@ -718,14 +769,48 @@ export default function CodeWorkspace() {
           (ev: MouseEvent) => {
             const target = ev.target as HTMLElement | null;
             if (!target) return;
+
             const el = target.closest("[data-file]") as HTMLElement | null;
             if (!el) return;
+
             const file = el.getAttribute("data-file") || "";
             const lineStr = el.getAttribute("data-line") || "";
-            if (file) {
-              const parsed = parseInt(lineStr || "0", 10);
-              openFile(file, isFiniteNum(parsed) && parsed > 0 ? parsed : undefined);
+
+            if (!file) return;
+
+            // NEW: if click is on an accessibility issue, suggest a default instruction
+            const issueEl = target.closest(".yb-a11y-issue") as HTMLElement | null;
+            if (issueEl) {
+              const tag = issueEl.tagName.toLowerCase();
+              let defaultInstruction = "";
+
+              if (tag === "img") {
+                defaultInstruction = "Add an appropriate alt text description for this image.";
+              } else if (
+                tag === "button" ||
+                tag === "a" ||
+                issueEl.getAttribute("role") === "button" ||
+                issueEl.getAttribute("role") === "link"
+              ) {
+                defaultInstruction =
+                  "Add an accessible label or aria-label for this button or link.";
+              } else if (
+                tag === "input" ||
+                tag === "select" ||
+                tag === "textarea" ||
+                issueEl.getAttribute("role") === "textbox"
+              ) {
+                defaultInstruction =
+                  "Add an accessible label or aria-label for this form field.";
+              }
+
+              if (defaultInstruction) {
+                setInstruction(defaultInstruction);
+              }
             }
+
+            const parsed = parseInt(lineStr || "0", 10);
+            openFile(file, isFiniteNum(parsed) && parsed > 0 ? parsed : undefined);
           },
           true
         );
@@ -779,6 +864,29 @@ export default function CodeWorkspace() {
     const end = ta.selectionEnd || 0;
     return ta.value.slice(start, end);
   }
+
+  function selectionRangeLines():
+    | { start: number; end: number }
+    | undefined {
+    const ta = leftTextRef.current;
+    if (!ta) return;
+    const full = ta.value;
+    const startPos = ta.selectionStart ?? 0;
+    const endPos = ta.selectionEnd ?? startPos;
+
+    // no selection → undefined
+    if (startPos === endPos) return;
+
+    const before = full.slice(0, startPos);
+    const selected = full.slice(startPos, endPos);
+
+    // zero-based line indexes
+    const startLine = before.split("\n").length - 1;
+    const endLine = startLine + (selected.split("\n").length - 1);
+
+    return { start: startLine, end: endLine };
+  }
+
   function chipRename() {
     const sel = selectionText().trim() || "name";
     const next = window.prompt(`Rename "${sel}" to:`, `${sel}2`);
@@ -798,7 +906,9 @@ export default function CodeWorkspace() {
     const sel = selectionText().trim();
     const name = window.prompt("Extract selection into React component named:", "NewSection");
     if (!name) return;
-    const base = sel ? `extract selected code into React component ${name}` : `extract into React component ${name}`;
+    const base = sel
+      ? `extract selected code into React component ${name}`
+      : `extract into React component ${name}`;
     setInstruction(`${base} and import/use it in this file`);
   }
 
@@ -1064,7 +1174,9 @@ export default function CodeWorkspace() {
             return (
               <div
                 key={t.path}
-                className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${active ? "bg-gray-200" : "hover:bg-gray-100"}`}
+                className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${
+                  active ? "bg-gray-200" : "hover:bg-gray-100"
+                }`}
                 onClick={() => activateTab(t.path)}
                 title={t.path}
               >
@@ -1096,7 +1208,11 @@ export default function CodeWorkspace() {
             <button onClick={chipRename} className="px-2 py-1 border rounded text-xs" title="Uses selection">
               Rename
             </button>
-            <button onClick={chipExtractComponent} className="px-2 py-1 border rounded text-xs" title="Uses selection if any">
+            <button
+              onClick={chipExtractComponent}
+              className="px-2 py-1 border rounded text-xs"
+              title="Uses selection if any"
+            >
               Extract ↗︎
             </button>
             <button onClick={chipAxiosToFetch} className="px-2 py-1 border rounded text-xs">
@@ -1115,13 +1231,17 @@ export default function CodeWorkspace() {
           <button onClick={onPropose} className="px-3 py-2 border rounded" title="Ctrl/Cmd+Enter">
             Propose
           </button>
+          <button onClick={handleManualSave} className="px-3 py-2 border rounded">
+            Save
+          </button>
           <button onClick={onExplain} className="px-3 py-2 border rounded">
             Explain
           </button>
           {intent && (
             <span className="text-xs px-2 py-1 border rounded ml-2">
               Intent: CTA {intent.cta} • CLAIM {intent.claim}
-              {intent.riskyClaims ? ` ⚠︎${intent.riskyClaims}` : ""} • PRICE {intent.price} • FEAT {intent.feature}
+              {intent.riskyClaims ? ` ⚠︎${intent.riskyClaims}` : ""} • PRICE {intent.price} • FEAT{" "}
+              {intent.feature}
             </span>
           )}
           <span className="text-sm opacity-70 ml-auto">{status}</span>
@@ -1131,8 +1251,8 @@ export default function CodeWorkspace() {
         <div className="grid grid-cols-2 gap-0 flex-1">
           <textarea
             ref={leftTextRef}
-            value={content}
-            readOnly
+            value={editorText}
+            onChange={(e) => setEditorText(e.target.value)}
             className="font-mono text-sm p-3 outline-none resize-none w-full h-full"
             spellCheck={false}
           />
@@ -1140,7 +1260,9 @@ export default function CodeWorkspace() {
             <div className="p-2 text-sm font-semibold border-b">Proposal / Explain / A/B / Tests / History</div>
 
             {explainLines.length > 0 && (
-              <pre className="p-3 text-xs opacity-80 whitespace-pre-wrap border-b max-h-28 overflow-auto">{explainLines.join("\n")}</pre>
+              <pre className="p-3 text-xs opacity-80 whitespace-pre-wrap border-b max-h-28 overflow-auto">
+                {explainLines.join("\n")}
+              </pre>
             )}
 
             {/* Proposal */}
@@ -1153,15 +1275,32 @@ export default function CodeWorkspace() {
                     <div key={i}>• {s}</div>
                   ))}
                   {outcomeHint && (
-                    <div className="px-2 py-1 text-xs border rounded bg-gray-50 mx-3 my-1">{outcomeHint.text}</div>
+                    <div className="px-2 py-1 text-xs border rounded bg-gray-50 mx-3 my-1">
+                      {outcomeHint.text}
+                    </div>
                   )}
                 </div>
-                <textarea
-                  value={proposal.newContent}
-                  readOnly
-                  className="font-mono text-sm p-3 outline-none resize-none h-52 w-full"
-                  spellCheck={false}
-                />
+
+                {/* NEW: diff view for proposal */}
+                {proposalHunks.length === 0 ? (
+                  <div className="p-3 text-xs opacity-60 border-t">
+                    No visible changes (proposal matches current content).
+                  </div>
+                ) : (
+                  <div className="max-h-60 overflow-auto text-[12px] font-mono border-t">
+                    {proposalHunks.map((h) => (
+                      <div key={h.idx} className="border-b">
+                        <div className="bg-gray-50 px-2 py-1 text-xs opacity-70">
+                          @@ -{h.aStart + 1},{h.aLen} +{h.bStart + 1},{h.bLen} @@
+                        </div>
+                        <pre className="px-2 py-1">
+                          {h.lines.map((ln) => `${ln.sign} ${ln.text}`).join("\n")}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="p-2 border-t flex flex-wrap gap-2">
                   {!abId ? (
                     <>
@@ -1186,22 +1325,35 @@ export default function CodeWorkspace() {
                       <div className="text-xs">
                         Experiment: <span className="font-mono">{abId}</span>
                       </div>
-                      <button onClick={() => onAbMark("A", "seen")} className="px-2 py-1 border rounded text-xs">
+                      <button
+                        onClick={() => onAbMark("A", "seen")}
+                        className="px-2 py-1 border rounded text-xs"
+                      >
                         Seen A
                       </button>
-                      <button onClick={() => onAbMark("A", "convert")} className="px-2 py-1 border rounded text-xs">
+                      <button
+                        onClick={() => onAbMark("A", "convert")}
+                        className="px-2 py-1 border rounded text-xs"
+                      >
                         Convert A
                       </button>
-                      <button onClick={() => onAbMark("B", "seen")} className="px-2 py-1 border rounded text-xs">
+                      <button
+                        onClick={() => onAbMark("B", "seen")}
+                        className="px-2 py-1 border rounded text-xs"
+                      >
                         Seen B
                       </button>
-                      <button onClick={() => onAbMark("B", "convert")} className="px-2 py-1 border rounded text-xs">
+                      <button
+                        onClick={() => onAbMark("B", "convert")}
+                        className="px-2 py-1 border rounded text-xs"
+                      >
                         Convert B
                       </button>
                       {abStatsState && (
                         <span className="text-xs px-2 py-1 border rounded">
-                          A: {abStatsState.A.convert}/{abStatsState.A.seen} ({(abStatsState.A.cr * 100).toFixed(1)}%) • B:{" "}
-                          {abStatsState.B.convert}/{abStatsState.B.seen} ({(abStatsState.B.cr * 100).toFixed(1)}%)
+                          A: {abStatsState.A.convert}/{abStatsState.A.seen} (
+                          {(abStatsState.A.cr * 100).toFixed(1)}%) • B: {abStatsState.B.convert}/
+                          {abStatsState.B.seen} ({(abStatsState.B.cr * 100).toFixed(1)}%)
                         </span>
                       )}
                       <button
@@ -1236,7 +1388,11 @@ export default function CodeWorkspace() {
                         try {
                           const j = await testsPropose(activePath);
                           if (j.ok) {
-                            setTestProposal({ path: j.testPath, newContent: j.newContent, summary: j.summary || [] });
+                            setTestProposal({
+                              path: j.testPath,
+                              newContent: j.newContent,
+                              summary: j.summary || [],
+                            });
                             setTestStatus("Proposed");
                           } else {
                             setTestStatus(j.error || "tests_propose_failed");
@@ -1255,8 +1411,19 @@ export default function CodeWorkspace() {
                           if (!testProposal) return;
                           setTestStatus("Applying tests…");
                           try {
-                            const j = await testsApply(testProposal.path, testProposal.newContent, false);
-                            setTestStatus(j.ok ? `Wrote ${testProposal.path}` : (j.error + (Array.isArray(j.reasons) ? ": " + j.reasons.join("; ") : "")));
+                            const j = await testsApply(
+                              testProposal.path,
+                              testProposal.newContent,
+                              false
+                            );
+                            setTestStatus(
+                              j.ok
+                                ? `Wrote ${testProposal.path}`
+                                : j.error +
+                                    (Array.isArray(j.reasons)
+                                      ? ": " + j.reasons.join("; ")
+                                      : "")
+                            );
                           } catch {
                             setTestStatus("tests_apply_failed");
                           }
@@ -1285,7 +1452,8 @@ export default function CodeWorkspace() {
                         spellCheck={false}
                       />
                       <div className="text-[11px] opacity-60 mt-2">
-                        Run locally: <code>npx vitest</code> (or <code>npm test</code>) • jsdom env pre-set in scaffold
+                        Run locally: <code>npx vitest</code> (or <code>npm test</code>) • jsdom env pre-set in
+                        scaffold
                       </div>
                     </div>
                   )}
@@ -1320,10 +1488,20 @@ export default function CodeWorkspace() {
                   className="border px-2 py-1 rounded text-sm"
                 />
                 <label className="text-xs flex items-center gap-1">
-                  <input type="checkbox" checked={migRegex} onChange={() => setMigRegex((v) => !v)} /> Regex
+                  <input
+                    type="checkbox"
+                    checked={migRegex}
+                    onChange={() => setMigRegex((v) => !v)}
+                  />{" "}
+                  Regex
                 </label>
                 <label className="text-xs flex items-center gap-1">
-                  <input type="checkbox" checked={migCase} onChange={() => setMigCase((v) => !v)} /> Case-sensitive
+                  <input
+                    type="checkbox"
+                    checked={migCase}
+                    onChange={() => setMigCase((v) => !v)}
+                  />{" "}
+                  Case-sensitive
                 </label>
                 <div className="flex gap-2">
                   <button
@@ -1341,7 +1519,9 @@ export default function CodeWorkspace() {
                         });
                         if (j.ok) {
                           setMigPrev(j);
-                          setMigStatus(`Preview: ${j.changed}/${j.total} files will change`);
+                          setMigStatus(
+                            `Preview: ${j.changed}/${j.total} files will change`
+                          );
                         } else setMigStatus(j.error || "preview failed");
                       } catch {
                         setMigStatus("preview failed");
@@ -1369,7 +1549,9 @@ export default function CodeWorkspace() {
                           dirPrefix: migDir || undefined,
                           maxFiles: 500,
                         });
-                        setMigStatus(j.ok ? `Applied to ${j.touched} file(s)` : j.error || "apply failed");
+                        setMigStatus(
+                          j.ok ? `Applied to ${j.touched} file(s)` : j.error || "apply failed"
+                        );
                       } catch {
                         setMigStatus("apply failed");
                       }
@@ -1382,7 +1564,9 @@ export default function CodeWorkspace() {
 
               {migPrev && (
                 <div className="mt-2 text-xs">
-                  <div className="opacity-70 mb-1">Will change {migPrev.changed}/{migPrev.total} files (showing top 50)</div>
+                  <div className="opacity-70 mb-1">
+                    Will change {migPrev.changed}/{migPrev.total} files (showing top 50)
+                  </div>
                   <div className="max-h-36 overflow-auto border rounded">
                     <ul className="divide-y">
                       {migPrev.items.slice(0, 50).map((it) => (
@@ -1403,26 +1587,37 @@ export default function CodeWorkspace() {
                 <div className="text-sm font-semibold">History</div>
                 <div className="flex items-center gap-3">
                   <label className="text-xs flex items-center gap-1">
-                    <input type="checkbox" checked={historyFilterActive} onChange={() => setHistoryFilterActive((v) => !v)} />
+                    <input
+                      type="checkbox"
+                      checked={historyFilterActive}
+                      onChange={() => setHistoryFilterActive((v) => !v)}
+                    />
                     This file only
                   </label>
                   <div className="text-xs opacity-70">{historyStatus}</div>
                 </div>
               </div>
               {filteredHistory.length === 0 ? (
-                <div className="text-xs opacity-60 mt-2">No snapshots yet. Commit a proposal to record.</div>
+                <div className="text-xs opacity-60 mt-2">
+                  No snapshots yet. Commit a proposal to record.
+                </div>
               ) : (
                 <div className="mt-2 space-y-2 max-h-52 overflow-auto">
                   {filteredHistory.map((s) => (
                     <div key={s.id} className="border rounded p-2">
                       <div className="text-xs flex flex-wrap gap-2">
-                        <span className="font-mono">{new Date(s.ts).toLocaleTimeString()}</span>
+                        <span className="font-mono">
+                          {new Date(s.ts).toLocaleTimeString()}
+                        </span>
                         <span className="opacity-70">{s.path}</span>
-                        <span className="opacity-70">Δ {Math.abs(s.after.length - s.before.length)} chars</span>
+                        <span className="opacity-70">
+                          Δ {Math.abs(s.after.length - s.before.length)} chars
+                        </span>
                         {s.intent && (
                           <span className="opacity-70">
                             Intent: CTA {s.intent.cta} • CLAIM {s.intent.claim}
-                            {s.intent.riskyClaims ? ` ⚠︎${s.intent.riskyClaims}` : ""} • PRICE {s.intent.price} • FEAT {s.intent.feature}
+                            {s.intent.riskyClaims ? ` ⚠︎${s.intent.riskyClaims}` : ""} • PRICE{" "}
+                            {s.intent.price} • FEAT {s.intent.feature}
                           </span>
                         )}
                       </div>
@@ -1434,13 +1629,22 @@ export default function CodeWorkspace() {
                         ))}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <button onClick={() => openDiff(s)} className="px-2 py-1 border rounded text-xs">
+                        <button
+                          onClick={() => openDiff(s)}
+                          className="px-2 py-1 border rounded text-xs"
+                        >
                           Diff
                         </button>
-                        <button onClick={() => revertToBefore(s)} className="px-2 py-1 border rounded text-xs">
+                        <button
+                          onClick={() => revertToBefore(s)}
+                          className="px-2 py-1 border rounded text-xs"
+                        >
                           Revert to Before
                         </button>
-                        <button onClick={() => reapplyAfter(s)} className="px-2 py-1 border rounded text-xs">
+                        <button
+                          onClick={() => reapplyAfter(s)}
+                          className="px-2 py-1 border rounded text-xs"
+                        >
                           Apply After
                         </button>
                       </div>
@@ -1460,16 +1664,22 @@ export default function CodeWorkspace() {
                       <button
                         className="px-2 py-1 border rounded text-xs"
                         onClick={() => {
-                          const all = diffHunksState.reduce((acc, h) => {
-                            acc[h.idx] = true;
-                            return acc;
-                          }, {} as Record<number, boolean>);
+                          const all = diffHunksState.reduce(
+                            (acc, h) => {
+                              acc[h.idx] = true;
+                              return acc;
+                            },
+                            {} as Record<number, boolean>
+                          );
                           setSelectedHunks(all);
                         }}
                       >
                         Select all
                       </button>
-                      <button className="px-2 py-1 border rounded text-xs" onClick={() => setSelectedHunks({})}>
+                      <button
+                        className="px-2 py-1 border rounded text-xs"
+                        onClick={() => setSelectedHunks({})}
+                      >
                         Deselect
                       </button>
                     </div>
@@ -1481,18 +1691,28 @@ export default function CodeWorkspace() {
                           <input
                             type="checkbox"
                             checked={!!selectedHunks[h.idx]}
-                            onChange={(e) => setSelectedHunks((prev) => ({ ...prev, [h.idx]: e.target.checked }))}
+                            onChange={(e) =>
+                              setSelectedHunks((prev) => ({
+                                ...prev,
+                                [h.idx]: e.target.checked,
+                              }))
+                            }
                           />
                           <span className="opacity-70">
                             @@ -{h.aStart + 1},{h.aLen} +{h.bStart + 1},{h.bLen} @@
                           </span>
                         </div>
-                        <pre className="px-2 py-1">{h.lines.map((ln) => `${ln.sign} ${ln.text}`).join("\n")}</pre>
+                        <pre className="px-2 py-1">
+                          {h.lines.map((ln) => `${ln.sign} ${ln.text}`).join("\n")}
+                        </pre>
                       </div>
                     ))}
                   </div>
                   <div className="px-2 py-2 border-t flex items-center gap-2">
-                    <button className="px-3 py-2 border rounded text-xs" onClick={() => cherryPickSelected(selectedSnap)}>
+                    <button
+                      className="px-3 py-2 border rounded text-xs"
+                      onClick={() => cherryPickSelected(selectedSnap)}
+                    >
                       Apply Selected Hunks
                     </button>
                     <button
@@ -1553,7 +1773,9 @@ export default function CodeWorkspace() {
                     <li
                       key={f.path}
                       onClick={() => qoOpenSelected(i)}
-                      className={`px-4 py-2 cursor-pointer text-sm ${i === qoSel ? "bg-gray-100" : "hover:bg-gray-50"}`}
+                      className={`px-4 py-2 cursor-pointer text-sm ${
+                        i === qoSel ? "bg-gray-100" : "hover:bg-gray-50"
+                      }`}
                       title={f.path}
                     >
                       <span className="font-medium">{f.name}</span>

@@ -4,7 +4,13 @@ import type { Response } from "express";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { listTree, readText, proposeEdit, applyWrite, explainAt } from "../code/brain.ts";
+import {
+  listTree,
+  readText,
+  proposeEdit,
+  applyWrite,
+  explainAt,
+} from "../code/brain.ts";
 
 const router = Router();
 router.use(express.json()); // simple, ESM-safe
@@ -33,7 +39,11 @@ function shouldHardGate() {
 
 type GateResult = { ok: true } | { ok: false; reasons: string[] };
 
-function gateFileChange(filePath: string, before: string, after: string): GateResult {
+function gateFileChange(
+  filePath: string,
+  before: string,
+  after: string
+): GateResult {
   if (!shouldHardGate()) return { ok: true };
 
   const reasons: string[] = [];
@@ -49,7 +59,9 @@ function gateFileChange(filePath: string, before: string, after: string): GateRe
   const MAX_FILE_BYTES = 1_500_000; // ~1.5 MB
   const MAX_DELTA_BYTES = 400_000; // +400 KB
   if (afterBytes > MAX_FILE_BYTES) {
-    reasons.push(`file too large: ${afterBytes} bytes (limit ${MAX_FILE_BYTES})`);
+    reasons.push(
+      `file too large: ${afterBytes} bytes (limit ${MAX_FILE_BYTES})`
+    );
   }
   if (delta > MAX_DELTA_BYTES) {
     reasons.push(`delta too large: +${delta} bytes (limit +${MAX_DELTA_BYTES})`);
@@ -60,9 +72,11 @@ function gateFileChange(filePath: string, before: string, after: string): GateRe
   // 2) JS safety
   if (/\.(m?js|c?ts|tsx|jsx)$/i.test(ext)) {
     if (/\beval\s*\(/.test(after)) reasons.push("forbidden: eval()");
-    if (/\bnew\s+Function\s*\(/.test(after)) reasons.push("forbidden: new Function()");
+    if (/\bnew\s+Function\s*\(/.test(after))
+      reasons.push("forbidden: new Function()");
     // naive innerHTML assignment detection
-    if (/\.\s*innerhtml\s*=/.test(lower)) reasons.push("forbidden: direct innerHTML assignment");
+    if (/\.\s*innerhtml\s*=/.test(lower))
+      reasons.push("forbidden: direct innerHTML assignment");
   }
 
   // 3) HTML/JSX alt text
@@ -105,7 +119,11 @@ router.get("/read", (req, res) => {
 
 router.post("/propose", (req, res) => {
   try {
-    const { path: p, instruction, selection } = req.body || {};
+    const { path: p, instruction, selection } = (req.body || {}) as {
+      path?: string;
+      instruction?: string;
+      selection?: { start: number; end: number };
+    };
     if (!p || !instruction) return bad(res, "missing path/instruction");
     const out = proposeEdit({ path: p, instruction, selection });
     res.json({ ok: true, ...out });
@@ -117,7 +135,8 @@ router.post("/propose", (req, res) => {
 router.post("/apply", (req, res) => {
   try {
     const { path: p, newContent, dryRun } = req.body || {};
-    if (!p || typeof newContent !== "string") return bad(res, "missing path/newContent");
+    if (!p || typeof newContent !== "string")
+      return bad(res, "missing path/newContent");
 
     // --- server hard-gate (safe for new files) ---
     let before = "";
@@ -129,7 +148,11 @@ router.post("/apply", (req, res) => {
     }
     const gate = gateFileChange(p, before, String(newContent));
     if (!gate.ok) {
-      return res.json({ ok: false, error: "contracts_failed", reasons: gate.reasons });
+      return res.json({
+        ok: false,
+        error: "contracts_failed",
+        reasons: gate.reasons,
+      });
     }
 
     // 👇 NEW: succeed without touching disk on dry-run
@@ -156,7 +179,11 @@ router.post("/explain", (req, res) => {
   try {
     const { path: p, line, selection } = req.body || {};
     if (!p) return bad(res, "missing path");
-    const out = explainAt(p, Number.isFinite(Number(line)) ? Number(line) : undefined, selection);
+    const out = explainAt(
+      p,
+      Number.isFinite(Number(line)) ? Number(line) : undefined,
+      selection
+    );
     res.json({ ok: true, ...out });
   } catch (e: any) {
     bad(res, e?.message || "explain_error");
@@ -232,7 +259,11 @@ router.get("/ab/stats", (req, res) => {
         A: { seen: 0, convert: 0, cr: 0 },
         B: { seen: 0, convert: 0, cr: 0 },
       });
-    const lines = fs.readFileSync(AB_FILE, "utf8").trim().split("\n").filter(Boolean);
+    const lines = fs
+      .readFileSync(AB_FILE, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean);
     let aSeen = 0,
       aConv = 0,
       bSeen = 0,
@@ -311,7 +342,9 @@ function scanExportedFns(src: string): string[] {
 function makeLibTest(importPath: string, fns: string[]) {
   const imports = fns.length ? `{ ${fns.join(", ")} }` : "* as mod";
   const subject = fns.length ? fns[0] : "mod";
-  const isFn = fns.length ? `typeof ${subject} === "function"` : `typeof ${subject} === "object"`;
+  const isFn = fns.length
+    ? `typeof ${subject} === "function"`
+    : `typeof ${subject} === "object"`;
   return `import { describe, it, expect } from "vitest";
 import ${imports} from "${importPath}";
 
@@ -332,7 +365,8 @@ router.post("/tests/propose", (req, res) => {
     const r = readText(String(sourcePath));
     const src = r.content || "";
     const ext = path.extname(sourcePath).toLowerCase();
-    const isReact = /from\s+['"]react['"]/.test(src) || ext === ".tsx" || ext === ".jsx";
+    const isReact =
+      /from\s+['"]react['"]/.test(src) || ext === ".tsx" || ext === ".jsx";
     const testPath = targetPath || defaultTestPathFor(String(sourcePath));
     const importPath = relativeImport(testPath, sourcePath);
 
@@ -360,7 +394,8 @@ router.post("/tests/propose", (req, res) => {
 router.post("/tests/apply", (req, res) => {
   try {
     const { testPath, newContent, dryRun } = req.body || {};
-    if (!testPath || typeof newContent !== "string") return bad(res, "missing testPath/newContent");
+    if (!testPath || typeof newContent !== "string")
+      return bad(res, "missing testPath/newContent");
 
     // --- server hard-gate for the new test file (safe for new files) ---
     let before = "";
@@ -372,7 +407,11 @@ router.post("/tests/apply", (req, res) => {
     }
     const gate = gateFileChange(String(testPath), before, String(newContent));
     if (!gate.ok) {
-      return res.json({ ok: false, error: "contracts_failed", reasons: gate.reasons });
+      return res.json({
+        ok: false,
+        error: "contracts_failed",
+        reasons: gate.reasons,
+      });
     }
 
     fs.mkdirSync(path.dirname(String(testPath)), { recursive: true });
@@ -433,7 +472,11 @@ router.post("/migrate/preview", (req, res) => {
 
     for (const p of paths) {
       if (!isTexty(p)) continue;
-      if (dirPrefix && !p.replace(/\\/g, "/").startsWith(dirPrefix.replace(/\\/g, "/"))) continue;
+      if (
+        dirPrefix &&
+        !p.replace(/\\/g, "/").startsWith(dirPrefix.replace(/\\/g, "/"))
+      )
+        continue;
       const r = readText(p);
       const txt = r.content || "";
       const hits = (txt.match(re) || []).length;
@@ -468,13 +511,22 @@ router.post("/migrate/apply", (req, res) => {
     const re = buildReg(find, regex, caseSensitive);
 
     // First pass: compute candidates + gates (atomic all-or-nothing if any blocked)
-    type Candidate = { path: string; before: string; next: string; bytesDelta: number };
+    type Candidate = {
+      path: string;
+      before: string;
+      next: string;
+      bytesDelta: number;
+    };
     const candidates: Candidate[] = [];
     const blocked: { path: string; reasons: string[] }[] = [];
 
     for (const p of paths) {
       if (!isTexty(p)) continue;
-      if (dirPrefix && !p.replace(/\\/g, "/").startsWith(dirPrefix.replace(/\\/g, "/"))) continue;
+      if (
+        dirPrefix &&
+        !p.replace(/\\/g, "/").startsWith(dirPrefix.replace(/\\/g, "/"))
+      )
+        continue;
 
       const r = readText(p);
       const txt = r.content || "";
@@ -486,7 +538,8 @@ router.post("/migrate/apply", (req, res) => {
         path: p,
         before: txt,
         next,
-        bytesDelta: Buffer.byteLength(next, "utf8") - Buffer.byteLength(txt, "utf8"),
+        bytesDelta:
+          Buffer.byteLength(next, "utf8") - Buffer.byteLength(txt, "utf8"),
       };
 
       // Gate each candidate
@@ -503,7 +556,10 @@ router.post("/migrate/apply", (req, res) => {
         error: "contracts_failed",
         blocked,
         touched: 0,
-        results: candidates.map((c) => ({ path: c.path, bytesDelta: c.bytesDelta })),
+        results: candidates.map((c) => ({
+          path: c.path,
+          bytesDelta: c.bytesDelta,
+        })),
       });
     }
 
