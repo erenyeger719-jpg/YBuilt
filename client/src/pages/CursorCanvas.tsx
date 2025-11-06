@@ -714,18 +714,9 @@ export default function CursorCanvas() {
 
   // Compose paths
   async function composeInstant() {
-    const r = await fetch("/api/ai/instant", json({ prompt: pagePrompt, sessionId, breadth }));
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || "instant_failed");
-
-    trySetCostMeta((j as any)?.meta?.cost);
-
-    setSpec(j.spec || null);
-    setChips((j.chips || []) as string[]);
-    const u = j.url || (j.result && (j.result.url || j.result.path)) || null;
-    const pid = j?.result?.pageId || null;
-    setPreview(u, pid);
-    pushHistory({ url: u, pageId: pid, spec: j?.spec });
+    // Use the guarded path so first-load + voice commands
+    // behave like the main Compose button.
+    await composeGuarded();
   }
 
   async function recompose(s: Spec) {
@@ -913,18 +904,23 @@ export default function CursorCanvas() {
   async function runArmyTop() {
     setArmyBusy(true);
     try {
-      const r = await fetch(
-        "/api/ai/army",
-        json({
-          prompt: pagePrompt,
-          sessionId,
-          concurrency: 5,
-          count: 20,
-          strict: true,
-        })
-      );
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || "army_failed");
+      const res = await supPost("/api/ai/army", {
+        prompt: pagePrompt,
+        sessionId,
+        concurrency: 5,
+        count: 20,
+        strict: true,
+      });
+
+      const j: any = res.body;
+
+      if (!res.ok || !j || j.ok === false) {
+        handleSupError("Army run", res);
+        return;
+      }
+
+      // If /army reports cost, show it in the HUD.
+      trySetCostMeta(j?.meta?.cost);
 
       const items = Array.isArray(j.winners) ? j.winners : [];
       const clean = items
@@ -937,7 +933,9 @@ export default function CursorCanvas() {
           proof_ok: !!w.proof_ok,
         }));
 
-      clean.sort((a: any, b: any) => Number(b.proof_ok) - Number(a.proof_ok) || b.score - a.score);
+      clean.sort(
+        (a: any, b: any) => Number(b.proof_ok) - Number(a.proof_ok) || b.score - a.score
+      );
 
       setArmyTop(clean.slice(0, 20));
     } finally {
