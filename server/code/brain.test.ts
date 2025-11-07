@@ -8,6 +8,8 @@ import {
   applyWrite,
   proposeEdit,
   explainAt,
+  inferStyleProfileFromSource,
+  applyStyleProfileToNewContent,
 } from "./brain";
 
 const TMP_DIR = "tmp-test-code";
@@ -206,5 +208,72 @@ describe("T0.4 – explainAt", () => {
 
     expect(res.summary.toLowerCase()).toMatch(/test|jest|vitest/);
     expect(res.lines.length).toBeGreaterThan(0);
+  });
+});
+
+//
+// T8 – style profile: infer + apply
+//
+describe("T8 – style profile", () => {
+  it("keeps single quotes and removes semicolons when source prefers that style", () => {
+    const source = `
+      const msg = 'hello'
+      function fn() {
+        return 'ok'
+      }
+    `;
+
+    const profile = inferStyleProfileFromSource(source);
+
+    expect(profile.quotes).toBe("single");
+    // could be "never" or "mixed" depending on heuristics,
+    // but it should not force semicolons.
+    expect(["never", "mixed"]).toContain(profile.semicolons);
+
+    const newContent = `
+      const msg = "hello";
+      function fn() {
+        return "ok";
+      }
+    `;
+
+    const styled = applyStyleProfileToNewContent(profile, newContent);
+
+    // quotes normalized to single
+    expect(styled).not.toContain('"hello"');
+    expect(styled).toContain("'hello'");
+
+    // no obvious trailing semicolons if source didn't use them
+    expect(styled).not.toMatch(/;\s*$/m);
+  });
+
+  it("forces double quotes and semicolons when source prefers that style", () => {
+    const source = `
+      const msg = "hello";
+      function fn() {
+        return "ok";
+      }
+    `;
+
+    const profile = inferStyleProfileFromSource(source);
+
+    expect(profile.quotes).toBe("double");
+    expect(profile.semicolons).toBe("always");
+
+    const newContent = `
+      const msg = 'hello'
+      function fn() {
+        return 'ok'
+      }
+    `;
+
+    const styled = applyStyleProfileToNewContent(profile, newContent);
+
+    // quotes normalized to double
+    expect(styled).not.toContain("'hello'");
+    expect(styled).toContain('"hello";');
+
+    // semicolons added where needed
+    expect(styled).toMatch(/"ok";/);
   });
 });

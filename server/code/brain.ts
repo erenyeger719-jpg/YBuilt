@@ -8,9 +8,11 @@ export type StyleProfile = {
   indent: "tabs" | "spaces2" | "spaces4" | "unknown";
   quote: "'" | '"';
   semicolons: "always" | "never" | "mixed";
+  // For tests / external callers (T8-style)
+  quotes: "single" | "double" | "mixed";
 };
 
-function inferStyleProfileFromSource(source: string): StyleProfile {
+export function inferStyleProfileFromSource(source: string): StyleProfile {
   const lines = source.split(/\r?\n/);
 
   let tabIndents = 0;
@@ -76,10 +78,17 @@ function inferStyleProfileFromSource(source: string): StyleProfile {
     else if (ratio < 0.2) semicolons = "never";
   }
 
-  const quote: "'" | '"' =
+  const quoteChar: "'" | '"' =
     singleQuotes >= doubleQuotes ? "'" : '"';
 
-  return { indent, quote, semicolons };
+  let quotesKind: StyleProfile["quotes"] = "mixed";
+  if (singleQuotes > 0 && doubleQuotes === 0) {
+    quotesKind = "single";
+  } else if (doubleQuotes > 0 && singleQuotes === 0) {
+    quotesKind = "double";
+  }
+
+  return { indent, quote: quoteChar, semicolons, quotes: quotesKind };
 }
 
 function normalizeIndentToProfile(
@@ -128,7 +137,18 @@ function normalizeQuotesToProfile(
   code: string,
   profile: StyleProfile
 ): string {
-  const preferred = profile.quote;
+  // Prefer explicit quote char, then quotes-kind
+  let preferred: "'" | '"' | null = null;
+
+  if (profile.quote === "'" || profile.quote === '"') {
+    preferred = profile.quote;
+  } else if (profile.quotes === "single") {
+    preferred = "'";
+  } else if (profile.quotes === "double") {
+    preferred = '"';
+  }
+
+  if (!preferred) return code;
 
   // Replace string literals, preserving content, flipping the outer quote
   // and escaping any inner occurrences of the preferred quote.
@@ -138,7 +158,10 @@ function normalizeQuotesToProfile(
 
     const inner = match.slice(1, -1);
     const escapedInner = inner.replace(
-      new RegExp(preferred.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"), "g"),
+      new RegExp(
+        preferred.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"),
+        "g"
+      ),
       `\\${preferred}`
     );
     return preferred + escapedInner + preferred;
@@ -162,24 +185,68 @@ function normalizeSemicolonsToProfile(
   return out.join("\n");
 }
 
-function applyStyleProfileToNewContent(
+// Overload 1: internal usage with path + original content
+export function applyStyleProfileToNewContent(
   pathStr: string,
   original: string,
   next: string
-): { styled: string; profile: StyleProfile | null } {
-  // Only attempt for JS/TS-ish files
-  if (!/\.(?:[jt]sx?)$/i.test(pathStr)) {
-    return { styled: next, profile: null };
+): { styled: string; profile: StyleProfile | null };
+
+// Overload 2: external usage (T8) with a StyleProfile + newContent
+export function applyStyleProfileToNewContent(
+  profile: StyleProfile,
+  newContent: string
+): string;
+
+export function applyStyleProfileToNewContent(
+  a: string | StyleProfile,
+  b: string,
+  c?: string
+): any {
+  // Legacy/internal call: (pathStr, original, next)
+  if (typeof a === "string" && typeof c === "string") {
+    const pathStr = a;
+    const original = b;
+    const next = c;
+
+    // Only attempt for JS/TS-ish files
+    if (!/\.(?:[jt]sx?)$/i.test(pathStr)) {
+      return { styled: next, profile: null };
+    }
+
+    const profile = inferStyleProfileFromSource(original);
+
+    let styled = next;
+    styled = normalizeIndentToProfile(styled, profile);
+    styled = normalizeQuotesToProfile(styled, profile);
+    styled = normalizeSemicolonsToProfile(styled, profile);
+
+    return { styled, profile };
   }
 
-  const profile = inferStyleProfileFromSource(original);
+  // New/test call: (profile, newContent)
+  const profile = a as StyleProfile;
+  const newContent = b;
 
-  let styled = next;
-  styled = normalizeIndentToProfile(styled, profile);
-  styled = normalizeQuotesToProfile(styled, profile);
-  styled = normalizeSemicolonsToProfile(styled, profile);
+  // Build a minimal profile for quote/semi normalization
+  const fullProfile: StyleProfile = {
+    indent: "unknown",
+    quote:
+      profile.quote ??
+      (profile.quotes === "single"
+        ? "'"
+        : profile.quotes === "double"
+        ? '"'
+        : "'"),
+    semicolons: profile.semicolons,
+    quotes: profile.quotes ?? "mixed",
+  };
 
-  return { styled, profile };
+  let styled = newContent;
+  styled = normalizeQuotesToProfile(styled, fullProfile);
+  styled = normalizeSemicolonsToProfile(styled, fullProfile);
+
+  return styled;
 }
 
 const ROOT = process.env.WORKSPACE_ROOT || process.cwd();
@@ -511,7 +578,7 @@ export function applyWrite(
 
   const abs = path.join(ROOT, relPath);
 
-  // NEW: safely read "before" content; if file doesn't exist, treat as ""
+  // safely read "before" content; if file doesn't exist, treat as ""
   let before = "";
   try {
     before = fs.readFileSync(abs, "utf8");
@@ -611,9 +678,7 @@ export function explainAt(
     if (
       /use(State|Effect|Memo|Callback|Ref)\(/.test(windowed)
     )
-      bullets.push(
-        "It uses React hooks for state/effects."
-      );
+      bullets.push("It uses React hooks for state/effects.");
     if (
       /export\s+default\s+function|const\s+\w+\s*=\s*\(/.test(
         windowed
@@ -624,9 +689,7 @@ export function explainAt(
       );
   }
   if (lang === "js") {
-    if (
-      /import\s+.*from\s+['"].+['"]/.test(windowed)
-    )
+    if (/import\s+.*from\s+['"].+['"]/.test(windowed))
       bullets.push("Imports modules at the top.");
     if (/async\s+function|\bawait\b/.test(windowed))
       bullets.push("Contains async/await flow.");
@@ -636,35 +699,23 @@ export function explainAt(
   if (lang === "css") {
     const selCount = (windowed.match(/{/g) || []).length;
     bullets.push(`CSS rules (~${selCount} in focus).`);
-    if (
-      /position:\s*sticky/.test(windowed)
-    )
-      bullets.push(
-        "Implements a sticky element (likely header)."
-      );
-    if (
-      /@media\s*\(max-width:/.test(windowed)
-    )
+    if (/position:\s*sticky/.test(windowed))
+      bullets.push("Implements a sticky element (likely header).");
+    if (/@media\s*\(max-width:/.test(windowed))
       bullets.push(
         "Has responsive behavior via media queries."
       );
   }
   if (lang === "html") {
-    if (
-      /<header|<nav|<main|<footer/.test(windowed)
-    )
-      bullets.push(
-        "Semantic layout elements are present."
-      );
+    if (/<header|<nav|<main|<footer/.test(windowed))
+      bullets.push("Semantic layout elements are present.");
     if (/data-file=/.test(windowed))
       bullets.push(
         "Preview elements are annotated with data-file/data-line for source jumps."
       );
   }
   if (/describe\(|it\(|test\(/.test(windowed))
-    bullets.push(
-      "Contains tests (Jest/Vitest style)."
-    );
+    bullets.push("Contains tests (Jest/Vitest style).");
   if (/axios\./.test(windowed))
     bullets.push(
       "Uses axios; you can auto-convert trivial calls to fetch via the Propose flow."
@@ -678,9 +729,7 @@ export function explainAt(
   const summary = bullets.join(" ");
   const focusLines: [number, string][] = windowed
     .split("\n")
-    .map(
-      (s, i) => [i + 1, s] as [number, string]
-    );
+    .map((s, i) => [i + 1, s] as [number, string]);
 
   return { summary, lines: focusLines };
 }
