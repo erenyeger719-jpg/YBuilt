@@ -93,7 +93,12 @@ async function testsApply(testPath: string, newContent: string, dryRun = false) 
 
 // --- Migration helpers (repo-wide) ---
 async function migratePreview(params: {
-  dirPrefix?: string; find: string; replace?: string; regex?: boolean; caseSensitive?: boolean; maxFiles?: number;
+  dirPrefix?: string;
+  find: string;
+  replace?: string;
+  regex?: boolean;
+  caseSensitive?: boolean;
+  maxFiles?: number;
 }) {
   const r = await fetch("/api/code/migrate/preview", {
     method: "POST",
@@ -104,7 +109,13 @@ async function migratePreview(params: {
   return r.json();
 }
 async function migrateApply(params: {
-  dirPrefix?: string; find: string; replace?: string; regex?: boolean; caseSensitive?: boolean; maxFiles?: number;
+  dirPrefix?: string;
+  find: string;
+  replace?: string;
+  regex?: boolean;
+  caseSensitive?: boolean;
+  maxFiles?: number;
+  dryRun?: boolean;
 }) {
   const r = await fetch("/api/code/migrate/apply", {
     method: "POST",
@@ -112,6 +123,45 @@ async function migrateApply(params: {
     body: JSON.stringify(params),
   });
   if (!r.ok) throw new Error("migrate_apply_failed");
+  return r.json();
+}
+
+// --- Comments helpers ---
+type FileComment = {
+  id: string;
+  path: string;
+  line: number;
+  text: string;
+  ts: number;
+};
+
+async function commentsList(path: string) {
+  const r = await fetch("/api/code/comments/list", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  if (!r.ok) throw new Error("comments_list_failed");
+  return r.json();
+}
+
+async function commentsAdd(path: string, line: number, text: string) {
+  const r = await fetch("/api/code/comments/add", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ path, line, text }),
+  });
+  if (!r.ok) throw new Error("comments_add_failed");
+  return r.json();
+}
+
+async function commentsDelete(id: string) {
+  const r = await fetch("/api/code/comments/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  if (!r.ok) throw new Error("comments_delete_failed");
   return r.json();
 }
 
@@ -370,6 +420,7 @@ type Snapshot = {
   after: string;
   summary: string[];
   intent?: IntentSummary | null;
+  review?: "pending" | "approved" | "needs_review";
 };
 
 type ABStats = { seen: number; convert: number; cr: number };
@@ -419,6 +470,7 @@ export default function CodeWorkspace() {
     items: { path: string; hits: number }[];
   } | null>(null);
   const [migStatus, setMigStatus] = useState<string>("");
+  const [migDryRun, setMigDryRun] = useState(false);
 
   // History state
   const [history, setHistory] = useState<Snapshot[]>([]);
@@ -427,6 +479,13 @@ export default function CodeWorkspace() {
   const [selectedSnap, setSelectedSnap] = useState<Snapshot | null>(null);
   const [selectedHunks, setSelectedHunks] = useState<Record<number, boolean>>({});
   const [diffHunksState, setDiffHunksState] = useState<Hunk[] | null>(null);
+
+  // Comments state
+  const [comments, setComments] = useState<FileComment[]>([]);
+  const [commentDraft, setCommentDraft] = useState<string>("");
+
+  // editor hover
+  const [editorHoverLine, setEditorHoverLine] = useState<number | null>(null);
 
   // voice
   const [listening, setListening] = useState(false);
@@ -539,10 +598,25 @@ export default function CodeWorkspace() {
           setDiffHunksState(null);
           setSelectedHunks({});
           setOutcomeHint(null);
+          setComments([]);
+          setCommentDraft("");
         }
       }
       return nextTabs;
     });
+  }
+
+  async function refreshCommentsForPath(path: string) {
+    try {
+      const d = await commentsList(path);
+      if (d.ok && Array.isArray(d.comments)) {
+        setComments(d.comments);
+      } else {
+        setComments([]);
+      }
+    } catch {
+      setComments([]);
+    }
   }
 
   async function openFile(p: string, line?: number) {
@@ -565,6 +639,7 @@ export default function CodeWorkspace() {
         setDiffHunksState(null);
         setSelectedHunks({});
         setOutcomeHint(null); // NEW: clear hint when switching files
+        await refreshCommentsForPath(d.path);
         if (isFiniteNum(line) && line > 0) {
           setTimeout(() => {
             scrollEditorToLine(leftTextRef.current, d.content, line);
@@ -650,6 +725,7 @@ export default function CodeWorkspace() {
           after: newContent,
           summary,
           intent,
+          review: "pending",
         });
         softReloadPreview();
         return true;
@@ -666,6 +742,10 @@ export default function CodeWorkspace() {
 
   function pushSnapshot(s: Snapshot) {
     setHistory((h) => [s, ...h].slice(0, 200)); // simple cap
+  }
+
+  function setSnapshotReview(id: string, review: Snapshot["review"]) {
+    setHistory((h) => h.map((s) => (s.id === id ? { ...s, review } : s)));
   }
 
   function softReloadPreview() {
@@ -728,17 +808,21 @@ export default function CodeWorkspace() {
     }
   }
 
+  function currentCaretLine1Based(): number | null {
+    const ta = leftTextRef.current;
+    if (!ta) return null;
+    const txt = ta.value.slice(0, ta.selectionStart || 0);
+    return txt.split("\n").length; // 1-based
+  }
+
   // Explain
   async function onExplain() {
     if (!activePath) return;
     setStatus("Explaining…");
     try {
       let caretLine: number | undefined = undefined;
-      const ta = leftTextRef.current;
-      if (ta) {
-        const txt = ta.value.slice(0, ta.selectionStart || 0);
-        caretLine = txt.split("\n").length; // 1-based
-      }
+      const caret = currentCaretLine1Based();
+      if (caret !== null) caretLine = caret;
       const d = await explain(activePath, caretLine);
       if (d.ok) {
         const pretty = [
@@ -753,6 +837,32 @@ export default function CodeWorkspace() {
       } else setStatus(d.error || "explain failed");
     } catch {
       setStatus("explain failed");
+    }
+  }
+
+  async function onAddCommentAtCaret() {
+    if (!activePath || !commentDraft.trim()) return;
+    const caret = currentCaretLine1Based();
+    const line = caret && caret > 0 ? caret : 1;
+    try {
+      const d = await commentsAdd(activePath, line, commentDraft.trim());
+      if (d.ok && d.comment) {
+        setComments((prev) => [...prev, d.comment as FileComment]);
+        setCommentDraft("");
+      }
+    } catch {
+      // optional: surface status
+    }
+  }
+
+  async function onDeleteComment(id: string) {
+    try {
+      const d = await commentsDelete(id);
+      if (d.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== id));
+      }
+    } catch {
+      // optional: surface status
     }
   }
 
@@ -850,13 +960,36 @@ export default function CodeWorkspace() {
     const s = await abStats(abId);
     if (s.ok) setAbStatsState({ A: s.A, B: s.B });
   }
+
+  async function onPromoteB() {
+    if (!activePath || !proposal || !abId) return;
+
+    const baseSummary = proposal.summary || [];
+
+    const extra: string[] = [`promote B from AB ${abId}`];
+
+    if (abStatsState) {
+      const { A, B } = abStatsState;
+      extra.push(
+        `AB ${abId}: A ${A.convert}/${A.seen} (${(A.cr * 100).toFixed(1)}%), ` +
+          `B ${B.convert}/${B.seen} (${(B.cr * 100).toFixed(1)}%)`
+      );
+    }
+
+    const finalSummary = outcomeHint
+      ? [...baseSummary, ...extra, outcomeHint.text]
+      : [...baseSummary, ...extra];
+
+    await commitContent(proposal.newContent, finalSummary, "promote");
+  }
+
   const bBeatsA = (() => {
     if (!abStatsState) return false;
     const { A, B } = abStatsState;
     return B.seen >= 10 && B.cr > A.cr * 1.2;
   })();
 
-  // ---- Quick Chips ----
+  // ---- selection + chips helpers ----
   function selectionText(): string {
     const ta = leftTextRef.current;
     if (!ta) return "";
@@ -887,6 +1020,54 @@ export default function CodeWorkspace() {
     return { start: startLine, end: endLine };
   }
 
+  function selectLine(lineIdx: number) {
+    const ta = leftTextRef.current;
+    if (!ta) return;
+    const lines = ta.value.split("\n");
+    if (!lines.length) return;
+
+    const clamped = Math.max(0, Math.min(lineIdx, lines.length - 1));
+
+    let start = 0;
+    for (let i = 0; i < clamped; i++) {
+      start += lines[i].length + 1; // +1 for newline
+    }
+    const end = start + lines[clamped].length;
+
+    ta.focus();
+    ta.selectionStart = start;
+    ta.selectionEnd = end;
+  }
+
+  const APPROX_LINE_HEIGHT = 18; // keep in sync with scrollEditorToLine
+
+  function handleEditorMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    const ta = leftTextRef.current;
+    if (!ta) return;
+
+    const rect = ta.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+
+    if (y < 0 || y > rect.height) {
+      setEditorHoverLine(null);
+      return;
+    }
+
+    const line = Math.floor((y + ta.scrollTop) / APPROX_LINE_HEIGHT);
+    const totalLines = ta.value.split("\n").length;
+
+    if (line < 0 || line >= totalLines) {
+      setEditorHoverLine(null);
+    } else {
+      setEditorHoverLine(line);
+    }
+  }
+
+  function clearEditorHover() {
+    setEditorHoverLine(null);
+  }
+
+  // ---- Quick Chips ----
   function chipRename() {
     const sel = selectionText().trim() || "name";
     const next = window.prompt(`Rename "${sel}" to:`, `${sel}2`);
@@ -1249,13 +1430,82 @@ export default function CodeWorkspace() {
 
         {/* Code + Context */}
         <div className="grid grid-cols-2 gap-0 flex-1">
-          <textarea
-            ref={leftTextRef}
-            value={editorText}
-            onChange={(e) => setEditorText(e.target.value)}
-            className="font-mono text-sm p-3 outline-none resize-none w-full h-full"
-            spellCheck={false}
-          />
+          <div
+            className="relative w-full h-full"
+            onMouseMove={handleEditorMouseMove}
+            onMouseLeave={clearEditorHover}
+          >
+            <textarea
+              ref={leftTextRef}
+              value={editorText}
+              onChange={(e) => setEditorText(e.target.value)}
+              className="font-mono text-sm p-3 outline-none resize-none w-full h-full"
+              spellCheck={false}
+              onScroll={(e) => {
+                // keep hover line aligned as user scrolls
+                const ta = e.target as HTMLTextAreaElement;
+                if (!ta) return;
+                // Small trick: recompute line based on current mouse if hovering.
+                // If no mouse over, we do nothing.
+              }}
+            />
+
+            {/* Inline hover chips overlay */}
+            <div className="pointer-events-none absolute inset-0">
+              {editorHoverLine !== null && leftTextRef.current && (
+                (() => {
+                  const ta = leftTextRef.current;
+                  const top =
+                    editorHoverLine * APPROX_LINE_HEIGHT - ta.scrollTop + 4; // +4px padding adjust
+
+                  return (
+                    <div
+                      className="absolute right-2 flex gap-1"
+                      style={{ top }}
+                    >
+                      <button
+                        className="pointer-events-auto px-2 py-0.5 border rounded text-[10px] bg-white shadow-sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (editorHoverLine === null) return;
+                          selectLine(editorHoverLine);
+                          onExplain();
+                        }}
+                      >
+                        Explain
+                      </button>
+                      <button
+                        className="pointer-events-auto px-2 py-0.5 border rounded text-[10px] bg-white shadow-sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (editorHoverLine === null) return;
+                          selectLine(editorHoverLine);
+                          chipExtractComponent();
+                        }}
+                      >
+                        Extract
+                      </button>
+                      <button
+                        className="pointer-events-auto px-2 py-0.5 border rounded text-[10px] bg-white shadow-sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (editorHoverLine === null) return;
+                          selectLine(editorHoverLine);
+                          chipSoftenClaims();
+                        }}
+                      >
+                        Soften
+                      </button>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+
           <div className="border-l h-full flex flex-col">
             <div className="p-2 text-sm font-semibold border-b">Proposal / Explain / A/B / Tests / History</div>
 
@@ -1358,7 +1608,7 @@ export default function CodeWorkspace() {
                       )}
                       <button
                         disabled={!bBeatsA || !proposal}
-                        onClick={onCommit}
+                        onClick={onPromoteB}
                         className="px-2 py-1 border rounded text-xs disabled:opacity-50"
                         title="Commits the proposal (Variant B) if B is winning"
                       >
@@ -1503,6 +1753,14 @@ export default function CodeWorkspace() {
                   />{" "}
                   Case-sensitive
                 </label>
+                <label className="text-xs flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={migDryRun}
+                    onChange={() => setMigDryRun((v) => !v)}
+                  />{" "}
+                  Dry-run only
+                </label>
                 <div className="flex gap-2">
                   <button
                     className="px-3 py-2 border rounded text-sm"
@@ -1533,13 +1791,23 @@ export default function CodeWorkspace() {
                   <button
                     className="px-3 py-2 border rounded text-sm"
                     onClick={async () => {
-                      setMigStatus("Contracts check…");
-                      const proof = await runContractsCheck();
-                      if (!proof.ok) {
-                        setMigStatus(proof.reason || "Blocked by contracts");
+                      if (!migFind.trim()) {
+                        setMigStatus("Missing find pattern");
                         return;
                       }
-                      setMigStatus("Applying…");
+
+                      // For real apply, still run global contracts check
+                      if (!migDryRun) {
+                        setMigStatus("Contracts check…");
+                        const proof = await runContractsCheck();
+                        if (!proof.ok) {
+                          setMigStatus(proof.reason || "Blocked by contracts");
+                          return;
+                        }
+                      }
+
+                      setMigStatus(migDryRun ? "Dry-run…" : "Applying…");
+
                       try {
                         const j = await migrateApply({
                           find: migFind,
@@ -1548,12 +1816,57 @@ export default function CodeWorkspace() {
                           caseSensitive: migCase,
                           dirPrefix: migDir || undefined,
                           maxFiles: 500,
+                          dryRun: migDryRun,
                         });
-                        setMigStatus(
-                          j.ok ? `Applied to ${j.touched} file(s)` : j.error || "apply failed"
+
+                        if (!j.ok) {
+                          setMigStatus(
+                            j.error || (migDryRun ? "dry-run failed" : "apply failed")
+                          );
+                          return;
+                        }
+
+                        const results = Array.isArray(j.results) ? j.results : [];
+                        const fileCount = results.length || j.touched || 0;
+                        const totalDelta = results.reduce(
+                          (acc: number, r: { bytesDelta?: number }) =>
+                            acc + (r.bytesDelta || 0),
+                          0
                         );
+                        const deltaLabel =
+                          totalDelta === 0
+                            ? "0"
+                            : `${totalDelta > 0 ? "+" : ""}${totalDelta}`;
+
+                        if (migDryRun) {
+                          setMigStatus(
+                            `Dry-run: would touch ${fileCount} file(s); total Δ${deltaLabel} bytes`
+                          );
+                        } else {
+                          setMigStatus(
+                            `Applied to ${j.touched} file(s); total Δ${deltaLabel} bytes`
+                          );
+
+                          const summary: string[] = [
+                            `migration apply: "${migFind}" → "${migReplace}"`,
+                            `touched ${fileCount} file(s)`,
+                            `total bytes Δ ${deltaLabel}`,
+                          ];
+                          if (migDir) summary.push(`scope: ${migDir}`);
+
+                          pushSnapshot({
+                            id: uid(),
+                            ts: Date.now(),
+                            path: "(migration batch)",
+                            before: "",
+                            after: "",
+                            summary,
+                            intent: null,
+                            review: "pending",
+                          });
+                        }
                       } catch {
-                        setMigStatus("apply failed");
+                        setMigStatus(migDryRun ? "dry-run failed" : "apply failed");
                       }
                     }}
                   >
@@ -1578,6 +1891,93 @@ export default function CodeWorkspace() {
                     </ul>
                   </div>
                 </div>
+              )}
+            </div>
+
+            {/* Comments panel */}
+            <div className="p-2 border-t">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold">Comments</div>
+                <div className="text-xs opacity-70">
+                  {activePath ? (
+                    <span className="font-mono truncate max-w-[180px] inline-block align-middle">
+                      {activePath}
+                    </span>
+                  ) : (
+                    "Open a file to comment"
+                  )}
+                </div>
+              </div>
+
+              {!activePath ? (
+                <div className="text-xs opacity-60 mt-2">No file selected.</div>
+              ) : (
+                <>
+                  <div className="mt-2">
+                    <textarea
+                      value={commentDraft}
+                      onChange={(e) => setCommentDraft(e.target.value)}
+                      placeholder="Add a comment for the current line…"
+                      className="w-full border rounded px-2 py-1 text-xs resize-none h-16"
+                    />
+                    <div className="mt-1 flex items-center gap-2">
+                      <button
+                        className="px-2 py-1 border rounded text-xs"
+                        onClick={onAddCommentAtCaret}
+                      >
+                        Add at caret line
+                      </button>
+                      <span className="text-[11px] opacity-60">
+                        Uses caret position in the left editor.
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 max-h-40 overflow-auto space-y-1">
+                    {comments.length === 0 ? (
+                      <div className="text-xs opacity-60">
+                        No comments for this file yet.
+                      </div>
+                    ) : (
+                      comments
+                        .slice()
+                        .sort((a, b) => a.line - b.line || a.ts - b.ts)
+                        .map((c) => (
+                          <div
+                            key={c.id}
+                            className="border rounded px-2 py-1 text-xs flex items-center justify-between gap-2"
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono">L{c.line}</span>
+                                <button
+                                  className="px-1 py-0.5 border rounded text-[10px]"
+                                  onClick={() => {
+                                    if (!activePath) return;
+                                    openFile(activePath, c.line);
+                                  }}
+                                >
+                                  Jump
+                                </button>
+                              </div>
+                              <div className="mt-1 whitespace-pre-wrap">{c.text}</div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="text-[10px] opacity-60">
+                                {new Date(c.ts).toLocaleTimeString()}
+                              </span>
+                              <button
+                                className="px-1 py-0.5 border rounded text-[10px]"
+                                onClick={() => onDeleteComment(c.id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </>
               )}
             </div>
 
@@ -1628,6 +2028,32 @@ export default function CodeWorkspace() {
                           </span>
                         ))}
                       </div>
+
+                      <div className="mt-1 flex items-center gap-2 text-[11px]">
+                        <span className="opacity-70">Review:</span>
+                        {(["pending", "approved", "needs_review"] as const).map((state) => (
+                          <button
+                            key={state}
+                            onClick={() => setSnapshotReview(s.id, state)}
+                            className={`px-2 py-0.5 border rounded ${
+                              (s.review || "pending") === state
+                                ? state === "approved"
+                                  ? "bg-green-50"
+                                  : state === "needs_review"
+                                  ? "bg-yellow-50"
+                                  : "bg-gray-50"
+                                : ""
+                            }`}
+                          >
+                            {state === "pending"
+                              ? "Pending"
+                              : state === "approved"
+                              ? "Approved"
+                              : "Needs review"}
+                          </button>
+                        ))}
+                      </div>
+
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button
                           onClick={() => openDiff(s)}

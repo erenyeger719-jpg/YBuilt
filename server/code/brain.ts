@@ -2,6 +2,186 @@
 import fs from "fs";
 import path from "path";
 
+// ---- tiny repo-style helper (B8) ----
+
+export type StyleProfile = {
+  indent: "tabs" | "spaces2" | "spaces4" | "unknown";
+  quote: "'" | '"';
+  semicolons: "always" | "never" | "mixed";
+};
+
+function inferStyleProfileFromSource(source: string): StyleProfile {
+  const lines = source.split(/\r?\n/);
+
+  let tabIndents = 0;
+  let space2Indents = 0;
+  let space4Indents = 0;
+
+  let codeLines = 0;
+  let semiLines = 0;
+
+  let singleQuotes = 0;
+  let doubleQuotes = 0;
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // indent
+    const indentMatch = raw.match(/^[ \t]+/);
+    if (indentMatch) {
+      const ind = indentMatch[0];
+      if (ind.includes("\t")) {
+        tabIndents++;
+      } else {
+        const len = ind.length;
+        // crude heuristic: treat multiples of 2 vs 4
+        if (len % 4 === 0) space4Indents++;
+        else if (len % 2 === 0) space2Indents++;
+      }
+    }
+
+    // code vs comment
+    const noLineComment = line.replace(/\/\/.*$/, "");
+    if (!noLineComment.trim()) continue;
+    codeLines++;
+
+    // semicolons: count lines ending in ;
+    if (noLineComment.trim().endsWith(";")) semiLines++;
+
+    // quotes: count string literals-ish
+    const matches = noLineComment.match(/(['"])(?:\\.|[^'"])*\1/g);
+    if (matches) {
+      for (const m of matches) {
+        if (m.startsWith("'")) singleQuotes++;
+        else if (m.startsWith('"')) doubleQuotes++;
+      }
+    }
+  }
+
+  let indent: StyleProfile["indent"] = "unknown";
+  if (tabIndents > space2Indents && tabIndents > space4Indents) {
+    indent = "tabs";
+  } else if (space2Indents >= space4Indents && space2Indents > 0) {
+    indent = "spaces2";
+  } else if (space4Indents > 0) {
+    indent = "spaces4";
+  }
+
+  let semicolons: StyleProfile["semicolons"] = "mixed";
+  if (codeLines > 0) {
+    const ratio = semiLines / codeLines;
+    if (ratio > 0.8) semicolons = "always";
+    else if (ratio < 0.2) semicolons = "never";
+  }
+
+  const quote: "'" | '"' =
+    singleQuotes >= doubleQuotes ? "'" : '"';
+
+  return { indent, quote, semicolons };
+}
+
+function normalizeIndentToProfile(
+  code: string,
+  profile: StyleProfile
+): string {
+  if (profile.indent === "unknown") return code;
+
+  const width =
+    profile.indent === "spaces2"
+      ? 2
+      : profile.indent === "spaces4"
+      ? 4
+      : null;
+
+  const lines = code.split(/\r?\n/);
+  const out = lines.map((line) => {
+    const m = line.match(/^[ \t]+/);
+    if (!m) return line;
+    const ind = m[0];
+
+    // estimate logical "levels" from current indentation
+    let levels = 0;
+    if (ind.includes("\t") && !ind.includes(" ")) {
+      levels = ind.length; // each tab = one level
+    } else if (!ind.includes("\t") && width) {
+      levels = Math.round(ind.length / width);
+    } else {
+      // mixed / weird -> leave line alone
+      return line;
+    }
+
+    let newIndent = "";
+    if (profile.indent === "tabs") {
+      newIndent = "\t".repeat(levels);
+    } else if (width) {
+      newIndent = " ".repeat(levels * width);
+    }
+    return newIndent + line.slice(ind.length);
+  });
+
+  return out.join("\n");
+}
+
+function normalizeQuotesToProfile(
+  code: string,
+  profile: StyleProfile
+): string {
+  const preferred = profile.quote;
+
+  // Replace string literals, preserving content, flipping the outer quote
+  // and escaping any inner occurrences of the preferred quote.
+  return code.replace(/(['"])(?:\\.|[^'"])*\1/g, (match) => {
+    const current = match[0] as "'" | '"';
+    if (current === preferred) return match;
+
+    const inner = match.slice(1, -1);
+    const escapedInner = inner.replace(
+      new RegExp(preferred.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"), "g"),
+      `\\${preferred}`
+    );
+    return preferred + escapedInner + preferred;
+  });
+}
+
+function normalizeSemicolonsToProfile(
+  code: string,
+  profile: StyleProfile
+): string {
+  if (profile.semicolons !== "never") {
+    // we only do the safe direction: removing semis
+    return code;
+  }
+
+  const lines = code.split(/\r?\n/);
+  const out = lines.map((line) => {
+    // strip trailing semicolons before end or comment
+    return line.replace(/;+\s*($|\/\/.*$)/, "$1");
+  });
+  return out.join("\n");
+}
+
+function applyStyleProfileToNewContent(
+  pathStr: string,
+  original: string,
+  next: string
+): { styled: string; profile: StyleProfile | null } {
+  // Only attempt for JS/TS-ish files
+  if (!/\.(?:[jt]sx?)$/i.test(pathStr)) {
+    return { styled: next, profile: null };
+  }
+
+  const profile = inferStyleProfileFromSource(original);
+
+  let styled = next;
+  styled = normalizeIndentToProfile(styled, profile);
+  styled = normalizeQuotesToProfile(styled, profile);
+  styled = normalizeSemicolonsToProfile(styled, profile);
+
+  return { styled, profile };
+}
+
 const ROOT = process.env.WORKSPACE_ROOT || process.cwd();
 const EXCLUDE_DIRS = new Set([
   "node_modules",
@@ -14,6 +194,95 @@ const EXCLUDE_DIRS = new Set([
 ]);
 const MAX_FILE_BYTES = 1_000_000; // 1MB guard
 const UNDO_FILE = path.join(ROOT, ".cache", "code-undo.jsonl");
+
+const COMMENTS_FILE = path.join(ROOT, ".cache", "code-comments.jsonl");
+
+export type FileCommentRecord = {
+  id: string;
+  path: string;
+  line: number;
+  text: string;
+  ts: number;
+};
+
+function readAllComments(): FileCommentRecord[] {
+  try {
+    if (!fs.existsSync(COMMENTS_FILE)) return [];
+    const raw = fs.readFileSync(COMMENTS_FILE, "utf8");
+    const lines = raw.split(/\r?\n/).filter(Boolean);
+    const out: FileCommentRecord[] = [];
+    for (const line of lines) {
+      try {
+        const obj = JSON.parse(line);
+        if (
+          obj &&
+          typeof obj.id === "string" &&
+          typeof obj.path === "string" &&
+          typeof obj.line === "number" &&
+          typeof obj.text === "string"
+        ) {
+          out.push(obj as FileCommentRecord);
+        }
+      } catch {
+        // skip malformed line
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function writeAllComments(all: FileCommentRecord[]) {
+  fs.mkdirSync(path.dirname(COMMENTS_FILE), { recursive: true });
+  const data =
+    all.map((c) => JSON.stringify(c)).join("\n") +
+    (all.length ? "\n" : "");
+  fs.writeFileSync(COMMENTS_FILE, data, "utf8");
+}
+
+function newCommentId() {
+  return (
+    "c_" +
+    Date.now().toString(36) +
+    "_" +
+    Math.random().toString(36).slice(2, 8)
+  );
+}
+
+export function listCommentsForPath(relPath: string): FileCommentRecord[] {
+  if (!isSafePath(relPath)) throw new Error("unsafe_path");
+  return readAllComments().filter((c) => c.path === relPath);
+}
+
+export function addCommentForPath(input: {
+  path: string;
+  line: number;
+  text: string;
+}): FileCommentRecord {
+  const relPath = input.path;
+  if (!isSafePath(relPath)) throw new Error("unsafe_path");
+
+  const rec: FileCommentRecord = {
+    id: newCommentId(),
+    path: relPath,
+    line: Math.max(1, Math.floor(input.line || 1)),
+    text: input.text || "",
+    ts: Date.now(),
+  };
+
+  fs.mkdirSync(path.dirname(COMMENTS_FILE), { recursive: true });
+  fs.appendFileSync(COMMENTS_FILE, JSON.stringify(rec) + "\n", "utf8");
+  return rec;
+}
+
+export function deleteCommentById(id: string): { ok: boolean } {
+  const all = readAllComments();
+  const next = all.filter((c) => c.id !== id);
+  if (next.length === all.length) return { ok: false };
+  writeAllComments(next);
+  return { ok: true };
+}
 
 function isSafePath(p: string) {
   const abs = path.resolve(ROOT, p);
@@ -104,7 +373,11 @@ type ProposeIn = {
   instruction: string;
   selection?: { start: number; end: number };
 };
-type ProposeOut = { newContent: string; summary: string[] };
+type ProposeOut = {
+  newContent: string;
+  summary: string[];
+  styleProfile?: StyleProfile | null;
+};
 
 export function proposeEdit(input: ProposeIn): ProposeOut {
   const { path: relPath, instruction, selection } = input;
@@ -188,9 +461,9 @@ export function proposeEdit(input: ProposeIn): ProposeOut {
   ) {
     const map: [RegExp, string][] = [
       [/\b(best|#1|number\s*one)\b/gi, "leading"],
-      [/\bguaranteed\b/gi, "designed"],
-      [/\bfastest\b/gi, "faster"],
-      [/\bunlimited\b/gi, "generous"],
+      [/\b(guaranteed)\b/gi, "designed"],
+      [/\b(fastest)\b/gi, "faster"],
+      [/\b(unlimited)\b/gi, "generous"],
     ];
     let changed = 0;
     for (const [re, repl] of map) {
@@ -219,7 +492,14 @@ export function proposeEdit(input: ProposeIn): ProposeOut {
   if (summary.length === 0)
     summary.push("no-op (instruction not recognized for this file)");
 
-  return { newContent, summary };
+  // B8: apply style adapter based on the original file
+  const { styled, profile } = applyStyleProfileToNewContent(
+    relPath,
+    content,
+    newContent
+  );
+
+  return { newContent: styled, summary, styleProfile: profile };
 }
 
 export function applyWrite(

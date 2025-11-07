@@ -10,6 +10,9 @@ import {
   proposeEdit,
   applyWrite,
   explainAt,
+  listCommentsForPath,
+  addCommentForPath,
+  deleteCommentById,
 } from "../code/brain.ts";
 
 const router = Router();
@@ -419,6 +422,64 @@ router.post("/tests/apply", (req, res) => {
     return res.json({ ok: true, ...out });
   } catch (e: any) {
     return bad(res, e?.message || "tests_apply_error");
+  }
+});
+
+// ----- Comments (B9) -----
+router.post("/comments/list", (req: any, res: any) => {
+  const { path: p } = req.body || {};
+  if (!p) {
+    return res.status(400).json({ ok: false, error: "missing_path" });
+  }
+  try {
+    const comments = listCommentsForPath(p);
+    res.json({ ok: true, comments });
+  } catch (err: any) {
+    res.status(500).json({
+      ok: false,
+      error: err?.message || "comments_list_failed",
+    });
+  }
+});
+
+router.post("/comments/add", (req: any, res: any) => {
+  const { path: p, line, text } = req.body || {};
+  if (!p || typeof text !== "string") {
+    return res
+      .status(400)
+      .json({ ok: false, error: "missing_path_or_text" });
+  }
+  try {
+    const comment = addCommentForPath({
+      path: p,
+      line: typeof line === "number" ? line : 1,
+      text,
+    });
+    res.json({ ok: true, comment });
+  } catch (err: any) {
+    res.status(500).json({
+      ok: false,
+      error: err?.message || "comments_add_failed",
+    });
+  }
+});
+
+router.post("/comments/delete", (req: any, res: any) => {
+  const { id } = req.body || {};
+  if (!id) {
+    return res.status(400).json({ ok: false, error: "missing_id" });
+  }
+  try {
+    const out = deleteCommentById(id);
+    if (!out.ok) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({
+      ok: false,
+      error: err?.message || "comments_delete_failed",
+    });
   }
 });
 
