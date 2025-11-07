@@ -8,8 +8,7 @@ export default defineConfig({
       'server/**/*.test.{ts,tsx,js}',
       'client/**/*.test.{ts,tsx,js}',
       'scripts/**/*.test.{ts,tsx,js}',
-      "tests/**/*.spec.ts",
-      "server/**/*.test.ts",
+      
     ],
     // Nuke heavy/foreign suites and e2e fixtures
     exclude: [

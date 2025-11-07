@@ -2090,7 +2090,10 @@
       "40a5adcf504b85f658173e539f61423044b34050"
     ]
   },
-  "usage": {},
+  "usage": {
+    "902b4fb97676de5b984e32ac20b60060c94a91ed": 5,
+    "bf81e3699337cb4331bc73ed46289c9aba5c4113": 5
+  },
   "synonyms": {
     "analytics": [
       "chart",

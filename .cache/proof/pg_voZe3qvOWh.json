@@ -1,0 +1,56 @@
+{
+  "pageId": "pg_voZe3qvOWh",
+  "url": "/api/ai/previews/pg_voZe3qvOWh",
+  "proof_ok": true,
+  "fact_counts": {},
+  "facts": {},
+  "cls_est": null,
+  "lcp_est_ms": null,
+  "perf_matrix": null,
+  "ux_score": null,
+  "ux_issues": [],
+  "policy_version": "2.0.0",
+  "risk": {
+    "prompt_risk": false,
+    "copy_claims": {
+      "superlative": 0,
+      "percent": 0,
+      "multiplier": 0,
+      "comparative": 0,
+      "factual": 0,
+      "testimonial": 0,
+      "missing_proof": 0,
+      "evidence_coverage_pct": 0
+    },
+    "device_perf": {
+      "cls_est": null,
+      "lcp_est_ms": null
+    },
+    "a11y": {
+      "pass": null
+    },
+    "pii": {
+      "present": false
+    },
+    "abuse_signals": {
+      "sketchy": false,
+      "reasons": []
+    },
+    "ux": {
+      "score": null
+    },
+    "claim_total": 0,
+    "claim_kinds": {
+      "superlative": 0,
+      "percent": 0,
+      "multiplier": 0,
+      "comparative": 0,
+      "factual": 0,
+      "testimonial": 0
+    },
+    "evidence_coverage": 1,
+    "claim_policy": {},
+    "claim_budget_state": "ok"
+  },
+  "signature": "f814299ec5e322ee1294ca4d1a14255ebffb490b463e86e8b806b2b54fea6541"
+}
