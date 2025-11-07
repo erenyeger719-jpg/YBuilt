@@ -563,3 +563,8 @@
 {"at":"2025-11-07T09:08:12.238Z","task":"unit-test-primary","provider":"granite","ms":1,"ok":true,"model_hint":null}
 {"at":"2025-11-07T09:08:12.239Z","task":"unit-test-header","provider":"granite","ms":0,"ok":true,"model_hint":null}
 {"at":"2025-11-07T09:08:12.240Z","task":"unit-test-policy","provider":"openai","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-07T09:11:42.988Z","task":"unit-test","provider":"openai","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-07T09:11:42.990Z","task":"unit-test-shadow","provider":"openai","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-07T09:11:43.013Z","task":"unit-test-primary","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-07T09:11:43.014Z","task":"unit-test-header","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-07T09:11:43.014Z","task":"unit-test-policy","provider":"openai","ms":0,"ok":true,"model_hint":null}
