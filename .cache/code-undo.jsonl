@@ -13,3 +13,8 @@
 {"ts":1762497758696,"path":"tmp-test-code/route-existing.txt","before":"old","after":"route content"}
 {"ts":1762497758702,"path":"tmp-test-code/route-new.txt","before":"","after":"hello from route"}
 {"ts":1762497758705,"path":"tmp-test-code/sample.test.ts","before":"","after":"test('x', () => {});"}
+{"ts":1762498141505,"path":"tmp-test-code/existing.txt","before":"old","after":"new"}
+{"ts":1762498141508,"path":"tmp-test-code/new-file.txt","before":"","after":"hello"}
+{"ts":1762498141691,"path":"tmp-test-code/route-existing.txt","before":"old","after":"route content"}
+{"ts":1762498141696,"path":"tmp-test-code/route-new.txt","before":"","after":"hello from route"}
+{"ts":1762498141699,"path":"tmp-test-code/sample.test.ts","before":"","after":"test('x', () => {});"}

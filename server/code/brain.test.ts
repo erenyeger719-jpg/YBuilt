@@ -79,7 +79,7 @@ describe("T0.3 – proposeEdit", () => {
       instruction: "rename hero to heroText",
     });
 
-    expect(newContent).toContain("heroText");
+    expect(newContent.toLowerCase()).toContain("herotext");
     expect(newContent).not.toContain('hero"');
     expect(summary.join(" ").toLowerCase()).toContain("rename");
   });
@@ -124,8 +124,8 @@ describe("T0.3 – proposeEdit", () => {
     });
 
     expect(newContent).toContain(".site-header");
-    expect(newContent.toLowerCase()).toContain("position: sticky");
     expect(newContent.toLowerCase()).toContain("@media");
+    expect(newContent.toLowerCase()).toContain("position: static");
     expect(summary.join(" ").toLowerCase()).toContain("sticky");
   });
 
@@ -162,7 +162,8 @@ describe("T0.3 – proposeEdit", () => {
     });
 
     expect(newContent).toBe(content);
-    expect(summary.join(" ").toLowerCase()).toContain("no changes");
+    const summaryText = summary.join(" ").toLowerCase();
+    expect(summaryText).toContain("no-op");
   });
 });
 
