@@ -33,3 +33,8 @@
 {"ts":1762506209167,"path":"tmp-test-code/route-existing.txt","before":"old","after":"route content"}
 {"ts":1762506209174,"path":"tmp-test-code/route-new.txt","before":"","after":"hello from route"}
 {"ts":1762506209178,"path":"tmp-test-code/sample.test.ts","before":"","after":"test('x', () => {});"}
+{"ts":1762506491631,"path":"tmp-test-code/route-existing.txt","before":"old","after":"route content"}
+{"ts":1762506491636,"path":"tmp-test-code/route-new.txt","before":"","after":"hello from route"}
+{"ts":1762506491639,"path":"tmp-test-code/sample.test.ts","before":"","after":"test('x', () => {});"}
+{"ts":1762506492254,"path":"tmp-test-code/existing.txt","before":"old","after":"new"}
+{"ts":1762506492262,"path":"tmp-test-code/new-file.txt","before":"","after":"hello"}

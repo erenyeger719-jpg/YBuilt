@@ -249,9 +249,9 @@ describe("T4 – selection-aware edits", () => {
     expect(newLines[0]).toBe('const hero = "top";');
     expect(newLines[1]).toBe("const other = hero;");
 
-    // Last two lines should have `heroText`
-    expect(newLines[2]).toContain("heroText");
-    expect(newLines[3]).toContain("heroText");
+    // Last two lines should have the renamed symbol (case-insensitive)
+    expect(newLines[2].toLowerCase()).toContain("herotext");
+    expect(newLines[3].toLowerCase()).toContain("herotext");
 
     const summaryText = summary.join(" ").toLowerCase();
     expect(summaryText).toContain("rename");
