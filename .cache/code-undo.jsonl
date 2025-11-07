@@ -8,3 +8,8 @@
 {"ts":1762496171087,"path":"tmp-test-code/route-existing.txt","before":"old","after":"route content"}
 {"ts":1762496171111,"path":"tmp-test-code/route-new.txt","before":"","after":"hello from route"}
 {"ts":1762496171138,"path":"tmp-test-code/sample.test.ts","before":"","after":"test('x', () => {});"}
+{"ts":1762497757865,"path":"tmp-test-code/existing.txt","before":"old","after":"new"}
+{"ts":1762497757867,"path":"tmp-test-code/new-file.txt","before":"","after":"hello"}
+{"ts":1762497758696,"path":"tmp-test-code/route-existing.txt","before":"old","after":"route content"}
+{"ts":1762497758702,"path":"tmp-test-code/route-new.txt","before":"","after":"hello from route"}
+{"ts":1762497758705,"path":"tmp-test-code/sample.test.ts","before":"","after":"test('x', () => {});"}

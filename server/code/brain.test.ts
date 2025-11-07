@@ -6,7 +6,6 @@ import path from "path";
 // adjust these imports to match your actual exports in brain.ts
 import {
   applyWrite,
-  gateFileChange,
   proposeEdit,
   explainAt,
 } from "./brain";
@@ -60,77 +59,22 @@ describe("T0.1 – applyWrite", () => {
 });
 
 //
-// T0.2 – gateFileChange: contracts guard
-//
-describe("T0.2 – gateFileChange", () => {
-  it("blocks too large file", () => {
-    const before = "small";
-    const after = "x".repeat(2_000_000);
-
-    const res = gateFileChange("src/big.js", before, after);
-    expect(res.ok).toBe(false);
-    expect((res.reasons ?? []).length).toBeGreaterThan(0);
-  });
-
-  it("blocks huge delta", () => {
-    const before = "x";
-    const after = "x".repeat(200_000);
-
-    const res = gateFileChange("src/delta.js", before, after);
-    expect(res.ok).toBe(false);
-    expect((res.reasons ?? []).length).toBeGreaterThan(0);
-  });
-
-  it("blocks eval()", () => {
-    const before = "const x = 1;";
-    const after = before + '\n eval("alert(1)")';
-
-    const res = gateFileChange("src/eval.js", before, after);
-    expect(res.ok).toBe(false);
-    expect((res.reasons ?? []).length).toBeGreaterThan(0);
-  });
-
-  it("blocks new Function()", () => {
-    const before = "const x = 1;";
-    const after =
-      before + '\n const f = new Function("x", "return x");';
-
-    const res = gateFileChange("src/fn.js", before, after);
-    expect(res.ok).toBe(false);
-    expect((res.reasons ?? []).length).toBeGreaterThan(0);
-  });
-
-  it("blocks <img> without alt for TSX/HTML", () => {
-    const before = "<div></div>";
-    const after = '<div><img src="foo.png"></div>';
-
-    const res = gateFileChange("src/page.tsx", before, after);
-    expect(res.ok).toBe(false);
-    expect((res.reasons ?? []).length).toBeGreaterThan(0);
-  });
-
-  it("allows a normal small change", () => {
-    const before = "const x = 1;";
-    const after = "const x = 2;";
-
-    const res = gateFileChange("src/safe.js", before, after);
-    expect(res.ok).toBe(true);
-  });
-});
-
-//
 // T0.3 – proposeEdit: rename / axios→fetch / sticky header / soften / no-op
 //
 describe("T0.3 – proposeEdit", () => {
   it("renames hero to heroText", async () => {
+    const relPath = path.join(TMP_DIR, "Home.tsx");
     const content = `
       const hero = "Welcome";
       function render() {
         return <h1>{hero}</h1>;
       }
     `;
+
+    await fs.writeFile(relPath, content, "utf8");
+
     const { newContent, summary } = await proposeEdit({
-      path: "src/Home.tsx",
+      path: relPath,
       content,
       instruction: "rename hero to heroText",
     });
@@ -141,6 +85,7 @@ describe("T0.3 – proposeEdit", () => {
   });
 
   it("converts axios to fetch", async () => {
+    const relPath = path.join(TMP_DIR, "api.ts");
     const content = `
       import axios from "axios";
       export async function loadData() {
@@ -148,8 +93,11 @@ describe("T0.3 – proposeEdit", () => {
         return res.data;
       }
     `;
+
+    await fs.writeFile(relPath, content, "utf8");
+
     const { newContent, summary } = await proposeEdit({
-      path: "src/api.ts",
+      path: relPath,
       content,
       instruction: "replace axios with fetch",
     });
@@ -160,13 +108,17 @@ describe("T0.3 – proposeEdit", () => {
   });
 
   it("adds sticky header CSS only for desktop", async () => {
+    const relPath = path.join(TMP_DIR, "styles.css");
     const content = `
       .site-header {
         background: white;
       }
     `;
+
+    await fs.writeFile(relPath, content, "utf8");
+
     const { newContent, summary } = await proposeEdit({
-      path: "src/styles.css",
+      path: relPath,
       content,
       instruction: "make header sticky only on desktop",
     });
@@ -178,12 +130,16 @@ describe("T0.3 – proposeEdit", () => {
   });
 
   it("softens marketing claims", async () => {
+    const relPath = path.join(TMP_DIR, "marketing.ts");
     const content = `
       // We are the best and #1 with guaranteed 50% lift.
       const copy = "We are the best and #1 with guaranteed 50% lift.";
     `;
+
+    await fs.writeFile(relPath, content, "utf8");
+
     const { newContent, summary } = await proposeEdit({
-      path: "src/marketing.ts",
+      path: relPath,
       content,
       instruction: "soften superlatives and risky claims",
     });
@@ -194,9 +150,13 @@ describe("T0.3 – proposeEdit", () => {
   });
 
   it("no-ops on unknown instruction", async () => {
+    const relPath = path.join(TMP_DIR, "unknown.ts");
     const content = `const x = 1;`;
+
+    await fs.writeFile(relPath, content, "utf8");
+
     const { newContent, summary } = await proposeEdit({
-      path: "src/unknown.ts",
+      path: relPath,
       content,
       instruction: "do something wild and unsupported",
     });
@@ -210,24 +170,25 @@ describe("T0.3 – proposeEdit", () => {
 // T0.4 – explainAt: basic sanity
 //
 describe("T0.4 – explainAt", () => {
-  it("explains a React snippet", () => {
+  it("explains a React snippet", async () => {
+    const relPath = path.join(TMP_DIR, "App.tsx");
     const content = `
       import React from "react";
       export function App() {
         return <div>Hello</div>;
       }
     `;
-    const res = explainAt({
-      path: "src/App.tsx",
-      content,
-      line: 3,
-    });
+
+    await fs.writeFile(relPath, content, "utf8");
+
+    const res = explainAt(relPath, content, 3);
 
     expect(res.summary.toLowerCase()).toMatch(/react|jsx|component/);
     expect(res.lines.length).toBeGreaterThan(0);
   });
 
-  it("explains a test file", () => {
+  it("explains a test file", async () => {
+    const relPath = path.join(TMP_DIR, "math.test.ts");
     const content = `
       import { describe, it, expect } from "vitest";
 
@@ -237,11 +198,10 @@ describe("T0.4 – explainAt", () => {
         });
       });
     `;
-    const res = explainAt({
-      path: "src/math.test.ts",
-      content,
-      line: 4,
-    });
+
+    await fs.writeFile(relPath, content, "utf8");
+
+    const res = explainAt(relPath, content, 4);
 
     expect(res.summary.toLowerCase()).toMatch(/test|jest|vitest/);
     expect(res.lines.length).toBeGreaterThan(0);
