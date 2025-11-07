@@ -194,7 +194,7 @@ describe("T0.4 – explainAt", () => {
 
     await fs.writeFile(relPath, content, "utf8");
 
-    const res = explainAt(relPath, content, 3);
+    const res = explainAt(relPath, 3);
 
     expect(res.summary.toLowerCase()).toMatch(/react|jsx|component/);
     expect(res.lines.length).toBeGreaterThan(0);
@@ -214,10 +214,47 @@ describe("T0.4 – explainAt", () => {
 
     await fs.writeFile(relPath, content, "utf8");
 
-    const res = explainAt(relPath, content, 4);
+    const res = explainAt(relPath, 4);
 
     expect(res.summary.toLowerCase()).toMatch(/test|jest|vitest/);
     expect(res.lines.length).toBeGreaterThan(0);
+  });
+});
+
+//
+// T4 – selection-aware edits
+//
+describe("T4 – selection-aware edits", () => {
+  it("only edits the selected lines when renaming", async () => {
+    const relPath = path.join(TMP_DIR, "selection.ts");
+
+    const lines = [
+      'const hero = "top";',
+      "const other = hero;",
+      'const hero = "bottom";',
+      "const footer = hero;",
+    ];
+    const content = lines.join("\n");
+    await fs.writeFile(relPath, content, "utf8");
+
+    const { newContent, summary } = await proposeEdit({
+      path: relPath,
+      instruction: "rename hero to heroText",
+      selection: { start: 2, end: 3 }, // zero-based: affect last two lines only
+    });
+
+    const newLines = newContent.split("\n");
+
+    // First two lines should still use `hero`
+    expect(newLines[0]).toBe('const hero = "top";');
+    expect(newLines[1]).toBe("const other = hero;");
+
+    // Last two lines should have `heroText`
+    expect(newLines[2]).toContain("heroText");
+    expect(newLines[3]).toContain("heroText");
+
+    const summaryText = summary.join(" ").toLowerCase();
+    expect(summaryText).toContain("rename");
   });
 });
 
