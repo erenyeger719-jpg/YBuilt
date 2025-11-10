@@ -1,113 +1,197 @@
-import { motion, type Variants } from "framer-motion";
-import { useLocation } from "wouter";
-import PromptInput from "./PromptInput";
-import { useGeneration } from "@/hooks/useGeneration";
-import PreviewModal from "./PreviewModal";
+// client/src/components/Hero.tsx
+import { useState, FormEvent } from "react";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect } from "react";
 
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.2,
-      delayChildren: 0.3,
-    },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.8,
-      ease: [0.22, 1, 0.36, 1],
-    },
-  },
-};
-
-export default function Hero() {
-  const [, setLocation] = useLocation();
-  const { generate, reset, isGenerating, status, error, redirectUrl } = useGeneration();
+export default function HomeHero() {
   const { toast } = useToast();
+  const [promptText, setPromptText] = useState("");
 
-  useEffect(() => {
-    if (error) {
+  async function handleCreate(e: FormEvent) {
+    e.preventDefault();
+    const prompt = promptText.trim();
+    if (!prompt) return;
+
+    try {
+      console.log("[home-hero] starting fetch → /api/generate", { prompt });
+
+      const r = await fetch("/api/generate", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, promptText: prompt }),
+      });
+
+      const ct = r.headers.get("content-type") || "";
+      const bodyText = await r.text();
+      const data =
+        ct.includes("application/json") && bodyText ? JSON.parse(bodyText) : {};
+
+      console.log("[home-hero] status:", r.status, "data:", data);
+
+      if (!r.ok) {
+        const msg =
+          (data as any)?.message ||
+          (data as any)?.error ||
+          r.statusText ||
+          "Request failed";
+        const err: any = new Error(msg);
+        err.status = r.status;
+        err.body = data;
+        throw err;
+      }
+
+      const id =
+        (data as any).jobId ||
+        (data as any).id ||
+        (data as any)?.job?.id ||
+        (data as any)?.data?.jobId ||
+        (data as any)?.data?.id;
+
+      if (!id) throw new Error("No jobId in response");
+
+      const target = `/workspace/${id}`;
+      console.log("[home-hero] redirect →", target);
+      window.location.assign(target);
+      setTimeout(() => {
+        window.location.href = target;
+      }, 50);
+    } catch (err: any) {
+      if (err?.status === 401) {
+        toast({
+          title: "Sign in required",
+          description: "Please sign in to create a project.",
+          variant: "destructive",
+        });
+        return;
+      }
+      console.error("[home-hero] error:", err);
       toast({
-        title: "Generation failed",
-        description: error,
+        title: "Create failed",
+        description: err?.message || "Request failed",
         variant: "destructive",
       });
     }
-  }, [error, toast]);
-
-  // Handle redirect to finalize page
-  useEffect(() => {
-    if (redirectUrl) {
-      setLocation(redirectUrl);
-    }
-  }, [redirectUrl, setLocation]);
+  }
 
   return (
-    <section className="-mt-14 md:-mt-16 pt-20 md:pt-24 relative min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Ultra-HDR Background */}
-      <div className="absolute inset-0 bg-gradient-to-r from-black via-neutral-800 to-neutral-300 dark:from-black dark:via-neutral-900 dark:to-neutral-700">
-        {/* Smoke overlay effect */}
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse delay-700" />
-        </div>
-      </div>
-
-      {/* Diagonal Striped Glass Backdrop */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="glass-stripe-container">
-          {/* Glass stripes */}
-          {[...Array(12)].map((_, i) => (
-            <div
-              key={i}
-              className={`glass-stripe ${i % 2 === 0 ? "glass-stripe-white" : "glass-stripe-black"}`}
-              style={{ left: `${i * 10 - 10}%` }}
-            />
-          ))}
-
-          {/* Reflected headline text */}
-          <div className="hero-reflection" aria-hidden="true">
-            From Idea to Digital Reality
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <motion.div
-        className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100">
+      {/* Background glow */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-16 -z-10 flex justify-center"
       >
-        <motion.h1
-          className="h-display text-4xl sm:text-6xl md:text-7xl lg:text-8xl text-hero-mobile md:text-hero font-bold mb-6 metal-text relative"
-          variants={itemVariants}
-        >
-          <span className="relative z-10">From Idea to Digital Reality</span>
-          {/* Text readability overlay */}
-          <span className="absolute inset-0 bg-black/20 dark:bg-black/30 blur-xl -z-10" aria-hidden="true" />
-        </motion.h1>
+        <div className="h-80 w-80 rounded-full bg-emerald-400/10 blur-3xl sm:h-96 sm:w-96" />
+      </div>
 
-        <motion.p
-          className="h-tagline text-sm sm:text-base md:text-lg opacity-80 mt-4 text-muted-foreground mb-12 font-light tracking-wide"
-          variants={itemVariants}
-        >
-          Build smarter. Launch faster.
-        </motion.p>
+      {/* Top nav */}
+      <header className="sticky top-0 z-20 border-b border-slate-800/60 bg-slate-950/70 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          {/* Logo */}
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-slate-800/80 shadow-sm shadow-slate-900/60">
+              <span className="text-xs font-semibold tracking-tight text-emerald-300">
+                Y
+              </span>
+            </div>
+            <span className="text-sm font-semibold tracking-tight text-slate-100">
+              Ybuilt
+            </span>
+          </div>
 
-        <motion.div variants={itemVariants}>
-          <PromptInput onGenerate={generate} isGenerating={isGenerating} />
-        </motion.div>
-      </motion.div>
-    </section>
+          {/* Nav links */}
+          <nav className="flex items-center gap-6 text-xs sm:text-sm">
+            <div className="hidden items-center gap-6 md:flex">
+              <button className="transition-colors hover:text-slate-50">
+                Library
+              </button>
+              <button className="transition-colors hover:text-slate-50">
+                Team
+              </button>
+              <button className="transition-colors hover:text-slate-50">
+                Invite
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button className="hidden rounded-full border border-slate-700/80 px-3 py-1 text-xs font-medium text-slate-200 shadow-sm shadow-slate-900/60 transition-colors hover:border-slate-500/80 md:inline-flex">
+                Creator plan · ₹799
+              </button>
+
+              <div className="hidden items-center gap-2 sm:flex">
+                <span className="rounded-full border border-slate-700/80 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-300">
+                  INR
+                </span>
+
+                <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/80 text-[11px] font-medium text-slate-200 shadow-sm shadow-slate-900/60">
+                  {/* Avatar placeholder; can be replaced by real user avatar */}
+                  Y
+                </button>
+              </div>
+            </div>
+          </nav>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <main className="mx-auto flex max-w-6xl flex-col items-center px-4 pb-16 pt-10 sm:px-6 lg:px-8 lg:pt-16">
+        <section className="w-full max-w-3xl text-center">
+          {/* Small label */}
+          <p className="mb-4 text-xs font-medium uppercase tracking-[0.2em] text-emerald-300/80">
+            Builder studio
+          </p>
+
+          {/* Headline */}
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl md:text-5xl">
+            Your builder that doesn&apos;t shout.
+          </h1>
+
+          {/* Subheadline */}
+          <p className="mt-4 text-sm text-slate-300 sm:text-base">
+            Share your idea in plain words; Ybuilt turns it into a live
+            website or app, quietly and precisely.
+          </p>
+
+          {/* Command surface */}
+          <div className="mt-8 rounded-2xl border border-slate-800/90 bg-slate-900/70 p-4 shadow-xl shadow-slate-950/60 sm:p-5">
+            <form
+              className="flex flex-col gap-3 sm:flex-row sm:items-center"
+              onSubmit={handleCreate}
+            >
+              <label className="sr-only" htmlFor="idea-input">
+                Describe your website or app idea
+              </label>
+
+              <input
+                id="idea-input"
+                type="text"
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                placeholder="Describe what you’d like to build…"
+                className="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none ring-0 transition focus:border-transparent focus:ring-2 focus:ring-emerald-400/70 sm:text-base"
+              />
+
+              <Button
+                type="submit"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-emerald-400 px-5 py-3 text-sm font-medium text-slate-950 shadow-sm shadow-emerald-400/40 transition hover:bg-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              >
+                Begin
+              </Button>
+            </form>
+
+            {/* Secondary action */}
+            <div className="mt-3 flex items-center justify-center">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-100"
+              >
+                <span>Or explore previews</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }
