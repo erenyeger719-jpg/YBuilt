@@ -1,13 +1,51 @@
-export async function getSession() {
-  const r = await fetch("/api/session");
-  const d = await r.json();
-  if (!r.ok || !d?.ok) throw new Error(d?.error || "session failed");
-  return d as { user:any, currentTeam:any, teams:any[] };
-}
-export async function switchTeam(teamId: string) {
-  const r = await fetch("/api/teams/switch", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ teamId })
-  });
-  if (!r.ok) throw new Error(await r.text());
+// client/src/lib/session.ts
+
+export type SessionUser = any;
+export type SessionTeam = any;
+
+export type Session = {
+  user: SessionUser | null;
+  currentTeam: SessionTeam | null;
+  teams: SessionTeam[];
+};
+
+type RawSessionResponse = {
+  ok?: boolean;
+  user?: SessionUser | null;
+  currentTeam?: SessionTeam | null;
+  teams?: SessionTeam[];
+  error?: string;
+};
+
+export async function getSession(): Promise<Session> {
+  try {
+    const r = await fetch("/api/session", { credentials: "include" });
+
+    const contentType = r.headers.get("content-type") || "";
+    const raw =
+      contentType.includes("application/json") ? await r.json() : {};
+
+    const data = (raw || {}) as RawSessionResponse;
+
+    // Graceful path: session endpoint not implemented / not found yet
+    if (r.status === 404 || data.error === "not_found") {
+      console.warn("[session] /api/session not found, using anonymous session");
+      return { user: null, currentTeam: null, teams: [] };
+    }
+
+    // Other hard failures
+    if (!r.ok || data.ok === false) {
+      throw new Error(data.error || "session failed");
+    }
+
+    return {
+      user: data.user ?? null,
+      currentTeam: data.currentTeam ?? null,
+      teams: data.teams ?? [],
+    };
+  } catch (err) {
+    // Last resort: never blow up the whole UI because of header session
+    console.error("[session] getSession failed, falling back to anonymous", err);
+    return { user: null, currentTeam: null, teams: [] };
+  }
 }
