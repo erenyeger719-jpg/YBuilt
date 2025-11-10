@@ -5,7 +5,7 @@
   "license": "MIT",
   "engines": {
     "node": "20.x"
-  },
+  }, 
   "scripts": {
     "ai:battle": "bash scripts/ai-battleready.sh",
     "ai:smoke": "tsx server/scripts/ai.smoke.ts",
