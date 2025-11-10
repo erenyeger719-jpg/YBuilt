@@ -111,12 +111,12 @@ export default function Hero() {
         </div>
 
         {/* Tagline */}
-        <p className="mt-7 text-xs font-semibold tracking-[0.35em] text-slate-500">
+        <p className="mt-7 text-[11px] font-medium tracking-[0.32em] text-slate-500/80">
           BUILD SMARTER. LAUNCH FASTER
         </p>
 
         {/* Command surface: input + button */}
-        <div className="mt-10 w-full max-w-2xl rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-5 shadow-[0_24px_70px_rgba(15,23,42,0.12)] backdrop-blur-sm">
+        <div className="mt-10 w-full max-w-2xl rounded-3xl border border-slate-200/70 bg-white/85 px-6 py-5 shadow-[0_20px_60px_rgba(15,23,42,0.16)] backdrop-blur-sm">
           <form
             className="flex flex-col gap-3 sm:flex-row sm:items-center"
             onSubmit={handleCreate}
@@ -131,15 +131,18 @@ export default function Hero() {
               value={promptText}
               onChange={(e) => setPromptText(e.target.value)}
               placeholder="Describe your website or app idea..."
-              className="w-full rounded-xl border border-transparent bg-white/70 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-[#0f766e] focus:ring-1 focus:ring-[#0f766e]/60 sm:text-base"
+              className="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-[#0b3b36] focus:ring-1 focus:ring-[#0b3b36]/60 sm:text-base"
             />
 
-            <Button
-              type="submit"
-              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-[#0f766e] via-[#0369a1] to-[#0f766e] px-5 py-3 text-sm font-semibold text-emerald-50 shadow-[0_14px_40px_rgba(15,118,110,0.35)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white/40"
-            >
-              Create
-            </Button>
+            {/* Premium hardware-style button */}
+            <div className="shrink-0 rounded-full bg-gradient-to-r from-[#f9e3bf] via-[#d4a15a] to-[#f9e3bf] p-[1px]">
+              <Button
+                type="submit"
+                className="inline-flex h-11 items-center justify-center rounded-full bg-[#0f172a] px-6 text-sm font-semibold text-[#fdfbf7] shadow-[0_14px_40px_rgba(15,23,42,0.45)] transition-transform transition-shadow hover:-translate-y-[1px] hover:shadow-[0_18px_55px_rgba(15,23,42,0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a15a]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white/60"
+              >
+                Create
+              </Button>
+            </div>
           </form>
 
           <div className="mt-3 flex items-center justify-center">
