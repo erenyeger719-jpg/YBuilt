@@ -75,48 +75,51 @@ export default function Hero() {
   }
 
   return (
-    <section className="relative flex min-h-[calc(100vh-64px)] items-center overflow-hidden bg-gradient-to-b from-[#f7f3ec] via-[#f3ece2] to-[#ece2d6] text-slate-900">
-      {/* Soft multi-color diagonal panels in the background */}
+    <section className="relative flex min-h-[calc(100vh-64px)] items-center overflow-hidden bg-[#f3eee7] text-slate-900">
+      {/* Background geometry + texture */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 overflow-hidden"
       >
-        {/* warm beige strip */}
-        <div className="absolute -left-1/2 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-[#e4d6c6] opacity-70" />
-        {/* muted lilac strip */}
-        <div className="absolute -left-1/6 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-[#e2d9f4] opacity-40" />
-        {/* cool steel strip */}
-        <div className="absolute left-1/6 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-[#dbeafe] opacity-40" />
-        {/* soft sage strip */}
-        <div className="absolute left-1/2 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-[#dbe7e3] opacity-55" />
+        {/* Deep panels */}
+        <div className="absolute -left-1/2 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-[#e0d2c2] opacity-80" />
+        <div className="absolute -left-1/8 -top-1/3 h-[140%] w-[46%] -rotate-12 bg-[#d4c7b7] opacity-75" />
+        <div className="absolute left-1/6 -top-1/3 h-[140%] w-[46%] -rotate-12 bg-[#cbd5e1] opacity-35" />
+        <div className="absolute left-1/2 -top-1/3 h-[140%] w-[46%] -rotate-12 bg-[#c8d4ce] opacity-45" />
 
-        {/* global light wash */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#ffffff_0,#f3ece2_55%,#e8ddcf_100%)] opacity-95" />
+        {/* Vignette + central light */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#ffffff_0,#f3eee7_48%,#d8ccbe_100%)] opacity-95" />
 
-        {/* subtle color glow behind card */}
-        <div className="absolute inset-x-0 top-1/3 mx-auto h-56 max-w-3xl rounded-full bg-[radial-gradient(circle,#22c55e26_0,#0ea5e91f_35%,transparent_70%)] blur-3xl" />
+        {/* Fine grain / texture */}
+        <div className="absolute inset-0 mix-blend-soft-light opacity-60 bg-[radial-gradient(circle_at_0_0,rgba(15,23,42,0.05)_0,transparent_55%),radial-gradient(circle_at_100%_0,rgba(15,23,42,0.04)_0,transparent_55%)]" />
 
-        {/* top glossy highlight */}
-        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/70 to-transparent" />
+        {/* Glow behind card */}
+        <div className="absolute inset-x-0 top-1/3 mx-auto h-60 max-w-3xl rounded-full bg-[radial-gradient(circle,rgba(15,23,42,0.16)_0,transparent_65%)] blur-3xl" />
+
+        {/* Floor under command surface */}
+        <div className="absolute inset-x-0 bottom-10 mx-auto h-40 max-w-4xl rounded-[999px] bg-[radial-gradient(circle,rgba(15,23,42,0.18)_0,transparent_70%)] opacity-70 blur-2xl" />
+
+        {/* Top highlight strip */}
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/75 via-white/30 to-transparent" />
       </div>
 
       {/* Hero content */}
       <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center px-4 py-16 sm:px-6 lg:px-8">
         {/* Main glossy card */}
-        <div className="rounded-[32px] border border-white/80 bg-gradient-to-b from-[#fdfcfb] to-[#f1e8dd] px-8 py-10 shadow-[0_32px_90px_rgba(15,23,42,0.18)] sm:px-12 sm:py-12">
-          <h1 className="text-center text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl">
+        <div className="rounded-[28px] border border-white/80 bg-gradient-to-b from-[#fdfbf7] via-[#f7eee3] to-[#e8dbcd] px-8 py-10 shadow-[0_30px_90px_rgba(15,23,42,0.22)] sm:px-12 sm:py-12">
+          <h1 className="text-center text-4xl font-semibold tracking-tight text-[#0f172a] sm:text-5xl md:text-6xl">
             From Idea to Digital{" "}
             <span className="mt-1 block">Reality</span>
           </h1>
         </div>
 
         {/* Tagline */}
-        <p className="mt-7 text-[11px] font-medium tracking-[0.32em] text-slate-500/80">
+        <p className="mt-7 text-[11px] font-medium tracking-[0.32em] text-slate-500/85">
           BUILD SMARTER. LAUNCH FASTER
         </p>
 
         {/* Command surface: input + button */}
-        <div className="mt-10 w-full max-w-2xl rounded-3xl border border-slate-200/70 bg-white/85 px-6 py-5 shadow-[0_20px_60px_rgba(15,23,42,0.16)] backdrop-blur-sm">
+        <div className="mt-10 w-full max-w-2xl rounded-3xl border border-slate-200/75 bg-white/85 px-6 py-5 shadow-[0_24px_70px_rgba(15,23,42,0.2)] backdrop-blur-sm">
           <form
             className="flex flex-col gap-3 sm:flex-row sm:items-center"
             onSubmit={handleCreate}
@@ -131,14 +134,14 @@ export default function Hero() {
               value={promptText}
               onChange={(e) => setPromptText(e.target.value)}
               placeholder="Describe your website or app idea..."
-              className="w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-[#0b3b36] focus:ring-1 focus:ring-[#0b3b36]/60 sm:text-base"
+              className="w-full rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-[#0b3b36] focus:ring-1 focus:ring-[#0b3b36]/60 sm:text-base"
             />
 
             {/* Premium hardware-style button */}
-            <div className="shrink-0 rounded-full bg-gradient-to-r from-[#f9e3bf] via-[#d4a15a] to-[#f9e3bf] p-[1px]">
+            <div className="shrink-0 rounded-full bg-gradient-to-r from-[#f7e0b9] via-[#d4a15a] to-[#f7e0b9] p-[1px]">
               <Button
                 type="submit"
-                className="inline-flex h-11 items-center justify-center rounded-full bg-[#0f172a] px-6 text-sm font-semibold text-[#fdfbf7] shadow-[0_14px_40px_rgba(15,23,42,0.45)] transition-transform transition-shadow hover:-translate-y-[1px] hover:shadow-[0_18px_55px_rgba(15,23,42,0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a15a]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white/60"
+                className="inline-flex h-11 items-center justify-center rounded-full bg-[#0f172a] px-6 text-sm font-semibold text-[#fdfbf7] shadow-[0_14px_40px_rgba(15,23,42,0.55)] transition-transform transition-shadow hover:-translate-y-[1px] hover:shadow-[0_20px_60px_rgba(15,23,42,0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a15a]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white/70"
               >
                 Create
               </Button>
