@@ -11,7 +11,7 @@
     "ai:smoke": "tsx server/scripts/ai.smoke.ts",
     "ai:e2e": "tsx server/scripts/ai.e2e.ts",
     "dev": "NODE_ENV=development tsx server/index.ts",
-    "build": "echo \"(optional) if you compile TS, wire it here\"",
+    "build": "npm run build:client",
     "build:client": "vite build --config client/vite.config.js",
     "start": "tsx server/index.ts",
     "smoke": "node server/tests/smoke.mjs",
