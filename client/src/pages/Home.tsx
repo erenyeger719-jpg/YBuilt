@@ -156,12 +156,12 @@ export default function Home() {
           </p>
 
           <h1 className="text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl md:text-5xl">
-            Your ideas, gently made real.
+            A quiet place for your ideas.
           </h1>
 
           <p className="mt-4 max-w-2xl text-sm text-slate-300 sm:text-base">
-            Describe what you want to create; Ybuilt turns it into a live
-            website or app, without the usual noise.
+            Sit down, breathe, and tell Ybuilt what you want to create. It turns
+            your words into a working site or app, while you stay in the calm.
           </p>
 
           <div className="mt-8 w-full max-w-3xl rounded-2xl border border-slate-800/90 bg-slate-900/70 p-4 shadow-xl shadow-slate-950/60 sm:p-5">
