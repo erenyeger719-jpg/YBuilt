@@ -75,82 +75,90 @@ export default function Hero() {
   }
 
   return (
-    <section className="relative flex min-h-[calc(100vh-64px)] items-center overflow-hidden bg-[#050509] text-slate-50">
-      {/* Sculpted cockpit panel + color inlays */}
+    <section className="relative flex min-h-[calc(100vh-64px)] items-center justify-center overflow-hidden bg-[#020617] text-slate-50">
+      {/* ===== BACKGROUND LAYERS ===== */}
+      {/* animated hero gradient */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 flex justify-center"
-      >
-        <div className="relative mt-10 mb-10 h-[460px] w-[1200px] max-w-[92vw] rounded-[56px] border border-white/10 bg-[#f4e9dd] shadow-[0_42px_140px_rgba(0,0,0,0.9)] overflow-hidden">
-          {/* left and right black “body” edges */}
-          <div className="absolute -left-[22%] inset-y-[-16%] w-[26%] bg-[#050509]" />
-          <div className="absolute -right-[22%] inset-y-[-16%] w-[26%] bg-[#050509]" />
+        className="pointer-events-none absolute inset-0 bg-hero-gradient animate-hero-gradient"
+      />
 
-          {/* color inlay bars – solid colors, angled, clipped to the curved panel */}
-          {/* deep navy base strip */}
-          <div className="absolute -left-[8%] top-[-8%] h-[130%] w-[22%] -rotate-8 rounded-[52px] bg-[#020617]" />
-          {/* royal blue */}
-          <div className="absolute -left-[1%] top-[-10%] h-[135%] w-[20%] -rotate-6 rounded-[52px] bg-[#1d4ed8]" />
-          {/* autumn orange */}
-          <div className="absolute left-[26%] top-[-10%] h-[135%] w-[16%] -rotate-6 rounded-[52px] bg-[#ea580c]" />
-          {/* Ferrari red */}
-          <div className="absolute left-[46%] top-[-10%] h-[135%] w-[16%] -rotate-6 rounded-[52px] bg-[#b91c1c]" />
-          {/* warm gold */}
-          <div className="absolute right-[-4%] top-[-8%] h-[130%] w-[20%] -rotate-4 rounded-[52px] bg-[#f59e0b]" />
+      {/* left body panel */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-40 top-[-10%] h-[130%] w-[52%] -rotate-8 rounded-[72px] bg-[linear-gradient(to_bottom,#020617,#1d4ed8,#0ea5e9)] opacity-80"
+      />
 
-          {/* subtle light + texture overlays */}
-          <div className="absolute inset-x-[-10%] top-0 h-28 bg-gradient-to-b from-white/80 via-white/30 to-transparent" />
-          <div className="absolute inset-x-[-10%] bottom-0 h-32 bg-gradient-to-t from-black/35 via-black/10 to-transparent" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_0_0,#ffffff19,transparent_60%),radial-gradient(circle_at_100%_0,#ffffff12,transparent_55%)] mix-blend-soft-light" />
-        </div>
-      </div>
+      {/* right body panel */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-40 top-[-14%] h-[130%] w-[52%] rotate-7 rounded-[72px] bg-[linear-gradient(to_bottom,#020617,#b91c1c,#f97316,#facc15)] opacity-85"
+      />
 
-      {/* Hero content */}
-      <div className="relative mx-auto flex w-full max-w-4xl flex-col items-center px-4 py-16 sm:px-6 lg:px-8">
-        {/* Headline card */}
-        <div className="rounded-[28px] border border-white/70 bg-[#f9f4ec]/95 px-8 py-8 shadow-[0_26px_80px_rgba(15,23,42,0.65)] sm:px-12 sm:py-10">
-          <h1 className="text-center font-serif text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl">
-            From Idea to Digital <span className="mt-2 block">Reality</span>
+      {/* central dark band behind cards */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-[-10%] top-[18%] h-[52%] rounded-[64px] bg-[radial-gradient(circle_at_center,#020617_0,#020617_45%,rgba(15,23,42,0.9)_70%,transparent_100%)] opacity-95"
+      />
+
+      {/* glow under command surface */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-[10%] mx-auto h-48 max-w-3xl rounded-[999px] bg-[radial-gradient(circle,#0ea5e9_0,rgba(56,189,248,0.0)_65%)] opacity-40 blur-3xl"
+      />
+
+      {/* noise / grain */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 mix-blend-soft-light opacity-[0.20] hero-noise"
+      />
+
+      {/* ===== FOREGROUND CONTENT ===== */}
+      <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-col items-center px-4 py-16 sm:px-6 lg:px-8">
+        {/* headline card */}
+        <div className="rounded-[32px] border border-white/20 bg-[radial-gradient(circle_at_top,#ffffff,#f4e9dc)] px-8 py-10 shadow-[0_32px_90px_rgba(0,0,0,0.6)] sm:px-12 sm:py-12">
+          <h1 className="text-center text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl">
+            From Idea to Digital{" "}
+            <span className="mt-1 block">Reality</span>
           </h1>
         </div>
 
-        {/* Tagline */}
-        <p className="mt-8 text-[11px] font-semibold tracking-[0.35em] text-slate-200/85">
+        {/* tagline */}
+        <p className="mt-7 text-xs font-semibold tracking-[0.35em] text-slate-200/90">
           BUILD SMARTER. LAUNCH FASTER
         </p>
 
-        {/* Command surface: glossy prompt pill */}
-        <div className="mt-8 w-full max-w-3xl rounded-[999px] border border-white/80 bg-white/95 px-3 py-3 shadow-[0_30px_90px_rgba(0,0,0,0.85)] backdrop-blur">
-          <form className="flex items-stretch gap-2" onSubmit={handleCreate}>
-            <label className="sr-only" htmlFor="hero-idea-input">
+        {/* prompt bar */}
+        <div className="mt-10 w-full max-w-3xl rounded-[999px] border border-white/40 bg-white/90 px-3 py-2 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur">
+          <form
+            className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4"
+            onSubmit={handleCreate}
+          >
+            <label htmlFor="hero-idea-input" className="sr-only">
               Describe your website or app idea
             </label>
 
-            {/* Inner pill with subtle inner shadow */}
-            <div className="flex-1 rounded-[999px] border border-slate-200/70 bg-white/85 px-5 py-3 shadow-inner flex items-center">
-              <input
-                id="hero-idea-input"
-                type="text"
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="Describe your website or app idea..."
-                className="w-full bg-transparent text-sm text-slate-900 placeholder:text-slate-400 outline-none"
-              />
-            </div>
+            <input
+              id="hero-idea-input"
+              type="text"
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              placeholder="Describe your website or app idea..."
+              className="w-full rounded-[999px] border border-transparent bg-white/0 px-5 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-300 focus:ring-0 sm:text-base"
+            />
 
-            {/* Ignition-style Create button */}
             <Button
               type="submit"
-              className="relative ml-1 flex h-12 min-w-[120px] items-center justify-center rounded-[999px] border border-[#f5e9d5] bg-[#020617] px-6 text-sm font-semibold text-slate-50 shadow-[0_16px_40px_rgba(15,23,42,0.95)] before:absolute before:inset-[2px] before:rounded-[999px] before:border before:border-[#facc15]/70 before:content-[''] hover:bg-[#020617] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#facc15]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white/40"
+              className="h-[46px] shrink-0 rounded-[999px] border border-[#f4d38a] bg-[radial-gradient(circle_at_top,#ffffff,#020617)] px-7 text-sm font-semibold text-slate-50 shadow-[0_0_0_1px_rgba(15,23,42,0.9),0_16px_40px_rgba(0,0,0,0.75)] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white/10"
             >
-              <span className="relative z-10">Create</span>
+              Create
             </Button>
           </form>
 
-          <div className="mt-3 flex items-center justify-center">
+          <div className="mt-2 flex items-center justify-center pb-1">
             <button
               type="button"
-              className="text-[11px] font-medium text-slate-300 transition-colors hover:text-slate-50"
+              className="text-xs font-medium text-slate-300 transition-colors hover:text-slate-100"
             >
               or Explore previews →
             </button>
