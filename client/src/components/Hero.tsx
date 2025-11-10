@@ -75,86 +75,95 @@ export default function Hero() {
   }
 
   return (
-    <section className="relative flex min-h-[calc(100vh-64px)] items-center overflow-hidden bg-[#f3eee7] text-slate-900">
+    <section className="relative flex min-h-[calc(100vh-64px)] items-center overflow-hidden bg-[#020617] text-slate-100">
       {/* Background geometry + texture */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 overflow-hidden"
       >
-        {/* Deep panels */}
-        <div className="absolute -left-1/2 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-[#e0d2c2] opacity-80" />
-        <div className="absolute -left-1/8 -top-1/3 h-[140%] w-[46%] -rotate-12 bg-[#d4c7b7] opacity-75" />
-        <div className="absolute left-1/6 -top-1/3 h-[140%] w-[46%] -rotate-12 bg-[#cbd5e1] opacity-35" />
-        <div className="absolute left-1/2 -top-1/3 h-[140%] w-[46%] -rotate-12 bg-[#c8d4ce] opacity-45" />
+        {/* Hard panels – no gradients, just colored planes */}
+        <div className="absolute -top-40 -left-40 h-[140%] w-[65%] -rotate-12 bg-[#050816]" />
+        <div className="absolute -top-52 left-10 h-[150%] w-[60%] -rotate-12 bg-[#0b1220]" />
+        <div className="absolute -top-44 left-1/2 h-[145%] w-[60%] -rotate-12 bg-[#020617]" />
+        <div className="absolute -top-36 left-[70%] h-[145%] w-[55%] -rotate-12 bg-[#0f172a]" />
 
-        {/* Vignette + central light */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#ffffff_0,#f3eee7_48%,#d8ccbe_100%)] opacity-95" />
+        {/* Color accents as panels, not floods */}
+        <div className="absolute inset-y-0 left-[-10%] w-1/3 -rotate-12 bg-[#0b3b36]/40 mix-blend-soft-light" />
+        <div className="absolute inset-y-10 right-[-8%] w-1/4 -rotate-12 bg-[#1d2441]/55 mix-blend-soft-light" />
 
-        {/* Fine grain / texture */}
-        <div className="absolute inset-0 mix-blend-soft-light opacity-60 bg-[radial-gradient(circle_at_0_0,rgba(15,23,42,0.05)_0,transparent_55%),radial-gradient(circle_at_100%_0,rgba(15,23,42,0.04)_0,transparent_55%)]" />
+        {/* Vignette + central light (gloss from above) */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#e5ddcf22_0,transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_110%,rgba(15,23,42,0.95)_0,transparent_70%)] opacity-70" />
 
-        {/* Glow behind card */}
-        <div className="absolute inset-x-0 top-1/3 mx-auto h-60 max-w-3xl rounded-full bg-[radial-gradient(circle,rgba(15,23,42,0.16)_0,transparent_65%)] blur-3xl" />
+        {/* Fine brushed texture */}
+        <div className="absolute inset-0 opacity-[0.22] mix-blend-soft-light bg-[repeating-linear-gradient(90deg,rgba(148,163,184,0.18)_0,rgba(148,163,184,0.18)_1px,transparent_1px,transparent_4px)]" />
+        <div className="absolute inset-0 opacity-[0.12] mix-blend-soft-light bg-[repeating-linear-gradient(0deg,rgba(15,23,42,0.35)_0,rgba(15,23,42,0.35)_1px,transparent_1px,transparent_3px)]" />
 
-        {/* Floor under command surface */}
-        <div className="absolute inset-x-0 bottom-10 mx-auto h-40 max-w-4xl rounded-[999px] bg-[radial-gradient(circle,rgba(15,23,42,0.18)_0,transparent_70%)] opacity-70 blur-2xl" />
+        {/* Glow behind main card */}
+        <div className="absolute inset-x-0 top-1/3 mx-auto h-64 max-w-4xl rounded-full bg-[radial-gradient(circle,rgba(248,244,236,0.5)_0,transparent_70%)] blur-3xl" />
 
-        {/* Top highlight strip */}
-        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/75 via-white/30 to-transparent" />
+        {/* Floor under console */}
+        <div className="absolute inset-x-0 bottom-6 mx-auto h-40 max-w-4xl rounded-[999px] bg-[radial-gradient(circle,rgba(15,23,42,0.85)_0,transparent_70%)] opacity-70 blur-2xl" />
+
+        {/* Top light strip to tie into black header */}
+        <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black via-black/80 to-transparent" />
       </div>
 
       {/* Hero content */}
       <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center px-4 py-16 sm:px-6 lg:px-8">
         {/* Main glossy card */}
-        <div className="rounded-[28px] border border-white/80 bg-gradient-to-b from-[#fdfbf7] via-[#f7eee3] to-[#e8dbcd] px-8 py-10 shadow-[0_30px_90px_rgba(15,23,42,0.22)] sm:px-12 sm:py-12">
-          <h1 className="text-center text-4xl font-semibold tracking-tight text-[#0f172a] sm:text-5xl md:text-6xl">
+        <div className="rounded-[30px] border border-white/70 bg-[#f7f1e6] px-8 py-10 shadow-[0_32px_90px_rgba(0,0,0,0.7)] sm:px-12 sm:py-12">
+          <div className="pointer-events-none absolute inset-x-16 top-[18%] h-px bg-gradient-to-r from-transparent via-white/70 to-transparent opacity-60" />
+          <h1 className="relative text-center text-4xl font-semibold tracking-tight text-[#0f172a] sm:text-5xl md:text-6xl">
             From Idea to Digital{" "}
             <span className="mt-1 block">Reality</span>
           </h1>
         </div>
 
         {/* Tagline */}
-        <p className="mt-7 text-[11px] font-medium tracking-[0.32em] text-slate-500/85">
+        <p className="mt-7 text-[11px] font-medium tracking-[0.32em] text-slate-300/90">
           BUILD SMARTER. LAUNCH FASTER
         </p>
 
-        {/* Command surface: input + button */}
-        <div className="mt-10 w-full max-w-2xl rounded-3xl border border-slate-200/75 bg-white/85 px-6 py-5 shadow-[0_24px_70px_rgba(15,23,42,0.2)] backdrop-blur-sm">
-          <form
-            className="flex flex-col gap-3 sm:flex-row sm:items-center"
-            onSubmit={handleCreate}
-          >
-            <label className="sr-only" htmlFor="hero-idea-input">
-              Describe your website or app idea
-            </label>
-
-            <input
-              id="hero-idea-input"
-              type="text"
-              value={promptText}
-              onChange={(e) => setPromptText(e.target.value)}
-              placeholder="Describe your website or app idea..."
-              className="w-full rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-[#0b3b36] focus:ring-1 focus:ring-[#0b3b36]/60 sm:text-base"
-            />
-
-            {/* Premium hardware-style button */}
-            <div className="shrink-0 rounded-full bg-gradient-to-r from-[#f7e0b9] via-[#d4a15a] to-[#f7e0b9] p-[1px]">
-              <Button
-                type="submit"
-                className="inline-flex h-11 items-center justify-center rounded-full bg-[#0f172a] px-6 text-sm font-semibold text-[#fdfbf7] shadow-[0_14px_40px_rgba(15,23,42,0.55)] transition-transform transition-shadow hover:-translate-y-[1px] hover:shadow-[0_20px_60px_rgba(15,23,42,0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a15a]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white/70"
-              >
-                Create
-              </Button>
-            </div>
-          </form>
-
-          <div className="mt-3 flex items-center justify-center">
-            <button
-              type="button"
-              className="text-xs font-medium text-slate-500 transition-colors hover:text-slate-900"
+        {/* Command surface: console-style */}
+        <div className="mt-10 w-full max-w-3xl rounded-[999px] border border-slate-500/60 bg-[#020617]/80 px-3 py-3 shadow-[0_28px_80px_rgba(0,0,0,0.9)] backdrop-blur-sm">
+          <div className="rounded-[999px] bg-[#050b16]/95 px-4 py-3 shadow-[inset_0_1px_0_rgba(148,163,184,0.4)]">
+            <form
+              className="flex flex-col gap-3 sm:flex-row sm:items-center"
+              onSubmit={handleCreate}
             >
-              or Explore previews →
-            </button>
+              <label className="sr-only" htmlFor="hero-idea-input">
+                Describe your website or app idea
+              </label>
+
+              <input
+                id="hero-idea-input"
+                type="text"
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                placeholder="Describe your website or app idea..."
+                className="w-full rounded-2xl border border-slate-600/70 bg-[#020617] px-4 py-3 text-sm text-slate-100 placeholder:text-slate-400 outline-none ring-0 transition focus:border-[#d4a15a] focus:ring-1 focus:ring-[#d4a15a]/70 sm:text-base"
+              />
+
+              {/* Premium hardware-style button */}
+              <div className="shrink-0 rounded-full bg-gradient-to-r from-[#f7e0b9] via-[#d4a15a] to-[#f7e0b9] p-[1px]">
+                <Button
+                  type="submit"
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-[#020617] px-6 text-sm font-semibold text-[#fdfbf7] shadow-[0_14px_40px_rgba(0,0,0,0.8)] transition-transform transition-shadow hover:-translate-y-[1px] hover:shadow-[0_20px_60px_rgba(0,0,0,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a15a]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#020617]"
+                >
+                  Create
+                </Button>
+              </div>
+            </form>
+
+            <div className="mt-2 flex items-center justify-center">
+              <button
+                type="button"
+                className="text-[11px] font-medium text-slate-400 transition-colors hover:text-slate-100"
+              >
+                or Explore previews →
+              </button>
+            </div>
           </div>
         </div>
       </div>
