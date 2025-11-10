@@ -1,7 +1,8 @@
 // client/src/pages/Home.tsx
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import HomeHero from "@/components/Hero";
+import Header from "@/components/Header";
+import Hero from "@/components/Hero";
 import WeavyBoard from "@/components/WeavyBoard";
 import ExploreWheel from "@/components/ExploreWheel";
 import ChatPanel from "@/components/ChatPanel";
@@ -21,13 +22,23 @@ function FloatingChat({
     <>
       <Button
         size="icon"
-        style={{ position: "fixed", bottom: 24, right: 24, left: "auto", zIndex: 70 }}
+        style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          left: "auto",
+          zIndex: 70,
+        }}
         className="h-14 w-14 rounded-full shadow-lg"
         onClick={() => setIsChatOpen(!isChatOpen)}
         data-testid="button-toggle-chat"
         aria-label="Toggle chat"
       >
-        {isChatOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
+        {isChatOpen ? (
+          <X className="h-6 w-6" />
+        ) : (
+          <MessageCircle className="h-6 w-6" />
+        )}
       </Button>
 
       {isChatOpen && (
@@ -57,8 +68,12 @@ export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <HomeHero />
+    <div className="min-h-screen bg-background">
+      {/* Original header: keeps your exact nav copy & layout */}
+      <Header />
+
+      {/* New charcoal hero with original title + tagline */}
+      <Hero />
 
       {/* Weavy band */}
       <section className="weavy-section home-weavy home-weavy--prism">
@@ -68,10 +83,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Explore wheel (includes “Pick a starting point — wheel it.” copy) */}
+      {/* Explore wheel */}
       <ExploreWheel />
 
-      {/* Replacement for “From Workflow → App Mode” */}
+      {/* Scroll gallery */}
       <ScrollGallery
         images={[
           "/demo/ybuilt-01.jpg",

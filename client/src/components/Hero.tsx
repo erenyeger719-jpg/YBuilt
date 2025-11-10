@@ -3,7 +3,7 @@ import { useState, FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
-export default function HomeHero() {
+export default function Hero() {
   const { toast } = useToast();
   const [promptText, setPromptText] = useState("");
 
@@ -13,7 +13,7 @@ export default function HomeHero() {
     if (!prompt) return;
 
     try {
-      console.log("[home-hero] starting fetch → /api/generate", { prompt });
+      console.log("[hero] starting fetch → /api/generate", { prompt });
 
       const r = await fetch("/api/generate", {
         method: "POST",
@@ -27,7 +27,7 @@ export default function HomeHero() {
       const data =
         ct.includes("application/json") && bodyText ? JSON.parse(bodyText) : {};
 
-      console.log("[home-hero] status:", r.status, "data:", data);
+      console.log("[hero] status:", r.status, "data:", data);
 
       if (!r.ok) {
         const msg =
@@ -51,7 +51,7 @@ export default function HomeHero() {
       if (!id) throw new Error("No jobId in response");
 
       const target = `/workspace/${id}`;
-      console.log("[home-hero] redirect →", target);
+      console.log("[hero] redirect →", target);
       window.location.assign(target);
       setTimeout(() => {
         window.location.href = target;
@@ -65,7 +65,7 @@ export default function HomeHero() {
         });
         return;
       }
-      console.error("[home-hero] error:", err);
+      console.error("[hero] error:", err);
       toast({
         title: "Create failed",
         description: err?.message || "Request failed",
@@ -75,123 +75,71 @@ export default function HomeHero() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      {/* Background glow */}
+    <section className="relative overflow-hidden bg-black text-slate-100">
+      {/* Diagonal charcoal panels in the background */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-16 -z-10 flex justify-center"
+        className="pointer-events-none absolute inset-0 overflow-hidden"
       >
-        <div className="h-80 w-80 rounded-full bg-emerald-400/10 blur-3xl sm:h-96 sm:w-96" />
+        <div className="absolute -left-1/2 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-gradient-to-b from-neutral-950 to-neutral-800" />
+        <div className="absolute -left-1/6 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-gradient-to-b from-neutral-900 to-neutral-700" />
+        <div className="absolute left-1/6 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-gradient-to-b from-neutral-950 to-neutral-800" />
+        <div className="absolute left-1/2 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-gradient-to-b from-neutral-900 to-neutral-700" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/5 to-black/80" />
       </div>
 
-      {/* Top nav */}
-      <header className="sticky top-0 z-20 border-b border-slate-800/60 bg-slate-950/70 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-slate-800/80 shadow-sm shadow-slate-900/60">
-              <span className="text-xs font-semibold tracking-tight text-emerald-300">
-                Y
-              </span>
-            </div>
-            <span className="text-sm font-semibold tracking-tight text-slate-100">
-              Ybuilt
-            </span>
-          </div>
-
-          {/* Nav links */}
-          <nav className="flex items-center gap-6 text-xs sm:text-sm">
-            <div className="hidden items-center gap-6 md:flex">
-              <button className="transition-colors hover:text-slate-50">
-                Library
-              </button>
-              <button className="transition-colors hover:text-slate-50">
-                Team
-              </button>
-              <button className="transition-colors hover:text-slate-50">
-                Invite
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button className="hidden rounded-full border border-slate-700/80 px-3 py-1 text-xs font-medium text-slate-200 shadow-sm shadow-slate-900/60 transition-colors hover:border-slate-500/80 md:inline-flex">
-                Creator plan · ₹799
-              </button>
-
-              <div className="hidden items-center gap-2 sm:flex">
-                <span className="rounded-full border border-slate-700/80 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-300">
-                  INR
-                </span>
-
-                <button className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/80 text-[11px] font-medium text-slate-200 shadow-sm shadow-slate-900/60">
-                  {/* Avatar placeholder; can be replaced by real user avatar */}
-                  Y
-                </button>
-              </div>
-            </div>
-          </nav>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <main className="mx-auto flex max-w-6xl flex-col items-center px-4 pb-16 pt-10 sm:px-6 lg:px-8 lg:pt-16">
-        <section className="w-full max-w-3xl text-center">
-          {/* Small label */}
-          <p className="mb-4 text-xs font-medium uppercase tracking-[0.2em] text-emerald-300/80">
-            Builder studio
-          </p>
-
-          {/* Headline */}
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl md:text-5xl">
-            Your builder that doesn&apos;t shout.
+      {/* Hero content */}
+      <div className="relative mx-auto flex max-w-5xl flex-col items-center px-4 py-16 sm:px-6 lg:px-8">
+        {/* Main white card */}
+        <div className="rounded-3xl bg-gradient-to-b from-zinc-50 to-zinc-200 px-6 py-10 shadow-2xl shadow-black/70 sm:px-12 sm:py-12">
+          <h1 className="text-center text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl md:text-6xl">
+            From Idea to Digital{" "}
+            <span className="mt-1 block">Reality</span>
           </h1>
+        </div>
 
-          {/* Subheadline */}
-          <p className="mt-4 text-sm text-slate-300 sm:text-base">
-            Share your idea in plain words; Ybuilt turns it into a live
-            website or app, quietly and precisely.
-          </p>
+        {/* Tagline */}
+        <p className="mt-6 text-sm font-medium tracking-[0.35em] text-zinc-100/90">
+          BUILD SMARTER. LAUNCH FASTER
+        </p>
 
-          {/* Command surface */}
-          <div className="mt-8 rounded-2xl border border-slate-800/90 bg-slate-900/70 p-4 shadow-xl shadow-slate-950/60 sm:p-5">
-            <form
-              className="flex flex-col gap-3 sm:flex-row sm:items-center"
-              onSubmit={handleCreate}
+        {/* Command surface: input + button */}
+        <div className="mt-10 w-full max-w-2xl rounded-2xl bg-black/80 px-5 py-5 shadow-2xl shadow-black/80 backdrop-blur">
+          <form
+            className="flex flex-col gap-3 sm:flex-row sm:items-center"
+            onSubmit={handleCreate}
+          >
+            <label className="sr-only" htmlFor="hero-idea-input">
+              Describe your website or app idea
+            </label>
+
+            <input
+              id="hero-idea-input"
+              type="text"
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              placeholder="Describe your website or app idea..."
+              className="w-full rounded-xl border border-zinc-700/80 bg-zinc-900/80 px-4 py-3 text-sm text-zinc-50 placeholder:text-zinc-500 outline-none ring-0 transition focus:border-transparent focus:ring-2 focus:ring-zinc-200 sm:text-base"
+            />
+
+            <Button
+              type="submit"
+              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-zinc-100 px-5 py-3 text-sm font-medium text-slate-900 shadow-sm shadow-black/40 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             >
-              <label className="sr-only" htmlFor="idea-input">
-                Describe your website or app idea
-              </label>
+              Create
+            </Button>
+          </form>
 
-              <input
-                id="idea-input"
-                type="text"
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="Describe what you’d like to build…"
-                className="w-full rounded-xl border border-slate-800/80 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none ring-0 transition focus:border-transparent focus:ring-2 focus:ring-emerald-400/70 sm:text-base"
-              />
-
-              <Button
-                type="submit"
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-emerald-400 px-5 py-3 text-sm font-medium text-slate-950 shadow-sm shadow-emerald-400/40 transition hover:bg-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-              >
-                Begin
-              </Button>
-            </form>
-
-            {/* Secondary action */}
-            <div className="mt-3 flex items-center justify-center">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-100"
-              >
-                <span>Or explore previews</span>
-                <span aria-hidden="true">→</span>
-              </button>
-            </div>
+          <div className="mt-3 flex items-center justify-center">
+            <button
+              type="button"
+              className="text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-100"
+            >
+              or Explore previews →
+            </button>
           </div>
-        </section>
-      </main>
-    </div>
+        </div>
+      </div>
+    </section>
   );
 }
