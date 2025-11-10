@@ -75,36 +75,45 @@ export default function Hero() {
   }
 
   return (
-    <section className="relative overflow-hidden bg-black text-slate-100">
-      {/* Diagonal charcoal panels in the background */}
+    <section className="relative flex min-h-[calc(100vh-64px)] items-center overflow-hidden bg-[#050509] text-slate-100">
+      {/* Multi-color diagonal panels in the background */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 overflow-hidden"
       >
-        <div className="absolute -left-1/2 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-gradient-to-b from-neutral-950 to-neutral-800" />
-        <div className="absolute -left-1/6 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-gradient-to-b from-neutral-900 to-neutral-700" />
-        <div className="absolute left-1/6 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-gradient-to-b from-neutral-950 to-neutral-800" />
-        <div className="absolute left-1/2 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-gradient-to-b from-neutral-900 to-neutral-700" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/5 to-black/80" />
+        {/* deep blue-black */}
+        <div className="absolute -left-1/2 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-[#050814]" />
+        {/* dark teal */}
+        <div className="absolute -left-1/6 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-[#06141f]" />
+        {/* steel navy */}
+        <div className="absolute left-1/6 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-[#111827]" />
+        {/* soft slate */}
+        <div className="absolute left-1/2 -top-1/3 h-[140%] w-[45%] -rotate-12 bg-[#1e293b]" />
+
+        {/* global dark overlay */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#0b1120_0,#020617_55%,#020617_100%)] opacity-90" />
+
+        {/* subtle color glow behind card */}
+        <div className="absolute inset-x-0 top-1/3 mx-auto h-64 max-w-3xl rounded-full bg-[radial-gradient(circle,#22c55e33_0,#0ea5e91f_35%,transparent_70%)] blur-3xl" />
       </div>
 
       {/* Hero content */}
-      <div className="relative mx-auto flex max-w-5xl flex-col items-center px-4 py-16 sm:px-6 lg:px-8">
-        {/* Main white card */}
-        <div className="rounded-3xl bg-gradient-to-b from-zinc-50 to-zinc-200 px-6 py-10 shadow-2xl shadow-black/70 sm:px-12 sm:py-12">
-          <h1 className="text-center text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl md:text-6xl">
+      <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center px-4 py-16 sm:px-6 lg:px-8">
+        {/* Main card */}
+        <div className="rounded-3xl bg-gradient-to-b from-[#f5f0e8] to-[#d4d4d4] px-8 py-10 shadow-[0_40px_120px_rgba(0,0,0,0.7)] sm:px-12 sm:py-12">
+          <h1 className="text-center text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl">
             From Idea to Digital{" "}
             <span className="mt-1 block">Reality</span>
           </h1>
         </div>
 
         {/* Tagline */}
-        <p className="mt-6 text-sm font-medium tracking-[0.35em] text-zinc-100/90">
+        <p className="mt-7 text-xs font-medium tracking-[0.35em] text-slate-200/90">
           BUILD SMARTER. LAUNCH FASTER
         </p>
 
         {/* Command surface: input + button */}
-        <div className="mt-10 w-full max-w-2xl rounded-2xl bg-black/80 px-5 py-5 shadow-2xl shadow-black/80 backdrop-blur">
+        <div className="mt-10 w-full max-w-2xl rounded-2xl border border-white/5 bg-[#020617]/95 px-5 py-5 shadow-[0_30px_80px_rgba(0,0,0,0.85)] backdrop-blur">
           <form
             className="flex flex-col gap-3 sm:flex-row sm:items-center"
             onSubmit={handleCreate}
@@ -119,12 +128,12 @@ export default function Hero() {
               value={promptText}
               onChange={(e) => setPromptText(e.target.value)}
               placeholder="Describe your website or app idea..."
-              className="w-full rounded-xl border border-zinc-700/80 bg-zinc-900/80 px-4 py-3 text-sm text-zinc-50 placeholder:text-zinc-500 outline-none ring-0 transition focus:border-transparent focus:ring-2 focus:ring-zinc-200 sm:text-base"
+              className="w-full rounded-xl border border-slate-600/70 bg-slate-900/80 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none ring-0 transition focus:border-transparent focus:ring-2 focus:ring-[#22c55e]/70 sm:text-base"
             />
 
             <Button
               type="submit"
-              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-zinc-100 px-5 py-3 text-sm font-medium text-slate-900 shadow-sm shadow-black/40 transition hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-[#22c55e] via-[#0ea5e9] to-[#22c55e] px-5 py-3 text-sm font-semibold text-slate-950 shadow-[0_8px_30px_rgba(15,118,110,0.65)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22c55e]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#020617]"
             >
               Create
             </Button>
@@ -133,7 +142,7 @@ export default function Hero() {
           <div className="mt-3 flex items-center justify-center">
             <button
               type="button"
-              className="text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-100"
+              className="text-xs font-medium text-slate-400 transition-colors hover:text-slate-100"
             >
               or Explore previews →
             </button>

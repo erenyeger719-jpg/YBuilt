@@ -68,7 +68,7 @@ export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#050509] text-slate-100">
       {/* Original header: keeps your exact nav copy & layout */}
       <Header />
 
