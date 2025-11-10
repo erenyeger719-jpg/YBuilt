@@ -189,7 +189,9 @@ app.use(ipGate());
   app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
   app.use(express.json({ limit: '1mb' }));
   // ensure .cache exists early for routers that write there
-  try { fs.mkdirSync('.cache', { recursive: true }); } catch {}
+  try {
+    fs.mkdirSync('.cache', { recursive: true });
+  } catch {}
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
   // 🔖 API marker header (place right after CORS/parsers; before routers)
@@ -687,9 +689,12 @@ app.use(ipGate());
   // NEW: mount extra team handlers
   if (teamsMod?.detail) app.get('/api/teams/:id', teamsMod.detail);
   if (teamsMod?.updateRole) app.post('/api/teams/role', express.json(), teamsMod.updateRole);
-  if (teamsMod?.removeMember) app.post('/api/teams/removeMember', express.json(), teamsMod.removeMember);
-  if (teamsMod?.revokeInvite) app.post('/api/teams/invites/revoke', express.json(), teamsMod.revokeInvite);
-  if (teamsMod?.resendInvite) app.post('/api/teams/invites/resend', express.json(), teamsMod.resendInvite);
+  if (teamsMod?.removeMember)
+    app.post('/api/teams/removeMember', express.json(), teamsMod.removeMember);
+  if (teamsMod?.revokeInvite)
+    app.post('/api/teams/invites/revoke', express.json(), teamsMod.revokeInvite);
+  if (teamsMod?.resendInvite)
+    app.post('/api/teams/invites/resend', express.json(), teamsMod.resendInvite);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
@@ -739,7 +744,7 @@ app.use(ipGate());
       try {
         await new Promise<void>((resolve, reject) => {
           const listener = server.listen({ port: currentPort, host: '0.0.0.0' }, () => {
-            log(`serving on port ${currentPort}`);
+            log(`[express] serving on port ${currentPort}`);
             logger.info(`[SERVER] Successfully started on port ${currentPort}`);
             resolve();
           });
@@ -754,6 +759,6 @@ app.use(ipGate());
     }
   }
 
-  const port = parseInt(process.env.PORT || '5050', 10);
-  await startServer(port);
+  const PORT = process.env.PORT ? Number(process.env.PORT) : 5050;
+  await startServer(PORT);
 })();
