@@ -69,15 +69,16 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Keep your existing black header as the “frame” */}
+      {/* Black header stays on top */}
       <Header />
 
-      <main className="mx-auto max-w-6xl px-4 pb-20 pt-0 sm:px-6 lg:px-8">
-        {/* HERO */}
-        <Hero />
+      {/* HERO owns the first viewport */}
+      <Hero />
 
+      {/* Rest of the homepage content */}
+      <main className="mx-auto max-w-6xl px-4 pb-20 pt-16 sm:px-6 lg:px-8">
         {/* SECTION: Canvas / board */}
-        <section className="mt-16 space-y-5">
+        <section className="space-y-5">
           <div className="flex items-baseline justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">
@@ -114,7 +115,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* SECTION: Simple gallery with placeholder images for now */}
+        {/* SECTION: Simple gallery */}
         <section className="mt-16 space-y-5">
           <div className="flex items-baseline justify-between gap-4">
             <div>
@@ -128,12 +129,9 @@ export default function Home() {
             </div>
           </div>
 
-          {/* If you want zero actual images for now, you can comment ScrollGallery out
-              and leave the placeholder below. */}
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <ScrollGallery
               images={[
-                // temporary placeholders — swap with real images later
                 "/demo/ybuilt-01.jpg",
                 "/demo/ybuilt-02.jpg",
                 "/demo/ybuilt-03.jpg",

@@ -71,53 +71,62 @@ export default function Hero() {
       toast({
         title: "Create failed",
         description: err?.message || "Request failed",
+        variant: "destructive",
       });
     }
   }
 
   return (
     <section
-      className="relative isolate flex min-h-[calc(100vh-56px)] items-center overflow-hidden bg-slate-50"
+      className="
+        relative isolate 
+        flex w-full flex-col justify-between 
+        bg-white text-slate-900
+        px-4 pt-10 pb-10
+        sm:px-8 lg:px-16
+        min-h-[calc(100vh-64px)]
+      "
     >
-      {/* === BACKGROUND IMAGE LAYER === */}
+      {/* Background: soft IG-ish gradient + grain */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-center bg-cover bg-no-repeat"
-        style={{
-          // 🔁 replace this with your real hero image later
-          backgroundImage: "url('/media/home-hero-placeholder.jpg')",
-        }}
-      />
-
-      {/* === OVERLAY: keep text readable over the image === */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 -z-10"
       >
-        {/* soft light wash */}
-        <div className="absolute inset-0 bg-gradient-to-b from-white/75 via-white/55 to-white/80" />
-        {/* subtle vertical divider */}
-        <div className="absolute inset-y-16 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-slate-200/0 via-slate-200/60 to-slate-200/0" />
-        {/* fine grain */}
+        {/* soft colour wash */}
+        <div className="h-full w-full bg-[radial-gradient(circle_at_top,_#fefefe_0,_#f4f4ff_35%,_#ffeef5_70%,_#fffaf1_100%)]" />
+
+        {/* super subtle noise */}
         <div
           className="absolute inset-0 opacity-[0.06] mix-blend-soft-light"
           style={{
             backgroundImage:
-              "repeating-linear-gradient(0deg,rgba(15,23,42,0.2)_0,rgba(15,23,42,0.2)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.12)_0,rgba(15,23,42,0.12)_1px,transparent_1px,transparent_3px)",
+              "repeating-linear-gradient(0deg,rgba(15,23,42,0.18)_0,rgba(15,23,42,0.18)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.1)_0,rgba(15,23,42,0.1)_1px,transparent_1px,transparent_3px)",
           }}
         />
       </div>
 
-      {/* === FOREGROUND CONTENT === */}
-      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-10 sm:px-6 lg:px-8 md:flex-row md:items-center md:py-16">
-        {/* LEFT: text + prompt */}
-        <div className="flex-1 space-y-7">
-          <p className="inline-flex items-center rounded-full border border-slate-300/70 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-            Build studio · Ybuilt
+      {/* Top content */}
+      <div className="flex flex-1 flex-col gap-10 lg:flex-row lg:items-center lg:gap-16">
+        {/* LEFT: brand intro */}
+        <div className="flex-1 max-w-sm space-y-5 text-xs sm:text-sm">
+          <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
+            YBUILT STUDIO
           </p>
+          <p className="leading-relaxed text-slate-600">
+            At Ybuilt, you&apos;re not a &quot;project&quot;. You&apos;re a
+            builder. This is your calm space to turn ideas into digital reality,
+            without the chaos of tools and tabs.
+          </p>
+          <p className="leading-relaxed text-slate-600">
+            Share what&apos;s in your head in plain language — we take it from
+            first sketch to something your friends can actually click.
+          </p>
+        </div>
 
+        {/* RIGHT: main hero copy + prompt */}
+        <div className="flex-1 space-y-6 lg:text-right">
           <div className="space-y-3">
-            <h1 className="text-balance text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl md:text-5xl">
+            <h1 className="text-balance text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl md:text-5xl lg:text-6xl">
               From Idea to Digital{" "}
               <span className="block">Reality</span>
             </h1>
@@ -125,15 +134,10 @@ export default function Hero() {
             <p className="text-[11px] font-semibold tracking-[0.35em] text-slate-500">
               BUILD SMARTER. LAUNCH FASTER
             </p>
-
-            <p className="max-w-xl text-sm text-slate-600 sm:text-[15px]">
-              Describe what you want to ship. Ybuilt turns it into a working
-              product, then lets you refine it without drowning in settings.
-            </p>
           </div>
 
-          {/* Prompt surface */}
-          <div className="mt-6 max-w-xl rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur">
+          {/* Prompt bar */}
+          <div className="mt-4 inline-flex max-w-xl flex-col items-stretch rounded-2xl border border-slate-200 bg-white/80 p-3 text-left shadow-[0_18px_45px_rgba(15,23,42,0.10)] backdrop-blur-sm lg:ml-auto">
             <form
               className="flex flex-col gap-3 sm:flex-row sm:items-center"
               onSubmit={handleCreate}
@@ -147,18 +151,18 @@ export default function Hero() {
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 placeholder="Describe your website or app idea…"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900/70"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900/70"
               />
 
               <Button
                 type="submit"
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-slate-50 shadow-sm shadow-slate-900/40 transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-slate-50 shadow-sm shadow-slate-900/40 transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               >
                 Create
               </Button>
             </form>
 
-            <div className="mt-3 flex items-center justify-center">
+            <div className="mt-3 flex items-center justify-center lg:justify-end">
               <button
                 type="button"
                 className="text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
@@ -168,15 +172,16 @@ export default function Hero() {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* RIGHT: placeholder block for now (could be removed later if you want pure center hero) */}
-        <div className="flex-1">
-          <div className="relative mx-auto aspect-[4/3] w-full max-w-md rounded-3xl border border-dashed border-slate-300 bg-white/60 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
-            <div className="absolute inset-4 rounded-2xl border border-slate-200/80" />
-            <p className="absolute inset-x-6 bottom-6 text-xs text-slate-400">
-              Future: product preview / animation goes here.
-            </p>
-          </div>
+      {/* Bottom strip: placeholder “gallery rail” like Avision / IG */}
+      <div className="mt-10 h-40 w-full rounded-3xl border border-slate-200 bg-white/70 p-3 shadow-[0_20px_55px_rgba(15,23,42,0.08)]">
+        <div className="flex h-full gap-3">
+          <div className="flex-1 rounded-2xl bg-slate-900/5" />
+          <div className="flex-1 rounded-2xl bg-rose-400/15" />
+          <div className="flex-1 rounded-2xl bg-amber-300/20" />
+          <div className="flex-1 rounded-2xl bg-sky-400/20" />
+          <div className="flex-1 rounded-2xl bg-emerald-400/18" />
         </div>
       </div>
     </section>
