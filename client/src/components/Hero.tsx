@@ -77,26 +77,8 @@ export default function Hero() {
 
   return (
     <section
-      className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden"
+      className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden bg-[#EDEFF3]"
     >
-      {/* === BACKGROUND LAYER: your gradient instead of image === */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(90deg, hsla(34, 98%, 50%, 1) 0%, hsla(32, 37%, 84%, 1) 100%)",
-        }}
-      />
-
-      {/* === VERY SUBTLE OVERLAY - keeps text readable but colors vibrant === */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-      >
-        <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-white/20" />
-      </div>
-
       {/* === CENTERED CONTENT === */}
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center text-center">
@@ -117,7 +99,7 @@ export default function Hero() {
           </div>
 
           {/* Prompt surface - centered */}
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-200/50 bg-white/85 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200/60 bg-white/85 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.08)] backdrop-blur-sm">
             <form
               className="flex flex-col gap-3 sm:flex-row sm:items-center"
               onSubmit={handleCreate}
