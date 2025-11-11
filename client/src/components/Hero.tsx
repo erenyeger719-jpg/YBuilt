@@ -79,112 +79,172 @@ export default function Hero() {
     <section
       className="relative isolate flex min-h-[calc(100vh-56px)] items-center overflow-hidden bg-slate-50"
     >
-      {/* === BACKGROUND GRADIENT LAYER === */}
+      {/* === BACKGROUND GRADIENT LAYER - SUPER SATURATED === */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
-          // High-quality gradient matching the image exactly
+          // Super saturated, high-contrast gradient exactly matching the image
           background: `
+            radial-gradient(
+              ellipse at top left,
+              hsla(270, 100%, 70%, 1) 0%,
+              transparent 50%
+            ),
+            radial-gradient(
+              ellipse at top right,
+              hsla(300, 100%, 65%, 1) 0%,
+              transparent 50%
+            ),
+            radial-gradient(
+              ellipse at center,
+              hsla(330, 100%, 70%, 1) 0%,
+              transparent 40%
+            ),
+            radial-gradient(
+              ellipse at bottom left,
+              hsla(35, 100%, 60%, 1) 0%,
+              transparent 50%
+            ),
+            radial-gradient(
+              ellipse at bottom right,
+              hsla(15, 100%, 55%, 1) 0%,
+              transparent 50%
+            ),
             linear-gradient(
               180deg,
-              #8b5cf6 0%,
-              #a855f7 8%,
-              #c084fc 16%,
-              #d8b4fe 24%,
-              #e9d5ff 32%,
-              #fbbf24 45%,
-              #fb923c 55%,
-              #f97316 65%,
-              #ea580c 75%,
-              #dc2626 85%,
-              #b91c1c 95%,
-              #991b1b 100%
+              hsla(270, 100%, 60%, 1) 0%,
+              hsla(290, 100%, 65%, 1) 10%,
+              hsla(310, 100%, 70%, 1) 20%,
+              hsla(330, 100%, 75%, 1) 30%,
+              hsla(350, 100%, 80%, 1) 40%,
+              hsla(20, 100%, 70%, 1) 50%,
+              hsla(35, 100%, 60%, 1) 60%,
+              hsla(25, 100%, 55%, 1) 70%,
+              hsla(15, 100%, 50%, 1) 80%,
+              hsla(5, 100%, 45%, 1) 90%,
+              hsla(0, 100%, 40%, 1) 100%
             )
           `,
           backgroundSize: "100% 100%",
           backgroundPosition: "center",
+          filter: "saturate(1.3) contrast(1.1)",
         }}
       />
 
-      {/* === ENHANCED GRAIN EFFECT === */}
+      {/* === ENHANCED GRAIN EFFECT - MORE PROMINENT === */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
       >
-        {/* SVG Noise Filter for authentic grain */}
+        {/* SVG Noise Filter for authentic strong grain */}
         <svg className="absolute h-0 w-0">
-          <filter id="grainy">
-            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/>
+          <filter id="grainy-strong">
+            <feTurbulence type="fractalNoise" baseFrequency="0.95" numOctaves="5" stitchTiles="stitch" seed="5"/>
             <feColorMatrix type="saturate" values="0"/>
+            <feComponentTransfer>
+              <feFuncA type="discrete" tableValues="0 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 1"/>
+            </feComponentTransfer>
+            <feGaussianBlur stdDeviation="0.2"/>
           </filter>
         </svg>
         
-        {/* Apply the noise filter */}
+        {/* Apply the stronger noise filter */}
         <div 
-          className="absolute inset-0 opacity-[0.035] mix-blend-overlay"
+          className="absolute inset-0 opacity-[0.08] mix-blend-overlay"
           style={{
-            filter: "url(#grainy)",
+            filter: "url(#grainy-strong)",
           }}
         />
         
-        {/* Additional CSS grain patterns for depth */}
+        {/* Additional strong grain patterns */}
         <div
-          className="absolute inset-0 opacity-[0.015] mix-blend-overlay"
+          className="absolute inset-0 opacity-[0.04] mix-blend-overlay"
           style={{
             backgroundImage: `
-              repeating-conic-gradient(#000000 0%, transparent 0.000096%, transparent 0.00024%, #000000 0.000336%)
+              repeating-conic-gradient(from 0deg at 50% 50%, #000000 0deg, transparent 0.1deg, transparent 0.2deg, #000000 0.3deg)
             `,
-            backgroundSize: "512px 512px",
+            backgroundSize: "256px 256px",
           }}
         />
         
-        {/* Fine grain texture using pseudo-random pattern */}
+        {/* Heavy noise texture for pronounced grain */}
         <div
-          className="absolute inset-0 opacity-[0.025] mix-blend-overlay"
+          className="absolute inset-0 opacity-[0.06] mix-blend-multiply"
           style={{
             backgroundImage: `
               repeating-linear-gradient(
                 0deg,
                 transparent,
-                transparent 2px,
-                rgba(0, 0, 0, 0.03) 2px,
-                rgba(0, 0, 0, 0.03) 4px
+                transparent 1px,
+                rgba(0, 0, 0, 0.08) 1px,
+                rgba(0, 0, 0, 0.08) 2px
               ),
               repeating-linear-gradient(
                 90deg,
                 transparent,
-                transparent 2px,
-                rgba(0, 0, 0, 0.03) 2px,
-                rgba(0, 0, 0, 0.03) 4px
+                transparent 1px,
+                rgba(0, 0, 0, 0.08) 1px,
+                rgba(0, 0, 0, 0.08) 2px
               ),
               repeating-linear-gradient(
                 45deg,
                 transparent,
-                transparent 2px,
-                rgba(0, 0, 0, 0.02) 2px,
-                rgba(0, 0, 0, 0.02) 4px
+                transparent 1px,
+                rgba(0, 0, 0, 0.05) 1px,
+                rgba(0, 0, 0, 0.05) 2px
               ),
               repeating-linear-gradient(
                 -45deg,
                 transparent,
-                transparent 2px,
-                rgba(0, 0, 0, 0.02) 2px,
-                rgba(0, 0, 0, 0.02) 4px
+                transparent 1px,
+                rgba(0, 0, 0, 0.05) 1px,
+                rgba(0, 0, 0, 0.05) 2px
               )
             `,
-            backgroundSize: "100px 100px, 100px 100px, 100px 100px, 100px 100px",
+            backgroundSize: "50px 50px, 50px 50px, 50px 50px, 50px 50px",
           }}
         />
 
-        {/* Subtle noise dots for authentic texture */}
+        {/* Prominent noise dots */}
         <div
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0 opacity-[0.08]"
           style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, rgba(0,0,0,0.4) 1px, transparent 1px)`,
-            backgroundSize: "3px 3px",
+            backgroundImage: `
+              radial-gradient(circle at 1px 1px, rgba(0,0,0,0.8) 1px, transparent 1px),
+              radial-gradient(circle at 3px 3px, rgba(0,0,0,0.6) 1px, transparent 1px)
+            `,
+            backgroundSize: "3px 3px, 5px 5px",
+            mixBlendMode: "multiply",
           }}
         />
+
+        {/* Extra film grain simulation */}
+        <div
+          className="absolute inset-0 opacity-[0.05]"
+          style={{
+            background: `
+              repeating-radial-gradient(circle at 0 0, transparent 0, rgba(0,0,0,0.1) 1px, transparent 2px, transparent 3px)
+            `,
+            backgroundSize: "7px 7px",
+            animation: "grain 8s steps(10) infinite",
+          }}
+        />
+        
+        <style>{`
+          @keyframes grain {
+            0%, 100% { transform: translate(0, 0); }
+            10% { transform: translate(-1%, -1%); }
+            20% { transform: translate(1%, 0%); }
+            30% { transform: translate(-1%, 1%); }
+            40% { transform: translate(0%, -1%); }
+            50% { transform: translate(1%, 1%); }
+            60% { transform: translate(-1%, 0%); }
+            70% { transform: translate(1%, -1%); }
+            80% { transform: translate(0%, 1%); }
+            90% { transform: translate(-1%, -1%); }
+          }
+        `}</style>
       </div>
 
       {/* === OVERLAY: keep text readable over the gradient === */}
