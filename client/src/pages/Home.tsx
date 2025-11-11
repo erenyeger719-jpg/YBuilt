@@ -69,81 +69,144 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Black header stays on top */}
+      {/* Fixed black header frame */}
       <Header />
 
       {/* HERO owns the first viewport */}
       <Hero />
 
-      {/* Rest of the homepage content */}
-      <main className="mx-auto max-w-6xl px-4 pb-20 pt-16 sm:px-6 lg:px-8">
-        {/* SECTION: Canvas / board */}
-        <section className="space-y-5">
-          <div className="flex items-baseline justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">
-                Sketch ideas on a calm canvas
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                A single place where your ideas, flows, and experiments live
-                before they become real products.
+      {/* Main content: soft gradient, editorial spacing */}
+      <main className="relative mx-auto max-w-6xl px-4 pb-24 pt-16 sm:px-6 lg:px-8">
+        {/* subtle background wash behind all sections */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px]"
+        >
+          <div className="h-full w-full bg-[radial-gradient(circle_at_top,_#eef2ff_0,_#f8fafc_45%,_transparent_100%)]" />
+        </div>
+
+        <div className="space-y-20">
+          {/* OVERVIEW STRIP — small “Wix-ish” trust / meta row */}
+          <section className="grid gap-6 rounded-3xl border border-slate-200/70 bg-white/80 p-6 shadow-sm backdrop-blur sm:grid-cols-3">
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                HOW IT WORKS
+              </p>
+              <p className="text-sm text-slate-700">
+                Describe what you want to build in one sentence. Ybuilt spins up
+                a working starting point in minutes.
               </p>
             </div>
-          </div>
-
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <WeavyBoard />
-          </div>
-        </section>
-
-        {/* SECTION: Explore starting points */}
-        <section className="mt-16 space-y-5">
-          <div className="flex items-baseline justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">
-                Start from a pattern that fits
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Pick a direction, not a template. Ybuilt adapts to what you
-                describe, instead of boxing you into a theme.
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                BUILDER EXPERIENCE
+              </p>
+              <p className="text-sm text-slate-700">
+                Edit flows, copy, and layout in a focused canvas instead of
+                digging through menus and panels.
               </p>
             </div>
-          </div>
-
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <ExploreWheel />
-          </div>
-        </section>
-
-        {/* SECTION: Simple gallery */}
-        <section className="mt-16 space-y-5">
-          <div className="flex items-baseline justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">
-                See what&apos;s possible
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                This strip will showcase live examples and shots of products
-                built with Ybuilt.
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                LAUNCH READY
+              </p>
+              <p className="text-sm text-slate-700">
+                Ship a shareable prototype or live site without ever leaving
+                this workspace.
               </p>
             </div>
-          </div>
+          </section>
 
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <ScrollGallery
-              images={[
-                "/demo/ybuilt-01.jpg",
-                "/demo/ybuilt-02.jpg",
-                "/demo/ybuilt-03.jpg",
-                "/demo/ybuilt-04.jpg",
-                "/demo/ybuilt-05.jpg",
-                "/demo/ybuilt-06.jpg",
-                "/demo/ybuilt-07.jpg",
-                "/demo/ybuilt-08.jpg",
-              ]}
-            />
-          </div>
-        </section>
+          {/* SECTION: Canvas / board */}
+          <section className="space-y-5">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  WORKSPACE
+                </p>
+                <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                  Sketch ideas on a calm canvas
+                </h2>
+                <p className="max-w-xl text-sm text-slate-500">
+                  Keep copy, flows, and structure in one place. Drag things
+                  around, try variants, and decide what actually deserves to go
+                  live.
+                </p>
+              </div>
+              <p className="text-xs text-slate-400">
+                Built for founder notes, screenshots, napkin sketches, and
+                “what if we…” threads.
+              </p>
+            </div>
+
+            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
+              <WeavyBoard />
+            </div>
+          </section>
+
+          {/* SECTION: Explore starting points */}
+          <section className="space-y-5">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  STARTING POINTS
+                </p>
+                <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                  Start from a pattern that fits you
+                </h2>
+                <p className="max-w-xl text-sm text-slate-500">
+                  Pick a direction, not a rigid template. Ybuilt listens to your
+                  prompt and suggests structures that feel right for products,
+                  newsletters, communities, and more.
+                </p>
+              </div>
+              <p className="text-xs text-slate-400">
+                Swap patterns anytime — your content and intent stay with you.
+              </p>
+            </div>
+
+            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.06)]">
+              <ExploreWheel />
+            </div>
+          </section>
+
+          {/* SECTION: Simple gallery / showcase */}
+          <section className="space-y-5">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  SHOWCASE
+                </p>
+                <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                  See what&apos;s possible with Ybuilt
+                </h2>
+                <p className="max-w-xl text-sm text-slate-500">
+                  A rotating strip of real projects, experiments, and layouts
+                  built with the same prompt surface you see above.
+                </p>
+              </div>
+              <p className="text-xs text-slate-400">
+                These will eventually be live links to your community&apos;s
+                best work.
+              </p>
+            </div>
+
+            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-900">
+              <ScrollGallery
+                images={[
+                  "/demo/ybuilt-01.jpg",
+                  "/demo/ybuilt-02.jpg",
+                  "/demo/ybuilt-03.jpg",
+                  "/demo/ybuilt-04.jpg",
+                  "/demo/ybuilt-05.jpg",
+                  "/demo/ybuilt-06.jpg",
+                  "/demo/ybuilt-07.jpg",
+                  "/demo/ybuilt-08.jpg",
+                ]}
+              />
+            </div>
+          </section>
+        </div>
       </main>
 
       <FloatingChat isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} />
