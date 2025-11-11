@@ -3,7 +3,6 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
-import WeavyBoard from "@/components/WeavyBoard";
 import ExploreWheel from "@/components/ExploreWheel";
 import ChatPanel from "@/components/ChatPanel";
 import { Button } from "@/components/ui/button";
@@ -96,7 +95,7 @@ export default function Home() {
       {/* Black header stays on top (unchanged) */}
       <Header />
 
-      {/* HERO takes the whole first viewport (your hero background image) */}
+      {/* HERO takes the whole first viewport */}
       <Hero />
 
       {/* Floating rounded panel that overlaps the hero, Lovable-style */}
@@ -105,27 +104,8 @@ export default function Home() {
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_-24px_80px_rgba(15,23,42,0.20)]">
             {/* inner padding for content */}
             <div className="px-6 pb-14 pt-10 sm:px-10 lg:px-12">
-              {/* SECTION: Canvas / board */}
-              <section className="space-y-5">
-                <div className="flex items-baseline justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold text-slate-900">
-                      Sketch ideas on a calm canvas
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      A single place where your ideas, flows, and experiments
-                      live before they become real products.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                  <WeavyBoard />
-                </div>
-              </section>
-
               {/* SECTION: Explore starting points */}
-              <section className="mt-16 space-y-5">
+              <section className="space-y-5">
                 <div className="flex items-baseline justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-slate-900">
