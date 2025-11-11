@@ -91,51 +91,34 @@ export default function Hero() {
         }}
       />
 
-      {/* === VERY SUBTLE OVERLAY - barely visible to keep colors vibrant === */}
+      {/* === VERY SUBTLE OVERLAY - keeps text readable but colors vibrant === */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
       >
-        {/* Very subtle gradient for just a touch of readability without dulling the image */}
         <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-white/20" />
       </div>
 
       {/* === CENTERED CONTENT === */}
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center text-center">
-          
-          {/* Badge */}
-          <div className="mb-8">
-            <p className="inline-flex items-center rounded-full border border-slate-300/50 bg-white/80 backdrop-blur-sm px-4 py-1.5 text-xs font-medium uppercase tracking-[0.18em] text-slate-600">
-              Build studio · Ybuilt
-            </p>
-          </div>
+          {/* Tagline (moved up, replaces badge) */}
+          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-700 uppercase">
+            BUILD SMARTER · LAUNCH FASTER
+          </p>
 
-          {/* Main heading */}
-          <div className="mb-4">
+          {/* New exotic, instructive heading */}
+          <div className="mb-8">
             <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl lg:text-7xl">
-              From your Idea to{" "}
-              <span className="block">Reality</span>
+              Describe your next product in plain language.
+              <span className="mt-2 block text-lg font-normal text-slate-900/90 sm:text-xl">
+                Ybuilt turns that idea into something your users can actually click, try, and share.
+              </span>
             </h1>
           </div>
 
-          {/* Subheading */}
-          <div className="mb-6">
-            <p className="text-sm font-semibold tracking-[0.35em] text-slate-600 sm:text-[13px]">
-              BUILD SMARTER. LAUNCH FASTER
-            </p>
-          </div>
-
-          {/* Description */}
-          <div className="mb-10 max-w-2xl">
-            <p className="text-base text-slate-700 sm:text-lg">
-              Describe what you want to ship. Ybuilt turns it into a working
-              product, then lets you refine it without drowning in settings.
-            </p>
-          </div>
-
           {/* Prompt surface - centered */}
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-200/50 bg-white/85 backdrop-blur-sm p-4 shadow-[0_20px_50px_rgba(0,0,0,0.08)]">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200/50 bg-white/85 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.08)] backdrop-blur-sm">
             <form
               className="flex flex-col gap-3 sm:flex-row sm:items-center"
               onSubmit={handleCreate}
