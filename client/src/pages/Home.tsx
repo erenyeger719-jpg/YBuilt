@@ -68,92 +68,123 @@ export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Black header stays on top */}
-      <Header />
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-50">
+      {/* Spotify / Lovable style background + grain on the sides */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10"
+      >
+        {/* Dark gradient base */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at top left, #22c55e26 0, transparent 55%), radial-gradient(circle at top right, #6366f126 0, transparent 55%), radial-gradient(circle at bottom left, #ec489926 0, transparent 55%), linear-gradient(135deg, #020617 0%, #020617 40%, #050816 100%)",
+            backgroundBlendMode: "screen, screen, screen, normal",
+          }}
+        />
 
-      {/* HERO takes the whole first viewport (your watercolor bg etc.) */}
-      <Hero />
+        {/* Grain / noise over the whole page */}
+        <div
+          className="absolute inset-0 opacity-[0.10] mix-blend-soft-light"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(0deg,rgba(15,23,42,0.5)_0,rgba(15,23,42,0.5)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.35)_0,rgba(15,23,42,0.35)_1px,transparent_1px,transparent_3px)",
+          }}
+        />
+      </div>
 
-      {/* Floating rounded panel that overlaps the hero, Lovable-style */}
-      <main className="relative -mt-10 pb-20 sm:-mt-12 lg:-mt-16">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_-24px_80px_rgba(15,23,42,0.20)]">
-            {/* inner padding for content */}
-            <div className="px-6 pb-14 pt-10 sm:px-10 lg:px-12">
-              {/* SECTION: Canvas / board */}
-              <section className="space-y-5">
-                <div className="flex items-baseline justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold text-slate-900">
-                      Sketch ideas on a calm canvas
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      A single place where your ideas, flows, and experiments
-                      live before they become real products.
-                    </p>
+      {/* Content layer */}
+      <div className="relative z-10">
+        {/* Black header stays on top */}
+        <Header />
+
+        {/* HERO takes the whole first viewport */}
+        <Hero />
+
+        {/* Floating rounded panel overlapping hero, Lovable-style */}
+        <main className="relative -mt-10 pb-20 sm:-mt-12 lg:-mt-16">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_-24px_80px_rgba(15,23,42,0.45)]">
+              {/* inner padding for content */}
+              <div className="px-6 pb-14 pt-10 sm:px-10 lg:px-12">
+                {/* SECTION: Canvas / board */}
+                <section className="space-y-5">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900">
+                        Sketch ideas on a calm canvas
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-500">
+                        A single place where your ideas, flows, and
+                        experiments live before they become real products.
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                  <WeavyBoard />
-                </div>
-              </section>
-
-              {/* SECTION: Explore starting points */}
-              <section className="mt-16 space-y-5">
-                <div className="flex items-baseline justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold text-slate-900">
-                      Start from a pattern that fits
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Pick a direction, not a template. Ybuilt adapts to what
-                      you describe, instead of boxing you into a theme.
-                    </p>
+                  <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    <WeavyBoard />
                   </div>
-                </div>
+                </section>
 
-                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                  <ExploreWheel />
-                </div>
-              </section>
-
-              {/* SECTION: Simple gallery */}
-              <section className="mt-16 space-y-5">
-                <div className="flex items-baseline justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold text-slate-900">
-                      See what&apos;s possible
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      This strip will showcase live examples and shots of
-                      products built with Ybuilt.
-                    </p>
+                {/* SECTION: Explore starting points */}
+                <section className="mt-16 space-y-5">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900">
+                        Start from a pattern that fits
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Pick a direction, not a template. Ybuilt adapts to
+                        what you describe, instead of boxing you into a theme.
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                  <ScrollGallery
-                    images={[
-                      "/demo/ybuilt-01.jpg",
-                      "/demo/ybuilt-02.jpg",
-                      "/demo/ybuilt-03.jpg",
-                      "/demo/ybuilt-04.jpg",
-                      "/demo/ybuilt-05.jpg",
-                      "/demo/ybuilt-06.jpg",
-                      "/demo/ybuilt-07.jpg",
-                      "/demo/ybuilt-08.jpg",
-                    ]}
-                  />
-                </div>
-              </section>
+                  <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    <ExploreWheel />
+                  </div>
+                </section>
+
+                {/* SECTION: Simple gallery */}
+                <section className="mt-16 space-y-5">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900">
+                        See what&apos;s possible
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-500">
+                        This strip will showcase live examples and shots of
+                        products built with Ybuilt.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    <ScrollGallery
+                      images={[
+                        "/demo/ybuilt-01.jpg",
+                        "/demo/ybuilt-02.jpg",
+                        "/demo/ybuilt-03.jpg",
+                        "/demo/ybuilt-04.jpg",
+                        "/demo/ybuilt-05.jpg",
+                        "/demo/ybuilt-06.jpg",
+                        "/demo/ybuilt-07.jpg",
+                        "/demo/ybuilt-08.jpg",
+                      ]}
+                    />
+                  </div>
+                </section>
+              </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
 
-      <FloatingChat isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} />
+        <FloatingChat
+          isChatOpen={isChatOpen}
+          setIsChatOpen={setIsChatOpen}
+        />
+      </div>
     </div>
   );
 }
