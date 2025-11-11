@@ -77,48 +77,57 @@ export default function Hero() {
 
   return (
     <section
-      className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden"
+      className="relative isolate flex min-h-[calc(100vh-56px)] items-center overflow-hidden bg-slate-950 text-slate-50"
     >
-      {/* === BACKGROUND IMAGE LAYER === */}
+      {/* === BACKGROUND LAYERS === */}
+      {/* Deep studio gradient */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 -z-20 bg-[radial-gradient(circle_at_top,_#111827_0,_#020617_55%,_#020617_100%)]"
+      />
+
+      {/* Soft coloured glow under the console */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-40 left-1/2 -z-10 h-[420px] w-[860px] -translate-x-1/2 rounded-[999px] bg-[radial-gradient(circle_at_center,_#38bdf8_0,_#6366f1_35%,_#f97316_75%,transparent_100%)] opacity-75 blur-3xl"
+      />
+
+      {/* Fine noise so it doesn’t feel flat */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.10] mix-blend-soft-light"
         style={{
-          backgroundImage: "url('/hero-bg.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
+          backgroundImage:
+            "repeating-linear-gradient(0deg,rgba(15,23,42,0.3)_0,rgba(15,23,42,0.3)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.25)_0,rgba(15,23,42,0.25)_1px,transparent_1px,transparent_3px)",
         }}
       />
 
-      {/* === VERY SUBTLE OVERLAY - keeps text readable but colors vibrant === */}
+      {/* Subtle fade at the very bottom so the next section can sit on white */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-      >
-        <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-white/20" />
-      </div>
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-40 -z-10 bg-gradient-to-b from-transparent via-slate-950 to-slate-50"
+      />
 
-      {/* === CENTERED CONTENT === */}
-      <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="flex flex-col items-center text-center">
-          {/* Tagline (moved up, replaces badge) */}
-          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-700 uppercase">
+      {/* === CONTENT === */}
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-10 sm:px-6 lg:px-8 lg:flex-row lg:items-center">
+        {/* LEFT: Copy + prompt */}
+        <div className="flex-1 space-y-8">
+          {/* Tagline */}
+          <p className="text-[11px] font-semibold tracking-[0.35em] text-slate-300 uppercase">
             BUILD SMARTER · LAUNCH FASTER
           </p>
 
-          {/* New exotic, instructive heading */}
-          <div className="mb-8">
-            <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl lg:text-7xl">
-              Describe your next product in plain language.
-              <span className="mt-2 block text-lg font-normal text-slate-900/90 sm:text-xl">
-                Ybuilt turns that idea into something your users can actually click, try, and share.
-              </span>
-            </h1>
-          </div>
+          {/* Main headline */}
+          <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl md:text-6xl">
+            Describe your next product in plain language.
+            <span className="mt-3 block text-lg font-normal text-slate-200 sm:text-xl">
+              Ybuilt turns that idea into layouts, logic, and live previews on a
+              single calm canvas.
+            </span>
+          </h1>
 
-          {/* Prompt surface - centered */}
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-200/50 bg-white/85 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+          {/* Prompt surface */}
+          <div className="mt-4 max-w-xl rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
             <form
               className="flex flex-col gap-3 sm:flex-row sm:items-center"
               onSubmit={handleCreate}
@@ -132,12 +141,12 @@ export default function Hero() {
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 placeholder="Describe your website or app idea…"
-                className="w-full rounded-xl border border-slate-200/60 bg-white/80 px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-400/30"
+                className="w-full rounded-xl border border-slate-600/70 bg-slate-900/70 px-4 py-3 text-sm text-slate-50 placeholder:text-slate-400 outline-none ring-0 transition focus:border-sky-400 focus:bg-slate-900 focus:ring-2 focus:ring-sky-500/40"
               />
 
               <Button
                 type="submit"
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-medium text-white shadow-sm transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-50 px-6 py-3 text-sm font-semibold text-slate-900 shadow-[0_16px_40px_rgba(15,23,42,0.6)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               >
                 Create
               </Button>
@@ -146,16 +155,85 @@ export default function Hero() {
             <div className="mt-3 flex items-center justify-center">
               <button
                 type="button"
-                className="text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-700 hover:underline"
+                className="text-xs font-medium text-slate-400 underline-offset-4 transition hover:text-slate-200 hover:underline"
               >
                 or Explore previews →
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Optional: placeholder for future content */}
-          <div className="mt-12 text-xs text-slate-400">
-            Future: product preview / animation goes here
+        {/* RIGHT: “Idea Console” visual */}
+        <div className="flex-1">
+          <div className="relative mx-auto w-full max-w-md rounded-[28px] border border-slate-100/15 bg-white/5 px-5 py-5 shadow-[0_30px_100px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
+            {/* Console header */}
+            <div className="mb-4 flex items-center justify-between text-xs text-slate-200/80">
+              <span className="inline-flex items-center gap-2 rounded-full bg-slate-900/60 px-3 py-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Idea console
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
+                Design · Logic · Live
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {/* Lane 1 – layout / design */}
+              <div className="rounded-2xl bg-slate-900/70 p-3 border border-slate-700/80">
+                <div className="mb-2 flex items-center justify-between text-[10px] uppercase tracking-[0.15em] text-slate-400">
+                  <span>Layout</span>
+                  <span className="h-1 w-10 rounded-full bg-sky-400/40" />
+                </div>
+                <div className="flex gap-2">
+                  <div className="h-16 flex-1 rounded-xl bg-slate-800/90" />
+                  <div className="flex w-16 flex-col gap-2">
+                    <div className="h-7 rounded-lg bg-slate-800/90" />
+                    <div className="h-7 rounded-lg bg-slate-800/60" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Lane 2 – logic / flows */}
+              <div className="rounded-2xl bg-slate-900/60 p-3 border border-slate-700/70">
+                <div className="mb-2 flex items-center justify-between text-[10px] uppercase tracking-[0.15em] text-slate-400">
+                  <span>Logic</span>
+                  <span className="h-1 w-10 rounded-full bg-emerald-400/50" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center rounded-full bg-slate-800/90 px-3 py-1 text-[11px] text-slate-100">
+                    Trigger
+                  </span>
+                  <span className="inline-flex items-center rounded-full bg-slate-800/80 px-3 py-1 text-[11px] text-slate-100">
+                    Condition
+                  </span>
+                  <span className="inline-flex items-center rounded-full bg-slate-800/70 px-3 py-1 text-[11px] text-slate-100">
+                    Action
+                  </span>
+                </div>
+              </div>
+
+              {/* Lane 3 – live preview */}
+              <div className="rounded-2xl bg-slate-900/60 p-3 border border-slate-700/70">
+                <div className="mb-2 flex items-center justify-between text-[10px] uppercase tracking-[0.15em] text-slate-400">
+                  <span>Preview</span>
+                  <span className="h-1 w-10 rounded-full bg-fuchsia-400/50" />
+                </div>
+                <div className="flex gap-3">
+                  <div className="h-14 flex-1 rounded-xl bg-gradient-to-br from-sky-500/60 via-indigo-500/60 to-fuchsia-500/60" />
+                  <div className="flex w-16 flex-col justify-between text-[10px] text-slate-300">
+                    <span className="rounded-lg bg-slate-900/70 px-2 py-1 text-center">
+                      Web
+                    </span>
+                    <span className="rounded-lg bg-slate-900/70 px-2 py-1 text-center">
+                      Mobile
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Glow line under console */}
+            <div className="pointer-events-none absolute inset-x-6 -bottom-4 h-10 rounded-full bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.6),transparent_65%)] opacity-80" />
           </div>
         </div>
       </div>
