@@ -107,7 +107,7 @@ export default function Hero() {
             className="mb-6 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold uppercase text-slate-900 tracking-[0.25em]"
             style={{ fontFamily: "Barrbar, system-ui, sans-serif" }}
           >
-            BUILD SMARTER · LAUNCH FASTER
+            BUILD SMARTER LAUNCH FASTER
           </p>
 
           {/* Main heading */}
