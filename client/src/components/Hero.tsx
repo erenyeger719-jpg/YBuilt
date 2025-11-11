@@ -77,7 +77,7 @@ export default function Hero() {
 
   return (
     <section
-      className="relative isolate flex min-h-[calc(100vh-56px)] items-center overflow-hidden bg-slate-50"
+      className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden"
     >
       {/* === BACKGROUND IMAGE LAYER === */}
       <div
@@ -91,43 +91,51 @@ export default function Hero() {
         }}
       />
 
-      {/* === OVERLAY: keep text readable over the image === */}
+      {/* === VERY SUBTLE OVERLAY - barely visible to keep colors vibrant === */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
       >
-        {/* stronger light wash for better text readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-white/80 via-white/65 to-white/85" />
-        {/* subtle vertical divider */}
-        <div className="absolute inset-y-16 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-slate-200/0 via-slate-200/60 to-slate-200/0" />
+        {/* Very subtle gradient for just a touch of readability without dulling the image */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-white/20" />
       </div>
 
-      {/* === FOREGROUND CONTENT === */}
-      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-10 sm:px-6 lg:px-8 md:flex-row md:items-center md:py-16">
-        {/* LEFT: text + prompt */}
-        <div className="flex-1 space-y-7">
-          <p className="inline-flex items-center rounded-full border border-slate-300/70 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-            Build studio · Ybuilt
-          </p>
+      {/* === CENTERED CONTENT === */}
+      <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="flex flex-col items-center text-center">
+          
+          {/* Badge */}
+          <div className="mb-8">
+            <p className="inline-flex items-center rounded-full border border-slate-300/50 bg-white/80 backdrop-blur-sm px-4 py-1.5 text-xs font-medium uppercase tracking-[0.18em] text-slate-600">
+              Build studio · Ybuilt
+            </p>
+          </div>
 
-          <div className="space-y-3">
-            <h1 className="text-balance text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl md:text-5xl">
-              From Idea to Digital{" "}
+          {/* Main heading */}
+          <div className="mb-4">
+            <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl lg:text-7xl">
+              From your Idea to{" "}
               <span className="block">Reality</span>
             </h1>
+          </div>
 
-            <p className="text-[11px] font-semibold tracking-[0.35em] text-slate-500">
+          {/* Subheading */}
+          <div className="mb-6">
+            <p className="text-sm font-semibold tracking-[0.35em] text-slate-600 sm:text-[13px]">
               BUILD SMARTER. LAUNCH FASTER
             </p>
+          </div>
 
-            <p className="max-w-xl text-sm text-slate-600 sm:text-[15px]">
+          {/* Description */}
+          <div className="mb-10 max-w-2xl">
+            <p className="text-base text-slate-700 sm:text-lg">
               Describe what you want to ship. Ybuilt turns it into a working
               product, then lets you refine it without drowning in settings.
             </p>
           </div>
 
-          {/* Prompt surface */}
-          <div className="mt-6 max-w-xl rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur">
+          {/* Prompt surface - centered */}
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200/50 bg-white/85 backdrop-blur-sm p-4 shadow-[0_20px_50px_rgba(0,0,0,0.08)]">
             <form
               className="flex flex-col gap-3 sm:flex-row sm:items-center"
               onSubmit={handleCreate}
@@ -141,12 +149,12 @@ export default function Hero() {
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 placeholder="Describe your website or app idea…"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900/70"
+                className="w-full rounded-xl border border-slate-200/60 bg-white/80 px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-400/30"
               />
 
               <Button
                 type="submit"
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-slate-50 shadow-sm shadow-slate-900/40 transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-medium text-white shadow-sm transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
               >
                 Create
               </Button>
@@ -155,21 +163,16 @@ export default function Hero() {
             <div className="mt-3 flex items-center justify-center">
               <button
                 type="button"
-                className="text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                className="text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-700 hover:underline"
               >
                 or Explore previews →
               </button>
             </div>
           </div>
-        </div>
 
-        {/* RIGHT: placeholder block for now (could be removed later if you want pure center hero) */}
-        <div className="flex-1">
-          <div className="relative mx-auto aspect-[4/3] w-full max-w-md rounded-3xl border border-dashed border-slate-300 bg-white/60 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
-            <div className="absolute inset-4 rounded-2xl border border-slate-200/80" />
-            <p className="absolute inset-x-6 bottom-6 text-xs text-slate-400">
-              Future: product preview / animation goes here.
-            </p>
+          {/* Optional: placeholder for future content */}
+          <div className="mt-12 text-xs text-slate-400">
+            Future: product preview / animation goes here
           </div>
         </div>
       </div>
