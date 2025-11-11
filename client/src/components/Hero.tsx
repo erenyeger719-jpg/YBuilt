@@ -79,32 +79,32 @@ export default function Hero() {
     <section
       className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden"
     >
-      {/* === 90s PURPLE GRADIENT BACKGROUND === */}
+      {/* === BACKGROUND IMAGE LAYER === */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
-          backgroundImage:
-            "linear-gradient(to bottom, #a0d2eb 0%, #e5eaf5 22%, #d0bdf4 45%, #8458B3 70%, #a28089 100%)",
+          // 🔁 changed this line to use your new image
+          backgroundImage: "url('/hero-img.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
         }}
       />
 
-      {/* === GRAIN OVERLAY (INSTAGRAM-LIKE) === */}
+      {/* === VERY SUBTLE OVERLAY - keeps text readable but colors vibrant === */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-soft-light"
-        style={{
-          backgroundImage: "url('/grain.png')",
-          backgroundRepeat: "repeat",
-          backgroundSize: "220px 220px",
-        }}
-      />
+        className="pointer-events-none absolute inset-0"
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-white/20" />
+      </div>
 
-      {/* === CENTERED CONTENT (unchanged) === */}
+      {/* === CENTERED CONTENT === */}
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center text-center">
           {/* Tagline (moved up, replaces badge) */}
-          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-800 uppercase">
+          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-700 uppercase">
             BUILD SMARTER · LAUNCH FASTER
           </p>
 
@@ -156,7 +156,7 @@ export default function Hero() {
           </div>
 
           {/* Optional: placeholder for future content */}
-          <div className="mt-12 text-xs text-slate-200">
+          <div className="mt-12 text-xs text-slate-400">
             Future: product preview / animation goes here
           </div>
         </div>
