@@ -3,12 +3,12 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
-
+import WeavyBoard from "@/components/WeavyBoard";
 import ExploreWheel from "@/components/ExploreWheel";
 import ChatPanel from "@/components/ChatPanel";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, X } from "lucide-react";
-
+import ScrollGallery from "@/components/ScrollGallery";
 
 /* ========= Floating chat ========= */
 function FloatingChat({
