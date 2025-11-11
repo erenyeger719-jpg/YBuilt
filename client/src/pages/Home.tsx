@@ -72,7 +72,7 @@ export default function Home() {
       {/* Keep your existing black header as the “frame” */}
       <Header />
 
-      <main className="mx-auto max-w-6xl px-4 pb-20 pt-10 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-6xl px-4 pb-20 pt-0 sm:px-6 lg:px-8">
         {/* HERO */}
         <Hero />
 
