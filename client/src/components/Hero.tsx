@@ -78,17 +78,33 @@ export default function Hero() {
   return (
     <section
       className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden"
-      style={{
-        // Minimal Colors – Purple 90’s palette
-        backgroundImage:
-          "linear-gradient(135deg, #a0d2eb 0%, #e5eaf5 20%, #d0bdf4 50%, #8458B3 80%, #a28089 100%)",
-      }}
     >
+      {/* === 90s PURPLE GRADIENT BACKGROUND === */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "linear-gradient(to bottom, #a0d2eb 0%, #e5eaf5 22%, #d0bdf4 45%, #8458B3 70%, #a28089 100%)",
+        }}
+      />
+
+      {/* === GRAIN OVERLAY (INSTAGRAM-LIKE) === */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-soft-light"
+        style={{
+          backgroundImage: "url('/grain.png')",
+          backgroundRepeat: "repeat",
+          backgroundSize: "220px 220px",
+        }}
+      />
+
       {/* === CENTERED CONTENT (unchanged) === */}
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center text-center">
           {/* Tagline (moved up, replaces badge) */}
-          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-700 uppercase">
+          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-800 uppercase">
             BUILD SMARTER · LAUNCH FASTER
           </p>
 
@@ -140,7 +156,7 @@ export default function Hero() {
           </div>
 
           {/* Optional: placeholder for future content */}
-          <div className="mt-12 text-xs text-slate-400">
+          <div className="mt-12 text-xs text-slate-200">
             Future: product preview / animation goes here
           </div>
         </div>

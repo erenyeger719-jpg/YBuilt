@@ -68,36 +68,11 @@ export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
-    <div className="relative min-h-screen text-slate-900">
-      {/* LOVABLE / SPOTIFY-STYLE GRADIENT BACKGROUND */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          backgroundColor: "#020617", // deep charcoal
-          backgroundImage:
-            // dark top + colourful glow bottom
-            "radial-gradient(circle at top, rgba(2,6,23,1) 0%, rgba(2,6,23,1) 55%, rgba(2,6,23,0.98) 70%, transparent 80%), radial-gradient(circle at bottom, #1d4ed8 0%, #6366f1 30%, #a855f7 55%, #fb923c 85%)",
-          backgroundRepeat: "no-repeat",
-          backgroundAttachment: "fixed",
-          backgroundSize: "100% 60%, 140% 140%",
-          backgroundPosition: "top center, bottom center",
-        }}
-      />
-      {/* GRAIN / NOISE OVERLAY */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 opacity-40 mix-blend-soft-light"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(0deg, rgba(15,23,42,0.5) 0, rgba(15,23,42,0.5) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(15,23,42,0.45) 0, rgba(15,23,42,0.45) 1px, transparent 1px, transparent 3px)",
-        }}
-      />
-
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       {/* Black header stays on top */}
       <Header />
 
-      {/* HERO takes the whole first viewport */}
+      {/* HERO takes the whole first viewport (your watercolor bg etc.) */}
       <Hero />
 
       {/* Floating rounded panel that overlaps the hero, Lovable-style */}
