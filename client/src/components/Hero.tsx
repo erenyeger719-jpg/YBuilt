@@ -79,109 +79,82 @@ export default function Hero() {
   return (
     <section
       className="
-        relative isolate 
-        flex w-full flex-col justify-between 
+        relative 
+        flex w-full flex-col 
         bg-white text-slate-900
-        px-4 pt-10 pb-10
-        sm:px-8 lg:px-16
         min-h-[calc(100vh-64px)]
       "
     >
-      {/* Background: soft IG-ish gradient + grain */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10"
-      >
-        {/* soft colour wash */}
-        <div className="h-full w-full bg-[radial-gradient(circle_at_top,_#fefefe_0,_#f4f4ff_35%,_#ffeef5_70%,_#fffaf1_100%)]" />
-
-        {/* super subtle noise */}
-        <div
-          className="absolute inset-0 opacity-[0.06] mix-blend-soft-light"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(0deg,rgba(15,23,42,0.18)_0,rgba(15,23,42,0.18)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.1)_0,rgba(15,23,42,0.1)_1px,transparent_1px,transparent_3px)",
-          }}
-        />
-      </div>
-
-      {/* Top content */}
-      <div className="flex flex-1 flex-col gap-10 lg:flex-row lg:items-center lg:gap-16">
-        {/* LEFT: brand intro */}
-        <div className="flex-1 max-w-sm space-y-5 text-xs sm:text-sm">
-          <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
+      {/* TOP ROW: Avision-style layout */}
+      <div className="flex flex-1 flex-col justify-end gap-12 px-6 pt-16 pb-10 sm:px-10 lg:flex-row lg:items-end lg:px-24">
+        {/* LEFT: studio intro */}
+        <div className="max-w-xs text-[11px] leading-relaxed tracking-[0.08em] text-slate-700">
+          <p className="mb-5 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
             YBUILT STUDIO
           </p>
-          <p className="leading-relaxed text-slate-600">
-            At Ybuilt, you&apos;re not a &quot;project&quot;. You&apos;re a
-            builder. This is your calm space to turn ideas into digital reality,
-            without the chaos of tools and tabs.
+          <p>
+            AT YBUILT, WE&apos;RE MORE THAN JUST A BUILDER; WE&apos;RE A QUIET
+            PARTNER DEDICATED TO TURNING RAW IDEAS INTO DIGITAL PRODUCTS.
           </p>
-          <p className="leading-relaxed text-slate-600">
-            Share what&apos;s in your head in plain language — we take it from
-            first sketch to something your friends can actually click.
+          <p className="mt-3">
+            WE HELP YOU GO FROM FIRST SPARK TO SOMETHING PEOPLE CAN ACTUALLY
+            CLICK — WITHOUT THE NOISE.
           </p>
         </div>
 
-        {/* RIGHT: main hero copy + prompt */}
-        <div className="flex-1 space-y-6 lg:text-right">
-          <div className="space-y-3">
-            <h1 className="text-balance text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl md:text-5xl lg:text-6xl">
-              From Idea to Digital{" "}
-              <span className="block">Reality</span>
+        {/* RIGHT: big heading + tagline + minimal prompt bar */}
+        <div className="pb-2 text-right lg:pb-6">
+          <div className="space-y-1">
+            <h1 className="text-[32px] font-medium leading-none tracking-[0.12em] text-slate-900 sm:text-[40px] md:text-[52px] lg:text-[64px]">
+              FROM IDEA
             </h1>
-
-            <p className="text-[11px] font-semibold tracking-[0.35em] text-slate-500">
-              BUILD SMARTER. LAUNCH FASTER
-            </p>
+            <h1 className="text-[32px] font-medium leading-none tracking-[0.12em] text-slate-900 sm:text-[40px] md:text-[52px] lg:text-[64px]">
+              TO DIGITAL
+            </h1>
+            <h1 className="text-[32px] font-medium leading-none tracking-[0.12em] text-slate-900 sm:text-[40px] md:text-[52px] lg:text-[64px]">
+              REALITY
+            </h1>
           </div>
 
-          {/* Prompt bar */}
-          <div className="mt-4 inline-flex max-w-xl flex-col items-stretch rounded-2xl border border-slate-200 bg-white/80 p-3 text-left shadow-[0_18px_45px_rgba(15,23,42,0.10)] backdrop-blur-sm lg:ml-auto">
-            <form
-              className="flex flex-col gap-3 sm:flex-row sm:items-center"
-              onSubmit={handleCreate}
+          <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-500">
+            BUILD SMARTER · LAUNCH FASTER
+          </p>
+
+          {/* Minimal prompt bar */}
+          <form
+            onSubmit={handleCreate}
+            className="mt-8 inline-flex items-center gap-4 border-b border-slate-900/25 pb-2 text-left lg:ml-auto"
+          >
+            <label className="sr-only" htmlFor="hero-idea-input">
+              Describe your website or app idea
+            </label>
+            <input
+              id="hero-idea-input"
+              type="text"
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              placeholder="Describe your website or app idea…"
+              className="w-56 bg-transparent text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none sm:w-72 sm:text-sm"
+            />
+            <Button
+              type="submit"
+              className="rounded-full border border-slate-900 bg-slate-900 px-5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white shadow-sm transition hover:bg-black"
             >
-              <label className="sr-only" htmlFor="hero-idea-input">
-                Describe your website or app idea
-              </label>
-              <input
-                id="hero-idea-input"
-                type="text"
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="Describe your website or app idea…"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900/70"
-              />
-
-              <Button
-                type="submit"
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-slate-50 shadow-sm shadow-slate-900/40 transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              >
-                Create
-              </Button>
-            </form>
-
-            <div className="mt-3 flex items-center justify-center lg:justify-end">
-              <button
-                type="button"
-                className="text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
-              >
-                or Explore previews →
-              </button>
-            </div>
-          </div>
+              Create
+            </Button>
+          </form>
         </div>
       </div>
 
-      {/* Bottom strip: placeholder “gallery rail” like Avision / IG */}
-      <div className="mt-10 h-40 w-full rounded-3xl border border-slate-200 bg-white/70 p-3 shadow-[0_20px_55px_rgba(15,23,42,0.08)]">
-        <div className="flex h-full gap-3">
-          <div className="flex-1 rounded-2xl bg-slate-900/5" />
-          <div className="flex-1 rounded-2xl bg-rose-400/15" />
-          <div className="flex-1 rounded-2xl bg-amber-300/20" />
-          <div className="flex-1 rounded-2xl bg-sky-400/20" />
-          <div className="flex-1 rounded-2xl bg-emerald-400/18" />
+      {/* BOTTOM IMAGE STRIP — Avision-style gallery rail */}
+      <div className="mt-4 h-[260px] w-full overflow-hidden">
+        <div className="grid h-full w-full grid-cols-5 gap-[2px]">
+          {/* Replace these with real <img> later */}
+          <div className="bg-[linear-gradient(135deg,#f97316,#fed7aa)]" />
+          <div className="bg-[linear-gradient(135deg,#e11d48,#fecaca)]" />
+          <div className="bg-[linear-gradient(135deg,#0ea5e9,#bfdbfe)]" />
+          <div className="bg-[linear-gradient(135deg,#22c55e,#bbf7d0)]" />
+          <div className="bg-[linear-gradient(135deg,#111827,#38bdf8)]" />
         </div>
       </div>
     </section>
