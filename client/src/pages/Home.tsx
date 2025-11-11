@@ -69,55 +69,57 @@ export default function Home() {
 
   return (
     <div
-      className="relative min-h-screen text-slate-50"
+      className="relative min-h-screen text-slate-900"
       style={{
-        // Minimal Colors – Purple 90’s gradient around the edges on a dark base
+        // Minimal Colors – Purple 90’s vertical gradient
         background:
-          "radial-gradient(circle at 0% 0%, #a0d2eb 0, rgba(160,210,235,0) 40%)," +
-          "radial-gradient(circle at 100% 0%, #e5eaf5 0, rgba(229,234,245,0) 45%)," +
-          "radial-gradient(circle at 0% 100%, #d0bdf4 0, rgba(208,189,244,0) 45%)," +
-          "radial-gradient(circle at 100% 100%, #8458B3 0, rgba(132,88,179,0) 50%)," +
-          "#1F1E21",
+          "linear-gradient(to bottom," +
+          " #a0d2eb 0%," +   // Ice Cold
+          " #e5eaf5 28%," +  // Freeze Purple
+          " #d0bdf4 40%," +  // Medium Purple
+          " #8458B3 56%," +  // Purple Pain
+          " #1F1E21 78%," +  // Heavy Purple
+          " #1F1E21 100%)",
       }}
     >
-      {/* Global grain/texture overlay (Instagram-ish) */}
+      {/* global grain / noise over the whole home screen */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.20] mix-blend-soft-light"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.25] mix-blend-soft-light"
         style={{
           backgroundImage:
             "repeating-linear-gradient(0deg, rgba(0,0,0,0.35) 0, rgba(0,0,0,0.35) 1px, transparent 1px, transparent 3px)," +
-            "repeating-linear-gradient(90deg, rgba(0,0,0,0.25) 0, rgba(0,0,0,0.25) 1px, transparent 1px, transparent 3px)",
+            "repeating-linear-gradient(90deg, rgba(0,0,0,0.22) 0, rgba(0,0,0,0.22) 1px, transparent 1px, transparent 3px)",
         }}
       />
 
-      {/* Header stays as-is on top */}
+      {/* Black header stays on top (unchanged) */}
       <Header />
 
-      {/* Hero (already using your hero-img.jpg background) */}
+      {/* HERO takes the whole first viewport (your hero background image) */}
       <Hero />
 
-      {/* Floating rounded panel that overlaps the hero, like Lovable */}
+      {/* Floating rounded panel that overlaps the hero, Lovable-style */}
       <main className="relative -mt-10 pb-20 sm:-mt-12 lg:-mt-16">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#1F1E21]/90 shadow-[0_-24px_80px_rgba(0,0,0,0.75)] backdrop-blur-md">
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_-24px_80px_rgba(15,23,42,0.20)]">
             {/* inner padding for content */}
             <div className="px-6 pb-14 pt-10 sm:px-10 lg:px-12">
               {/* SECTION: Canvas / board */}
               <section className="space-y-5">
                 <div className="flex items-baseline justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-white">
+                    <h2 className="text-lg font-semibold text-slate-900">
                       Sketch ideas on a calm canvas
                     </h2>
-                    <p className="mt-1 text-sm text-slate-300">
+                    <p className="mt-1 text-sm text-slate-500">
                       A single place where your ideas, flows, and experiments
                       live before they become real products.
                     </p>
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-3xl border border-white/5 bg-[#26252F] shadow-sm">
+                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                   <WeavyBoard />
                 </div>
               </section>
@@ -126,17 +128,17 @@ export default function Home() {
               <section className="mt-16 space-y-5">
                 <div className="flex items-baseline justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-white">
+                    <h2 className="text-lg font-semibold text-slate-900">
                       Start from a pattern that fits
                     </h2>
-                    <p className="mt-1 text-sm text-slate-300">
+                    <p className="mt-1 text-sm text-slate-500">
                       Pick a direction, not a template. Ybuilt adapts to what
                       you describe, instead of boxing you into a theme.
                     </p>
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-3xl border border-white/5 bg-[#26252F] shadow-sm">
+                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                   <ExploreWheel />
                 </div>
               </section>
@@ -145,17 +147,17 @@ export default function Home() {
               <section className="mt-16 space-y-5">
                 <div className="flex items-baseline justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-white">
+                    <h2 className="text-lg font-semibold text-slate-900">
                       See what&apos;s possible
                     </h2>
-                    <p className="mt-1 text-sm text-slate-300">
+                    <p className="mt-1 text-sm text-slate-500">
                       This strip will showcase live examples and shots of
                       products built with Ybuilt.
                     </p>
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-3xl border border-white/5 bg-[#26252F] shadow-sm">
+                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                   <ScrollGallery
                     images={[
                       "/demo/ybuilt-01.jpg",
