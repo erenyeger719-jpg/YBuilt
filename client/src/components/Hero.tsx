@@ -77,56 +77,28 @@ export default function Hero() {
 
   return (
     <section
-      className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden bg-[#020617] text-slate-50"
+      className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden"
     >
-      {/* === SPOTIFY / LOVABLE STYLE GRADIENT BACKGROUND === */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          backgroundImage: `
-            radial-gradient(circle at top, #1ed760 0, #1ed76033 26%, transparent 55%),
-            radial-gradient(circle at 15% 120%, #fb923c 0, #fb923c33 28%, transparent 60%),
-            radial-gradient(circle at 85% 120%, #6366f1 0, #6366f133 28%, transparent 60%),
-            radial-gradient(circle at center, #0f172a 0, #020617 70%)
-          `,
-          backgroundRepeat: "no-repeat",
-          backgroundSize: "140% 140%",
-          backgroundPosition: "center",
-        }}
-      />
-
-      {/* === GRAIN / NOISE OVERLAY (VISIBLE) === */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 opacity-40 mix-blend-soft-light"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(0deg,rgba(255,255,255,0.10)_0,rgba(255,255,255,0.10)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(0,0,0,0.55)_0,rgba(0,0,0,0.55)_1px,transparent_1px,transparent_4px)",
-        }}
-      />
-
-      {/* === CENTERED CONTENT === */}
+      {/* === CENTERED CONTENT (unchanged) === */}
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center text-center">
-          {/* Tagline */}
-          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-200 uppercase">
+          {/* Tagline (moved up, replaces badge) */}
+          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-700 uppercase">
             BUILD SMARTER · LAUNCH FASTER
           </p>
 
-          {/* Headline */}
+          {/* New exotic, instructive heading */}
           <div className="mb-8">
-            <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl md:text-6xl lg:text-7xl">
+            <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl lg:text-7xl">
               Describe your next product in plain language.
-              <span className="mt-2 block text-lg font-normal text-slate-200 sm:text-xl">
-                Ybuilt turns that idea into something your users can actually
-                click, try, and share.
+              <span className="mt-2 block text-lg font-normal text-slate-900/90 sm:text-xl">
+                Ybuilt turns that idea into something your users can actually click, try, and share.
               </span>
             </h1>
           </div>
 
-          {/* Prompt surface */}
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-700/70 bg-white/95 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-sm">
+          {/* Prompt surface - centered */}
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200/50 bg-white/85 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.08)] backdrop-blur-sm">
             <form
               className="flex flex-col gap-3 sm:flex-row sm:items-center"
               onSubmit={handleCreate}
@@ -140,12 +112,12 @@ export default function Hero() {
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 placeholder="Describe your website or app idea…"
-                className="w-full rounded-xl border border-slate-200/70 bg-white/90 px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-400/40"
+                className="w-full rounded-xl border border-slate-200/60 bg-white/80 px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-400/30"
               />
 
               <Button
                 type="submit"
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-medium text-white shadow-[0_18px_40px_rgba(0,0,0,0.8)] transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-medium text-white shadow-sm transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
               >
                 Create
               </Button>
@@ -161,7 +133,7 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* Placeholder for future visual */}
+          {/* Optional: placeholder for future content */}
           <div className="mt-12 text-xs text-slate-400">
             Future: product preview / animation goes here
           </div>

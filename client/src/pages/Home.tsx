@@ -29,15 +29,15 @@ function FloatingChat({
           left: "auto",
           zIndex: 70,
         }}
-        className="h-12 w-12 rounded-full border border-slate-500 bg-black/80 shadow-lg shadow-black/60"
+        className="h-12 w-12 rounded-full border border-slate-300 bg-white shadow-lg shadow-slate-400/40"
         onClick={() => setIsChatOpen(!isChatOpen)}
         data-testid="button-toggle-chat"
         aria-label="Toggle chat"
       >
         {isChatOpen ? (
-          <X className="h-5 w-5 text-slate-100" />
+          <X className="h-5 w-5" />
         ) : (
-          <MessageCircle className="h-5 w-5 text-slate-100" />
+          <MessageCircle className="h-5 w-5" />
         )}
       </Button>
 
@@ -52,7 +52,7 @@ function FloatingChat({
             width: 400,
             height: 560,
           }}
-          className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl shadow-black/70"
+          className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
           data-testid="chat-panel-container"
         >
           <ChatPanel />
@@ -68,43 +68,43 @@ export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
-    <div className="relative min-h-screen text-slate-50">
-      {/* Global Spotify/Lovable gradient background */}
+    <div className="relative min-h-screen text-slate-900">
+      {/* LOVABLE / SPOTIFY-STYLE GRADIENT BACKGROUND */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-20"
+        className="pointer-events-none absolute inset-0 -z-10"
         style={{
-          backgroundImage: `
-            radial-gradient(circle at top, #1ed760 0, #1ed76033 26%, transparent 55%),
-            radial-gradient(circle at 10% 115%, #fb923c 0, #fb923c33 28%, transparent 60%),
-            radial-gradient(circle at 90% 115%, #6366f1 0, #6366f133 28%, transparent 60%),
-            radial-gradient(circle at center, #020617 0, #020617 70%)
-          `,
+          backgroundColor: "#020617", // deep charcoal
+          backgroundImage:
+            // dark top + colourful glow bottom
+            "radial-gradient(circle at top, rgba(2,6,23,1) 0%, rgba(2,6,23,1) 55%, rgba(2,6,23,0.98) 70%, transparent 80%), radial-gradient(circle at bottom, #1d4ed8 0%, #6366f1 30%, #a855f7 55%, #fb923c 85%)",
           backgroundRepeat: "no-repeat",
-          backgroundSize: "150% 150%",
-          backgroundPosition: "center",
+          backgroundAttachment: "fixed",
+          backgroundSize: "100% 60%, 140% 140%",
+          backgroundPosition: "top center, bottom center",
         }}
       />
-      {/* Global grain overlay */}
+      {/* GRAIN / NOISE OVERLAY */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10 opacity-40 mix-blend-soft-light"
         style={{
           backgroundImage:
-            "repeating-linear-gradient(0deg,rgba(255,255,255,0.10)_0,rgba(255,255,255,0.10)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(0,0,0,0.55)_0,rgba(0,0,0,0.55)_1px,transparent_1px,transparent_4px)",
+            "repeating-linear-gradient(0deg, rgba(15,23,42,0.5) 0, rgba(15,23,42,0.5) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(15,23,42,0.45) 0, rgba(15,23,42,0.45) 1px, transparent 1px, transparent 3px)",
         }}
       />
 
       {/* Black header stays on top */}
       <Header />
 
-      {/* HERO takes the first viewport */}
+      {/* HERO takes the whole first viewport */}
       <Hero />
 
       {/* Floating rounded panel that overlaps the hero, Lovable-style */}
       <main className="relative -mt-10 pb-20 sm:-mt-12 lg:-mt-16">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="overflow-hidden rounded-3xl border border-slate-700/70 bg-white text-slate-900 shadow-[0_-24px_80px_rgba(0,0,0,0.65)]">
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_-24px_80px_rgba(15,23,42,0.20)]">
+            {/* inner padding for content */}
             <div className="px-6 pb-14 pt-10 sm:px-10 lg:px-12">
               {/* SECTION: Canvas / board */}
               <section className="space-y-5">
