@@ -79,191 +79,27 @@ export default function Hero() {
     <section
       className="relative isolate flex min-h-[calc(100vh-56px)] items-center overflow-hidden bg-slate-50"
     >
-      {/* === BACKGROUND GRADIENT LAYER - SUPER SATURATED === */}
+      {/* === BACKGROUND IMAGE LAYER === */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
-          // Super saturated, high-contrast gradient exactly matching the image
-          background: `
-            radial-gradient(
-              ellipse at top left,
-              hsla(270, 100%, 70%, 1) 0%,
-              transparent 50%
-            ),
-            radial-gradient(
-              ellipse at top right,
-              hsla(300, 100%, 65%, 1) 0%,
-              transparent 50%
-            ),
-            radial-gradient(
-              ellipse at center,
-              hsla(330, 100%, 70%, 1) 0%,
-              transparent 40%
-            ),
-            radial-gradient(
-              ellipse at bottom left,
-              hsla(35, 100%, 60%, 1) 0%,
-              transparent 50%
-            ),
-            radial-gradient(
-              ellipse at bottom right,
-              hsla(15, 100%, 55%, 1) 0%,
-              transparent 50%
-            ),
-            linear-gradient(
-              180deg,
-              hsla(270, 100%, 60%, 1) 0%,
-              hsla(290, 100%, 65%, 1) 10%,
-              hsla(310, 100%, 70%, 1) 20%,
-              hsla(330, 100%, 75%, 1) 30%,
-              hsla(350, 100%, 80%, 1) 40%,
-              hsla(20, 100%, 70%, 1) 50%,
-              hsla(35, 100%, 60%, 1) 60%,
-              hsla(25, 100%, 55%, 1) 70%,
-              hsla(15, 100%, 50%, 1) 80%,
-              hsla(5, 100%, 45%, 1) 90%,
-              hsla(0, 100%, 40%, 1) 100%
-            )
-          `,
-          backgroundSize: "100% 100%",
+          backgroundImage: "url('/hero-bg.jpg')",
+          backgroundSize: "cover",
           backgroundPosition: "center",
-          filter: "saturate(1.3) contrast(1.1)",
+          backgroundRepeat: "no-repeat",
         }}
       />
 
-      {/* === ENHANCED GRAIN EFFECT - MORE PROMINENT === */}
+      {/* === OVERLAY: keep text readable over the image === */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
       >
-        {/* SVG Noise Filter for authentic strong grain */}
-        <svg className="absolute h-0 w-0">
-          <filter id="grainy-strong">
-            <feTurbulence type="fractalNoise" baseFrequency="0.95" numOctaves="5" stitchTiles="stitch" seed="5"/>
-            <feColorMatrix type="saturate" values="0"/>
-            <feComponentTransfer>
-              <feFuncA type="discrete" tableValues="0 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 .5 1"/>
-            </feComponentTransfer>
-            <feGaussianBlur stdDeviation="0.2"/>
-          </filter>
-        </svg>
-        
-        {/* Apply the stronger noise filter */}
-        <div 
-          className="absolute inset-0 opacity-[0.08] mix-blend-overlay"
-          style={{
-            filter: "url(#grainy-strong)",
-          }}
-        />
-        
-        {/* Additional strong grain patterns */}
-        <div
-          className="absolute inset-0 opacity-[0.04] mix-blend-overlay"
-          style={{
-            backgroundImage: `
-              repeating-conic-gradient(from 0deg at 50% 50%, #000000 0deg, transparent 0.1deg, transparent 0.2deg, #000000 0.3deg)
-            `,
-            backgroundSize: "256px 256px",
-          }}
-        />
-        
-        {/* Heavy noise texture for pronounced grain */}
-        <div
-          className="absolute inset-0 opacity-[0.06] mix-blend-multiply"
-          style={{
-            backgroundImage: `
-              repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 1px,
-                rgba(0, 0, 0, 0.08) 1px,
-                rgba(0, 0, 0, 0.08) 2px
-              ),
-              repeating-linear-gradient(
-                90deg,
-                transparent,
-                transparent 1px,
-                rgba(0, 0, 0, 0.08) 1px,
-                rgba(0, 0, 0, 0.08) 2px
-              ),
-              repeating-linear-gradient(
-                45deg,
-                transparent,
-                transparent 1px,
-                rgba(0, 0, 0, 0.05) 1px,
-                rgba(0, 0, 0, 0.05) 2px
-              ),
-              repeating-linear-gradient(
-                -45deg,
-                transparent,
-                transparent 1px,
-                rgba(0, 0, 0, 0.05) 1px,
-                rgba(0, 0, 0, 0.05) 2px
-              )
-            `,
-            backgroundSize: "50px 50px, 50px 50px, 50px 50px, 50px 50px",
-          }}
-        />
-
-        {/* Prominent noise dots */}
-        <div
-          className="absolute inset-0 opacity-[0.08]"
-          style={{
-            backgroundImage: `
-              radial-gradient(circle at 1px 1px, rgba(0,0,0,0.8) 1px, transparent 1px),
-              radial-gradient(circle at 3px 3px, rgba(0,0,0,0.6) 1px, transparent 1px)
-            `,
-            backgroundSize: "3px 3px, 5px 5px",
-            mixBlendMode: "multiply",
-          }}
-        />
-
-        {/* Extra film grain simulation */}
-        <div
-          className="absolute inset-0 opacity-[0.05]"
-          style={{
-            background: `
-              repeating-radial-gradient(circle at 0 0, transparent 0, rgba(0,0,0,0.1) 1px, transparent 2px, transparent 3px)
-            `,
-            backgroundSize: "7px 7px",
-            animation: "grain 8s steps(10) infinite",
-          }}
-        />
-        
-        <style>{`
-          @keyframes grain {
-            0%, 100% { transform: translate(0, 0); }
-            10% { transform: translate(-1%, -1%); }
-            20% { transform: translate(1%, 0%); }
-            30% { transform: translate(-1%, 1%); }
-            40% { transform: translate(0%, -1%); }
-            50% { transform: translate(1%, 1%); }
-            60% { transform: translate(-1%, 0%); }
-            70% { transform: translate(1%, -1%); }
-            80% { transform: translate(0%, 1%); }
-            90% { transform: translate(-1%, -1%); }
-          }
-        `}</style>
-      </div>
-
-      {/* === OVERLAY: keep text readable over the gradient === */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-      >
-        {/* soft light wash */}
-        <div className="absolute inset-0 bg-gradient-to-b from-white/75 via-white/55 to-white/80" />
+        {/* stronger light wash for better text readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/80 via-white/65 to-white/85" />
         {/* subtle vertical divider */}
         <div className="absolute inset-y-16 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-slate-200/0 via-slate-200/60 to-slate-200/0" />
-        {/* fine grain overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.06] mix-blend-soft-light"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(0deg,rgba(15,23,42,0.2) 0,rgba(15,23,42,0.2) 1px,transparent 1px,transparent 3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.12) 0,rgba(15,23,42,0.12) 1px,transparent 1px,transparent 3px)",
-          }}
-        />
       </div>
 
       {/* === FOREGROUND CONTENT === */}
