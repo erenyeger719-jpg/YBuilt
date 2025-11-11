@@ -79,23 +79,115 @@ export default function Hero() {
     <section
       className="relative isolate flex min-h-[calc(100vh-56px)] items-center overflow-hidden bg-slate-50"
     >
-      {/* === BACKGROUND IMAGE LAYER === */}
+      {/* === BACKGROUND GRADIENT LAYER === */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
-          // 1) instant “vector-like” gradient (shows immediately)
-          // 2) your noisy PNG on top when it finishes loading
-          backgroundImage:
-            "radial-gradient(circle at top, #a855f7 0%, #ec4899 40%, #f97316 100%), url('/hero-bg.jpg')",
-          backgroundSize: "cover, cover",
-          backgroundPosition: "center, center",
-          backgroundRepeat: "no-repeat, no-repeat",
+          // High-quality gradient matching the image exactly
+          background: `
+            linear-gradient(
+              180deg,
+              #8b5cf6 0%,
+              #a855f7 8%,
+              #c084fc 16%,
+              #d8b4fe 24%,
+              #e9d5ff 32%,
+              #fbbf24 45%,
+              #fb923c 55%,
+              #f97316 65%,
+              #ea580c 75%,
+              #dc2626 85%,
+              #b91c1c 95%,
+              #991b1b 100%
+            )
+          `,
+          backgroundSize: "100% 100%",
+          backgroundPosition: "center",
         }}
       />
 
+      {/* === ENHANCED GRAIN EFFECT === */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+      >
+        {/* SVG Noise Filter for authentic grain */}
+        <svg className="absolute h-0 w-0">
+          <filter id="grainy">
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/>
+            <feColorMatrix type="saturate" values="0"/>
+          </filter>
+        </svg>
+        
+        {/* Apply the noise filter */}
+        <div 
+          className="absolute inset-0 opacity-[0.035] mix-blend-overlay"
+          style={{
+            filter: "url(#grainy)",
+          }}
+        />
+        
+        {/* Additional CSS grain patterns for depth */}
+        <div
+          className="absolute inset-0 opacity-[0.015] mix-blend-overlay"
+          style={{
+            backgroundImage: `
+              repeating-conic-gradient(#000000 0%, transparent 0.000096%, transparent 0.00024%, #000000 0.000336%)
+            `,
+            backgroundSize: "512px 512px",
+          }}
+        />
+        
+        {/* Fine grain texture using pseudo-random pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.025] mix-blend-overlay"
+          style={{
+            backgroundImage: `
+              repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.03) 2px,
+                rgba(0, 0, 0, 0.03) 4px
+              ),
+              repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.03) 2px,
+                rgba(0, 0, 0, 0.03) 4px
+              ),
+              repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.02) 2px,
+                rgba(0, 0, 0, 0.02) 4px
+              ),
+              repeating-linear-gradient(
+                -45deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.02) 2px,
+                rgba(0, 0, 0, 0.02) 4px
+              )
+            `,
+            backgroundSize: "100px 100px, 100px 100px, 100px 100px, 100px 100px",
+          }}
+        />
 
-      {/* === OVERLAY: keep text readable over the image === */}
+        {/* Subtle noise dots for authentic texture */}
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: `radial-gradient(circle at 1px 1px, rgba(0,0,0,0.4) 1px, transparent 1px)`,
+            backgroundSize: "3px 3px",
+          }}
+        />
+      </div>
+
+      {/* === OVERLAY: keep text readable over the gradient === */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
@@ -104,12 +196,12 @@ export default function Hero() {
         <div className="absolute inset-0 bg-gradient-to-b from-white/75 via-white/55 to-white/80" />
         {/* subtle vertical divider */}
         <div className="absolute inset-y-16 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-slate-200/0 via-slate-200/60 to-slate-200/0" />
-        {/* fine grain */}
+        {/* fine grain overlay */}
         <div
           className="absolute inset-0 opacity-[0.06] mix-blend-soft-light"
           style={{
             backgroundImage:
-              "repeating-linear-gradient(0deg,rgba(15,23,42,0.2)_0,rgba(15,23,42,0.2)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.12)_0,rgba(15,23,42,0.12)_1px,transparent_1px,transparent_3px)",
+              "repeating-linear-gradient(0deg,rgba(15,23,42,0.2) 0,rgba(15,23,42,0.2) 1px,transparent 1px,transparent 3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.12) 0,rgba(15,23,42,0.12) 1px,transparent 1px,transparent 3px)",
           }}
         />
       </div>
