@@ -17,11 +17,19 @@
   font-style: normal;
   font-display: swap;
 }
+/* NEW: Barrbar font for hero tagline */
+@font-face {
+  font-family: "Barrbar";
+  src: url("/fonts/Barrbar.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 /* CSS Vars for consistent usage */
 :root {
   --font-display: "Biospace", Cinzel, Marcellus, serif;
-  --font-tagline: "Dirty Queen", "Cormorant Garamond", serif;
+  --font-tagline: "Barrbar", "Dirty Queen", "Cormorant Garamond", serif;
   --font-ui: ui-sans-serif, system-ui, -apple-system, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans";
 }
 
@@ -263,7 +271,7 @@ body { font-family: var(--font-ui); }
   --shadow: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 1px 2px -1px hsl(0 0% 0% / 0.00);
   --shadow-md: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 2px 4px -1px hsl(0 0% 0% / 0.00);
   --shadow-lg: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 4px 6px -1px hsl(0 0% 0% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 8px 10px -1px hsl(0 0% 0% / 0.00);
+  --shadow-xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 8px 10px -1px hsl(0 0% 0% / 0.00), 0px 8px 10px -1px hsl(0 0% 0% / 0.00);
   --shadow-2xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
 
   /* Glass and Gloss Material System */

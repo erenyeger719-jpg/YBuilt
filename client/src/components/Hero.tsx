@@ -84,8 +84,7 @@ export default function Hero() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
-          // 🔁 changed this line to use your new image
-          backgroundImage: "url('/hero-img.jpg')",
+          backgroundImage: "url('/hero-bg.jpg')",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
@@ -103,12 +102,15 @@ export default function Hero() {
       {/* === CENTERED CONTENT === */}
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center text-center">
-          {/* Tagline (moved up, replaces badge) */}
-          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-700 uppercase">
+          {/* TAGLINE WITH BARRBAR FONT + MUCH BIGGER */}
+          <p
+            className="mb-6 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold uppercase text-slate-900 tracking-[0.25em]"
+            style={{ fontFamily: "Barrbar, system-ui, sans-serif" }}
+          >
             BUILD SMARTER · LAUNCH FASTER
           </p>
 
-          {/* New exotic, instructive heading */}
+          {/* Main heading */}
           <div className="mb-8">
             <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl lg:text-7xl">
               Describe your next product in plain language.
