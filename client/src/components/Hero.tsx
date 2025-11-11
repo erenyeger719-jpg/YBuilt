@@ -71,100 +71,118 @@ export default function Hero() {
       toast({
         title: "Create failed",
         description: err?.message || "Request failed",
-        variant: "destructive",
       });
     }
   }
 
   return (
     <section
-      className="
-        relative 
-        flex w-full flex-col 
-        min-h-[calc(100vh-64px)]
-        text-slate-900
-        overflow-hidden
-      "
+      className="relative isolate flex min-h-[calc(100vh-56px)] items-center overflow-hidden bg-slate-50"
     >
-      {/* background image */}
+      {/* === BACKGROUND IMAGE LAYER === */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 -z-20 bg-cover bg-center"
-        style={{ backgroundImage: 'url("/hero-bg.jpg")' }}
+        className="pointer-events-none absolute inset-0"
+        style={{
+          // 1) instant “vector-like” gradient (shows immediately)
+          // 2) your noisy PNG on top when it finishes loading
+          backgroundImage:
+            "radial-gradient(circle at top, #a855f7 0%, #ec4899 40%, #f97316 100%), url('/hero-bg.jpg')",
+          backgroundSize: "cover, cover",
+          backgroundPosition: "center, center",
+          backgroundRepeat: "no-repeat, no-repeat",
+        }}
       />
-      {/* soft white wash on top so text stays readable */}
-      <div className="absolute inset-0 -z-10 bg-white/82 backdrop-blur-[1px]" />
 
-      {/* TOP ROW: Avision-style layout */}
-      <div className="flex flex-1 flex-col justify-end gap-12 px-6 pt-16 pb-10 sm:px-10 lg:flex-row lg:items-end lg:px-24">
-        {/* LEFT: studio intro */}
-        <div className="max-w-xs text-[11px] leading-relaxed tracking-[0.08em] text-slate-800">
-          <p className="mb-5 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-600">
-            YBUILT STUDIO
-          </p>
-          <p>
-            AT YBUILT, WE&apos;RE MORE THAN JUST A BUILDER; WE&apos;RE A QUIET
-            PARTNER DEDICATED TO EMPOWERING DIGITAL TALENT.
-          </p>
-          <p className="mt-3">
-            WE HELP YOU GO FROM FIRST SPARK TO SOMETHING PEOPLE CAN ACTUALLY
-            CLICK — WITHOUT THE NOISE.
-          </p>
-        </div>
 
-        {/* RIGHT: big heading + tagline + minimal prompt bar */}
-        <div className="pb-2 text-right lg:pb-6">
-          <div className="space-y-1">
-            <h1 className="text-[32px] font-medium leading-none tracking-[0.12em] text-slate-900 sm:text-[40px] md:text-[52px] lg:text-[64px]">
-              FROM IDEA
-            </h1>
-            <h1 className="text-[32px] font-medium leading-none tracking-[0.12em] text-slate-900 sm:text-[40px] md:text-[52px] lg:text-[64px]">
-              TO DIGITAL
-            </h1>
-            <h1 className="text-[32px] font-medium leading-none tracking-[0.12em] text-slate-900 sm:text-[40px] md:text-[52px] lg:text-[64px]">
-              REALITY
-            </h1>
-          </div>
-
-          <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-600">
-            BUILD SMARTER · LAUNCH FASTER
-          </p>
-
-          {/* Minimal prompt bar */}
-          <form
-            onSubmit={handleCreate}
-            className="mt-8 inline-flex items-center gap-4 border-b border-slate-900/25 pb-2 text-left lg:ml-auto"
-          >
-            <label className="sr-only" htmlFor="hero-idea-input">
-              Describe your website or app idea
-            </label>
-            <input
-              id="hero-idea-input"
-              type="text"
-              value={promptText}
-              onChange={(e) => setPromptText(e.target.value)}
-              placeholder="Describe your website or app idea…"
-              className="w-56 bg-transparent text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none sm:w-72 sm:text-sm"
-            />
-            <Button
-              type="submit"
-              className="rounded-full border border-slate-900 bg-slate-900 px-5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white shadow-sm transition hover:bg-black"
-            >
-              Create
-            </Button>
-          </form>
-        </div>
+      {/* === OVERLAY: keep text readable over the image === */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+      >
+        {/* soft light wash */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/75 via-white/55 to-white/80" />
+        {/* subtle vertical divider */}
+        <div className="absolute inset-y-16 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-slate-200/0 via-slate-200/60 to-slate-200/0" />
+        {/* fine grain */}
+        <div
+          className="absolute inset-0 opacity-[0.06] mix-blend-soft-light"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(0deg,rgba(15,23,42,0.2)_0,rgba(15,23,42,0.2)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.12)_0,rgba(15,23,42,0.12)_1px,transparent_1px,transparent_3px)",
+          }}
+        />
       </div>
 
-      {/* BOTTOM IMAGE STRIP — placeholder rail */}
-      <div className="mt-4 h-[260px] w-full overflow-hidden">
-        <div className="grid h-full w-full grid-cols-5 gap-[2px]">
-          {/* Replace with real images later */}
-          <div className="bg-[linear-gradient(135deg,#f97316,#fed7aa)]" />
-          <div className="bg-[linear-gradient(135deg,#e11d48,#fecaca)]" />
-          <div className="bg-[linear-gradient(135deg,#0ea5e9,#bfdbfe)]" />
-          <div className="bg-[linear-gradient(135deg,#22c55e,#bbf7d0)]" />
-          <div className="bg-[linear-gradient(135deg,#111827,#38bdf8)]" />
+      {/* === FOREGROUND CONTENT === */}
+      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-10 sm:px-6 lg:px-8 md:flex-row md:items-center md:py-16">
+        {/* LEFT: text + prompt */}
+        <div className="flex-1 space-y-7">
+          <p className="inline-flex items-center rounded-full border border-slate-300/70 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+            Build studio · Ybuilt
+          </p>
+
+          <div className="space-y-3">
+            <h1 className="text-balance text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl md:text-5xl">
+              From Idea to Digital{" "}
+              <span className="block">Reality</span>
+            </h1>
+
+            <p className="text-[11px] font-semibold tracking-[0.35em] text-slate-500">
+              BUILD SMARTER. LAUNCH FASTER
+            </p>
+
+            <p className="max-w-xl text-sm text-slate-600 sm:text-[15px]">
+              Describe what you want to ship. Ybuilt turns it into a working
+              product, then lets you refine it without drowning in settings.
+            </p>
+          </div>
+
+          {/* Prompt surface */}
+          <div className="mt-6 max-w-xl rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur">
+            <form
+              className="flex flex-col gap-3 sm:flex-row sm:items-center"
+              onSubmit={handleCreate}
+            >
+              <label className="sr-only" htmlFor="hero-idea-input">
+                Describe your website or app idea
+              </label>
+              <input
+                id="hero-idea-input"
+                type="text"
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                placeholder="Describe your website or app idea…"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900/70"
+              />
+
+              <Button
+                type="submit"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-slate-50 shadow-sm shadow-slate-900/40 transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100"
+              >
+                Create
+              </Button>
+            </form>
+
+            <div className="mt-3 flex items-center justify-center">
+              <button
+                type="button"
+                className="text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
+              >
+                or Explore previews →
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT: placeholder block for now (could be removed later if you want pure center hero) */}
+        <div className="flex-1">
+          <div className="relative mx-auto aspect-[4/3] w-full max-w-md rounded-3xl border border-dashed border-slate-300 bg-white/60 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
+            <div className="absolute inset-4 rounded-2xl border border-slate-200/80" />
+            <p className="absolute inset-x-6 bottom-6 text-xs text-slate-400">
+              Future: product preview / animation goes here.
+            </p>
+          </div>
         </div>
       </div>
     </section>
