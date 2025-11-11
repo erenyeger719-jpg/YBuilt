@@ -77,93 +77,86 @@ export default function Hero() {
   }
 
   return (
-    <section
-      className="relative isolate flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden bg-[#f5f4f2] px-4 sm:px-6 lg:px-8"
-    >
-      {/* === BACKGROUND IMAGE LAYER (we'll swap the src later) === */}
+    <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-12 shadow-sm sm:px-8 sm:py-14 lg:px-10">
+      {/* subtle grain so it doesn't feel flat */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-center bg-cover bg-no-repeat"
+        className="pointer-events-none absolute inset-0 opacity-[0.08] mix-blend-soft-light"
         style={{
-          // TODO: replace this with your final hero image path
-          backgroundImage: "url('/media/home-hero-placeholder.jpg')",
+          backgroundImage:
+            "repeating-linear-gradient(0deg,rgba(15,23,42,0.15)_0,rgba(15,23,42,0.15)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.08)_0,rgba(15,23,42,0.08)_1px,transparent_1px,transparent_3px)",
         }}
       />
 
-      {/* === HALO + TEXTURE OVERLAY (so it feels designed, not just flat image) === */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-      >
-        {/* soft spotlight behind hero card */}
-        <div className="absolute inset-x-0 top-20 mx-auto h-80 max-w-4xl rounded-full bg-[radial-gradient(circle,#ffffff_0,#f0ebe4_55%,transparent_80%)] opacity-95 blur-3xl" />
-        {/* subtle vertical hint */}
-        <div className="absolute inset-y-16 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-slate-200/0 via-slate-200/60 to-slate-200/0" />
-        {/* micro grain */}
-        <div
-          className="absolute inset-0 opacity-[0.06] mix-blend-soft-light"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(0deg,rgba(15,23,42,0.2)_0,rgba(15,23,42,0.2)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.12)_0,rgba(15,23,42,0.12)_1px,transparent_1px,transparent_3px)",
-          }}
-        />
-      </div>
+      <div className="relative mx-auto flex max-w-6xl flex-col gap-10 md:flex-row md:items-center">
+        {/* LEFT: text + prompt */}
+        <div className="flex-1 space-y-7">
+          <p className="inline-flex items-center rounded-full border border-slate-300/70 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+            Build studio · Ybuilt
+          </p>
 
-      {/* === FOREGROUND CONTENT === */}
-      <div className="relative mx-auto flex w-full max-w-4xl flex-col items-center text-center pb-16 pt-10">
-        {/* Label */}
-        <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-slate-200/90 bg-white/80 px-3 py-1 text-[11px] font-medium tracking-[0.18em] text-slate-500 shadow-sm shadow-slate-900/5">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-900" />
-          <span>YBUILT • BUILDER STUDIO</span>
-        </div>
+          <div className="space-y-3">
+            <h1 className="text-balance text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl md:text-5xl">
+              From Idea to Digital{" "}
+              <span className="block">Reality</span>
+            </h1>
 
-        {/* Headline card */}
-        <div className="rounded-[32px] border border-slate-200/90 bg-gradient-to-b from-white to-[#f4ede3] px-8 py-10 shadow-[0_24px_60px_rgba(15,23,42,0.16)] sm:px-10 sm:py-12">
-          <h1 className="text-balance text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl md:text-[2.8rem] md:leading-tight">
-            From Idea to Digital{" "}
-            <span className="block">Reality</span>
-          </h1>
-        </div>
+            <p className="text-[11px] font-semibold tracking-[0.35em] text-slate-500">
+              BUILD SMARTER. LAUNCH FASTER
+            </p>
 
-        {/* Tagline */}
-        <p className="mt-7 text-[11px] font-semibold tracking-[0.35em] text-slate-500">
-          BUILD SMARTER. LAUNCH FASTER
-        </p>
+            <p className="max-w-xl text-sm text-slate-600 sm:text-[15px]">
+              Describe what you want to ship. Ybuilt turns it into a working
+              product, then lets you refine it without drowning in settings.
+            </p>
+          </div>
 
-        {/* Prompt bar */}
-        <div className="mt-9 w-full max-w-2xl rounded-[999px] border border-slate-200/90 bg-white/90 px-3 py-2 shadow-[0_22px_55px_rgba(15,23,42,0.16)] backdrop-blur-sm">
-          <form
-            className="flex flex-col gap-2 sm:flex-row sm:items-center"
-            onSubmit={handleCreate}
-          >
-            <label className="sr-only" htmlFor="hero-idea-input">
-              Describe your website or app idea
-            </label>
-            <input
-              id="hero-idea-input"
-              type="text"
-              value={promptText}
-              onChange={(e) => setPromptText(e.target.value)}
-              placeholder="Describe your website or app idea…"
-              className="w-full rounded-[999px] border border-transparent bg-slate-50/70 px-5 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900/70"
-            />
-
-            <Button
-              type="submit"
-              className="mt-1 inline-flex shrink-0 items-center justify-center rounded-[999px] bg-slate-900 px-6 py-3 text-sm font-medium text-slate-50 shadow-[0_14px_32px_rgba(15,23,42,0.45)] transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white/40 sm:mt-0"
+          {/* Prompt surface */}
+          <div className="mt-6 max-w-xl rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur">
+            <form
+              className="flex flex-col gap-3 sm:flex-row sm:items-center"
+              onSubmit={handleCreate}
             >
-              Create
-            </Button>
-          </form>
+              <label className="sr-only" htmlFor="hero-idea-input">
+                Describe your website or app idea
+              </label>
+              <input
+                id="hero-idea-input"
+                type="text"
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                placeholder="Describe your website or app idea…"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-900 focus:bg-white focus:ring-1 focus:ring-slate-900/70"
+              />
+
+              <Button
+                type="submit"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-slate-50 shadow-sm shadow-slate-900/40 transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100"
+              >
+                Create
+              </Button>
+            </form>
+
+            <div className="mt-3 flex items-center justify-center">
+              <button
+                type="button"
+                className="text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
+              >
+                or Explore previews →
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Secondary link */}
-        <button
-          type="button"
-          className="mt-4 text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
-        >
-          or Explore previews →
-        </button>
+        {/* RIGHT: empty visual placeholder for later images/video */}
+        <div className="flex-1">
+          <div className="relative mx-auto aspect-[4/3] w-full max-w-md rounded-3xl border border-dashed border-slate-300 bg-white/70 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
+            <div className="absolute inset-4 rounded-2xl border border-slate-200/80" />
+            <p className="absolute inset-x-6 bottom-6 text-xs text-slate-400">
+              Future: product preview / animation goes here.
+            </p>
+          </div>
+        </div>
       </div>
     </section>
   );
