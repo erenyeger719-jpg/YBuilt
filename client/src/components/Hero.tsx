@@ -78,6 +78,11 @@ export default function Hero() {
   return (
     <section
       className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden"
+      style={{
+        // Minimal Colors – Purple 90’s palette
+        backgroundImage:
+          "linear-gradient(135deg, #a0d2eb 0%, #e5eaf5 20%, #d0bdf4 50%, #8458B3 80%, #a28089 100%)",
+      }}
     >
       {/* === CENTERED CONTENT (unchanged) === */}
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
@@ -92,7 +97,8 @@ export default function Hero() {
             <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl lg:text-7xl">
               Describe your next product in plain language.
               <span className="mt-2 block text-lg font-normal text-slate-900/90 sm:text-xl">
-                Ybuilt turns that idea into something your users can actually click, try, and share.
+                Ybuilt turns that idea into something your users can actually
+                click, try, and share.
               </span>
             </h1>
           </div>
