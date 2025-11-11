@@ -71,24 +71,45 @@ export default function Hero() {
       toast({
         title: "Create failed",
         description: err?.message || "Request failed",
-        variant: "destructive",
       });
     }
   }
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-12 shadow-sm sm:px-8 sm:py-14 lg:px-10">
-      {/* subtle grain so it doesn't feel flat */}
+    <section
+      className="relative isolate flex min-h-[calc(100vh-56px)] items-center overflow-hidden bg-slate-50"
+    >
+      {/* === BACKGROUND IMAGE LAYER === */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-[0.08] mix-blend-soft-light"
+        className="pointer-events-none absolute inset-0 bg-center bg-cover bg-no-repeat"
         style={{
-          backgroundImage:
-            "repeating-linear-gradient(0deg,rgba(15,23,42,0.15)_0,rgba(15,23,42,0.15)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.08)_0,rgba(15,23,42,0.08)_1px,transparent_1px,transparent_3px)",
+          // 🔁 replace this with your real hero image later
+          backgroundImage: "url('/media/home-hero-placeholder.jpg')",
         }}
       />
 
-      <div className="relative mx-auto flex max-w-6xl flex-col gap-10 md:flex-row md:items-center">
+      {/* === OVERLAY: keep text readable over the image === */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+      >
+        {/* soft light wash */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/75 via-white/55 to-white/80" />
+        {/* subtle vertical divider */}
+        <div className="absolute inset-y-16 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-slate-200/0 via-slate-200/60 to-slate-200/0" />
+        {/* fine grain */}
+        <div
+          className="absolute inset-0 opacity-[0.06] mix-blend-soft-light"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(0deg,rgba(15,23,42,0.2)_0,rgba(15,23,42,0.2)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.12)_0,rgba(15,23,42,0.12)_1px,transparent_1px,transparent_3px)",
+          }}
+        />
+      </div>
+
+      {/* === FOREGROUND CONTENT === */}
+      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-10 sm:px-6 lg:px-8 md:flex-row md:items-center md:py-16">
         {/* LEFT: text + prompt */}
         <div className="flex-1 space-y-7">
           <p className="inline-flex items-center rounded-full border border-slate-300/70 bg-white/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
@@ -148,9 +169,9 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* RIGHT: empty visual placeholder for later images/video */}
+        {/* RIGHT: placeholder block for now (could be removed later if you want pure center hero) */}
         <div className="flex-1">
-          <div className="relative mx-auto aspect-[4/3] w-full max-w-md rounded-3xl border border-dashed border-slate-300 bg-white/70 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
+          <div className="relative mx-auto aspect-[4/3] w-full max-w-md rounded-3xl border border-dashed border-slate-300 bg-white/60 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
             <div className="absolute inset-4 rounded-2xl border border-slate-200/80" />
             <p className="absolute inset-x-6 bottom-6 text-xs text-slate-400">
               Future: product preview / animation goes here.
