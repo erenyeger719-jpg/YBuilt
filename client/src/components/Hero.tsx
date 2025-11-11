@@ -77,54 +77,40 @@ export default function Hero() {
 
   return (
     <section
-      className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden bg-slate-950"
+      className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden bg-[#020617] text-slate-50"
     >
-      {/* === BACKGROUND IMAGE + SPOTIFY / LOVABLE COLOUR WASH === */}
+      {/* === SPOTIFY / LOVABLE STYLE GRADIENT BACKGROUND === */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-      >
-        {/* Base dark gradient (Spotify-ish) */}
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at top left, #22c55e33 0, transparent 55%), radial-gradient(circle at top right, #6366f133 0, transparent 55%), radial-gradient(circle at bottom left, #ec489933 0, transparent 55%), linear-gradient(135deg, #020617 0%, #020617 40%, #050816 100%)",
-            backgroundBlendMode: "screen, screen, screen, normal",
-          }}
-        />
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          backgroundImage: `
+            radial-gradient(circle at top, #1ed760 0, #1ed76033 26%, transparent 55%),
+            radial-gradient(circle at 15% 120%, #fb923c 0, #fb923c33 28%, transparent 60%),
+            radial-gradient(circle at 85% 120%, #6366f1 0, #6366f133 28%, transparent 60%),
+            radial-gradient(circle at center, #0f172a 0, #020617 70%)
+          `,
+          backgroundRepeat: "no-repeat",
+          backgroundSize: "140% 140%",
+          backgroundPosition: "center",
+        }}
+      />
 
-        {/* Your hero background image on top */}
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: "url('/hero-bg.jpg')",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat",
-            mixBlendMode: "screen",
-            opacity: 0.9,
-          }}
-        />
-
-        {/* Soft gradient for readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/40" />
-
-        {/* Grain / noise layer – Instagram filter vibe */}
-        <div
-          className="absolute inset-0 opacity-[0.12] mix-blend-soft-light"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(0deg,rgba(15,23,42,0.45)_0,rgba(15,23,42,0.45)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(15,23,42,0.35)_0,rgba(15,23,42,0.35)_1px,transparent_1px,transparent_3px)",
-          }}
-        />
-      </div>
+      {/* === GRAIN / NOISE OVERLAY (VISIBLE) === */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-40 mix-blend-soft-light"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(0deg,rgba(255,255,255,0.10)_0,rgba(255,255,255,0.10)_1px,transparent_1px,transparent_3px),repeating-linear-gradient(90deg,rgba(0,0,0,0.55)_0,rgba(0,0,0,0.55)_1px,transparent_1px,transparent_4px)",
+        }}
+      />
 
       {/* === CENTERED CONTENT === */}
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center text-center">
           {/* Tagline */}
-          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-200/80 uppercase">
+          <p className="mb-4 text-[11px] font-semibold tracking-[0.35em] text-slate-200 uppercase">
             BUILD SMARTER · LAUNCH FASTER
           </p>
 
@@ -132,14 +118,15 @@ export default function Hero() {
           <div className="mb-8">
             <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl md:text-6xl lg:text-7xl">
               Describe your next product in plain language.
-              <span className="mt-2 block text-lg font-normal text-slate-100/90 sm:text-xl">
-                Ybuilt turns that idea into something your users can actually click, try, and share.
+              <span className="mt-2 block text-lg font-normal text-slate-200 sm:text-xl">
+                Ybuilt turns that idea into something your users can actually
+                click, try, and share.
               </span>
             </h1>
           </div>
 
-          {/* Prompt surface - centered */}
-          <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-white/90 p-4 shadow-[0_22px_60px_rgba(0,0,0,0.55)] backdrop-blur-md">
+          {/* Prompt surface */}
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-700/70 bg-white/95 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-sm">
             <form
               className="flex flex-col gap-3 sm:flex-row sm:items-center"
               onSubmit={handleCreate}
@@ -153,12 +140,12 @@ export default function Hero() {
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 placeholder="Describe your website or app idea…"
-                className="w-full rounded-xl border border-slate-200/60 bg-white/85 px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/40"
+                className="w-full rounded-xl border border-slate-200/70 bg-white/90 px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-400/40"
               />
 
               <Button
                 type="submit"
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-[#22c55e] via-[#1db954] to-[#22c55e] px-6 py-3.5 text-sm font-medium text-slate-950 shadow-[0_14px_45px_rgba(34,197,94,0.65)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-medium text-white shadow-[0_18px_40px_rgba(0,0,0,0.8)] transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
               >
                 Create
               </Button>
@@ -167,15 +154,15 @@ export default function Hero() {
             <div className="mt-3 flex items-center justify-center">
               <button
                 type="button"
-                className="text-xs font-medium text-slate-500 hover:text-slate-700 underline-offset-4 hover:underline"
+                className="text-xs font-medium text-slate-500 underline-offset-4 transition hover:text-slate-700 hover:underline"
               >
                 or Explore previews →
               </button>
             </div>
           </div>
 
-          {/* Optional placeholder */}
-          <div className="mt-12 text-xs text-slate-300/80">
+          {/* Placeholder for future visual */}
+          <div className="mt-12 text-xs text-slate-400">
             Future: product preview / animation goes here
           </div>
         </div>
