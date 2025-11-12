@@ -182,9 +182,9 @@ export default function Hero() {
                 </div>
 
                 {/* Icons row (bottom) */}
-                <div className="flex items-end justify-between pb-[2px]">
+                <div className="flex items-end justify-between">
                   {/* Left cluster: + and Attach */}
-                  <div className="flex items-center gap-3 -ml-4">
+                  <div className="flex items-center gap-3">
                     {/* Plus button – outline circle, no fill */}
                     <button
                       type="button"
@@ -217,7 +217,7 @@ export default function Hero() {
                   </div>
 
                   {/* Right cluster: Mic + Send */}
-                  <div className="flex items-center gap-3 -mr-4">
+                  <div className="flex items-center gap-3">
                     {/* Mic button – outline circle with bars */}
                     <button
                       type="button"
