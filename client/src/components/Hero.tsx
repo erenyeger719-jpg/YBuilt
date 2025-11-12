@@ -164,76 +164,87 @@ export default function Hero() {
         <div className="mt-12 flex justify-center">
           <div className="w-full max-w-3xl rounded-[32px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[2px] shadow-[0_22px_60px_rgba(15,23,42,0.5)]">
             <form onSubmit={handleCreate}>
-              <div className="flex items-center gap-4 rounded-[24px] bg-[#292929] px-8 py-9 sm:px-10 sm:py-9">
-                {/* Left: plus button */}
-                <button
-                  type="button"
-                  className="flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/5 text-2xl leading-none text-white/85 transition hover:bg-white/10"
-                >
-                  +
-                </button>
+              <div className="flex flex-col gap-4 rounded-[24px] bg-[#292929] px-8 py-7 sm:px-10 sm:py-8">
+                {/* Input row */}
+                <div className="flex items-center">
+                  <label className="sr-only" htmlFor="hero-idea-input">
+                    Describe your website or app idea
+                  </label>
+                  <input
+                    id="hero-idea-input"
+                    type="text"
+                    value={promptText}
+                    onChange={(e) => setPromptText(e.target.value)}
+                    placeholder="Ask Ybuilt to create a dashboard, app, or site…"
+                    className="w-full border-none bg-transparent text-sm sm:text-base text-slate-50 placeholder:text-slate-400 outline-none ring-0 focus:outline-none"
+                  />
+                </div>
 
-                {/* Attach pill (hidden on very small screens) */}
-                <button
-                  type="button"
-                  className="hidden items-center gap-2 rounded-full border border-white/14 bg-white/5 px-4 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 sm:inline-flex"
-                >
-                  <span className="inline-block h-[14px] w-[14px] rounded-[3px] border border-white/40" />
-                  <span>Attach</span>
-                </button>
+                {/* Icons row */}
+                <div className="flex items-center justify-between gap-4">
+                  {/* Left cluster: + and Attach */}
+                  <div className="flex items-center gap-3">
+                    {/* Plus button */}
+                    <button
+                      type="button"
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl leading-none text-white/85 transition hover:bg-white/10"
+                    >
+                      +
+                    </button>
 
-                {/* Input */}
-                <label className="sr-only" htmlFor="hero-idea-input">
-                  Describe your website or app idea
-                </label>
-                <input
-                  id="hero-idea-input"
-                  type="text"
-                  value={promptText}
-                  onChange={(e) => setPromptText(e.target.value)}
-                  placeholder="Ask Ybuilt to create a dashboard, app, or site…"
-                  className="flex-1 border-none bg-transparent text-sm sm:text-base text-slate-50 placeholder:text-slate-400 outline-none ring-0 focus:outline-none"
-                />
+                    {/* Attach pill (hidden on very small screens) */}
+                    <button
+                      type="button"
+                      className="hidden items-center gap-2 rounded-full border border-white/14 bg-white/5 px-4 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 sm:inline-flex"
+                    >
+                      <span className="inline-block h-[14px] w-[14px] rounded-[3px] border border-white/40" />
+                      <span>Attach</span>
+                    </button>
+                  </div>
 
-                {/* Mic button */}
-                <button
-                  type="button"
-                  className="hidden h-14 w-14 items-center justify-center rounded-full bg-white/5 text-white/75 transition hover:bg-white/10 sm:flex"
-                >
-                  <span className="sr-only">Record voice prompt</span>
-                  <svg
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    className="h-5 w-5"
-                  >
-                    <path
-                      d="M12 3a3 3 0 0 0-3 3v4a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"
-                      fill="currentColor"
-                    />
-                    <path
-                      d="M7 11a1 1 0 1 0-2 0 7 7 0 0 0 6 6.93V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.07A7 7 0 0 0 19 11a1 1 0 1 0-2 0 5 5 0 1 1-10 0Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                </button>
+                  {/* Right cluster: Mic and Send */}
+                  <div className="flex items-center gap-3">
+                    {/* Mic button */}
+                    <button
+                      type="button"
+                      className="hidden h-10 w-10 items-center justify-center rounded-full bg-white/5 text-white/75 transition hover:bg-white/10 sm:flex"
+                    >
+                      <span className="sr-only">Record voice prompt</span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        className="h-5 w-5"
+                      >
+                        <path
+                          d="M12 3a3 3 0 0 0-3 3v4a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"
+                          fill="currentColor"
+                        />
+                        <path
+                          d="M7 11a1 1 0 1 0-2 0 7 7 0 0 0 6 6.93V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.07A7 7 0 0 0 19 11a1 1 0 1 0-2 0 5 5 0 1 1-10 0Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
 
-                {/* Send button (submit) */}
-                <button
-                  type="submit"
-                  className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
-                >
-                  <span className="sr-only">Send</span>
-                  <svg
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    className="h-5 w-5"
-                  >
-                    <path
-                      d="M5 12h8.586l-3.293 3.293a1 1 0 1 0 1.414 1.414l5-5a1 1 0 0 0 0-1.414l-5-5a1 1 0 0 0-1.414 1.414L13.586 11H5a1 1 0 1 0 0 2Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                </button>
+                    {/* Send button (submit) */}
+                    <button
+                      type="submit"
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
+                    >
+                      <span className="sr-only">Send</span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        className="h-5 w-5"
+                      >
+                        <path
+                          d="M5 12h8.586l-3.293 3.293a1 1 0 1 0 1.414 1.414l5-5a1 1 0 0 0 0-1.414l-5-5a1 1 0 0 0-1.414 1.414L13.586 11H5a1 1 0 1 0 0 2Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
             </form>
           </div>
