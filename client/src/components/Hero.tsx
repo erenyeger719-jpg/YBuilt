@@ -76,52 +76,49 @@ export default function Hero() {
   }
 
   return (
-    <section
-      className="relative flex min-h-[calc(100vh-56px)] items-center justify-center overflow-hidden"
-    >
-      {/* === BACKGROUND IMAGE LAYER === */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage: "url('/hero-bg.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-        }}
-      />
-
-      {/* === VERY SUBTLE OVERLAY - keeps text readable but colors vibrant === */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-      >
-        <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-white/20" />
-      </div>
-
-      {/* === CENTERED CONTENT === */}
-      <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="flex flex-col items-center text-center">
-          {/* TAGLINE WITH BARRBAR FONT + MUCH BIGGER */}
-          <p
-            className="mb-6 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold uppercase text-slate-900 tracking-[0.25em]"
-            style={{ fontFamily: "Barrbar, system-ui, sans-serif" }}
-          >
-            BUILD SMARTER LAUNCH FASTER
-          </p>
-
-          {/* Main heading */}
-          <div className="mb-8">
-            <h1 className="text-balance text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl md:text-6xl lg:text-7xl">
-              Describe your next product in plain language.
-              <span className="mt-2 block text-lg font-normal text-slate-900/90 sm:text-xl">
-                Ybuilt turns that idea into something your users can actually
-                click, try, and share.
-              </span>
-            </h1>
+    <section className="relative overflow-hidden bg-white text-black">
+      <div className="mx-auto flex min-h-[calc(100vh-56px)] max-w-6xl flex-col justify-between px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+        {/* TOP ROW: billboard text + trust copy */}
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-end">
+          {/* Left: BUILD SMARTER LAUNCH FASTER */}
+          <div>
+            <p
+              className="leading-[0.8] tracking-tight uppercase text-[clamp(2.8rem,5.6vw,4.6rem)] font-extrabold"
+              style={{ fontFamily: "Barrbar, system-ui, sans-serif" }}
+            >
+              <span className="block">BUILD</span>
+              <span className="block">SMARTER</span>
+              <span className="block">LAUNCH FASTER</span>
+            </p>
           </div>
 
-          {/* Prompt surface - centered */}
+          {/* Right: trust / marketing copy */}
+          <div className="flex items-end lg:items-start">
+            <div className="max-w-xs text-right text-[13px] leading-relaxed tracking-tight text-neutral-800 lg:ml-auto lg:pt-4 lg:text-left">
+              <p className="mb-3 font-medium">
+                A focused product studio for people who want{" "}
+                <span className="font-semibold">real, working apps and sites</span>,
+                not just nice-looking mockups.
+              </p>
+              <p className="text-neutral-600">
+                Ybuilt gives you a single AI-assisted space to go from idea to
+                live product — UI, logic, and deployment in one flow — so you
+                can launch functional platforms, websites, and tools without
+                needing a full engineering team.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* MIDDLE: video slot (centered, like the reference hero) */}
+        <div className="mt-10 flex justify-center">
+          <div className="aspect-[16/9] w-full max-w-3xl overflow-hidden rounded-2xl bg-black shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
+            {/* Put your <video> or iframe here later */}
+          </div>
+        </div>
+
+        {/* PROMPT BAR (kept, just centered under the video) */}
+        <div className="mt-10 flex justify-center">
           <div className="w-full max-w-2xl rounded-2xl border border-slate-200/50 bg-white/85 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.08)] backdrop-blur-sm">
             <form
               className="flex flex-col gap-3 sm:flex-row sm:items-center"
@@ -156,10 +153,40 @@ export default function Hero() {
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Optional: placeholder for future content */}
-          <div className="mt-12 text-xs text-slate-400">
-            Future: product preview / animation goes here
+        {/* BOTTOM: black stripes + red wavy line */}
+        <div className="mt-12 w-full">
+          <div className="space-y-2 border-t border-black pt-6">
+            <div className="h-[2px] bg-black" />
+            <div className="h-[2px] bg-black" />
+            <div className="h-[2px] bg-black" />
+            <div className="h-[10px] bg-black" />
+          </div>
+
+          <div className="relative mt-4 h-16 overflow-hidden">
+            <svg
+              viewBox="0 0 800 80"
+              className="absolute inset-0 h-full w-full"
+            >
+              <path
+                d="
+                  M 0 40
+                  Q 50 0   100 40
+                  T 200 40
+                  T 300 40
+                  T 400 40
+                  T 500 40
+                  T 600 40
+                  T 700 40
+                  T 800 40
+                "
+                fill="none"
+                stroke="#e24b2f"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+            </svg>
           </div>
         </div>
       </div>
