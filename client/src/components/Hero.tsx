@@ -1,6 +1,8 @@
 // client/src/components/Hero.tsx
 import { useState, FormEvent, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { FiCamera, FiUploadCloud } from "react-icons/fi";
+import { SiFigma, SiGithub } from "react-icons/si";
 
 export default function Hero() {
   const { toast } = useToast();
@@ -127,7 +129,6 @@ export default function Hero() {
 
   function handleToggleVoice() {
     if (isListening) {
-      // stop current session
       recognitionRef.current?.stop?.();
       setIsListening(false);
       return;
@@ -149,7 +150,6 @@ export default function Hero() {
   }
 
   useEffect(() => {
-    // cleanup on unmount
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.onresult = null;
@@ -161,26 +161,28 @@ export default function Hero() {
   }, []);
 
   // ----- Plus menu -----
-  function handleMenuAction(action: "screenshot" | "figma" | "github" | "upload") {
+  function handleMenuAction(
+    action: "screenshot" | "figma" | "github" | "upload"
+  ) {
     setIsPlusMenuOpen(false);
 
     switch (action) {
       case "screenshot":
         toast({
           title: "Screenshot capture",
-          description: "Hook this up to your capture flow (getDisplayMedia, etc.).",
+          description: "Wire this into your getDisplayMedia or capture flow.",
         });
         break;
       case "figma":
         toast({
           title: "Import from Figma",
-          description: "Open your Figma import flow here (OAuth / file picker).",
+          description: "Open your Figma OAuth or file picker here.",
         });
         break;
       case "github":
         toast({
           title: "Import from GitHub",
-          description: "Connect to GitHub and pull a repo or file here.",
+          description: "Connect to GitHub and pull a repo or file.",
         });
         break;
       case "upload":
@@ -189,7 +191,7 @@ export default function Hero() {
     }
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: any) {
     const file = e.target.files?.[0];
     if (!file) return;
     console.log("[upload] design/code file selected:", file);
@@ -197,7 +199,7 @@ export default function Hero() {
       title: "File selected",
       description: `Ready to process: ${file.name}`,
     });
-    // TODO: send file to your backend
+    // TODO: actually send the file to your backend
   }
 
   useEffect(() => {
@@ -334,54 +336,56 @@ export default function Hero() {
                       +
                     </button>
 
-                    {/* Plus menu */}
+                    {/* Plus dropdown – opens downward */}
                     {isPlusMenuOpen && (
                       <div
                         ref={plusMenuRef}
-                        className="absolute left-0 bottom-[120%] z-20 w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f] py-1 shadow-xl"
+                        className="absolute left-0 top-[135%] z-20 w-72 overflow-hidden rounded-2xl border border-white/12 bg-[#101010] py-1 shadow-xl shadow-black/70 backdrop-blur"
                       >
+                        {/* Take a screenshot */}
                         <button
                           type="button"
                           onClick={() => handleMenuAction("screenshot")}
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
                         >
-                          {/* Screenshot icon */}
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/25 text-[13px]">
-                            ⬒
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5">
+                            <FiCamera className="h-4 w-4" />
                           </span>
                           <span>Take a screenshot</span>
                         </button>
 
+                        {/* Import from Figma */}
                         <button
                           type="button"
                           onClick={() => handleMenuAction("figma")}
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
                         >
-                          {/* Figma dot stack */}
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#222] text-[11px]">
-                            ●●●
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5">
+                            <SiFigma className="h-4 w-4" />
                           </span>
                           <span>Import from Figma</span>
                         </button>
 
+                        {/* Import from GitHub */}
                         <button
                           type="button"
                           onClick={() => handleMenuAction("github")}
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
                         >
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#222] text-[12px]">
-                            GH
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5">
+                            <SiGithub className="h-4 w-4" />
                           </span>
                           <span>Import from GitHub</span>
                         </button>
 
+                        {/* Upload design / code file */}
                         <button
                           type="button"
                           onClick={() => handleMenuAction("upload")}
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
                         >
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#222] text-[12px]">
-                            ⬆
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5">
+                            <FiUploadCloud className="h-4 w-4" />
                           </span>
                           <span>Upload design / code file</span>
                         </button>
