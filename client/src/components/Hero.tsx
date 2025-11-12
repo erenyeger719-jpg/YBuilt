@@ -1,5 +1,6 @@
 // client/src/components/Hero.tsx
 import { useState, FormEvent } from "react";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Hero() {
@@ -76,15 +77,14 @@ export default function Hero() {
 
   return (
     <section className="relative overflow-hidden bg-white text-black">
-      {/* MAIN HERO CONTAINER */}
-      <div className="mx-auto flex min-h-[calc(100vh-56px)] max-w-6xl flex-col px-4 pt-12 pb-16 sm:px-6 lg:px-8 lg:pt-16 lg:pb-20">
+      <div className="mx-auto flex min-h-[calc(100vh-56px)] max-w-6xl flex-col justify-between px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
         {/* TOP ROW: billboard text + trust copy */}
         <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-end">
           {/* Left: BUILD SMARTER LAUNCH FASTER */}
           <div>
             <p
-              className="leading-[0.8] tracking-[0.03em] uppercase text-[clamp(3.4rem,7vw,5.8rem)] font-extrabold"
-              style={{ fontFamily: '"AmericanCaptain", system-ui, sans-serif' }}
+              className="leading-[0.8] tracking-tight uppercase text-[clamp(2.8rem,5.6vw,4.6rem)] font-extrabold"
+              style={{ fontFamily: "AmericanCaptain, system-ui, sans-serif" }}
             >
               <span className="block">BUILD</span>
               <span className="block">SMARTER</span>
@@ -98,8 +98,10 @@ export default function Hero() {
             <div className="max-w-xs text-right text-[13px] leading-relaxed tracking-tight text-neutral-800 lg:ml-auto lg:pt-4 lg:text-left">
               <p className="mb-3 font-medium">
                 A focused product studio for people who want{" "}
-                <span className="font-semibold">real, working apps and sites</span>,
-                not just nice-looking mockups.
+                <span className="font-semibold">
+                  real, working apps and sites
+                </span>
+                , not just nice-looking mockups.
               </p>
               <p className="text-neutral-600">
                 Ybuilt gives you a single AI-assisted space to go from idea to
@@ -111,94 +113,70 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* PROMPT BAR — bigger vertical height, #292929 */}
-        <div className="mt-12 flex justify-center">
-          <div className="w-full max-w-4xl rounded-[48px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[2px] shadow-[0_22px_60px_rgba(15,23,42,0.5)]">
-            <form onSubmit={handleCreate}>
-              <div className="flex items-center gap-4 rounded-[44px] bg-[#292929] px-8 py-6 sm:px-10 sm:py-6">
-                {/* Left: plus button */}
-                <button
-                  type="button"
-                  className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5 text-2xl leading-none text-white/85 transition hover:bg-white/10"
-                >
-                  +
-                </button>
+        {/* LOVABLE-STYLE PROMPT BAR (only height adjusted) */}
+        <div className="mt-16 flex justify-center">
+          <div className="w-full max-w-4xl">
+            {/* glow wrapper */}
+            <div className="rounded-[999px] bg-transparent shadow-[0_40px_120px_rgba(0,0,0,0.35)]">
+              <form
+                onSubmit={handleCreate}
+                className="flex flex-col gap-4 rounded-[999px] border border-white/5 bg-[#18181b] px-8 py-7 sm:px-10 sm:py-8"
+              >
+                {/* main row: input + right buttons */}
+                <div className="flex items-center gap-4">
+                  <input
+                    id="hero-idea-input"
+                    type="text"
+                    value={promptText}
+                    onChange={(e) => setPromptText(e.target.value)}
+                    placeholder="Ask Ybuilt to create a dashboard, app, or site…"
+                    className="flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-400 outline-none border-none focus:outline-none"
+                  />
 
-                {/* Attach pill (hidden on very small screens) */}
-                <button
-                  type="button"
-                  className="hidden items-center gap-2 rounded-full border border-white/14 bg-white/5 px-4 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 sm:inline-flex"
-                >
-                  <span className="inline-block h-[14px] w-[14px] rounded-[3px] border border-white/40" />
-                  <span>Attach</span>
-                </button>
-
-                {/* Input */}
-                <label className="sr-only" htmlFor="hero-idea-input">
-                  Describe your website or app idea
-                </label>
-                <input
-                  id="hero-idea-input"
-                  type="text"
-                  value={promptText}
-                  onChange={(e) => setPromptText(e.target.value)}
-                  placeholder="Ask Ybuilt to create a dashboard, app, or site…"
-                  className="flex-1 border-none bg-transparent text-sm sm:text-base text-slate-50 placeholder:text-slate-400 outline-none ring-0 focus:outline-none"
-                />
-
-                {/* Mic button */}
-                <button
-                  type="button"
-                  className="hidden h-12 w-12 items-center justify-center rounded-full bg-white/5 text-white/75 transition hover:bg-white/10 sm:flex"
-                >
-                  <span className="sr-only">Record voice prompt</span>
-                  <svg
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    className="h-5 w-5"
+                  {/* mic-style button (non-functional for now) */}
+                  <button
+                    type="button"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#202124] text-slate-200 text-xs hover:bg-[#26272b] transition"
                   >
-                    <path
-                      d="M12 3a3 3 0 0 0-3 3v4a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"
-                      fill="currentColor"
-                    />
-                    <path
-                      d="M7 11a1 1 0 1 0-2 0 7 7 0 0 0 6 6.93V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.07A7 7 0 0 0 19 11a1 1 0 1 0-2 0 5 5 0 1 1-10 0Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                </button>
+                    ●
+                  </button>
 
-                {/* Send button (submit) */}
-                <button
-                  type="submit"
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
-                >
-                  <span className="sr-only">Send</span>
-                  <svg
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    className="h-5 w-5"
+                  {/* send button */}
+                  <Button
+                    type="submit"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black shadow-sm hover:bg-slate-100"
                   >
-                    <path
-                      d="M5 12h8.586l-3.293 3.293a1 1 0 1 0 1.414 1.414l5-5a1 1 0 0 0 0-1.414l-5-5a1 1 0 0 0-1.414 1.414L13.586 11H5a1 1 0 1 0 0 2Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </form>
+                    ↑
+                  </Button>
+                </div>
+
+                {/* bottom row: + and Attach */}
+                <div className="flex items-center gap-3 text-xs text-slate-300">
+                  <button
+                    type="button"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-white/12 bg-[#202124] text-base leading-none hover:bg-[#26272b] transition"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-full border border-white/12 bg-[#202124] px-3 py-1.5 hover:bg-[#26272b] transition"
+                  >
+                    <span className="text-[11px] tracking-wide">Attach</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
 
-        {/* BLACK STRIPES — full width, 4 lines, 1:2:3:9 ratio */}
-        <div className="mt-12 -mx-4 sm:-mx-6 lg:-mx-8">
-          <div className="relative left-1/2 w-screen -translate-x-1/2 border-t border-black/80 pt-6">
-            <div className="space-y-3">
-              <div className="h-[2px] bg-black" />
-              <div className="h-[4px] bg-black" />
-              <div className="h-[6px] bg-black" />
-              <div className="h-[18px] bg-black" />
-            </div>
+        {/* BOTTOM: black stripes (full-page width) */}
+        <div className="mt-16 w-screen relative left-1/2 right-1/2 -mx-[50vw]">
+          <div className="space-y-3 border-t border-black pt-8 px-4 sm:px-10">
+            <div className="h-[2px] bg-black" />
+            <div className="h-[4px] bg-black" />
+            <div className="h-[6px] bg-black" />
+            <div className="h-[18px] bg-black" />
           </div>
         </div>
       </div>
