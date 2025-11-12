@@ -164,7 +164,7 @@ export default function Hero() {
         <div className="mt-12 flex justify-center">
           <div className="w-full max-w-3xl rounded-[32px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[2px] shadow-[0_22px_60px_rgba(15,23,42,0.5)]">
             <form onSubmit={handleCreate}>
-              {/* Fixed-height inner shell so icons sit low, text on top */}
+              {/* Same height as before */}
               <div className="flex h-[96px] flex-col justify-between rounded-[24px] bg-[#292929] px-8 py-4 sm:px-10 sm:py-4">
                 {/* Input row (top) */}
                 <div className="flex items-center">
@@ -181,19 +181,19 @@ export default function Hero() {
                   />
                 </div>
 
-                {/* Icons row (bottom) */}
-                <div className="flex items-end justify-between">
+                {/* Icons row (bottom) – all 4 aligned horizontally */}
+                <div className="flex items-end justify-between pb-1">
                   {/* Left cluster: + and Attach */}
-                  <div className="flex items-center gap-3 -ml-4 mb-[-2px]">
-                    {/* Plus button – outline circle, no fill */}
+                  <div className="flex items-center gap-3 -ml-4">
+                    {/* Plus icon – NO circle, same hitbox size */}
                     <button
                       type="button"
-                      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-transparent text-lg leading-none text-white/85"
+                      className="flex h-9 w-9 items-center justify-center bg-transparent text-base leading-none text-white/85"
                     >
                       +
                     </button>
 
-                    {/* Attach pill – paperclip + text, outline only */}
+                    {/* Attach pill – paperclip + text */}
                     <button
                       type="button"
                       className="hidden items-center gap-2 rounded-full border border-white/22 bg-transparent px-4 py-1.5 text-xs font-medium text-white/80 sm:inline-flex"
@@ -217,7 +217,7 @@ export default function Hero() {
                   </div>
 
                   {/* Right cluster: Mic + Send */}
-                  <div className="flex items-center gap-3 -mr-4 mb-[-2px]">
+                  <div className="flex items-center gap-3 -mr-4">
                     {/* Mic button – outline circle with bars */}
                     <button
                       type="button"
