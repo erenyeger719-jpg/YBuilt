@@ -184,11 +184,11 @@ export default function Hero() {
                 {/* Icons row (bottom) – all 4 aligned horizontally */}
                 <div className="flex items-end justify-between pb-1">
                   {/* Left cluster: + and Attach */}
-                  <div className="flex items-center gap-3 -ml-4">
-                    {/* Plus icon – NO circle, same hitbox size */}
+                  <div className="flex items-center gap-2 -ml-4">
+                    {/* Plus icon – bigger again, no circle */}
                     <button
                       type="button"
-                      className="flex h-9 w-9 items-center justify-center bg-transparent text-base leading-none text-white/85"
+                      className="flex h-9 w-9 items-center justify-center bg-transparent text-4xl leading-none text-white/85"
                     >
                       +
                     </button>
