@@ -115,6 +115,41 @@ export default function Hero() {
     }
   }
 
+  // ----- voice result → translate → prompt text -----
+  async function handleVoiceResult(rawText: string, langCode: string) {
+    try {
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: rawText,
+          sourceLang: voiceLang === "auto" ? "auto" : langCode,
+          targetLang: "en", // everything into English for the prompt
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Translate API failed");
+      }
+
+      const data = await res.json();
+      const translatedText: string = data?.translatedText || rawText;
+
+      setPromptText((prev) =>
+        prev ? `${prev} ${translatedText}` : translatedText
+      );
+    } catch (err) {
+      console.error("[translate] error, falling back to raw text:", err);
+      // fallback – just use whatever we got from speech
+      setPromptText((prev) => (prev ? `${prev} ${rawText}` : rawText));
+      toast({
+        title: "Translate issue",
+        description:
+          "Couldn’t translate with the API, using the raw speech text instead.",
+      });
+    }
+  }
+
   // ----- Voice input -----
   function initRecognition() {
     if (typeof window === "undefined") return null;
@@ -151,7 +186,8 @@ export default function Hero() {
       const text = Array.from(event.results)
         .map((r: any) => r[0].transcript)
         .join(" ");
-      setPromptText((prev) => (prev ? `${prev} ${text}` : text));
+      // after we get text → send to translate
+      void handleVoiceResult(text, langCode);
     };
 
     recognition.onerror = (event: any) => {
@@ -448,7 +484,7 @@ export default function Hero() {
                         <div className="mt-1 border-t border-white/10 px-4 pt-2.5 pb-3 text-[11px] text-white/60">
                           <div className="mb-1.5">
                             <span className="uppercase tracking-[0.12em] text-[10px] text-white/40">
-                              Voice input language
+                              Voice input language → translated to English
                             </span>
                           </div>
                           <select
