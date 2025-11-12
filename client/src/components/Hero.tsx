@@ -164,8 +164,9 @@ export default function Hero() {
         <div className="mt-12 flex justify-center">
           <div className="w-full max-w-3xl rounded-[32px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[2px] shadow-[0_22px_60px_rgba(15,23,42,0.5)]">
             <form onSubmit={handleCreate}>
-              <div className="flex flex-col gap-4 rounded-[24px] bg-[#292929] px-8 py-7 sm:px-10 sm:py-8">
-                {/* Input row */}
+              {/* Fixed-height inner shell so icons sit low, text on top */}
+              <div className="flex h-[96px] flex-col justify-between rounded-[24px] bg-[#292929] px-8 py-4 sm:px-10 sm:py-4">
+                {/* Input row (top) */}
                 <div className="flex items-center">
                   <label className="sr-only" htmlFor="hero-idea-input">
                     Describe your website or app idea
@@ -180,65 +181,81 @@ export default function Hero() {
                   />
                 </div>
 
-                {/* Icons row */}
-                <div className="flex items-center justify-between gap-4">
+                {/* Icons row (bottom) */}
+                <div className="flex items-end justify-between">
                   {/* Left cluster: + and Attach */}
                   <div className="flex items-center gap-3">
-                    {/* Plus button */}
+                    {/* Plus button – outline circle, no fill */}
                     <button
                       type="button"
-                      className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl leading-none text-white/85 transition hover:bg-white/10"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-transparent text-lg leading-none text-white/85"
                     >
                       +
                     </button>
 
-                    {/* Attach pill (hidden on very small screens) */}
+                    {/* Attach pill – paperclip + text, outline only */}
                     <button
                       type="button"
-                      className="hidden items-center gap-2 rounded-full border border-white/14 bg-white/5 px-4 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 sm:inline-flex"
+                      className="hidden items-center gap-2 rounded-full border border-white/22 bg-transparent px-4 py-1.5 text-xs font-medium text-white/80 sm:inline-flex"
                     >
-                      <span className="inline-block h-[14px] w-[14px] rounded-[3px] border border-white/40" />
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        className="h-4 w-4"
+                      >
+                        <path
+                          d="M16.5 6.75 10 13.25a2.5 2.5 0 1 1-3.54-3.54l6.5-6.5a3.5 3.5 0 0 1 4.95 4.95l-7.07 7.07a4 4 0 1 1-5.66-5.66l5.13-5.13"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                       <span>Attach</span>
                     </button>
                   </div>
 
-                  {/* Right cluster: Mic and Send */}
+                  {/* Right cluster: Mic + Send */}
                   <div className="flex items-center gap-3">
-                    {/* Mic button */}
+                    {/* Mic button – outline circle with bars */}
                     <button
                       type="button"
-                      className="hidden h-10 w-10 items-center justify-center rounded-full bg-white/5 text-white/75 transition hover:bg-white/10 sm:flex"
+                      className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/22 bg-transparent text-white/80 sm:flex"
                     >
                       <span className="sr-only">Record voice prompt</span>
                       <svg
                         viewBox="0 0 24 24"
                         aria-hidden="true"
-                        className="h-5 w-5"
+                        className="h-4 w-4"
                       >
-                        <path
-                          d="M12 3a3 3 0 0 0-3 3v4a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"
-                          fill="currentColor"
-                        />
-                        <path
-                          d="M7 11a1 1 0 1 0-2 0 7 7 0 0 0 6 6.93V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.07A7 7 0 0 0 19 11a1 1 0 1 0-2 0 5 5 0 1 1-10 0Z"
-                          fill="currentColor"
-                        />
+                        <g
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                        >
+                          <line x1="6.5" y1="10" x2="6.5" y2="14" />
+                          <line x1="10" y1="8" x2="10" y2="16" />
+                          <line x1="13.5" y1="9" x2="13.5" y2="15" />
+                          <line x1="17" y1="11" x2="17" y2="13" />
+                        </g>
                       </svg>
                     </button>
 
-                    {/* Send button (submit) */}
+                    {/* Send button – solid white circle with up arrow */}
                     <button
                       type="submit"
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
                     >
                       <span className="sr-only">Send</span>
                       <svg
                         viewBox="0 0 24 24"
                         aria-hidden="true"
-                        className="h-5 w-5"
+                        className="h-4 w-4"
                       >
                         <path
-                          d="M5 12h8.586l-3.293 3.293a1 1 0 1 0 1.414 1.414l5-5a1 1 0 0 0 0-1.414l-5-5a1 1 0 0 0-1.414 1.414L13.586 11H5a1 1 0 1 0 0 2Z"
+                          d="M12 4.5a1 1 0 0 1 .7.29l5 5a1 1 0 0 1-1.4 1.42L13 7.9V18a1 1 0 1 1-2 0V7.9l-3.3 3.31a1 1 0 0 1-1.4-1.42l5-5A1 1 0 0 1 12 4.5Z"
                           fill="currentColor"
                         />
                       </svg>
