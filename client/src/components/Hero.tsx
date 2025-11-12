@@ -84,124 +84,34 @@ export default function Hero() {
           <div>
             <div className="leading-[0.8] tracking-[0.03em] uppercase text-[clamp(3.4rem,7vw,5.8rem)] font-extrabold">
               {/* BUILD */}
-              <div style={{ marginLeft: "0ch" }}>
-                <span
-                  style={{
-                    fontFamily: '"Blenny", system-ui, sans-serif',
-                  }}
-                >
-                  BUIL
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Glodok Display", system-ui, sans-serif',
-                  }}
-                >
-                  D
-                </span>
+              <div>
+                <span style={{ fontFamily: '"blenny", sans-serif' }}>BUIL</span>
+                <span style={{ fontFamily: "glodok, sans-serif" }}>D</span>
               </div>
 
-              {/* SMARTER  (3 spaces indent) */}
-              <div style={{ marginLeft: "3ch" }}>
-                <span
-                  style={{
-                    fontFamily: '"Glodok Display", system-ui, sans-serif',
-                  }}
-                >
-                  SMA
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Courage", system-ui, sans-serif',
-                  }}
-                >
-                  R
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Alfarn", system-ui, sans-serif',
-                  }}
-                >
-                  TE
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Courage", system-ui, sans-serif',
-                  }}
-                >
-                  R
-                </span>
+              {/* SMARTER */}
+              <div>
+                <span style={{ fontFamily: "glodok, sans-serif" }}>SMA</span>
+                <span style={{ fontFamily: "courage, sans-serif" }}>R</span>
+                <span style={{ fontFamily: '"alfarn", sans-serif' }}>TE</span>
+                <span style={{ fontFamily: "courage, sans-serif" }}>R</span>
               </div>
 
-              {/* LAUNCH  (12 spaces indent) */}
-              <div style={{ marginLeft: "12ch" }}>
-                <span
-                  style={{
-                    fontFamily: '"Courage", system-ui, sans-serif',
-                  }}
-                >
-                  L
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Blenny", system-ui, sans-serif',
-                  }}
-                >
-                  A
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Alfarn", system-ui, sans-serif',
-                  }}
-                >
-                  UN
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Courage", system-ui, sans-serif',
-                  }}
-                >
-                  C
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Glodok Display", system-ui, sans-serif',
-                  }}
-                >
-                  H
-                </span>
+              {/* LAUNCH */}
+              <div>
+                <span style={{ fontFamily: "courage, sans-serif" }}>L</span>
+                <span style={{ fontFamily: '"blenny", sans-serif' }}>A</span>
+                <span style={{ fontFamily: '"alfarn", sans-serif' }}>UN</span>
+                <span style={{ fontFamily: "courage, sans-serif" }}>C</span>
+                <span style={{ fontFamily: "glodok, sans-serif" }}>H</span>
               </div>
 
-              {/* FASTER  (21 spaces indent) */}
-              <div style={{ marginLeft: "21ch" }}>
-                <span
-                  style={{
-                    fontFamily: '"Courage", system-ui, sans-serif',
-                  }}
-                >
-                  F
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Flegrei", system-ui, sans-serif',
-                  }}
-                >
-                  A
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Alfarn", system-ui, sans-serif',
-                  }}
-                >
-                  S
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"Courage", system-ui, sans-serif',
-                  }}
-                >
-                  TER
-                </span>
+              {/* FASTER */}
+              <div>
+                <span style={{ fontFamily: "courage, sans-serif" }}>F</span>
+                <span style={{ fontFamily: '"flegrei", sans-serif' }}>A</span>
+                <span style={{ fontFamily: '"alfarn", sans-serif' }}>S</span>
+                <span style={{ fontFamily: "courage, sans-serif" }}>TER</span>
               </div>
             </div>
           </div>
