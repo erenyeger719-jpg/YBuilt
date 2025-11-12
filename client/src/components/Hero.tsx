@@ -111,15 +111,15 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* PROMPT BAR — Lovable-style */}
-        <div className="mt-10 flex justify-center">
-          <div className="w-full max-w-3xl rounded-[40px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[1.5px] shadow-[0_22px_60px_rgba(15,23,42,0.45)]">
+        {/* PROMPT BAR — Lovable-style, bigger + #292929 */}
+        <div className="mt-12 flex justify-center">
+          <div className="w-full max-w-4xl rounded-[44px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[2px] shadow-[0_22px_60px_rgba(15,23,42,0.5)]">
             <form onSubmit={handleCreate}>
-              <div className="flex items-center gap-3 rounded-[36px] bg-[#181818] px-4 py-3.5 sm:px-5 sm:py-4">
+              <div className="flex items-center gap-4 rounded-[40px] bg-[#292929] px-6 py-4 sm:px-7 sm:py-4.5">
                 {/* Left: plus button */}
                 <button
                   type="button"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/12 bg-white/5 text-lg leading-none text-white/80 transition hover:bg-white/10"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl leading-none text-white/85 transition hover:bg-white/10"
                 >
                   +
                 </button>
@@ -127,7 +127,7 @@ export default function Hero() {
                 {/* Attach pill (hidden on very small screens) */}
                 <button
                   type="button"
-                  className="hidden items-center gap-2 rounded-full border border-white/12 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-white/75 transition hover:bg-white/10 sm:inline-flex"
+                  className="hidden items-center gap-2 rounded-full border border-white/14 bg-white/5 px-4 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10 sm:inline-flex"
                 >
                   <span className="inline-block h-[14px] w-[14px] rounded-[3px] border border-white/40" />
                   <span>Attach</span>
@@ -143,13 +143,13 @@ export default function Hero() {
                   value={promptText}
                   onChange={(e) => setPromptText(e.target.value)}
                   placeholder="Ask Ybuilt to create a dashboard, app, or site…"
-                  className="flex-1 border-none bg-transparent text-sm text-slate-50 placeholder:text-slate-400 outline-none ring-0 focus:outline-none"
+                  className="flex-1 border-none bg-transparent text-sm sm:text-base text-slate-50 placeholder:text-slate-400 outline-none ring-0 focus:outline-none"
                 />
 
                 {/* Mic button */}
                 <button
                   type="button"
-                  className="hidden h-9 w-9 items-center justify-center rounded-full bg-white/5 text-white/70 transition hover:bg-white/10 sm:flex"
+                  className="hidden h-10 w-10 items-center justify-center rounded-full bg-white/5 text-white/75 transition hover:bg-white/10 sm:flex"
                 >
                   <span className="sr-only">Record voice prompt</span>
                   <svg
@@ -171,7 +171,7 @@ export default function Hero() {
                 {/* Send button (submit) */}
                 <button
                   type="submit"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
                 >
                   <span className="sr-only">Send</span>
                   <svg
