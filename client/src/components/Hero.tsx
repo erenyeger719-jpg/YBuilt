@@ -185,18 +185,18 @@ export default function Hero() {
                 <div className="flex items-end justify-between pb-1">
                   {/* Left cluster: + and Attach */}
                   <div className="flex items-center gap-1 -ml-5">
-                    {/* + icon – same size, thinner stroke (lighter weight) and 1 step left */}
+                    {/* Plus icon – thinner, same size, moved slightly left */}
                     <button
                       type="button"
-                      className="flex h-9 w-9 items-center justify-center bg-transparent text-4xl font-extralight leading-none text-white/85"
+                      className="flex h-9 w-9 items-center justify-center bg-transparent text-4xl font-light leading-none text-white/85"
                     >
                       +
                     </button>
 
-                    {/* Attach – 2 “spaces” left (cluster already pulled left) + 0.5 line lower */}
+                    {/* Attach pill – shifted slightly left + slightly lower */}
                     <button
                       type="button"
-                      className="hidden mt-1 items-center gap-2 rounded-full border border-white/22 bg-transparent px-4 py-1.5 text-xs font-medium text-white/80 sm:inline-flex"
+                      className="hidden mt-0.5 items-center gap-2 rounded-full border border-white/22 bg-transparent px-4 py-1.5 text-xs font-medium text-white/80 sm:inline-flex"
                     >
                       <svg
                         viewBox="0 0 24 24"
@@ -217,11 +217,11 @@ export default function Hero() {
                   </div>
 
                   {/* Right cluster: Mic + Send */}
-                  <div className="flex items-center gap-3 mr-4">
-                    {/* Mic – nudged right inside cluster */}
+                  <div className="flex items-center gap-3 -mr-5">
+                    {/* Mic button */}
                     <button
                       type="button"
-                      className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/22 bg-transparent text-white/80 sm:flex mr-1"
+                      className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/22 bg-transparent text-white/80 sm:flex"
                     >
                       <span className="sr-only">Record voice prompt</span>
                       <svg
@@ -243,10 +243,10 @@ export default function Hero() {
                       </svg>
                     </button>
 
-                    {/* Send – nudged right a bit */}
+                    {/* Send button */}
                     <button
                       type="submit"
-                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100 ml-1"
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
                     >
                       <span className="sr-only">Send</span>
                       <svg
