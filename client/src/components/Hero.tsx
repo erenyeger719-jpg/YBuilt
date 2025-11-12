@@ -75,9 +75,9 @@ export default function Hero() {
   }
 
   return (
-    // Pull hero up behind the header (-mt-14) and push content back down (pt-14)
+    // pull hero further up behind the header
     <section
-      className="relative overflow-hidden text-white -mt-14 pt-14"
+      className="relative overflow-hidden text-white -mt-20 pt-20"
       style={{
         background: `
           linear-gradient(
