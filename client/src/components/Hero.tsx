@@ -185,10 +185,10 @@ export default function Hero() {
                 <div className="flex items-end justify-between pb-1">
                   {/* Left cluster: + and Attach */}
                   <div className="flex items-center gap-1 -ml-5">
-                    {/* Plus icon – thinner, same size, moved slightly left */}
+                    {/* Plus icon – now inside a circle, centered */}
                     <button
                       type="button"
-                      className="flex h-9 w-9 items-center justify-center bg-transparent text-4xl font-light leading-none text-white/85"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/22 bg-transparent text-4xl font-light leading-none text-white/85"
                     >
                       +
                     </button>
