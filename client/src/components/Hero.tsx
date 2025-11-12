@@ -115,7 +115,7 @@ export default function Hero() {
     }
   }
 
-  // ----- voice result → translate → prompt text -----
+  // ---- voice result → translate → prompt text ----
   async function handleVoiceResult(rawText: string, langCode: string) {
     try {
       const res = await fetch("/api/translate", {
@@ -123,12 +123,15 @@ export default function Hero() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: rawText,
-          sourceLang: voiceLang === "auto" ? "auto" : langCode,
-          targetLang: "en", // everything into English for the prompt
+          // let backend auto-detect, unless you want to force:
+          sourceLang: "auto",
+          // everything into English for now
+          targetLang: "en",
         }),
       });
 
       if (!res.ok) {
+        console.error("[translate] HTTP error", res.status);
         throw new Error("Translate API failed");
       }
 
@@ -140,12 +143,11 @@ export default function Hero() {
       );
     } catch (err) {
       console.error("[translate] error, falling back to raw text:", err);
-      // fallback – just use whatever we got from speech
       setPromptText((prev) => (prev ? `${prev} ${rawText}` : rawText));
       toast({
         title: "Translate issue",
         description:
-          "Couldn’t translate with the API, using the raw speech text instead.",
+          "Translate API failed – using the raw speech text instead.",
       });
     }
   }
@@ -186,7 +188,6 @@ export default function Hero() {
       const text = Array.from(event.results)
         .map((r: any) => r[0].transcript)
         .join(" ");
-      // after we get text → send to translate
       void handleVoiceResult(text, langCode);
     };
 
@@ -484,7 +485,7 @@ export default function Hero() {
                         <div className="mt-1 border-t border-white/10 px-4 pt-2.5 pb-3 text-[11px] text-white/60">
                           <div className="mb-1.5">
                             <span className="uppercase tracking-[0.12em] text-[10px] text-white/40">
-                              Voice input language → translated to English
+                              Voice input language (speech engine)
                             </span>
                           </div>
                           <select
