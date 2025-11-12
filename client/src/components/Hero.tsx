@@ -75,14 +75,15 @@ export default function Hero() {
   }
 
   return (
-    <section className="relative overflow-hidden bg-white text-black">
+    // hero background inverted to black, text default white in this section
+    <section className="relative overflow-hidden bg-black text-white">
       {/* MAIN HERO CONTAINER */}
       <div className="mx-auto flex min-h-[calc(100vh-56px)] max-w-6xl flex-col px-4 pt-12 pb-16 sm:px-6 lg:px-8 lg:pt-16 lg:pb-20">
         {/* TOP ROW: billboard text + trust copy */}
         <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-end">
           {/* Left: BUILD / SMARTER / LAUNCH / FASTER with mixed fonts */}
           <div>
-            <p className="leading-[0.9] tracking-[0.03em] uppercase text-[clamp(3.4rem,7vw,5.8rem)] font-extrabold">
+            <p className="leading-[0.9] tracking-[0.03em] uppercase text-[clamp(3.4rem,7vw,5.8rem)] font-extrabold text-white">
               {/* BUILD */}
               <span className="block">
                 <span className="font-blenny">BUIL</span>
@@ -116,15 +117,15 @@ export default function Hero() {
             </p>
           </div>
 
-          {/* Right: trust / marketing copy */}
+          {/* Right: trust / marketing copy (kept readable on dark bg) */}
           <div className="flex items-end lg:items-start">
-            <div className="max-w-xs text-right text-[13px] leading-relaxed tracking-tight text-neutral-800 lg:ml-auto lg:pt-4 lg:text-left">
+            <div className="max-w-xs text-right text-[13px] leading-relaxed tracking-tight text-white/85 lg:ml-auto lg:pt-4 lg:text-left">
               <p className="mb-3 font-medium">
                 A focused product studio for people who want{" "}
                 <span className="font-semibold">real, working apps and sites</span>,
                 not just nice-looking mockups.
               </p>
-              <p className="text-neutral-600">
+              <p className="text-white/70">
                 Ybuilt gives you a single AI-assisted space to go from idea to
                 live product — UI, logic, and deployment in one flow — so you
                 can launch functional platforms, websites, and tools without
@@ -134,7 +135,7 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* PROMPT BAR — centered, narrower horizontally */}
+        {/* PROMPT BAR — unchanged (no color inversion here) */}
         <div className="mt-12 flex justify-center">
           <div className="w-full max-w-3xl rounded-[32px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[2px] shadow-[0_22px_60px_rgba(15,23,42,0.5)]">
             <form onSubmit={handleCreate}>
@@ -213,14 +214,14 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* BLACK STRIPES — unchanged */}
+        {/* STRIPES — inverted to white so they show on black */}
         <div className="mt-12 -mx-4 sm:-mx-6 lg:-mx-8">
-          <div className="relative left-1/2 w-screen -translate-x-1/2 border-t border-black/80 pt-6">
+          <div className="relative left-1/2 w-screen -translate-x-1/2 border-t border-white/60 pt-6">
             <div className="space-y-3">
-              <div className="h-[2px] bg-black" />
-              <div className="h-[4px] bg-black" />
-              <div className="h-[6px] bg-black" />
-              <div className="h-[18px] bg-black" />
+              <div className="h-[2px] bg-white" />
+              <div className="h-[4px] bg-white" />
+              <div className="h-[6px] bg-white" />
+              <div className="h-[18px] bg-white" />
             </div>
           </div>
         </div>
