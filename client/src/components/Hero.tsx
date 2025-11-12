@@ -184,19 +184,19 @@ export default function Hero() {
                 {/* Icons row (bottom) – all 4 aligned horizontally */}
                 <div className="flex items-end justify-between pb-1">
                   {/* Left cluster: + and Attach */}
-                  <div className="flex items-center gap-2 -ml-4">
-                    {/* Plus icon – bigger again, no circle */}
+                  <div className="flex items-center gap-1 -ml-5">
+                    {/* Plus icon – thinner, same size, moved slightly left */}
                     <button
                       type="button"
-                      className="flex h-9 w-9 items-center justify-center bg-transparent text-4xl leading-none text-white/85"
+                      className="flex h-9 w-9 items-center justify-center bg-transparent text-4xl font-light leading-none text-white/85"
                     >
                       +
                     </button>
 
-                    {/* Attach pill – paperclip + text */}
+                    {/* Attach pill – shifted slightly left + slightly lower */}
                     <button
                       type="button"
-                      className="hidden items-center gap-2 rounded-full border border-white/22 bg-transparent px-4 py-1.5 text-xs font-medium text-white/80 sm:inline-flex"
+                      className="hidden mt-0.5 items-center gap-2 rounded-full border border-white/22 bg-transparent px-4 py-1.5 text-xs font-medium text-white/80 sm:inline-flex"
                     >
                       <svg
                         viewBox="0 0 24 24"
@@ -217,8 +217,8 @@ export default function Hero() {
                   </div>
 
                   {/* Right cluster: Mic + Send */}
-                  <div className="flex items-center gap-3 -mr-4">
-                    {/* Mic button – outline circle with bars */}
+                  <div className="flex items-center gap-3 -mr-5">
+                    {/* Mic button */}
                     <button
                       type="button"
                       className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/22 bg-transparent text-white/80 sm:flex"
@@ -243,7 +243,7 @@ export default function Hero() {
                       </svg>
                     </button>
 
-                    {/* Send button – solid white circle with up arrow */}
+                    {/* Send button */}
                     <button
                       type="submit"
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
