@@ -75,9 +75,9 @@ export default function Hero() {
   }
 
   return (
-    // HERO with custom gradient background
+    // Pull hero up behind the header (-mt-14) and push content back down (pt-14)
     <section
-      className="relative overflow-hidden text-white"
+      className="relative overflow-hidden text-white -mt-14 pt-14"
       style={{
         background: `
           linear-gradient(
@@ -142,7 +142,7 @@ export default function Hero() {
             </p>
           </div>
 
-          {/* Right: trust / marketing copy (kept readable on dark bg) */}
+          {/* Right: trust / marketing copy */}
           <div className="flex items-end lg:items-start">
             <div className="max-w-xs text-right text-[13px] leading-relaxed tracking-tight text-white/85 lg:ml-auto lg:pt-4 lg:text-left">
               <p className="mb-3 font-medium">
@@ -160,7 +160,7 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* PROMPT BAR — unchanged */}
+        {/* PROMPT BAR */}
         <div className="mt-12 flex justify-center">
           <div className="w-full max-w-3xl rounded-[32px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[2px] shadow-[0_22px_60px_rgba(15,23,42,0.5)]">
             <form onSubmit={handleCreate}>
@@ -239,7 +239,7 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* STRIPES — still visible on dark part of gradient */}
+        {/* STRIPES */}
         <div className="mt-12 -mx-4 sm:-mx-6 lg:-mx-8">
           <div className="relative left-1/2 w-screen -translate-x-1/2 border-t border-white/60 pt-6">
             <div className="space-y-3">
