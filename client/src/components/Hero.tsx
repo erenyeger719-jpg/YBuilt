@@ -2,13 +2,46 @@
 import { useState, FormEvent, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { FiCamera, FiUploadCloud } from "react-icons/fi";
-import { SiFigma, SiGithub } from "react-icons/si";
+import { SiGithub } from "react-icons/si";
+
+const VOICE_LANG_OPTIONS = [
+  { code: "auto", label: "Auto (browser default)" },
+  { code: "en-US", label: "English (US)" },
+  { code: "en-GB", label: "English (UK)" },
+  { code: "en-IN", label: "English (India)" },
+
+  // Indian languages
+  { code: "hi-IN", label: "Hindi" },
+  { code: "bn-IN", label: "Bengali" },
+  { code: "ta-IN", label: "Tamil" },
+  { code: "te-IN", label: "Telugu" },
+  { code: "kn-IN", label: "Kannada" },
+  { code: "ml-IN", label: "Malayalam" },
+  { code: "mr-IN", label: "Marathi" },
+  { code: "gu-IN", label: "Gujarati" },
+  { code: "pa-IN", label: "Punjabi" },
+  { code: "or-IN", label: "Odia" },
+  { code: "ur-IN", label: "Urdu (India)" },
+
+  // Common global languages
+  { code: "es-ES", label: "Spanish (Spain)" },
+  { code: "es-MX", label: "Spanish (Mexico)" },
+  { code: "fr-FR", label: "French" },
+  { code: "de-DE", label: "German" },
+  { code: "pt-BR", label: "Portuguese (Brazil)" },
+  { code: "ru-RU", label: "Russian" },
+  { code: "zh-CN", label: "Chinese (Mandarin)" },
+  { code: "ja-JP", label: "Japanese" },
+  { code: "ko-KR", label: "Korean" },
+  { code: "ar-SA", label: "Arabic" },
+];
 
 export default function Hero() {
   const { toast } = useToast();
   const [promptText, setPromptText] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
+  const [voiceLang, setVoiceLang] = useState<string>("auto");
 
   const recognitionRef = useRef<any>(null);
   const plusMenuRef = useRef<HTMLDivElement | null>(null);
@@ -99,7 +132,19 @@ export default function Hero() {
     }
 
     const recognition = new SpeechRecognitionClass();
-    recognition.lang = "en-US";
+
+    let langCode: string;
+    if (voiceLang === "auto") {
+      if (typeof navigator !== "undefined" && navigator.language) {
+        langCode = navigator.language;
+      } else {
+        langCode = "en-US";
+      }
+    } else {
+      langCode = voiceLang;
+    }
+
+    recognition.lang = langCode;
     recognition.interimResults = false;
 
     recognition.onresult = (event: any) => {
@@ -113,7 +158,9 @@ export default function Hero() {
       console.error("[voice] error", event);
       toast({
         title: "Voice input error",
-        description: event?.error || "Something went wrong with voice capture.",
+        description:
+          event?.error ||
+          "Something went wrong with voice capture or this language.",
         variant: "destructive",
       });
       setIsListening(false);
@@ -134,11 +181,8 @@ export default function Hero() {
       return;
     }
 
-    let recognition = recognitionRef.current;
-    if (!recognition) {
-      recognition = initRecognition();
-      if (!recognition) return;
-    }
+    const recognition = initRecognition();
+    if (!recognition) return;
 
     try {
       recognition.start();
@@ -354,14 +398,24 @@ export default function Hero() {
                           <span>Take a screenshot</span>
                         </button>
 
-                        {/* Import from Figma */}
+                        {/* Import from Figma – colorful inline SVG */}
                         <button
                           type="button"
                           onClick={() => handleMenuAction("figma")}
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
                         >
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5">
-                            <SiFigma className="h-4 w-4" />
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-[#111]">
+                            <svg
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                              className="h-4 w-4"
+                            >
+                              <circle cx="10" cy="6" r="2.2" fill="#F24E1E" />
+                              <circle cx="10" cy="12" r="2.2" fill="#A259FF" />
+                              <circle cx="10" cy="18" r="2.2" fill="#0ACF83" />
+                              <circle cx="16" cy="6" r="2.2" fill="#FF7262" />
+                              <circle cx="16" cy="12" r="2.2" fill="#1ABCFE" />
+                            </svg>
                           </span>
                           <span>Import from Figma</span>
                         </button>
@@ -389,6 +443,30 @@ export default function Hero() {
                           </span>
                           <span>Upload design / code file</span>
                         </button>
+
+                        {/* Voice language selector */}
+                        <div className="mt-1 border-t border-white/10 px-4 pt-2.5 pb-3 text-[11px] text-white/60">
+                          <div className="mb-1.5">
+                            <span className="uppercase tracking-[0.12em] text-[10px] text-white/40">
+                              Voice input language
+                            </span>
+                          </div>
+                          <select
+                            value={voiceLang}
+                            onChange={(e) => setVoiceLang(e.target.value)}
+                            className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-3 py-1.5 text-xs text-white outline-none focus:border-white/40"
+                          >
+                            {VOICE_LANG_OPTIONS.map((lang) => (
+                              <option
+                                key={lang.code}
+                                value={lang.code}
+                                className="bg-[#101010] text-white"
+                              >
+                                {lang.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     )}
 
