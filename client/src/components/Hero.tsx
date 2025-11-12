@@ -111,9 +111,9 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* PROMPT BAR — size & radius tweaked only */}
+        {/* PROMPT BAR — centered, narrower horizontally */}
         <div className="mt-12 flex justify-center">
-          <div className="w-full max-w-5xl rounded-[32px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[2px] shadow-[0_22px_60px_rgba(15,23,42,0.5)]">
+          <div className="w-full max-w-3xl rounded-[32px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[2px] shadow-[0_22px_60px_rgba(15,23,42,0.5)]">
             <form onSubmit={handleCreate}>
               <div className="flex items-center gap-4 rounded-[24px] bg-[#292929] px-8 py-9 sm:px-10 sm:py-9">
                 {/* Left: plus button */}
