@@ -80,40 +80,40 @@ export default function Hero() {
       <div className="mx-auto flex min-h-[calc(100vh-56px)] max-w-6xl flex-col px-4 pt-12 pb-16 sm:px-6 lg:px-8 lg:pt-16 lg:pb-20">
         {/* TOP ROW: billboard text + trust copy */}
         <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-end">
-          {/* Left: BUILD SMARTER LAUNCH FASTER */}
+          {/* Left: BUILD / SMARTER / LAUNCH / FASTER with mixed fonts */}
           <div>
-            <div className="leading-[0.8] tracking-[0.03em] uppercase text-[clamp(3.4rem,7vw,5.8rem)] font-extrabold">
+            <p className="leading-[0.9] tracking-[0.03em] uppercase text-[clamp(3.4rem,7vw,5.8rem)] font-extrabold">
               {/* BUILD */}
-              <div>
-                <span style={{ fontFamily: '"blenny", sans-serif' }}>BUIL</span>
-                <span style={{ fontFamily: "glodok, sans-serif" }}>D</span>
-              </div>
+              <span className="block">
+                <span className="font-blenny">BUIL</span>
+                <span className="font-glodok">D</span>
+              </span>
 
               {/* SMARTER */}
-              <div>
-                <span style={{ fontFamily: "glodok, sans-serif" }}>SMA</span>
-                <span style={{ fontFamily: "courage, sans-serif" }}>R</span>
-                <span style={{ fontFamily: '"alfarn", sans-serif' }}>TE</span>
-                <span style={{ fontFamily: "courage, sans-serif" }}>R</span>
-              </div>
+              <span className="block">
+                <span className="font-glodok">SMA</span>
+                <span className="font-courage">R</span>
+                <span className="font-alfarn">TE</span>
+                <span className="font-courage">R</span>
+              </span>
 
               {/* LAUNCH */}
-              <div>
-                <span style={{ fontFamily: "courage, sans-serif" }}>L</span>
-                <span style={{ fontFamily: '"blenny", sans-serif' }}>A</span>
-                <span style={{ fontFamily: '"alfarn", sans-serif' }}>UN</span>
-                <span style={{ fontFamily: "courage, sans-serif" }}>C</span>
-                <span style={{ fontFamily: "glodok, sans-serif" }}>H</span>
-              </div>
+              <span className="block">
+                <span className="font-courage">L</span>
+                <span className="font-blenny">A</span>
+                <span className="font-alfarn">UN</span>
+                <span className="font-courage">C</span>
+                <span className="font-glodok">H</span>
+              </span>
 
               {/* FASTER */}
-              <div>
-                <span style={{ fontFamily: "courage, sans-serif" }}>F</span>
-                <span style={{ fontFamily: '"flegrei", sans-serif' }}>A</span>
-                <span style={{ fontFamily: '"alfarn", sans-serif' }}>S</span>
-                <span style={{ fontFamily: "courage, sans-serif" }}>TER</span>
-              </div>
-            </div>
+              <span className="block">
+                <span className="font-courage">F</span>
+                <span className="font-flegrei">A</span>
+                <span className="font-alfarn">S</span>
+                <span className="font-courage">TER</span>
+              </span>
+            </p>
           </div>
 
           {/* Right: trust / marketing copy */}
@@ -121,10 +121,8 @@ export default function Hero() {
             <div className="max-w-xs text-right text-[13px] leading-relaxed tracking-tight text-neutral-800 lg:ml-auto lg:pt-4 lg:text-left">
               <p className="mb-3 font-medium">
                 A focused product studio for people who want{" "}
-                <span className="font-semibold">
-                  real, working apps and sites
-                </span>
-                , not just nice-looking mockups.
+                <span className="font-semibold">real, working apps and sites</span>,
+                not just nice-looking mockups.
               </p>
               <p className="text-neutral-600">
                 Ybuilt gives you a single AI-assisted space to go from idea to

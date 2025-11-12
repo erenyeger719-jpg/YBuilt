@@ -26,6 +26,73 @@
   font-display: swap;
 }
 
+/* === Custom font faces (self-hosted Adobe fonts) === */
+@font-face {
+  font-family: "blenny";
+  src: url("/fonts/blenny.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "glodok";
+  src: url("/fonts/glodok.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "courage";
+  src: url("/fonts/courage.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "alfarn";
+  src: url("/fonts/alfarn.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "flegrei";
+  src: url("/fonts/flegrei.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* === Small helper classes so we can swap fonts per chunk === */
+.font-blenny {
+  font-family: "blenny", sans-serif;
+  font-weight: 900;
+}
+
+.font-glodok {
+  font-family: "glodok", sans-serif;
+  font-weight: 400;
+}
+
+.font-courage {
+  font-family: "courage", sans-serif;
+  font-weight: 400;
+}
+
+.font-alfarn {
+  font-family: "alfarn", sans-serif;
+  font-weight: 400;
+}
+
+.font-flegrei {
+  font-family: "flegrei", sans-serif;
+  font-weight: 400;
+}
+
 /* CSS Vars for consistent usage */
 :root {
   --font-display: "Biospace", Cinzel, Marcellus, serif;
