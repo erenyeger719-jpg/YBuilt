@@ -75,7 +75,7 @@ export default function Hero() {
   }
 
   return (
-    <section className="relative overflow-hidden bg-[#F5F0EC] text-black">
+    <section className="relative overflow-hidden bg-white text-black">
       {/* MAIN HERO CONTAINER */}
       <div className="mx-auto flex min-h-[calc(100vh-56px)] max-w-6xl flex-col px-4 pt-12 pb-16 sm:px-6 lg:px-8 lg:pt-16 lg:pb-20">
         {/* TOP ROW: billboard text + trust copy */}
