@@ -185,15 +185,15 @@ export default function Hero() {
                 <div className="flex items-end justify-between pb-1">
                   {/* Left cluster: + and Attach */}
                   <div className="flex items-center gap-1 -ml-5">
-                    {/* Plus icon – now inside a circle, centered */}
+                    {/* Plus icon – smaller circle, centered, aligned with Attach */}
                     <button
                       type="button"
-                      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/22 bg-transparent text-4xl font-light leading-none text-white/85"
+                      className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-white/22 bg-transparent text-2xl font-light leading-[0] text-white/85"
                     >
                       +
                     </button>
 
-                    {/* Attach pill – shifted slightly left + slightly lower */}
+                    {/* Attach pill – unchanged */}
                     <button
                       type="button"
                       className="hidden mt-0.5 items-center gap-2 rounded-full border border-white/22 bg-transparent px-4 py-1.5 text-xs font-medium text-white/80 sm:inline-flex"
