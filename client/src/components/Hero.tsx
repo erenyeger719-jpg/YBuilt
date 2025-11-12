@@ -1,10 +1,16 @@
 // client/src/components/Hero.tsx
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Hero() {
   const { toast } = useToast();
   const [promptText, setPromptText] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
+
+  const recognitionRef = useRef<any>(null);
+  const plusMenuRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -73,6 +79,140 @@ export default function Hero() {
       });
     }
   }
+
+  // ----- Voice input -----
+  function initRecognition() {
+    if (typeof window === "undefined") return null;
+
+    const SpeechRecognitionClass =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionClass) {
+      toast({
+        title: "Voice input not available",
+        description: "Your browser doesn’t support speech recognition yet.",
+      });
+      return null;
+    }
+
+    const recognition = new SpeechRecognitionClass();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+
+    recognition.onresult = (event: any) => {
+      const text = Array.from(event.results)
+        .map((r: any) => r[0].transcript)
+        .join(" ");
+      setPromptText((prev) => (prev ? `${prev} ${text}` : text));
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("[voice] error", event);
+      toast({
+        title: "Voice input error",
+        description: event?.error || "Something went wrong with voice capture.",
+        variant: "destructive",
+      });
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    return recognition;
+  }
+
+  function handleToggleVoice() {
+    if (isListening) {
+      // stop current session
+      recognitionRef.current?.stop?.();
+      setIsListening(false);
+      return;
+    }
+
+    let recognition = recognitionRef.current;
+    if (!recognition) {
+      recognition = initRecognition();
+      if (!recognition) return;
+    }
+
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch (err) {
+      console.error("[voice] start error", err);
+      setIsListening(false);
+    }
+  }
+
+  useEffect(() => {
+    // cleanup on unmount
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop?.();
+      }
+    };
+  }, []);
+
+  // ----- Plus menu -----
+  function handleMenuAction(action: "screenshot" | "figma" | "github" | "upload") {
+    setIsPlusMenuOpen(false);
+
+    switch (action) {
+      case "screenshot":
+        toast({
+          title: "Screenshot capture",
+          description: "Hook this up to your capture flow (getDisplayMedia, etc.).",
+        });
+        break;
+      case "figma":
+        toast({
+          title: "Import from Figma",
+          description: "Open your Figma import flow here (OAuth / file picker).",
+        });
+        break;
+      case "github":
+        toast({
+          title: "Import from GitHub",
+          description: "Connect to GitHub and pull a repo or file here.",
+        });
+        break;
+      case "upload":
+        fileInputRef.current?.click();
+        break;
+    }
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    console.log("[upload] design/code file selected:", file);
+    toast({
+      title: "File selected",
+      description: `Ready to process: ${file.name}`,
+    });
+    // TODO: send file to your backend
+  }
+
+  useEffect(() => {
+    if (!isPlusMenuOpen) return;
+
+    function handleClickOutside(e: MouseEvent) {
+      if (!plusMenuRef.current) return;
+      if (!plusMenuRef.current.contains(e.target as Node)) {
+        setIsPlusMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isPlusMenuOpen]);
 
   return (
     // pull hero further up behind the header
@@ -184,16 +324,79 @@ export default function Hero() {
                 {/* Icons row (bottom) – all 4 aligned horizontally */}
                 <div className="flex items-end justify-between pb-1">
                   {/* Left cluster: + and Attach */}
-                  <div className="flex items-center gap-1 -ml-5">
-                    {/* Plus icon – smaller circle, centered, aligned with Attach */}
+                  <div className="relative flex items-center gap-1 -ml-5">
+                    {/* Plus icon – small circle, centered */}
                     <button
                       type="button"
+                      onClick={() => setIsPlusMenuOpen((v) => !v)}
                       className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-white/22 bg-transparent text-2xl font-light leading-[0] text-white/85"
                     >
                       +
                     </button>
 
-                    {/* Attach pill – unchanged */}
+                    {/* Plus menu */}
+                    {isPlusMenuOpen && (
+                      <div
+                        ref={plusMenuRef}
+                        className="absolute left-0 bottom-[120%] z-20 w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f] py-1 shadow-xl"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleMenuAction("screenshot")}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
+                        >
+                          {/* Screenshot icon */}
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/25 text-[13px]">
+                            ⬒
+                          </span>
+                          <span>Take a screenshot</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleMenuAction("figma")}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
+                        >
+                          {/* Figma dot stack */}
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#222] text-[11px]">
+                            ●●●
+                          </span>
+                          <span>Import from Figma</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleMenuAction("github")}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
+                        >
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#222] text-[12px]">
+                            GH
+                          </span>
+                          <span>Import from GitHub</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleMenuAction("upload")}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
+                        >
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#222] text-[12px]">
+                            ⬆
+                          </span>
+                          <span>Upload design / code file</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* hidden file input for upload */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+
+                    {/* Attach pill */}
                     <button
                       type="button"
                       className="hidden mt-0.5 items-center gap-2 rounded-full border border-white/22 bg-transparent px-4 py-1.5 text-xs font-medium text-white/80 sm:inline-flex"
@@ -218,10 +421,13 @@ export default function Hero() {
 
                   {/* Right cluster: Mic + Send */}
                   <div className="flex items-center gap-3 -mr-5">
-                    {/* Mic button */}
+                    {/* Mic button – hooked to voice input */}
                     <button
                       type="button"
-                      className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/22 bg-transparent text-white/80 sm:flex"
+                      onClick={handleToggleVoice}
+                      className={`hidden h-9 w-9 items-center justify-center rounded-full border ${
+                        isListening ? "border-white bg-white/10" : "border-white/22"
+                      } bg-transparent text-white/80 sm:flex`}
                     >
                       <span className="sr-only">Record voice prompt</span>
                       <svg
