@@ -127,7 +127,6 @@ export default function Hero() {
 
   function handleToggleVoice() {
     if (isListening) {
-      // stop current session
       recognitionRef.current?.stop?.();
       setIsListening(false);
       return;
@@ -149,7 +148,6 @@ export default function Hero() {
   }
 
   useEffect(() => {
-    // cleanup on unmount
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.onresult = null;
@@ -161,26 +159,28 @@ export default function Hero() {
   }, []);
 
   // ----- Plus menu -----
-  function handleMenuAction(action: "screenshot" | "figma" | "github" | "upload") {
+  function handleMenuAction(
+    action: "screenshot" | "figma" | "github" | "upload"
+  ) {
     setIsPlusMenuOpen(false);
 
     switch (action) {
       case "screenshot":
         toast({
           title: "Screenshot capture",
-          description: "Hook this up to your capture flow (getDisplayMedia, etc.).",
+          description: "Wire this into your getDisplayMedia or capture flow.",
         });
         break;
       case "figma":
         toast({
           title: "Import from Figma",
-          description: "Open your Figma import flow here (OAuth / file picker).",
+          description: "Open your Figma OAuth or file picker here.",
         });
         break;
       case "github":
         toast({
           title: "Import from GitHub",
-          description: "Connect to GitHub and pull a repo or file here.",
+          description: "Connect to GitHub and pull a repo or file.",
         });
         break;
       case "upload":
@@ -189,7 +189,7 @@ export default function Hero() {
     }
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: any) {
     const file = e.target.files?.[0];
     if (!file) return;
     console.log("[upload] design/code file selected:", file);
@@ -197,7 +197,7 @@ export default function Hero() {
       title: "File selected",
       description: `Ready to process: ${file.name}`,
     });
-    // TODO: send file to your backend
+    // TODO: actually send the file to your backend
   }
 
   useEffect(() => {
@@ -334,54 +334,145 @@ export default function Hero() {
                       +
                     </button>
 
-                    {/* Plus menu */}
+                    {/* Plus dropdown – now opens downward */}
                     {isPlusMenuOpen && (
                       <div
                         ref={plusMenuRef}
-                        className="absolute left-0 bottom-[120%] z-20 w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f] py-1 shadow-xl"
+                        className="absolute left-0 top-[135%] z-20 w-72 overflow-hidden rounded-2xl border border-white/12 bg-[#101010] py-1 shadow-xl shadow-black/70 backdrop-blur"
                       >
+                        {/* Take a screenshot */}
                         <button
                           type="button"
                           onClick={() => handleMenuAction("screenshot")}
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
                         >
-                          {/* Screenshot icon */}
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/25 text-[13px]">
-                            ⬒
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5">
+                            <svg
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                              className="h-4 w-4 text-white"
+                            >
+                              <rect
+                                x="4"
+                                y="7"
+                                width="16"
+                                height="11"
+                                rx="2"
+                                ry="2"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.6"
+                              />
+                              <path
+                                d="M10 5h4"
+                                stroke="currentColor"
+                                strokeWidth="1.6"
+                                strokeLinecap="round"
+                              />
+                              <circle
+                                cx="12"
+                                cy="12"
+                                r="2.1"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.6"
+                              />
+                            </svg>
                           </span>
                           <span>Take a screenshot</span>
                         </button>
 
+                        {/* Import from Figma */}
                         <button
                           type="button"
                           onClick={() => handleMenuAction("figma")}
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
                         >
-                          {/* Figma dot stack */}
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#222] text-[11px]">
-                            ●●●
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5">
+                            <svg
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                              className="h-4 w-4 text-white"
+                            >
+                              <g
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.6"
+                              >
+                                <circle cx="10" cy="6.5" r="2" />
+                                <circle cx="10" cy="12" r="2" />
+                                <circle cx="10" cy="17.5" r="2" />
+                                <circle cx="15" cy="9.25" r="2" />
+                                <path d="M13 14.75a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z" />
+                              </g>
+                            </svg>
                           </span>
                           <span>Import from Figma</span>
                         </button>
 
+                        {/* Import from GitHub (code-brackets icon) */}
                         <button
                           type="button"
                           onClick={() => handleMenuAction("github")}
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
                         >
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#222] text-[12px]">
-                            GH
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5">
+                            <svg
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                              className="h-4 w-4 text-white"
+                            >
+                              <path
+                                d="M9 6 5 12l4 6M15 6l4 6-4 6"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.6"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
                           </span>
                           <span>Import from GitHub</span>
                         </button>
 
+                        {/* Upload design / code file */}
                         <button
                           type="button"
                           onClick={() => handleMenuAction("upload")}
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-white/90 hover:bg-white/5"
                         >
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#222] text-[12px]">
-                            ⬆
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5">
+                            <svg
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                              className="h-4 w-4 text-white"
+                            >
+                              <path
+                                d="M12 15V6"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.6"
+                                strokeLinecap="round"
+                              />
+                              <path
+                                d="M8.5 9.5 12 6l3.5 3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.6"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              <rect
+                                x="5"
+                                y="15"
+                                width="14"
+                                height="3"
+                                rx="1.2"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.6"
+                              />
+                            </svg>
                           </span>
                           <span>Upload design / code file</span>
                         </button>
