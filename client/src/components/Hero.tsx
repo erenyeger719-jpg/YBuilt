@@ -109,7 +109,12 @@ export default function Hero() {
               {/* FASTER */}
               <span className="block">
                 <span className="font-courage">F</span>
-                <span className="font-flegrei">A</span>
+                <span
+                  className="font-flegrei align-baseline"
+                  style={{ fontFamily: '"flegrei", sans-serif', fontWeight: 400 }}
+                >
+                  A
+                </span>
                 <span className="font-alfarn">S</span>
                 <span className="font-courage">TER</span>
               </span>
