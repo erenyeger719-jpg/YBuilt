@@ -82,9 +82,9 @@ export default function Hero() {
         <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-end">
           {/* Left: BUILD SMARTER LAUNCH FASTER */}
           <div>
-            <p className="leading-[0.8] tracking-[0.03em] uppercase text-[clamp(3.4rem,7vw,5.8rem)] font-extrabold">
+            <div className="leading-[0.8] tracking-[0.03em] uppercase text-[clamp(3.4rem,7vw,5.8rem)] font-extrabold">
               {/* BUILD */}
-              <span className="block">
+              <div style={{ marginLeft: "0ch" }}>
                 <span
                   style={{
                     fontFamily: '"Blenny", system-ui, sans-serif',
@@ -99,13 +99,10 @@ export default function Hero() {
                 >
                   D
                 </span>
-              </span>
+              </div>
 
-              {/* SMARTER – indented ~3 spaces */}
-              <span
-                className="block"
-                style={{ paddingLeft: "3ch" }} // ≈ 3 spaces
-              >
+              {/* SMARTER  (3 spaces indent) */}
+              <div style={{ marginLeft: "3ch" }}>
                 <span
                   style={{
                     fontFamily: '"Glodok Display", system-ui, sans-serif',
@@ -115,35 +112,32 @@ export default function Hero() {
                 </span>
                 <span
                   style={{
-                    fontFamily: '"Courage Regular", system-ui, sans-serif',
+                    fontFamily: '"Courage", system-ui, sans-serif',
                   }}
                 >
                   R
                 </span>
                 <span
                   style={{
-                    fontFamily: '"Alfarn Regular", system-ui, sans-serif',
+                    fontFamily: '"Alfarn", system-ui, sans-serif',
                   }}
                 >
                   TE
                 </span>
                 <span
                   style={{
-                    fontFamily: '"Courage Regular", system-ui, sans-serif',
+                    fontFamily: '"Courage", system-ui, sans-serif',
                   }}
                 >
                   R
                 </span>
-              </span>
+              </div>
 
-              {/* LAUNCH – indented ~12 spaces */}
-              <span
-                className="block"
-                style={{ paddingLeft: "12ch" }} // ≈ 12 spaces
-              >
+              {/* LAUNCH  (12 spaces indent) */}
+              <div style={{ marginLeft: "12ch" }}>
                 <span
                   style={{
-                    fontFamily: '"Courage Regular", system-ui, sans-serif',
+                    fontFamily: '"Courage", system-ui, sans-serif',
                   }}
                 >
                   L
@@ -157,14 +151,14 @@ export default function Hero() {
                 </span>
                 <span
                   style={{
-                    fontFamily: '"Alfarn Regular", system-ui, sans-serif',
+                    fontFamily: '"Alfarn", system-ui, sans-serif',
                   }}
                 >
                   UN
                 </span>
                 <span
                   style={{
-                    fontFamily: '"Courage Regular", system-ui, sans-serif',
+                    fontFamily: '"Courage", system-ui, sans-serif',
                   }}
                 >
                   C
@@ -176,43 +170,40 @@ export default function Hero() {
                 >
                   H
                 </span>
-              </span>
+              </div>
 
-              {/* FASTER – indented ~21 spaces */}
-              <span
-                className="block"
-                style={{ paddingLeft: "21ch" }} // ≈ 21 spaces
-              >
+              {/* FASTER  (21 spaces indent) */}
+              <div style={{ marginLeft: "21ch" }}>
                 <span
                   style={{
-                    fontFamily: '"Courage Regular", system-ui, sans-serif',
+                    fontFamily: '"Courage", system-ui, sans-serif',
                   }}
                 >
                   F
                 </span>
                 <span
                   style={{
-                    fontFamily: '"Flegrei Regular", system-ui, sans-serif',
+                    fontFamily: '"Flegrei", system-ui, sans-serif',
                   }}
                 >
                   A
                 </span>
                 <span
                   style={{
-                    fontFamily: '"Alfarn Regular", system-ui, sans-serif',
+                    fontFamily: '"Alfarn", system-ui, sans-serif',
                   }}
                 >
                   S
                 </span>
                 <span
                   style={{
-                    fontFamily: '"Courage Regular", system-ui, sans-serif',
+                    fontFamily: '"Courage", system-ui, sans-serif',
                   }}
                 >
                   TER
                 </span>
-              </span>
-            </p>
+              </div>
+            </div>
           </div>
 
           {/* Right: trust / marketing copy */}
@@ -220,8 +211,10 @@ export default function Hero() {
             <div className="max-w-xs text-right text-[13px] leading-relaxed tracking-tight text-neutral-800 lg:ml-auto lg:pt-4 lg:text-left">
               <p className="mb-3 font-medium">
                 A focused product studio for people who want{" "}
-                <span className="font-semibold">real, working apps and sites</span>,
-                not just nice-looking mockups.
+                <span className="font-semibold">
+                  real, working apps and sites
+                </span>
+                , not just nice-looking mockups.
               </p>
               <p className="text-neutral-600">
                 Ybuilt gives you a single AI-assisted space to go from idea to
