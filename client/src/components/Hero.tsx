@@ -1,6 +1,5 @@
 // client/src/components/Hero.tsx
 import { useState, FormEvent } from "react";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Hero() {
@@ -112,47 +111,87 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* PROMPT BAR — cute, centered */}
+        {/* PROMPT BAR — Lovable-style */}
         <div className="mt-10 flex justify-center">
-          <div className="w-full max-w-2xl rounded-3xl border border-slate-200/70 bg-gradient-to-r from-[#fdf2ff] via-[#eef3ff] to-[#e8fbff] p-3 shadow-[0_20px_55px_rgba(15,23,42,0.16)] backdrop-blur">
-            <form
-              className="flex flex-col gap-3 sm:flex-row sm:items-center"
-              onSubmit={handleCreate}
-            >
-              <label className="sr-only" htmlFor="hero-idea-input">
-                Describe your website or app idea
-              </label>
-              <input
-                id="hero-idea-input"
-                type="text"
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="Describe your website or app idea…"
-                className="w-full rounded-2xl border border-slate-200/60 bg-white/90 px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-400/30"
-              />
+          <div className="w-full max-w-3xl rounded-[40px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[1.5px] shadow-[0_22px_60px_rgba(15,23,42,0.45)]">
+            <form onSubmit={handleCreate}>
+              <div className="flex items-center gap-3 rounded-[36px] bg-[#181818] px-4 py-3.5 sm:px-5 sm:py-4">
+                {/* Left: plus button */}
+                <button
+                  type="button"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/12 bg-white/5 text-lg leading-none text-white/80 transition hover:bg-white/10"
+                >
+                  +
+                </button>
 
-              <Button
-                type="submit"
-                className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
-              >
-                Create
-              </Button>
+                {/* Attach pill (hidden on very small screens) */}
+                <button
+                  type="button"
+                  className="hidden items-center gap-2 rounded-full border border-white/12 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-white/75 transition hover:bg-white/10 sm:inline-flex"
+                >
+                  <span className="inline-block h-[14px] w-[14px] rounded-[3px] border border-white/40" />
+                  <span>Attach</span>
+                </button>
+
+                {/* Input */}
+                <label className="sr-only" htmlFor="hero-idea-input">
+                  Describe your website or app idea
+                </label>
+                <input
+                  id="hero-idea-input"
+                  type="text"
+                  value={promptText}
+                  onChange={(e) => setPromptText(e.target.value)}
+                  placeholder="Ask Ybuilt to create a dashboard, app, or site…"
+                  className="flex-1 border-none bg-transparent text-sm text-slate-50 placeholder:text-slate-400 outline-none ring-0 focus:outline-none"
+                />
+
+                {/* Mic button */}
+                <button
+                  type="button"
+                  className="hidden h-9 w-9 items-center justify-center rounded-full bg-white/5 text-white/70 transition hover:bg-white/10 sm:flex"
+                >
+                  <span className="sr-only">Record voice prompt</span>
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                  >
+                    <path
+                      d="M12 3a3 3 0 0 0-3 3v4a3 3 0 1 0 6 0V6a3 3 0 0 0-3-3Z"
+                      fill="currentColor"
+                    />
+                    <path
+                      d="M7 11a1 1 0 1 0-2 0 7 7 0 0 0 6 6.93V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.07A7 7 0 0 0 19 11a1 1 0 1 0-2 0 5 5 0 1 1-10 0Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </button>
+
+                {/* Send button (submit) */}
+                <button
+                  type="submit"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
+                >
+                  <span className="sr-only">Send</span>
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                  >
+                    <path
+                      d="M5 12h8.586l-3.293 3.293a1 1 0 1 0 1.414 1.414l5-5a1 1 0 0 0 0-1.414l-5-5a1 1 0 0 0-1.414 1.414L13.586 11H5a1 1 0 1 0 0 2Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </button>
+              </div>
             </form>
-
-            <div className="mt-2 flex items-center justify-center">
-              <button
-                type="button"
-                className="text-xs font-medium text-slate-600 underline-offset-4 transition hover:text-slate-900 hover:underline"
-              >
-                or Explore previews →
-              </button>
-            </div>
           </div>
         </div>
 
-        {/* BLACK STRIPES — moved up, full-width, 4 lines, 1:2:3:9 thickness */}
+        {/* BLACK STRIPES — full width, 4 lines, 1:2:3:9 ratio */}
         <div className="mt-12 -mx-4 sm:-mx-6 lg:-mx-8">
-          {/* Make the stripes span the whole viewport width */}
           <div className="relative left-1/2 w-screen -translate-x-1/2 border-t border-black/80 pt-6">
             <div className="space-y-3">
               <div className="h-[2px] bg-black" />
