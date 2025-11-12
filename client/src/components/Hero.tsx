@@ -75,8 +75,33 @@ export default function Hero() {
   }
 
   return (
-    // hero background inverted to black, text default white in this section
-    <section className="relative overflow-hidden bg-black text-white">
+    // HERO with custom gradient background
+    <section
+      className="relative overflow-hidden text-white"
+      style={{
+        background: `
+          linear-gradient(
+            180deg,
+            #171717 0%,
+            #171717 33%,
+            #191919 38%,
+            #1A1D22 43%,
+            #242F40 48%,
+            #283854 53%,
+            #4262A3 58%,
+            #587CC9 63%,
+            #698AD5 68%,
+            #8B97DE 73%,
+            #C89EE1 78%,
+            #D499D9 83%,
+            #F27166 88%,
+            #F27361 92%,
+            #F16E3C 96%,
+            #F16D0B 100%
+          )
+        `,
+      }}
+    >
       {/* MAIN HERO CONTAINER */}
       <div className="mx-auto flex min-h-[calc(100vh-56px)] max-w-6xl flex-col px-4 pt-12 pb-16 sm:px-6 lg:px-8 lg:pt-16 lg:pb-20">
         {/* TOP ROW: billboard text + trust copy */}
@@ -135,7 +160,7 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* PROMPT BAR — unchanged (no color inversion here) */}
+        {/* PROMPT BAR — unchanged */}
         <div className="mt-12 flex justify-center">
           <div className="w-full max-w-3xl rounded-[32px] bg-gradient-to-r from-[#6c7dff] via-[#c26bff] to-[#f28ac1] p-[2px] shadow-[0_22px_60px_rgba(15,23,42,0.5)]">
             <form onSubmit={handleCreate}>
@@ -214,7 +239,7 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* STRIPES — inverted to white so they show on black */}
+        {/* STRIPES — still visible on dark part of gradient */}
         <div className="mt-12 -mx-4 sm:-mx-6 lg:-mx-8">
           <div className="relative left-1/2 w-screen -translate-x-1/2 border-t border-white/60 pt-6">
             <div className="space-y-3">
