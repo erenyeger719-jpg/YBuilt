@@ -97,41 +97,29 @@ const DEPLOY_DESCRIPTIONS = {
   custom: "We'll ask for your provider details inside the Workspace.",
 } as const;
 
-// --- Pure vertical Studio background using all hero colours ---
-// Order: dark → blue → pink → purple → orange runway
-// Stops are spaced mathematically across 0–100% so the darks own ~top 1/3.
+// --- Studio background: EXACT copy of Hero gradient ---
 const STUDIO_BG_CANVAS: CSSProperties = {
   background: `
     linear-gradient(
       180deg,
-      /* Dark band (~0–33%) */
       #171717 0%,
-      #191919 8%,
-      #1A1D22 17%,
-      #242F40 25%,
-
-      /* Blues (~33–60%) */
-      #283854 33%,
-      #4262A3 38%,
-      #587CC9 44%,
-      #698AD5 49%,
-      #8B97DE 55%,
-
-      /* Pinks (~60–74%) */
-      #F27166 60%,
-      #F27361 67%,
-
-      /* Purples (~74–88%) */
-      #C89EE1 74%,
-      #D499D9 81%,
-
-      /* Oranges / runway (~88–100%) */
-      #F16E3C 88%,
-      #F16D0B 94%,
+      #171717 33%,
+      #191919 38%,
+      #1A1D22 43%,
+      #242F40 48%,
+      #283854 53%,
+      #4262A3 58%,
+      #587CC9 63%,
+      #698AD5 68%,
+      #8B97DE 73%,
+      #C89EE1 78%,
+      #D499D9 83%,
+      #F27166 88%,
+      #F27361 92%,
+      #F16E3C 96%,
       #F16D0B 100%
     )
   `,
-  backgroundAttachment: "fixed",
   backgroundRepeat: "no-repeat",
   backgroundSize: "100% 100%",
 };
@@ -219,14 +207,14 @@ function useStudioFX() {
 
     // --- Diagonal text reveal (fire early so things don't look "missing")
     const io = new IntersectionObserver(
-      entries =>
-        entries.forEach(e => e.isIntersecting && e.target.classList.add("in")),
+      (entries) =>
+        entries.forEach((e) => e.isIntersecting && e.target.classList.add("in")),
       { threshold: 0.01 },
     );
     const reveals = Array.from(
       root.querySelectorAll<HTMLElement>(".reveal-diag"),
     );
-    reveals.forEach(n => io.observe(n));
+    reveals.forEach((n) => io.observe(n));
 
     return () => {
       window.removeEventListener("scroll", onScroll);
@@ -317,7 +305,7 @@ export default function StudioPage() {
           <Header />
         </div>
 
-        <header className="relative z-10 max-w-6xl mx-auto pt-20 px-6 text-center">
+        <header className="relative z-10 max-w-6xl mx-auto pt-20 px-6 text-center text-white">
           <p className="h-tagline reveal-diag">BUILD FASTER</p>
           <h1
             className="h-display reveal-diag mt-2"
@@ -383,7 +371,7 @@ export default function StudioPage() {
                 </button>
                 <a
                   href="/templates"
-                  className="px-3 py-1.5 text-sm rounded border border-white/20 hover:bg-white/10"
+                  className="px-3 py-1.5 text-sm rounded border border-white/20 hover:bg:white/10"
                 >
                   Try another template
                 </a>
@@ -494,7 +482,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
       });
       if (!r.ok) throw new Error((await r.text()) || r.statusText);
 
-      setUploadedFiles(prev => [...prev, file.name]);
+      setUploadedFiles((prev) => [...prev, file.name]);
       toast({
         title: "Uploaded",
         description: `${file.name} added to workspace`,
@@ -575,7 +563,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         className="studio-root min-h-screen grid place-items-center"
         style={STUDIO_BG_CANVAS}
       >
-        <div className="relative z-10 text-center">
+        <div className="relative z-10 text-center text-white">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Preparing studio…</p>
         </div>
@@ -585,7 +573,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
   return (
     <div
-      className="studio-root min-h-screen"
+      className="studio-root min-h-screen text-white"
       style={STUDIO_BG_CANVAS}
     >
       {/* Keep your header on top of the glass */}
@@ -702,7 +690,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                           <Input
                             className="mt-1.5"
                             value={customHost}
-                            onChange={e => setCustomHost(e.target.value)}
+                            onChange={(e) => setCustomHost(e.target.value)}
                           />
                         </div>
                       </div>
@@ -780,7 +768,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                     </SheetHeader>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                      {PRESET_THEMES.map(t => (
+                      {PRESET_THEMES.map((t) => (
                         <button
                           key={t.id}
                           onClick={() => {
@@ -809,19 +797,19 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                         <input
                           type="color"
                           value={customA}
-                          onChange={e => setCustomA(e.target.value)}
+                          onChange={(e) => setCustomA(e.target.value)}
                           className="h-10 w-full rounded"
                         />
                         <input
                           type="color"
                           value={customB}
-                          onChange={e => setCustomB(e.target.value)}
+                          onChange={(e) => setCustomB(e.target.value)}
                           className="h-10 w-full rounded"
                         />
                         <input
                           type="color"
                           value={customC}
-                          onChange={e => setCustomC(e.target.value)}
+                          onChange={(e) => setCustomC(e.target.value)}
                           className="h-10 w-full rounded"
                         />
                       </div>
@@ -879,7 +867,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                 </div>
                 <Input
                   value={projectName}
-                  onChange={e => setProjectName(e.target.value)}
+                  onChange={(e) => setProjectName(e.target.value)}
                   className="text-2xl font-semibold metal-text h-auto py-2 bg-background/30"
                   placeholder="Your project name"
                 />
@@ -901,7 +889,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                   {editingSummary ? (
                     <Textarea
                       value={projectSummary}
-                      onChange={e => setProjectSummary(e.target.value)}
+                      onChange={(e) => setProjectSummary(e.target.value)}
                       className="min-h-[60px] bg-background/30"
                     />
                   ) : (
@@ -928,7 +916,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                 <Label className="text-sm">Prompt</Label>
                 <Textarea
                   value={editablePrompt}
-                  onChange={e => setEditablePrompt(e.target.value)}
+                  onChange={(e) => setEditablePrompt(e.target.value)}
                   className="mt-1.5 bg-background/30 min-h-[80px]"
                   placeholder="Describe what you want to build..."
                 />
