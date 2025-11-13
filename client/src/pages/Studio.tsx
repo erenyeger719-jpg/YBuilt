@@ -268,9 +268,8 @@ export default function StudioPage() {
     useForceStudioTheme(true);
     useStudioFX();
     return (
-      // exact same background gradient as Hero
       <section
-        className="studio-root relative overflow-hidden text-white -mt-20 pt-20 min-h-screen"
+        className="studio-root min-h-screen text-white relative overflow-hidden"
         style={{
           background: `
             linear-gradient(
@@ -551,8 +550,8 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
   if (loading) {
     return (
-      <section
-        className="studio-root relative overflow-hidden text-white -mt-20 pt-20 min-h-screen grid place-items-center"
+      <div
+        className="studio-root min-h-screen grid place-items-center text-white relative overflow-hidden"
         style={{
           background: `
             linear-gradient(
@@ -581,13 +580,13 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Preparing studio…</p>
         </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section
-      className="studio-root relative overflow-hidden text-white -mt-20 pt-20 min-h-screen"
+    <div
+      className="studio-root min-h-screen text-white relative overflow-hidden"
       style={{
         background: `
           linear-gradient(
@@ -1013,7 +1012,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           </Card>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
