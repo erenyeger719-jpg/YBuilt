@@ -5,14 +5,14 @@ import {
   useState,
   useRef,
 } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import Header from "@/components/Header";
+import LogoButton from "@/components/previews/LogoButton";
 import Showcase from "@/components/Showcase";
 import {
   Dialog,
@@ -199,7 +199,63 @@ function useStudioFX() {
 
 export default function StudioPage() {
   const { jobId } = useParams<{ jobId?: string }>();
+  const [location] = useLocation();
   const { toast } = useToast();
+
+  // --- THEME + LOW-GLOSS (mirrors Header.tsx) ---
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [lowGloss, setLowGloss] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") as
+      | "light"
+      | "dark"
+      | null;
+    const savedLowGloss = localStorage.getItem("lowGloss") === "true";
+
+    if (savedTheme) {
+      setTheme(savedTheme);
+      if (savedTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    } else {
+      setTheme("dark");
+      document.documentElement.classList.add("dark");
+    }
+
+    if (savedLowGloss) {
+      setLowGloss(true);
+      document.documentElement.classList.add("low-gloss");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    if (newTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    localStorage.setItem("theme", newTheme);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    window.location.href = "/";
+  };
+
+  // Studio is its own page, so all these are false
+  const isWorkspace = false;
+  const isHome = false;
+  const isLibrary = false;
+  const isSettings = false;
+
+  // If your Studio page already knows a project name, plug it here
+  const currentProjectName = undefined; // or e.g. job.manifest.name
+  const currentProjectPath = jobId ? `/workspace/${jobId}` : undefined;
 
   // Autorun AI build (from Templates → Studio)
   const [busy, setBusy] = useState(false);
@@ -279,8 +335,19 @@ export default function StudioPage() {
           `,
         }}
       >
-        <div className="relative z-10">
-          <Header />
+        {/* Ybuilt logo in top-left, Studio only */}
+        <div className="fixed left-3 top-3 z-[60]">
+          <LogoButton
+            currentProjectName={currentProjectName}
+            currentProjectPath={currentProjectPath}
+            onThemeToggle={toggleTheme}
+            onLogout={handleLogout}
+            isWorkspace={isWorkspace}
+            onThemeModalOpen={undefined}
+            isHome={isHome}
+            isLibrary={isLibrary}
+            isSettings={isSettings}
+          />
         </div>
 
         <header className="relative z-10 max-w-6xl mx-auto pt-20 px-6 text-center">
@@ -367,10 +434,37 @@ export default function StudioPage() {
   }
 
   // Finalize view (with :jobId)
-  return <FinalizeStudio jobId={jobId} />;
+  return <FinalizeStudio 
+    jobId={jobId} 
+    currentProjectPath={currentProjectPath}
+    toggleTheme={toggleTheme}
+    handleLogout={handleLogout}
+    isWorkspace={isWorkspace}
+    isHome={isHome}
+    isLibrary={isLibrary}
+    isSettings={isSettings}
+  />;
 }
 
-function FinalizeStudio({ jobId }: { jobId: string }) {
+function FinalizeStudio({ 
+  jobId,
+  currentProjectPath,
+  toggleTheme,
+  handleLogout,
+  isWorkspace,
+  isHome,
+  isLibrary,
+  isSettings
+}: { 
+  jobId: string;
+  currentProjectPath?: string;
+  toggleTheme: () => void;
+  handleLogout: () => void;
+  isWorkspace: boolean;
+  isHome: boolean;
+  isLibrary: boolean;
+  isSettings: boolean;
+}) {
   useStudioFX();
 
   const { toast } = useToast();
@@ -595,9 +689,19 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         `,
       }}
     >
-      {/* Keep your header on top of the glass */}
-      <div className="relative z-10">
-        <Header />
+      {/* Ybuilt logo in top-left, Studio only */}
+      <div className="fixed left-3 top-3 z-[60]">
+        <LogoButton
+          currentProjectName={projectName || undefined}
+          currentProjectPath={currentProjectPath}
+          onThemeToggle={toggleTheme}
+          onLogout={handleLogout}
+          isWorkspace={isWorkspace}
+          onThemeModalOpen={undefined}
+          isHome={isHome}
+          isLibrary={isLibrary}
+          isSettings={isSettings}
+        />
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-8">
