@@ -97,12 +97,29 @@ const DEPLOY_DESCRIPTIONS = {
   custom: "We'll ask for your provider details inside the Workspace.",
 } as const;
 
-// --- Theme 1: Hero Echo background (mirrors home hero, softened for Studio) ---
-const STUDIO_BG_HERO_ECHO: CSSProperties = {
-  background:
-    "radial-gradient(circle at 50% -10%, rgba(88,124,201,0.35), transparent 60%), " +
-    "radial-gradient(circle at 50% 110%, rgba(242,113,102,0.24), transparent 65%), " +
-    "linear-gradient(180deg, #050505 0%, #0b0b10 30%, #171b26 55%, #242F40 75%, #1a1010 100%)",
+// --- Composite Studio background (Hero Echo + Studio Dusk + Runway Stripe) ---
+const STUDIO_BG_CANVAS: CSSProperties = {
+  background: `
+    /* Studio Dusk side glows */
+    radial-gradient(circle at 20% 0%, rgba(200,158,225,0.22), transparent 55%),
+    radial-gradient(circle at 80% 100%, rgba(88,124,201,0.30), transparent 60%),
+
+    /* Hero Echo top + bottom glow */
+    radial-gradient(circle at 50% -10%, rgba(88,124,201,0.35), transparent 60%),
+    radial-gradient(circle at 50% 110%, rgba(242,113,102,0.24), transparent 65%),
+
+    /* Base vertical blend + soft runway stripe */
+    linear-gradient(
+      180deg,
+      #050505 0%,
+      #0b0b10 28%,
+      #171b26 52%,
+      #242F40 74%,
+      #161925 88%,
+      #F27361 94%,
+      rgba(241,109,11,0.0) 100%
+    )
+  `,
   backgroundAttachment: "fixed",
   backgroundRepeat: "no-repeat",
   backgroundSize: "100% 100%",
@@ -283,7 +300,7 @@ export default function StudioPage() {
     return (
       <section
         className="studio-root min-h-screen"
-        style={STUDIO_BG_HERO_ECHO}
+        style={STUDIO_BG_CANVAS}
       >
         <div className="relative z-10">
           <Header />
@@ -545,7 +562,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
     return (
       <div
         className="studio-root min-h-screen grid place-items-center"
-        style={STUDIO_BG_HERO_ECHO}
+        style={STUDIO_BG_CANVAS}
       >
         <div className="relative z-10 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
@@ -558,7 +575,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   return (
     <div
       className="studio-root min-h-screen"
-      style={STUDIO_BG_HERO_ECHO}
+      style={STUDIO_BG_CANVAS}
     >
       {/* Keep your header on top of the glass */}
       <div className="relative z-10">
