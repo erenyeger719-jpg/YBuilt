@@ -197,20 +197,6 @@ function useStudioFX() {
   }, []);
 }
 
-/** Mount/unmount: toggle the Studio forced theme on <body> */
-function useForceStudioTheme(enable: boolean) {
-  useEffect(() => {
-    if (enable) {
-      (document.body as any).dataset.forceTheme = "studio";
-    } else {
-      delete (document.body as any).dataset.forceTheme;
-    }
-    return () => {
-      delete (document.body as any).dataset.forceTheme;
-    };
-  }, [enable]);
-}
-
 export default function StudioPage() {
   const { jobId } = useParams<{ jobId?: string }>();
   const { toast } = useToast();
@@ -265,7 +251,6 @@ export default function StudioPage() {
 
   // Marketing view (no :jobId)
   if (!jobId) {
-    useForceStudioTheme(true);
     useStudioFX();
     return (
       <section
@@ -386,7 +371,6 @@ export default function StudioPage() {
 }
 
 function FinalizeStudio({ jobId }: { jobId: string }) {
-  useForceStudioTheme(true);
   useStudioFX();
 
   const { toast } = useToast();
@@ -641,7 +625,12 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         {/* 3-column premium layout with aligned heights */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT — inputs & choices */}
-          <Card className="lg:col-span-3 p-6 h-full bg-black/20 backdrop-blur-sm border-white/10">
+          <Card className="lg:col-span-3 p-6 h-full card-tilt" 
+            style={{ 
+              backgroundColor: 'rgba(26, 26, 26, 0.85)',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'none'
+            }}>
             <div className="relative z-10 space-y-6">
               <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5" /> Configuration
@@ -886,7 +875,12 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           </Card>
 
           {/* MIDDLE — plan + prompt (HERO CARD) */}
-          <Card className="lg:col-span-6 p-6 h-full bg-black/20 backdrop-blur-sm border-white/10">
+          <Card className="lg:col-span-6 p-6 h-full card-tilt"
+            style={{ 
+              backgroundColor: 'rgba(26, 26, 26, 0.85)',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'none'
+            }}>
             <div className="relative z-10 space-y-5">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
@@ -963,9 +957,14 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
           {/* RIGHT — actions */}
           <Card
-            className={`lg:col-span-3 p-6 h-full bg-black/20 backdrop-blur-sm border-white/10 ${
+            className={`lg:col-span-3 p-6 h-full card-tilt ${
               isReady ? "ring-2 ring-primary/30" : ""
             }`}
+            style={{ 
+              backgroundColor: 'rgba(26, 26, 26, 0.85)',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'none'
+            }}
           >
             <div className="relative z-10 space-y-4">
               <h2 className="text-lg font-semibold">Actions</h2>
