@@ -4,7 +4,6 @@ import {
   useMemo,
   useState,
   useRef,
-  type CSSProperties,
 } from "react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -95,33 +94,6 @@ const DEPLOY_DESCRIPTIONS = {
   business: "Teams, SSO, and audits.",
   custom: "We'll ask for your provider details inside the Workspace.",
 } as const;
-
-// --- Studio background: EXACT copy of Hero gradient ---
-const STUDIO_BG_CANVAS: CSSProperties = {
-  background: `
-    linear-gradient(
-      180deg,
-      #171717 0%,
-      #171717 33%,
-      #191919 38%,
-      #1A1D22 43%,
-      #242F40 48%,
-      #283854 53%,
-      #4262A3 58%,
-      #587CC9 63%,
-      #698AD5 68%,
-      #8B97DE 73%,
-      #C89EE1 78%,
-      #D499D9 83%,
-      #F27166 88%,
-      #F27361 92%,
-      #F16E3C 96%,
-      #F16D0B 100%
-    )
-  `,
-  backgroundRepeat: "no-repeat",
-  backgroundSize: "100% 100%",
-};
 
 /** Studio-only FX with event delegation: scroll stops, magnetic, tilt, reveal */
 function useStudioFX() {
@@ -296,9 +268,32 @@ export default function StudioPage() {
     useForceStudioTheme(true);
     useStudioFX();
     return (
+      // exact same background gradient as Hero
       <section
-        className="studio-root min-h-screen text-white"
-        style={STUDIO_BG_CANVAS}
+        className="studio-root relative overflow-hidden text-white -mt-20 pt-20 min-h-screen"
+        style={{
+          background: `
+            linear-gradient(
+              180deg,
+              #171717 0%,
+              #171717 33%,
+              #191919 38%,
+              #1A1D22 43%,
+              #242F40 48%,
+              #283854 53%,
+              #4262A3 58%,
+              #587CC9 63%,
+              #698AD5 68%,
+              #8B97DE 73%,
+              #C89EE1 78%,
+              #D499D9 83%,
+              #F27166 88%,
+              #F27361 92%,
+              #F16E3C 96%,
+              #F16D0B 100%
+            )
+          `,
+        }}
       >
         <div className="relative z-10">
           <Header />
@@ -556,22 +551,66 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
   if (loading) {
     return (
-      <div
-        className="studio-root min-h-screen grid place-items-center text-white"
-        style={STUDIO_BG_CANVAS}
+      <section
+        className="studio-root relative overflow-hidden text-white -mt-20 pt-20 min-h-screen grid place-items-center"
+        style={{
+          background: `
+            linear-gradient(
+              180deg,
+              #171717 0%,
+              #171717 33%,
+              #191919 38%,
+              #1A1D22 43%,
+              #242F40 48%,
+              #283854 53%,
+              #4262A3 58%,
+              #587CC9 63%,
+              #698AD5 68%,
+              #8B97DE 73%,
+              #C89EE1 78%,
+              #D499D9 83%,
+              #F27166 88%,
+              #F27361 92%,
+              #F16E3C 96%,
+              #F16D0B 100%
+            )
+          `,
+        }}
       >
         <div className="relative z-10 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Preparing studio…</p>
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div
-      className="studio-root min-h-screen text-white"
-      style={STUDIO_BG_CANVAS}
+    <section
+      className="studio-root relative overflow-hidden text-white -mt-20 pt-20 min-h-screen"
+      style={{
+        background: `
+          linear-gradient(
+            180deg,
+            #171717 0%,
+            #171717 33%,
+            #191919 38%,
+            #1A1D22 43%,
+            #242F40 48%,
+            #283854 53%,
+            #4262A3 58%,
+            #587CC9 63%,
+            #698AD5 68%,
+            #8B97DE 73%,
+            #C89EE1 78%,
+            #D499D9 83%,
+            #F27166 88%,
+            #F27361 92%,
+            #F16E3C 96%,
+            #F16D0B 100%
+          )
+        `,
+      }}
     >
       {/* Keep your header on top of the glass */}
       <div className="relative z-10">
@@ -974,7 +1013,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           </Card>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
