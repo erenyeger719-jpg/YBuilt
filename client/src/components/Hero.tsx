@@ -1,4 +1,3 @@
-// client/src/components/Hero.tsx
 import { useState, FormEvent, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { FiCamera, FiUploadCloud } from "react-icons/fi";
@@ -194,7 +193,7 @@ export default function Hero() {
     if (!SpeechRecognitionClass) {
       toast({
         title: "Voice input not available",
-        description: "Your browser doesn’t support speech recognition yet.",
+        description: "Your browser doesn't support speech recognition yet.",
       });
       return null;
     }
@@ -424,24 +423,35 @@ export default function Hero() {
                   />
                 </div>
 
-                {/* Icons row (bottom) – all 4 aligned horizontally */}
-                <div className="flex items-end justify-between pb-1">
+                {/* Icons row (bottom) – FIXED positioning and styling */}
+                <div className="flex items-center justify-between">
                   {/* Left cluster: + and Attach */}
-                  <div className="relative flex items-center gap-1 -ml-5">
-                    {/* Plus icon – small circle, centered */}
+                  <div className="relative flex items-center gap-2">
+                    {/* Plus icon – properly styled circle with centered + */}
                     <button
                       type="button"
                       onClick={() => setIsPlusMenuOpen((v) => !v)}
-                      className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-white/22 bg-transparent text-2xl font-light leading-[0] text-white/85"
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/30 bg-transparent text-white/80 hover:bg-white/5 transition-colors"
                     >
-                      +
+                      <svg 
+                        viewBox="0 0 20 20" 
+                        className="h-4 w-4" 
+                        fill="none"
+                      >
+                        <path 
+                          d="M10 5v10M5 10h10" 
+                          stroke="currentColor" 
+                          strokeWidth="2" 
+                          strokeLinecap="round"
+                        />
+                      </svg>
                     </button>
 
                     {/* Plus dropdown – opens downward */}
                     {isPlusMenuOpen && (
                       <div
                         ref={plusMenuRef}
-                        className="absolute left-0 top-[135%] z-20 w-72 overflow-hidden rounded-2xl border border-white/12 bg-[#101010] py-1 shadow-xl shadow-black/70 backdrop-blur"
+                        className="absolute left-0 top-full mt-2 z-20 w-72 overflow-hidden rounded-2xl border border-white/12 bg-[#101010] py-1 shadow-xl shadow-black/70 backdrop-blur"
                       >
                         {/* Take a screenshot */}
                         <button
@@ -537,22 +547,22 @@ export default function Hero() {
                       onChange={handleFileChange}
                     />
 
-                    {/* Attach pill — now triggers the same upload flow */}
+                    {/* Attach pill — properly styled with paperclip icon */}
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="hidden mt-0.5 items-center gap-2 rounded-full border border-white/22 bg-transparent px-4 py-1.5 text-xs font-medium text-white/80 sm:inline-flex"
+                      className="flex items-center gap-1.5 rounded-full border border-white/30 bg-transparent px-3.5 py-1.5 text-xs font-medium text-white/80 hover:bg-white/5 transition-colors"
                     >
                       <svg
-                        viewBox="0 0 24 24"
+                        viewBox="0 0 20 20"
                         aria-hidden="true"
-                        className="h-4 w-4"
+                        className="h-3.5 w-3.5"
+                        fill="none"
                       >
                         <path
-                          d="M16.5 6.75 10 13.25a2.5 2.5 0 1 1-3.54-3.54l6.5-6.5a3.5 3.5 0 0 1 4.95 4.95l-7.07 7.07a4 4 0 1 1-5.66-5.66l5.13-5.13"
-                          fill="none"
+                          d="M13.5 5.5 8 11a2 2 0 1 1-2.83-2.83l5.5-5.5a2.83 2.83 0 0 1 4 4l-6 6a3.33 3.33 0 1 1-4.71-4.71l4.33-4.34"
                           stroke="currentColor"
-                          strokeWidth="1.4"
+                          strokeWidth="1.5"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
@@ -562,31 +572,30 @@ export default function Hero() {
                   </div>
 
                   {/* Right cluster: Mic + Send */}
-                  <div className="flex items-center gap-3 -mr-5">
-                    {/* Mic button – hooked to voice input */}
+                  <div className="flex items-center gap-2">
+                    {/* Mic button – properly styled */}
                     <button
                       type="button"
                       onClick={handleToggleVoice}
-                      className={`hidden h-9 w-9 items-center justify-center rounded-full border ${
-                        isListening ? "border-white bg-white/10" : "border-white/22"
-                      } bg-transparent text-white/80 sm:flex`}
+                      className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
+                        isListening 
+                          ? "border-red-400 bg-red-400/20 text-red-400" 
+                          : "border-white/30 bg-transparent text-white/80 hover:bg-white/5"
+                      }`}
                     >
                       <span className="sr-only">Record voice prompt</span>
                       <svg
                         viewBox="0 0 24 24"
                         aria-hidden="true"
                         className="h-4 w-4"
+                        fill="none"
                       >
                         <g
-                          fill="none"
                           stroke="currentColor"
-                          strokeWidth="1.6"
+                          strokeWidth="2"
                           strokeLinecap="round"
                         >
-                          <line x1="6.5" y1="10" x2="6.5" y2="14" />
-                          <line x1="10" y1="8" x2="10" y2="16" />
-                          <line x1="13.5" y1="9" x2="13.5" y2="15" />
-                          <line x1="17" y1="11" x2="17" y2="13" />
+                          <path d="M6 10v4M10 8v8M14 9v6M18 11v2" />
                         </g>
                       </svg>
                     </button>
@@ -594,17 +603,17 @@ export default function Hero() {
                     {/* Send button */}
                     <button
                       type="submit"
-                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-900 shadow-sm transition hover:bg-slate-100"
                     >
                       <span className="sr-only">Send</span>
                       <svg
-                        viewBox="0 0 24 24"
+                        viewBox="0 0 20 20"
                         aria-hidden="true"
                         className="h-4 w-4"
+                        fill="currentColor"
                       >
                         <path
-                          d="M12 4.5a1 1 0 0 1 .7.29l5 5a1 1 0 0 1-1.4 1.42L13 7.9V18a1 1 0 1 1-2 0V7.9l-3.3 3.31a1 1 0 0 1-1.4-1.42l5-5A1 1 0 0 1 12 4.5Z"
-                          fill="currentColor"
+                          d="M10 3.5a.75.75 0 0 1 .53.22l4.5 4.5a.75.75 0 0 1-1.06 1.06L10.75 6.06V15.5a.75.75 0 0 1-1.5 0V6.06L6.03 9.28a.75.75 0 0 1-1.06-1.06l4.5-4.5A.75.75 0 0 1 10 3.5Z"
                         />
                       </svg>
                     </button>
