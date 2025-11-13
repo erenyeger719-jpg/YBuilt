@@ -115,6 +115,39 @@ export default function Hero() {
     }
   }
 
+  // ---- upload helper (used by + menu and Attach) ----
+  async function uploadFiles(files: FileList | File[]) {
+    const list = Array.from(files as any);
+    if (!list.length) return;
+
+    const form = new FormData();
+    for (const f of list) form.append("files", f);
+
+    const res = await fetch("/api/upload", { method: "POST", body: form });
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      console.error("[upload] failed", data);
+      toast({
+        title: "Upload failed",
+        description: data?.message || "Server error",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Uploaded",
+      description: `Received ${data?.files?.length || list.length} file(s).`,
+    });
+  }
+
+  function handleFileChange(e: any) {
+    const files = e.target.files as FileList;
+    void uploadFiles(files);
+    e.target.value = ""; // allows re-selecting the same file
+  }
+
   // ---- voice result → translate → prompt text ----
   async function handleVoiceResult(rawText: string, langCode: string) {
     try {
@@ -123,9 +156,7 @@ export default function Hero() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: rawText,
-          // let backend auto-detect, unless you want to force:
           sourceLang: "auto",
-          // everything into English for now
           targetLang: "en",
         }),
       });
@@ -270,17 +301,6 @@ export default function Hero() {
         fileInputRef.current?.click();
         break;
     }
-  }
-
-  function handleFileChange(e: any) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    console.log("[upload] design/code file selected:", file);
-    toast({
-      title: "File selected",
-      description: `Ready to process: ${file.name}`,
-    });
-    // TODO: actually send the file to your backend
   }
 
   useEffect(() => {
@@ -507,17 +527,20 @@ export default function Hero() {
                       </div>
                     )}
 
-                    {/* hidden file input for upload */}
+                    {/* hidden file input for upload (used by + menu + Attach) */}
                     <input
                       ref={fileInputRef}
                       type="file"
                       className="hidden"
+                      multiple
+                      accept=".png,.jpg,.jpeg,.webp,.svg,.pdf,.zip,.json,.txt,.md,.html,.css,.js,.ts,.tsx,.fig,.sketch,.psd,.ai,.mp4,.mov,.webm"
                       onChange={handleFileChange}
                     />
 
-                    {/* Attach pill */}
+                    {/* Attach pill — now triggers the same upload flow */}
                     <button
                       type="button"
+                      onClick={() => fileInputRef.current?.click()}
                       className="hidden mt-0.5 items-center gap-2 rounded-full border border-white/22 bg-transparent px-4 py-1.5 text-xs font-medium text-white/80 sm:inline-flex"
                     >
                       <svg
