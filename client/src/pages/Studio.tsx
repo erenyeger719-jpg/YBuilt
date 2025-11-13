@@ -600,10 +600,10 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         <Header />
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-8">
         {/* Step indicator */}
-        <div className="mb-8 text-center">
-          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <div className="mb-4 text-center">
+          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground mb-1">
             <span className="px-2 py-1 rounded-full bg-primary/10 text-primary">
               1. Describe
             </span>
@@ -614,10 +614,10 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
             <ChevronRight className="h-4 w-4" />
             <span className="px-2 py-1 rounded-full bg-muted">3. Build</span>
           </div>
-          <h1 className="text-3xl font-bold mt-3">
+          <h1 className="text-3xl font-bold mt-2">
             Step 2 · Review your build plan
           </h1>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-muted-foreground mt-1">
             We'll open the Workspace next. Just check these details once.
           </p>
         </div>
@@ -627,7 +627,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           {/* LEFT — inputs & choices */}
           <Card className="lg:col-span-3 p-6 h-full card-tilt" 
             style={{ 
-              backgroundColor: 'rgba(26, 26, 26, 0.85)',
+              backgroundColor: '#212121',
               borderColor: 'rgba(255, 255, 255, 0.1)',
               backdropFilter: 'none'
             }}>
@@ -877,7 +877,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           {/* MIDDLE — plan + prompt (HERO CARD) */}
           <Card className="lg:col-span-6 p-6 h-full card-tilt"
             style={{ 
-              backgroundColor: 'rgba(26, 26, 26, 0.85)',
+              backgroundColor: '#212121',
               borderColor: 'rgba(255, 255, 255, 0.1)',
               backdropFilter: 'none'
             }}>
@@ -961,7 +961,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
               isReady ? "ring-2 ring-primary/30" : ""
             }`}
             style={{ 
-              backgroundColor: 'rgba(26, 26, 26, 0.85)',
+              backgroundColor: '#212121',
               borderColor: 'rgba(255, 255, 255, 0.1)',
               backdropFilter: 'none'
             }}
