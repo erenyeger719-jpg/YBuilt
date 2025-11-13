@@ -21,36 +21,18 @@ function FloatingChat({
     <>
       <Button
         size="icon"
-        style={{
-          position: "fixed",
-          bottom: 24,
-          right: 24,
-          left: "auto",
-          zIndex: 70,
-        }}
+        style={{ position: "fixed", bottom: 24, right: 24, left: "auto", zIndex: 70 }}
         className="h-12 w-12 rounded-full border border-slate-300 bg-white shadow-lg shadow-slate-400/40"
         onClick={() => setIsChatOpen(!isChatOpen)}
         data-testid="button-toggle-chat"
         aria-label="Toggle chat"
       >
-        {isChatOpen ? (
-          <X className="h-5 w-5" />
-        ) : (
-          <MessageCircle className="h-5 w-5" />
-        )}
+        {isChatOpen ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
       </Button>
 
       {isChatOpen && (
         <div
-          style={{
-            position: "fixed",
-            bottom: 110,
-            right: 24,
-            left: "auto",
-            zIndex: 60,
-            width: 400,
-            height: 560,
-          }}
+          style={{ position: "fixed", bottom: 110, right: 24, left: "auto", zIndex: 60, width: 400, height: 560 }}
           className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
           data-testid="chat-panel-container"
         >
@@ -71,13 +53,7 @@ export default function Home() {
       className="relative min-h-screen text-slate-900"
       style={{
         background:
-          "linear-gradient(to bottom," +
-          " #a0d2eb 0%," +
-          " #e5eaf5 28%," +
-          " #d0bdf4 40%," +
-          " #8458B3 56%," +
-          " #1F1E21 78%," +
-          " #1F1E21 100%)",
+          "linear-gradient(to bottom, #a0d2eb 0%, #e5eaf5 28%, #d0bdf4 40%, #8458B3 56%, #1F1E21 78%, #1F1E21 100%)",
       }}
     >
       {/* global grain / noise */}
@@ -94,56 +70,44 @@ export default function Home() {
       <Header />
       <Hero />
 
-      {/* Overlapping content panel with your gradient */}
+      {/* Overlapping content panel with requested gradient */}
       <main className="relative -mt-10 pb-20 sm:-mt-12 lg:-mt-16">
-        <div
-          className="mx-auto"
-          style={{
-            width: "min(1680px, calc(100vw - 48px))", // ~24px gutters
-          }}
-        >
+        <div className="mx-auto" style={{ width: "min(1680px, calc(100vw - 48px))" }}>
           <div
             className="overflow-hidden rounded-[28px] md:rounded-[32px] border border-slate-200 shadow-[0_-24px_80px_rgba(15,23,42,0.20)]"
             style={{
+              /* Rules:
+                 - 0–22.22%  : solid White (#FFFFFF) → upper 1/3 of remaining 2/3
+                 - 22–66.67% : blend Freeze Purple → Medium Purple → Purple Pain (in order)
+                 - 66.67–100%: solid Heavy Purple (#1F1E21) → last 1/3
+              */
               background: `
                 linear-gradient(
                   180deg,
-                  /* 1) Yass Queen → Sister Sister */
-                  #ff1d58 0%,
-                  #ff2c66 6%,
-                  #f75990 12%,
-                  /* 2) Sister Sister → Crown Yellow (soft coral in-betweens) */
-                  #ff9a7a 18%,
-                  #fff685 24%,
-                  /* 3) Crown Yellow → Blue Light (minty bridge) */
-                  #c8f7b8 30%,
-                  #7ef0e8 33%,
-                  #00DDFF 36%,
-                  /* 4) Blue Light → Brutal Blue */
-                  #007fe0 42%,
-                  #0066ca 45%,
-                  #0049B7 48%,
-                  /* 5) Lead-in to dark slab */
-                  #0b2b58 60%,
-                  /* 6) Final third = #171717 */
-                  #171717 67%,
-                  #171717 100%
+                  #FFFFFF 0%,
+                  #FFFFFF 22.22%,
+
+                  /* middle blend, keep order */
+                  #e5eaf5 30%,
+                  #d0bdf4 45%,
+                  #8458B3 60%,
+
+                  /* final third = heavy purple slab */
+                  #1F1E21 66.67%,
+                  #1F1E21 100%
                 )
               `,
             }}
           >
-            {/* inner padding for content */}
             <div className="px-4 sm:px-8 lg:px-12 pb-14 pt-10">
               {/* SECTION: Explore starting points */}
               <section className="space-y-5">
                 <div className="flex items-baseline justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-900">
-                      Start from a pattern that fits
-                    </h2>
+                    <h2 className="text-lg font-semibold text-slate-900">Start from a pattern that fits</h2>
                     <p className="mt-1 text-sm text-slate-800/80">
-                      Pick a direction, not a template. Ybuilt adapts to what
-                      you describe, instead of boxing you into a theme.
+                      Pick a direction, not a template. Ybuilt adapts to what you describe, instead of boxing you into a
+                      theme.
                     </p>
                   </div>
                 </div>
@@ -158,12 +122,9 @@ export default function Home() {
               <section className="mt-16 space-y-5">
                 <div className="flex items-baseline justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-900">
-                      See what&apos;s possible
-                    </h2>
+                    <h2 className="text-lg font-semibold text-slate-900">See what&apos;s possible</h2>
                     <p className="mt-1 text-sm text-slate-800/80">
-                      This strip will showcase live examples and shots of
-                      products built with Ybuilt.
+                      This strip will showcase live examples and shots of products built with Ybuilt.
                     </p>
                   </div>
                 </div>
