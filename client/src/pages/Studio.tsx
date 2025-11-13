@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
-import Hero from "@/components/Hero";
 import Showcase from "@/components/Showcase";
 import {
   Dialog,
@@ -298,14 +297,14 @@ export default function StudioPage() {
     useStudioFX();
     return (
       <section
-        className="studio-root min-h-screen"
+        className="studio-root min-h-screen text-white"
         style={STUDIO_BG_CANVAS}
       >
         <div className="relative z-10">
           <Header />
         </div>
 
-        <header className="relative z-10 max-w-6xl mx-auto pt-20 px-6 text-center text-white">
+        <header className="relative z-10 max-w-6xl mx-auto pt-20 px-6 text-center">
           <p className="h-tagline reveal-diag">BUILD FASTER</p>
           <h1
             className="h-display reveal-diag mt-2"
@@ -371,7 +370,7 @@ export default function StudioPage() {
                 </button>
                 <a
                   href="/templates"
-                  className="px-3 py-1.5 text-sm rounded border border-white/20 hover:bg:white/10"
+                  className="px-3 py-1.5 text-sm rounded border border-white/20 hover:bg-white/10"
                 >
                   Try another template
                 </a>
@@ -380,11 +379,9 @@ export default function StudioPage() {
           )}
         </header>
 
-        <div className="relative z-10">
-          <Hero />
-          <div className="max-w-7xl mx-auto px-6 content-auto">
-            <Showcase />
-          </div>
+        {/* Only Showcase, no Hero (so no second background) */}
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-24">
+          <Showcase />
         </div>
       </section>
     );
@@ -560,10 +557,10 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   if (loading) {
     return (
       <div
-        className="studio-root min-h-screen grid place-items-center"
+        className="studio-root min-h-screen grid place-items-center text-white"
         style={STUDIO_BG_CANVAS}
       >
-        <div className="relative z-10 text-center text-white">
+        <div className="relative z-10 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Preparing studio…</p>
         </div>
