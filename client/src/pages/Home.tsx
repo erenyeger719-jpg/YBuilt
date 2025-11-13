@@ -72,11 +72,11 @@ export default function Home() {
       style={{
         background:
           "linear-gradient(to bottom," +
-          " #a0d2eb 0%," + // Ice Cold
-          " #e5eaf5 28%," + // Freeze Purple
-          " #d0bdf4 40%," + // Medium Purple
-          " #8458B3 56%," + // Purple Pain
-          " #1F1E21 78%," + // Heavy Purple
+          " #a0d2eb 0%," +
+          " #e5eaf5 28%," +
+          " #d0bdf4 40%," +
+          " #8458B3 56%," +
+          " #1F1E21 78%," +
           " #1F1E21 100%)",
       }}
     >
@@ -94,16 +94,44 @@ export default function Home() {
       <Header />
       <Hero />
 
-      {/* Overlapping white panel — widened to near-edges with ~24px gutter */}
+      {/* Overlapping content panel with your gradient */}
       <main className="relative -mt-10 pb-20 sm:-mt-12 lg:-mt-16">
         <div
           className="mx-auto"
           style={{
-            // max 1680px, otherwise leave 24px gutters on each side
-            width: "min(1680px, calc(100vw - 48px))",
+            width: "min(1680px, calc(100vw - 48px))", // ~24px gutters
           }}
         >
-          <div className="overflow-hidden rounded-[28px] md:rounded-[32px] border border-slate-200 bg-white shadow-[0_-24px_80px_rgba(15,23,42,0.20)]">
+          <div
+            className="overflow-hidden rounded-[28px] md:rounded-[32px] border border-slate-200 shadow-[0_-24px_80px_rgba(15,23,42,0.20)]"
+            style={{
+              background: `
+                linear-gradient(
+                  180deg,
+                  /* 1) Yass Queen → Sister Sister */
+                  #ff1d58 0%,
+                  #ff2c66 6%,
+                  #f75990 12%,
+                  /* 2) Sister Sister → Crown Yellow (soft coral in-betweens) */
+                  #ff9a7a 18%,
+                  #fff685 24%,
+                  /* 3) Crown Yellow → Blue Light (minty bridge) */
+                  #c8f7b8 30%,
+                  #7ef0e8 33%,
+                  #00DDFF 36%,
+                  /* 4) Blue Light → Brutal Blue */
+                  #007fe0 42%,
+                  #0066ca 45%,
+                  #0049B7 48%,
+                  /* 5) Lead-in to dark slab */
+                  #0b2b58 60%,
+                  /* 6) Final third = #171717 */
+                  #171717 67%,
+                  #171717 100%
+                )
+              `,
+            }}
+          >
             {/* inner padding for content */}
             <div className="px-4 sm:px-8 lg:px-12 pb-14 pt-10">
               {/* SECTION: Explore starting points */}
@@ -113,13 +141,14 @@ export default function Home() {
                     <h2 className="text-lg font-semibold text-slate-900">
                       Start from a pattern that fits
                     </h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 text-sm text-slate-800/80">
                       Pick a direction, not a template. Ybuilt adapts to what
                       you describe, instead of boxing you into a theme.
                     </p>
                   </div>
                 </div>
 
+                {/* Keep inner cards white for readability */}
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                   <ExploreWheel />
                 </div>
@@ -132,7 +161,7 @@ export default function Home() {
                     <h2 className="text-lg font-semibold text-slate-900">
                       See what&apos;s possible
                     </h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 text-sm text-slate-800/80">
                       This strip will showcase live examples and shots of
                       products built with Ybuilt.
                     </p>
