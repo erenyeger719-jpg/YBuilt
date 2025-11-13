@@ -64,6 +64,13 @@ export default function Hero() {
     if (!prompt) return;
 
     try {
+      // Remember last prompt for Studio finalize view
+      try {
+        localStorage.setItem("lastPrompt", prompt);
+      } catch {
+        // ignore storage issues
+      }
+
       const r = await fetch("/api/generate", {
         method: "POST",
         credentials: "include",
@@ -97,7 +104,8 @@ export default function Hero() {
 
       if (!id) throw new Error("No jobId in response");
 
-      const target = `/workspace/${id}`;
+      // ✅ Go to Studio middle step instead of Workspace
+      const target = `/studio/${id}`;
       window.location.assign(target);
       setTimeout(() => {
         window.location.href = target;
