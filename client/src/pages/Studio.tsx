@@ -97,27 +97,38 @@ const DEPLOY_DESCRIPTIONS = {
   custom: "We'll ask for your provider details inside the Workspace.",
 } as const;
 
-// --- Composite Studio background (Hero Echo + Studio Dusk + Runway Stripe) ---
+// --- Pure vertical Studio background using all hero colours ---
+// Order: dark → blue → pink → purple → orange runway
+// Stops are spaced mathematically across 0–100% so the darks own ~top 1/3.
 const STUDIO_BG_CANVAS: CSSProperties = {
   background: `
-    /* Studio Dusk side glows */
-    radial-gradient(circle at 20% 0%, rgba(200,158,225,0.22), transparent 55%),
-    radial-gradient(circle at 80% 100%, rgba(88,124,201,0.30), transparent 60%),
-
-    /* Hero Echo top + bottom glow */
-    radial-gradient(circle at 50% -10%, rgba(88,124,201,0.35), transparent 60%),
-    radial-gradient(circle at 50% 110%, rgba(242,113,102,0.24), transparent 65%),
-
-    /* Base vertical blend + soft runway stripe */
     linear-gradient(
       180deg,
-      #050505 0%,
-      #0b0b10 28%,
-      #171b26 52%,
-      #242F40 74%,
-      #161925 88%,
-      #F27361 94%,
-      rgba(241,109,11,0.0) 100%
+      /* Dark band (~0–33%) */
+      #171717 0%,
+      #191919 8%,
+      #1A1D22 17%,
+      #242F40 25%,
+
+      /* Blues (~33–60%) */
+      #283854 33%,
+      #4262A3 38%,
+      #587CC9 44%,
+      #698AD5 49%,
+      #8B97DE 55%,
+
+      /* Pinks (~60–74%) */
+      #F27166 60%,
+      #F27361 67%,
+
+      /* Purples (~74–88%) */
+      #C89EE1 74%,
+      #D499D9 81%,
+
+      /* Oranges / runway (~88–100%) */
+      #F16E3C 88%,
+      #F16D0B 94%,
+      #F16D0B 100%
     )
   `,
   backgroundAttachment: "fixed",
