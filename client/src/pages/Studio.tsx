@@ -308,7 +308,7 @@ export default function StudioPage() {
           </h1>
 
           <div className="mt-8 flex justify-center gap-3">
-            <Button className="btn btn-magnetic card-glass px-6 py-3 rounded-xl">
+            <Button className="btn btn-magnetic px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20">
               Start building
             </Button>
             <Button
@@ -641,8 +641,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         {/* 3-column premium layout with aligned heights */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT — inputs & choices */}
-          <Card className="lg:col-span-3 p-6 card-glass card-tilt h-full">
-            <div className="gloss-sheen" />
+          <Card className="lg:col-span-3 p-6 h-full bg-black/20 backdrop-blur-sm border-white/10">
             <div className="relative z-10 space-y-6">
               <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5" /> Configuration
@@ -887,8 +886,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           </Card>
 
           {/* MIDDLE — plan + prompt (HERO CARD) */}
-          <Card className="lg:col-span-6 p-6 card-glass card-tilt h-full">
-            <div className="gloss-sheen" />
+          <Card className="lg:col-span-6 p-6 h-full bg-black/20 backdrop-blur-sm border-white/10">
             <div className="relative z-10 space-y-5">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
@@ -965,11 +963,10 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
           {/* RIGHT — actions */}
           <Card
-            className={`lg:col-span-3 p-6 card-glass card-tilt h-full ${
+            className={`lg:col-span-3 p-6 h-full bg-black/20 backdrop-blur-sm border-white/10 ${
               isReady ? "ring-2 ring-primary/30" : ""
             }`}
           >
-            <div className="gloss-sheen" />
             <div className="relative z-10 space-y-4">
               <h2 className="text-lg font-semibold">Actions</h2>
 
