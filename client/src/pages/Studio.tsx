@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import Header from "@/components/Header";
 import LogoButton from "@/components/LogoButton";
 import Showcase from "@/components/Showcase";
 import {
@@ -202,15 +203,12 @@ export default function StudioPage() {
   const [location] = useLocation();
   const { toast } = useToast();
 
-  // --- THEME + LOW-GLOSS (mirrors Header.tsx) ---
+  // --- THEME + LOW-GLOSS + LOGOUT LOGIC FOR LOGOBUTTON ---
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [lowGloss, setLowGloss] = useState(false);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") as
-      | "light"
-      | "dark"
-      | null;
+    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const savedLowGloss = localStorage.getItem("lowGloss") === "true";
 
     if (savedTheme) {
@@ -253,8 +251,7 @@ export default function StudioPage() {
   const isLibrary = false;
   const isSettings = false;
 
-  // If your Studio page already knows a project name, plug it here
-  const currentProjectName = undefined; // or e.g. job.manifest.name
+  const currentProjectName = undefined;
   const currentProjectPath = jobId ? `/workspace/${jobId}` : undefined;
 
   // Autorun AI build (from Templates → Studio)
@@ -335,8 +332,8 @@ export default function StudioPage() {
           `,
         }}
       >
-        {/* Ybuilt logo overlay - does not affect layout */}
-        <div className="absolute left-4 top-4 z-[60]">
+        {/* Logo Button overlay - absolute positioning so it doesn't affect layout */}
+        <div style={{ position: 'absolute', left: '16px', top: '16px', zIndex: 60 }}>
           <LogoButton
             currentProjectName={currentProjectName}
             currentProjectPath={currentProjectPath}
@@ -349,6 +346,8 @@ export default function StudioPage() {
             isSettings={isSettings}
           />
         </div>
+
+        {/* Remove Header - we only want logo */}
 
         <header className="relative z-10 max-w-6xl mx-auto pt-20 px-6 text-center">
           <p className="h-tagline reveal-diag">BUILD FASTER</p>
@@ -629,7 +628,7 @@ function FinalizeStudio({
   if (loading) {
     return (
       <div
-        className="studio-root min-h-screen grid place-items-center text-white relative overflow-hidden"
+        className="studio-root dark min-h-screen grid place-items-center text-white relative overflow-hidden"
         style={{
           background: `
             linear-gradient(
@@ -664,9 +663,29 @@ function FinalizeStudio({
 
   return (
     <div
-      className="studio-root min-h-screen text-white relative overflow-hidden"
-      style={{
-        background: `
+      className="studio-root dark min-h-screen text-white relative overflow-hidden bg-[#171717]"
+    >
+      {/* Logo Button overlay - absolute positioning so it doesn't affect layout */}
+      <div style={{ position: 'absolute', left: '16px', top: '16px', zIndex: 60 }}>
+        <LogoButton
+          currentProjectName={projectName || undefined}
+          currentProjectPath={currentProjectPath}
+          onThemeToggle={toggleTheme}
+          onLogout={handleLogout}
+          isWorkspace={isWorkspace}
+          onThemeModalOpen={undefined}
+          isHome={isHome}
+          isLibrary={isLibrary}
+          isSettings={isSettings}
+        />
+      </div>
+
+      {/* Gradient overlay shifted slightly upward – only background moves */}
+      <div
+        className="pointer-events-none absolute inset-x-0 h-[900px]"
+        style={{
+          top: "-2.5rem", // ≈ two text "enter" lines upward
+          background: `
           linear-gradient(
             180deg,
             #171717 0%,
@@ -687,27 +706,14 @@ function FinalizeStudio({
             #F16D0B 100%
           )
         `,
-      }}
-    >
-      {/* Ybuilt logo overlay - does not affect layout */}
-      <div className="absolute left-4 top-4 z-[60]">
-        <LogoButton
-          currentProjectName={projectName || undefined}
-          currentProjectPath={currentProjectPath}
-          onThemeToggle={toggleTheme}
-          onLogout={handleLogout}
-          isWorkspace={isWorkspace}
-          onThemeModalOpen={undefined}
-          isHome={isHome}
-          isLibrary={isLibrary}
-          isSettings={isSettings}
-        />
-      </div>
+        }}
+      />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-8">
+      {/* Content stays exactly where it was */}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-16">
         {/* Step indicator */}
-        <div className="mb-4 text-center">
-          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground mb-1">
+        <div className="mb-6 text-center">
+          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground mb-2">
             <span className="px-2 py-1 rounded-full bg-primary/10 text-primary">
               1. Describe
             </span>
@@ -718,10 +724,10 @@ function FinalizeStudio({
             <ChevronRight className="h-4 w-4" />
             <span className="px-2 py-1 rounded-full bg-muted">3. Build</span>
           </div>
-          <h1 className="text-3xl font-bold mt-2">
+          <h1 className="text-3xl font-bold mt-3">
             Step 2 · Review your build plan
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-2">
             We'll open the Workspace next. Just check these details once.
           </p>
         </div>
@@ -729,12 +735,14 @@ function FinalizeStudio({
         {/* 3-column premium layout with aligned heights */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT — inputs & choices */}
-          <Card className="lg:col-span-3 p-6 h-full card-tilt" 
-            style={{ 
-              backgroundColor: '#212121',
-              borderColor: 'rgba(255, 255, 255, 0.1)',
-              backdropFilter: 'none'
-            }}>
+          <Card
+            className="lg:col-span-3 p-6 h-full card-tilt"
+            style={{
+              backgroundColor: "#212121",
+              borderColor: "rgba(255, 255, 255, 0.1)",
+              backdropFilter: "none",
+            }}
+          >
             <div className="relative z-10 space-y-6">
               <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5" /> Configuration
@@ -855,8 +863,8 @@ function FinalizeStudio({
                   {uploading
                     ? "Uploading…"
                     : uploadedFiles.length > 0
-                      ? `${uploadedFiles.length} file(s) uploaded`
-                      : "Choose files"}
+                    ? `${uploadedFiles.length} file(s) uploaded`
+                    : "Choose files"}
                 </Button>
                 {uploadedFiles.length > 0 && (
                   <div className="text-xs text-muted-foreground">
@@ -979,12 +987,14 @@ function FinalizeStudio({
           </Card>
 
           {/* MIDDLE — plan + prompt (HERO CARD) */}
-          <Card className="lg:col-span-6 p-6 h-full card-tilt"
-            style={{ 
-              backgroundColor: '#212121',
-              borderColor: 'rgba(255, 255, 255, 0.1)',
-              backdropFilter: 'none'
-            }}>
+          <Card
+            className="lg:col-span-6 p-6 h-full card-tilt"
+            style={{
+              backgroundColor: "#212121",
+              borderColor: "rgba(255, 255, 255, 0.1)",
+              backdropFilter: "none",
+            }}
+          >
             <div className="relative z-10 space-y-5">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
@@ -1034,10 +1044,10 @@ function FinalizeStudio({
                     {deployPreset === "beginner"
                       ? "Starter stack (cheap hosting, simple CI)"
                       : deployPreset === "pro"
-                        ? "Pro stack (Git + CI, observability, CDN)"
-                        : deployPreset === "business"
-                          ? "Business-ready (teams, SSO, tracing)"
-                          : "Custom deployment"}
+                      ? "Pro stack (Git + CI, observability, CDN)"
+                      : deployPreset === "business"
+                      ? "Business-ready (teams, SSO, tracing)"
+                      : "Custom deployment"}
                   </p>
                 </div>
               </div>
@@ -1064,10 +1074,10 @@ function FinalizeStudio({
             className={`lg:col-span-3 p-6 h-full card-tilt ${
               isReady ? "ring-2 ring-primary/30" : ""
             }`}
-            style={{ 
-              backgroundColor: '#212121',
-              borderColor: 'rgba(255, 255, 255, 0.1)',
-              backdropFilter: 'none'
+            style={{
+              backgroundColor: "#212121",
+              borderColor: "rgba(255, 255, 255, 0.1)",
+              backdropFilter: "none",
             }}
           >
             <div className="relative z-10 space-y-4">
