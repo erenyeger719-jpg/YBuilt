@@ -600,9 +600,9 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         <Header />
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16">
         {/* Step indicator */}
-        <div className="mb-6 text-center">
+        <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 text-sm text-muted-foreground mb-2">
             <span className="px-2 py-1 rounded-full bg-primary/10 text-primary">
               1. Describe
@@ -627,7 +627,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           {/* LEFT — inputs & choices */}
           <Card className="lg:col-span-3 p-6 h-full card-tilt" 
             style={{ 
-              backgroundColor: '#212121',
+              backgroundColor: 'rgba(26, 26, 26, 0.85)',
               borderColor: 'rgba(255, 255, 255, 0.1)',
               backdropFilter: 'none'
             }}>
@@ -877,7 +877,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           {/* MIDDLE — plan + prompt (HERO CARD) */}
           <Card className="lg:col-span-6 p-6 h-full card-tilt"
             style={{ 
-              backgroundColor: '#212121',
+              backgroundColor: 'rgba(26, 26, 26, 0.85)',
               borderColor: 'rgba(255, 255, 255, 0.1)',
               backdropFilter: 'none'
             }}>
@@ -961,7 +961,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
               isReady ? "ring-2 ring-primary/30" : ""
             }`}
             style={{ 
-              backgroundColor: '#212121',
+              backgroundColor: 'rgba(26, 26, 26, 0.85)',
               borderColor: 'rgba(255, 255, 255, 0.1)',
               backdropFilter: 'none'
             }}
