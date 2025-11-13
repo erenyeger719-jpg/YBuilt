@@ -70,18 +70,17 @@ export default function Home() {
     <div
       className="relative min-h-screen text-slate-900"
       style={{
-        // Minimal Colors – Purple 90’s vertical gradient
         background:
           "linear-gradient(to bottom," +
-          " #a0d2eb 0%," +   // Ice Cold
-          " #e5eaf5 28%," +  // Freeze Purple
-          " #d0bdf4 40%," +  // Medium Purple
-          " #8458B3 56%," +  // Purple Pain
-          " #1F1E21 78%," +  // Heavy Purple
+          " #a0d2eb 0%," + // Ice Cold
+          " #e5eaf5 28%," + // Freeze Purple
+          " #d0bdf4 40%," + // Medium Purple
+          " #8458B3 56%," + // Purple Pain
+          " #1F1E21 78%," + // Heavy Purple
           " #1F1E21 100%)",
       }}
     >
-      {/* global grain / noise over the whole home screen */}
+      {/* global grain / noise */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10 opacity-[0.25] mix-blend-soft-light"
@@ -92,18 +91,21 @@ export default function Home() {
         }}
       />
 
-      {/* Black header stays on top (unchanged) */}
       <Header />
-
-      {/* HERO takes the whole first viewport */}
       <Hero />
 
-      {/* Floating rounded panel that overlaps the hero, Lovable-style */}
+      {/* Overlapping white panel — widened to near-edges with ~24px gutter */}
       <main className="relative -mt-10 pb-20 sm:-mt-12 lg:-mt-16">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_-24px_80px_rgba(15,23,42,0.20)]">
+        <div
+          className="mx-auto"
+          style={{
+            // max 1680px, otherwise leave 24px gutters on each side
+            width: "min(1680px, calc(100vw - 48px))",
+          }}
+        >
+          <div className="overflow-hidden rounded-[28px] md:rounded-[32px] border border-slate-200 bg-white shadow-[0_-24px_80px_rgba(15,23,42,0.20)]">
             {/* inner padding for content */}
-            <div className="px-6 pb-14 pt-10 sm:px-10 lg:px-12">
+            <div className="px-4 sm:px-8 lg:px-12 pb-14 pt-10">
               {/* SECTION: Explore starting points */}
               <section className="space-y-5">
                 <div className="flex items-baseline justify-between gap-4">
