@@ -5,14 +5,14 @@ import {
   useState,
   useRef,
 } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import Header from "@/components/Header";
+import LogoButton from "@/components/LogoButton";
 import Showcase from "@/components/Showcase";
 import {
   Dialog,
@@ -199,7 +199,63 @@ function useStudioFX() {
 
 export default function StudioPage() {
   const { jobId } = useParams<{ jobId?: string }>();
+  const [location] = useLocation();
   const { toast } = useToast();
+
+  // --- THEME + LOW-GLOSS (mirrors Header.tsx) ---
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [lowGloss, setLowGloss] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") as
+      | "light"
+      | "dark"
+      | null;
+    const savedLowGloss = localStorage.getItem("lowGloss") === "true";
+
+    if (savedTheme) {
+      setTheme(savedTheme);
+      if (savedTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    } else {
+      setTheme("dark");
+      document.documentElement.classList.add("dark");
+    }
+
+    if (savedLowGloss) {
+      setLowGloss(true);
+      document.documentElement.classList.add("low-gloss");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    if (newTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    localStorage.setItem("theme", newTheme);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    window.location.href = "/";
+  };
+
+  // Studio is its own page, so all these are false
+  const isWorkspace = false;
+  const isHome = false;
+  const isLibrary = false;
+  const isSettings = false;
+
+  // If your Studio page already knows a project name, plug it here
+  const currentProjectName = undefined; // or e.g. job.manifest.name
+  const currentProjectPath = jobId ? `/workspace/${jobId}` : undefined;
 
   // Autorun AI build (from Templates → Studio)
   const [busy, setBusy] = useState(false);
@@ -279,8 +335,19 @@ export default function StudioPage() {
           `,
         }}
       >
-        <div className="relative z-10">
-          <Header />
+        {/* Ybuilt logo in top-left, Studio only */}
+        <div className="fixed left-3 top-3 z-[60]">
+          <LogoButton
+            currentProjectName={currentProjectName}
+            currentProjectPath={currentProjectPath}
+            onThemeToggle={toggleTheme}
+            onLogout={handleLogout}
+            isWorkspace={isWorkspace}
+            onThemeModalOpen={undefined}
+            isHome={isHome}
+            isLibrary={isLibrary}
+            isSettings={isSettings}
+          />
         </div>
 
         <header className="relative z-10 max-w-6xl mx-auto pt-20 px-6 text-center">
@@ -367,10 +434,37 @@ export default function StudioPage() {
   }
 
   // Finalize view (with :jobId)
-  return <FinalizeStudio jobId={jobId} />;
+  return <FinalizeStudio 
+    jobId={jobId} 
+    currentProjectPath={currentProjectPath}
+    toggleTheme={toggleTheme}
+    handleLogout={handleLogout}
+    isWorkspace={isWorkspace}
+    isHome={isHome}
+    isLibrary={isLibrary}
+    isSettings={isSettings}
+  />;
 }
 
-function FinalizeStudio({ jobId }: { jobId: string }) {
+function FinalizeStudio({ 
+  jobId,
+  currentProjectPath,
+  toggleTheme,
+  handleLogout,
+  isWorkspace,
+  isHome,
+  isLibrary,
+  isSettings
+}: { 
+  jobId: string;
+  currentProjectPath?: string;
+  toggleTheme: () => void;
+  handleLogout: () => void;
+  isWorkspace: boolean;
+  isHome: boolean;
+  isLibrary: boolean;
+  isSettings: boolean;
+}) {
   useStudioFX();
 
   const { toast } = useToast();
@@ -535,7 +629,7 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   if (loading) {
     return (
       <div
-        className="studio-root dark min-h-screen grid place-items-center text-white relative overflow-hidden"
+        className="studio-root min-h-screen grid place-items-center text-white relative overflow-hidden"
         style={{
           background: `
             linear-gradient(
@@ -570,14 +664,9 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
   return (
     <div
-      className="studio-root dark min-h-screen text-white relative overflow-hidden bg-[#171717]"
-    >
-      {/* Gradient overlay shifted slightly upward – only background moves */}
-      <div
-        className="pointer-events-none absolute inset-x-0 h-[900px]"
-        style={{
-          top: "-2.5rem", // ≈ two text "enter" lines upward
-          background: `
+      className="studio-root min-h-screen text-white relative overflow-hidden"
+      style={{
+        background: `
           linear-gradient(
             180deg,
             #171717 0%,
@@ -598,14 +687,27 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
             #F16D0B 100%
           )
         `,
-        }}
-      />
+      }}
+    >
+      {/* Ybuilt logo in top-left, Studio only */}
+      <div className="fixed left-3 top-3 z-[60]">
+        <LogoButton
+          currentProjectName={projectName || undefined}
+          currentProjectPath={currentProjectPath}
+          onThemeToggle={toggleTheme}
+          onLogout={handleLogout}
+          isWorkspace={isWorkspace}
+          onThemeModalOpen={undefined}
+          isHome={isHome}
+          isLibrary={isLibrary}
+          isSettings={isSettings}
+        />
+      </div>
 
-      {/* Content stays exactly where it was */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-16">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-8">
         {/* Step indicator */}
-        <div className="mb-6 text-center">
-          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <div className="mb-4 text-center">
+          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground mb-1">
             <span className="px-2 py-1 rounded-full bg-primary/10 text-primary">
               1. Describe
             </span>
@@ -616,10 +718,10 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
             <ChevronRight className="h-4 w-4" />
             <span className="px-2 py-1 rounded-full bg-muted">3. Build</span>
           </div>
-          <h1 className="text-3xl font-bold mt-3">
+          <h1 className="text-3xl font-bold mt-2">
             Step 2 · Review your build plan
           </h1>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-muted-foreground mt-1">
             We'll open the Workspace next. Just check these details once.
           </p>
         </div>
@@ -627,14 +729,12 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         {/* 3-column premium layout with aligned heights */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT — inputs & choices */}
-          <Card
-            className="lg:col-span-3 p-6 h-full card-tilt"
-            style={{
-              backgroundColor: "#212121",
-              borderColor: "rgba(255, 255, 255, 0.1)",
-              backdropFilter: "none",
-            }}
-          >
+          <Card className="lg:col-span-3 p-6 h-full card-tilt" 
+            style={{ 
+              backgroundColor: '#212121',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'none'
+            }}>
             <div className="relative z-10 space-y-6">
               <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5" /> Configuration
@@ -755,8 +855,8 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                   {uploading
                     ? "Uploading…"
                     : uploadedFiles.length > 0
-                    ? `${uploadedFiles.length} file(s) uploaded`
-                    : "Choose files"}
+                      ? `${uploadedFiles.length} file(s) uploaded`
+                      : "Choose files"}
                 </Button>
                 {uploadedFiles.length > 0 && (
                   <div className="text-xs text-muted-foreground">
@@ -879,14 +979,12 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           </Card>
 
           {/* MIDDLE — plan + prompt (HERO CARD) */}
-          <Card
-            className="lg:col-span-6 p-6 h-full card-tilt"
-            style={{
-              backgroundColor: "#212121",
-              borderColor: "rgba(255, 255, 255, 0.1)",
-              backdropFilter: "none",
-            }}
-          >
+          <Card className="lg:col-span-6 p-6 h-full card-tilt"
+            style={{ 
+              backgroundColor: '#212121',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'none'
+            }}>
             <div className="relative z-10 space-y-5">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
@@ -936,10 +1034,10 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                     {deployPreset === "beginner"
                       ? "Starter stack (cheap hosting, simple CI)"
                       : deployPreset === "pro"
-                      ? "Pro stack (Git + CI, observability, CDN)"
-                      : deployPreset === "business"
-                      ? "Business-ready (teams, SSO, tracing)"
-                      : "Custom deployment"}
+                        ? "Pro stack (Git + CI, observability, CDN)"
+                        : deployPreset === "business"
+                          ? "Business-ready (teams, SSO, tracing)"
+                          : "Custom deployment"}
                   </p>
                 </div>
               </div>
@@ -966,10 +1064,10 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
             className={`lg:col-span-3 p-6 h-full card-tilt ${
               isReady ? "ring-2 ring-primary/30" : ""
             }`}
-            style={{
-              backgroundColor: "#212121",
-              borderColor: "rgba(255, 255, 255, 0.1)",
-              backdropFilter: "none",
+            style={{ 
+              backgroundColor: '#212121',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'none'
             }}
           >
             <div className="relative z-10 space-y-4">
