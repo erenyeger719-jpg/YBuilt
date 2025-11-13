@@ -1,5 +1,11 @@
 // client/src/pages/Studio.tsx
-import { useEffect, useMemo, useState, useRef } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  type CSSProperties,
+} from "react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -90,6 +96,17 @@ const DEPLOY_DESCRIPTIONS = {
   business: "Teams, SSO, and audits.",
   custom: "We'll ask for your provider details inside the Workspace.",
 } as const;
+
+// --- Theme 1: Hero Echo background (mirrors home hero, softened for Studio) ---
+const STUDIO_BG_HERO_ECHO: CSSProperties = {
+  background:
+    "radial-gradient(circle at 50% -10%, rgba(88,124,201,0.35), transparent 60%), " +
+    "radial-gradient(circle at 50% 110%, rgba(242,113,102,0.24), transparent 65%), " +
+    "linear-gradient(180deg, #050505 0%, #0b0b10 30%, #171b26 55%, #242F40 75%, #1a1010 100%)",
+  backgroundAttachment: "fixed",
+  backgroundRepeat: "no-repeat",
+  backgroundSize: "100% 100%",
+};
 
 /** Studio-only FX with event delegation: scroll stops, magnetic, tilt, reveal */
 function useStudioFX() {
@@ -264,7 +281,10 @@ export default function StudioPage() {
     useForceStudioTheme(true);
     useStudioFX();
     return (
-      <section className="studio-root min-h-screen">
+      <section
+        className="studio-root min-h-screen"
+        style={STUDIO_BG_HERO_ECHO}
+      >
         <div className="relative z-10">
           <Header />
         </div>
@@ -523,7 +543,10 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
   if (loading) {
     return (
-      <div className="studio-root min-h-screen grid place-items-center">
+      <div
+        className="studio-root min-h-screen grid place-items-center"
+        style={STUDIO_BG_HERO_ECHO}
+      >
         <div className="relative z-10 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Preparing studio…</p>
@@ -533,7 +556,10 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   }
 
   return (
-    <div className="studio-root min-h-screen">
+    <div
+      className="studio-root min-h-screen"
+      style={STUDIO_BG_HERO_ECHO}
+    >
       {/* Keep your header on top of the glass */}
       <div className="relative z-10">
         <Header />
