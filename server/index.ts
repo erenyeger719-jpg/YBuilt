@@ -115,6 +115,24 @@ logger.info(`[RAZORPAY] Mode: ${RAZORPAY_MODE}`);
 
 const app = express();
 
+// --- KPI "seen" ledger (.cache/kpi.seen.jsonl) ---
+const KPI_SEEN_FILE = path.join(process.cwd(), '.cache', 'kpi.seen.jsonl');
+
+function logPreviewSeen(event: any) {
+  try {
+    fs.mkdirSync(path.dirname(KPI_SEEN_FILE), { recursive: true });
+    const line = JSON.stringify({
+      ...event,
+      ts: event?.ts ?? Date.now(),
+      kind: 'seen',
+      source: event?.source ?? 'preview',
+    });
+    fs.appendFile(KPI_SEEN_FILE, line + '\n', () => {});
+  } catch {
+    // Never break the server because of logging.
+  }
+}
+
 // trust proxy so req.ip uses X-Forwarded-For on Render
 app.set('trust proxy', 1);
 
@@ -653,6 +671,36 @@ app.use(ipGate());
 
   // NEW: KPI endpoints (seen/convert/metrics)
   app.use('/api', kpiRouter);
+
+  // NEW: KPI seen endpoint → append-only ledger .cache/kpi.seen.jsonl
+  app.post('/api/kpi/seen', express.json(), (req, res) => {
+    try {
+      const body = req.body || {};
+      const jobId = typeof body.jobId === 'string' ? body.jobId : undefined;
+      const workspaceId =
+        typeof body.workspaceId === 'string' ? body.workspaceId : undefined;
+      const pathName =
+        typeof body.path === 'string' ? body.path : undefined;
+
+      if (!jobId || !pathName) {
+        return res
+          .status(400)
+          .json({ ok: false, error: 'missing_job_or_path' });
+      }
+
+      logPreviewSeen({
+        jobId,
+        workspaceId,
+        path: pathName,
+      });
+
+      return res.json({ ok: true });
+    } catch {
+      return res
+        .status(500)
+        .json({ ok: false, error: 'kpi_seen_failed' });
+    }
+  });
 
   // NEW: Challenge API (with JSON parsing)
   app.use('/api/challenge', express.json({ limit: '16kb' }), challengeRouter);

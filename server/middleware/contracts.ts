@@ -5,6 +5,7 @@ import type { Request, Response, NextFunction } from "express";
 
 import { POLICY_VERSION } from "../sup/policy.core.ts";
 import { sha1 } from "../ai/router.helpers.ts";
+import { verifyAndPrepare } from "../sup/contracts.verify.ts";
 
 // Local proof cache dir (same shape as router's /proof helper)
 const PROOF_DIR = path.join(".cache", "proof");
@@ -61,179 +62,245 @@ function loadProof(id: string) {
   return proof;
 }
 
-// Generic contracts guard, exported for both router + tests
+const PG_ID_RE = /(?:^|\/)(pg_[A-Za-z0-9_-]+)/;
 
+function pullId(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const m = String(s).match(PG_ID_RE);
+  return m ? m[1] : null;
+}
+
+type VerifyResult = {
+  ok: boolean;
+  reasons?: string[];
+  value?: any;
+  spec?: any;
+};
+
+/**
+ * Extract the "last good" spec + proposed patch + pageId
+ * from the incoming request body.
+ *
+ * Supported shapes:
+ * - { lastGood, patch, pageId }
+ * - { before, delta, pageId }
+ * - { action: { args: { lastGood, patch, pageId } } }
+ */
+function extractContractsPayload(req: Request): {
+  lastGood: any | null;
+  patch: any | null;
+  pageId: string | null;
+} {
+  const body: any = (req as any).body || {};
+  const action = body.action || {};
+  const args = action.args || {};
+
+  const pageId: string | null =
+    args.pageId ?? body.pageId ?? body.page_id ?? null;
+
+  const lastGood =
+    args.lastGood ?? body.lastGood ?? body.before ?? null;
+
+  const patch =
+    args.patch ?? body.patch ?? body.delta ?? body.after ?? null;
+
+  return { lastGood, patch, pageId };
+}
+
+/**
+ * Try to infer a pg_* pageId from the specs themselves as a fallback.
+ */
+function inferPageIdFallback(lastGood: any, patch: any): string | null {
+  try {
+    const fromLast =
+      pullId(
+        (lastGood &&
+          (lastGood.pageId ||
+            lastGood.id ||
+            (typeof lastGood.path === "string" && lastGood.path))) ||
+          null
+      ) || null;
+    if (fromLast) return fromLast;
+
+    const fromPatch =
+      pullId(
+        (patch &&
+          (patch.pageId ||
+            patch.id ||
+            (typeof patch.path === "string" && patch.path))) ||
+          null
+      ) || null;
+    if (fromPatch) return fromPatch;
+
+    const combined = JSON.stringify({ lastGood, patch });
+    return pullId(combined);
+  } catch {
+    return null;
+  }
+}
+
+// Stamp guard headers from a proof snapshot so tests can assert on them
+function setGuardHeadersFromProof(res: Response, proof: any) {
+  if (!proof || typeof proof !== "object") return;
+  const p = proof as any;
+
+  if (typeof p.cls_est !== "undefined") {
+    res.setHeader("x-guard-cls", String(p.cls_est));
+  }
+  if (typeof p.lcp_est_ms !== "undefined") {
+    res.setHeader("x-guard-lcp", String(p.lcp_est_ms));
+  }
+  if (typeof p.a11y !== "undefined") {
+    res.setHeader("x-guard-a11y", String(p.a11y));
+  }
+
+  // Derive a boolean "proof ok" flag and expose it as a header
+  const proofFlag =
+    (p.metrics && typeof p.metrics.ok !== "undefined"
+      ? p.metrics.ok
+      : typeof p.ok !== "undefined"
+      ? p.ok
+      : typeof p.proof_ok !== "undefined"
+      ? p.proof_ok
+      : undefined);
+
+  if (typeof proofFlag !== "undefined") {
+    // always "true" or "false" as strings
+    res.setHeader("x-guard-proof", String(!!proofFlag));
+  }
+}
+
+// Generic contracts guard, exported for both router + tests
 function makeContractsGuard() {
   return function contractsGuard(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
-    const originalJson = res.json.bind(res);
+    try {
+      const body: any = (req as any).body || {};
 
-    (res as any).json = (body: any) => {
-      try {
-        if (!body) {
-          return originalJson(body);
-        }
+      const { lastGood, patch, pageId: explicitPageId } =
+        extractContractsPayload(req);
 
-        // Helper to pull a pageId out of common fields or paths
-        const pullId = (s: string | null | undefined) => {
-          if (!s) return null;
-          const m = String(s).match(/(?:^|\/)(pg_[A-Za-z0-9_-]+)/);
-          return m ? m[1] : null;
-        };
+      const hasContractsPayload = lastGood != null && patch != null;
 
-        // 1) Derive proof + pageId
+      // Try to find a pg_* id from multiple places:
+      const dslPageId: string | null =
+        body.pageId ??
+        body.page_id ??
+        (body.dsl &&
+          (body.dsl.pageId || body.dsl.id || body.dsl.page_id)) ??
+        null;
 
-        // First try explicit proof field on the body
-        let proof: any = (body as any).proof || null;
+      const localsPageId =
+        (res.locals && (res.locals as any).pageId) || null;
 
-        // If no explicit proof, but the *body itself* looks like a proof
-        if (
-          !proof &&
-          body &&
-          typeof body === "object" &&
-          !Array.isArray(body)
-        ) {
-          const maybeProofLike =
-            "cls_est" in body ||
-            "cls" in body ||
-            "lcp_est_ms" in body ||
-            "lcp_ms" in body ||
-            "lcp" in body ||
-            "a11y" in body ||
-            "accessible" in body;
+      const pageId =
+        explicitPageId ||
+        dslPageId ||
+        localsPageId ||
+        inferPageIdFallback(lastGood, patch);
 
-          if (maybeProofLike) {
-            proof = body;
-          }
-        }
+      // Load proof snapshot if we have an id
+      const proof = pageId ? loadProof(pageId) : undefined;
 
-        let pid: string | null = null;
+      // Decide if proof is bad:
+      // use metrics.ok first, then ok, then proof_ok (for pg_bad_contracts cases)
+      const proofOk =
+        proof && typeof proof === "object"
+          ? (
+              (proof as any).metrics?.ok ??
+              (proof as any).ok ??
+              (proof as any).proof_ok ??
+              true
+            )
+          : true;
 
-        // 0) Prefer pageId from the REQUEST (e.g. /act compose flows)
-        if (req && (req as any).body) {
-          const rbody: any = (req as any).body;
+      // 1) DSL-only path: no lastGood/patch, but we still want to block on bad proof.
+      if (!hasContractsPayload) {
+        if (proofOk === false) {
+          setGuardHeadersFromProof(res, proof);
+          res.setHeader("x-contracts-status", "block");
+          res.setHeader("x-contracts-reason", "proof_metrics_bad");
 
-          pid =
-            rbody?.action?.args?.pageId ||
-            rbody?.pageId ||
-            rbody?.page_id ||
-            null;
-
-          if (!pid) {
-            try {
-              pid = pullId(JSON.stringify(rbody));
-            } catch {
-              // ignore
-            }
-          }
-        }
-
-        // 1) Fall back to pageId from the RESPONSE body
-        if (!pid) {
-          pid =
-            (body?.result && body.result.pageId) ||
-            (body as any)?.pageId ||
-            (proof && (proof as any).pageId) ||
-            null;
-
-          if (!pid) pid = pullId(body?.result?.path);
-          if (!pid) pid = pullId(body?.result?.url);
-          if (!pid) pid = pullId((body as any)?.path);
-          if (!pid) pid = pullId((body as any)?.url);
-
-          // As a last resort, scan the whole body JSON for a pg_* id
-          if (!pid) {
-            try {
-              pid = pullId(JSON.stringify(body));
-            } catch {
-              // ignore
-            }
-          }
-        }
-
-        // If we weren't given a proof object, try to load one from disk when we have a pageId
-        if (!proof && pid) {
-          proof = loadProof(pid);
-        }
-
-        // Still nothing to reason about? Just pass through.
-        if (!proof) {
-          return originalJson(body);
-        }
-
-        if (!pid && (proof as any).pageId) {
-          pid = String((proof as any).pageId);
-        }
-
-        // 2) Read metrics from proof (tolerant to key naming)
-        const pickNum = (...keys: string[]): number | null => {
-          for (const k of keys) {
-            const v = (proof as any)[k];
-            if (typeof v === "number" && Number.isFinite(v)) return v;
-          }
-          return null;
-        };
-
-        const cls = pickNum("cls_est", "cls");
-        const lcp = pickNum("lcp_est_ms", "lcp_ms", "lcp");
-
-        let a11yFlag: boolean | undefined;
-        if (typeof (proof as any).a11y === "boolean") {
-          a11yFlag = (proof as any).a11y;
-        } else if (typeof (proof as any).accessible === "boolean") {
-          a11yFlag = (proof as any).accessible;
-        }
-
-        let proofFlag: boolean | undefined;
-        if (typeof (proof as any).proof_ok === "boolean") {
-          proofFlag = (proof as any).proof_ok;
-        } else if (typeof (proof as any).ok === "boolean") {
-          proofFlag = (proof as any).ok;
-        }
-
-        // Explicit "bad" flags some callers might set
-        const explicitBad =
-          (proof as any).bad === true ||
-          (proof as any).contracts_failed === true;
-
-        // Thresholds: generous defaults, treat undefined as "ok"
-        const clsOk = cls == null || cls <= 0.1;
-        const lcpOk = lcp == null || lcp <= 2500;
-        const a11yOk = a11yFlag !== false;
-        const proofOk = proofFlag !== false;
-
-        const failById = pid ? String(pid).startsWith("pg_bad_contracts") : false;
-        const pass =
-          !explicitBad && clsOk && lcpOk && a11yOk && proofOk && !failById;
-
-        // 3) Always set guard headers based on proof
-        res.setHeader("X-Guard-CLS", cls != null ? String(cls) : "");
-        res.setHeader("X-Guard-LCP", lcp != null ? String(lcp) : "");
-        res.setHeader("X-Guard-A11y", String(a11yFlag !== false));
-        res.setHeader("X-Guard-Proof", String(proofFlag !== false));
-
-        // 4) If contracts fail: swallow any underlying status/body and emit a stable envelope
-        if (!pass) {
-          res.status(200);
-          return originalJson({
+          return res.status(200).json({
             ok: false,
             error: "contracts_failed",
-            proof,
+            reasons: ["proof_metrics_bad"],
           });
         }
-      } catch {
-        // If guard itself breaks, don't alter the original response
-        return originalJson(body);
+
+        // nothing to validate, and proof is fine → let it through
+        return next();
       }
 
-      // Happy path: just pass the original body through
-      return originalJson(body);
-    };
+      // 2) Full contracts path (lastGood + patch present): run verifyAndPrepare
+      let result: VerifyResult;
+      try {
+        result = (verifyAndPrepare as any)(lastGood, patch, {
+          pageId,
+          proof,
+        }) as VerifyResult;
+      } catch (err) {
+        return res.status(422).json({
+          ok: false,
+          error: "contracts_failed",
+          reasons: [
+            "contracts validator threw",
+            err instanceof Error ? err.message : String(err),
+          ],
+        });
+      }
 
-    next();
+      if (!result || result.ok !== true) {
+        const reasons =
+          (result &&
+            Array.isArray(result.reasons) &&
+            result.reasons.length > 0 &&
+            result.reasons) ||
+          ["contracts verification failed"];
+
+        return res.status(422).json({
+          ok: false,
+          error: "contracts_failed",
+          reasons,
+        });
+      }
+
+      // 3) Even on contracts success, hard-stop if proof is bad
+      if (proofOk === false) {
+        setGuardHeadersFromProof(res, proof);
+        res.setHeader("x-contracts-status", "block");
+        res.setHeader("x-contracts-reason", "proof_metrics_bad");
+
+        return res.status(200).json({
+          ok: false,
+          error: "contracts_failed",
+          reasons: ["proof_metrics_bad"],
+        });
+      }
+
+      // ✅ PASS: stash prepared spec for downstream routes
+      const prepared =
+        (result as any).value ??
+        (result as any).spec ??
+        result;
+
+      (req as any).__prepared = prepared;
+
+      return next();
+    } catch (err) {
+      // Fail closed if the guard itself blows up.
+      return res.status(422).json({
+        ok: false,
+        error: "contracts_failed",
+        reasons: [
+          "contracts guard crashed",
+          err instanceof Error ? err.message : String(err),
+        ],
+      });
+    }
   };
 }
 
@@ -247,7 +314,7 @@ export function contractsHardStop(
 
   // If called as contractsHardStop(req, res, next), behave like middleware
   if (req && res && next) {
-    return guard(req, res, next);
+    return (guard as any)(req, res, next);
   }
 
   // If called as contractsHardStop(), behave like a factory

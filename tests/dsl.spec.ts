@@ -1,3 +1,4 @@
+// tests/dsl.spec.ts
 import { describe, it, expect } from "vitest";
 import { verifyAndPrepare, defaultsForSections, hardenCopy } from "../server/intent/dsl";
 

@@ -221,7 +221,16 @@ export default function CursorCanvas() {
   // Use custom hooks
   usePersonaPersistence(persona);
   useCostTracking(sessionId, setCostMeta, setReceipt);
-  useABTesting(ab, abAuto, setAbKpi, setAb, setAbWinner, setPreview, pushAutoLog, say);
+  useABTesting(
+    ab,
+    abAuto,
+    setAbKpi,
+    setAb,
+    setAbWinner,
+    setPreview,
+    pushAutoLog,
+    say
+  );
 
   // Helper functions
   function trySetCostMeta(c: any) {
@@ -270,11 +279,16 @@ export default function CursorCanvas() {
       tag === "button" ||
       role === "button" ||
       (tag === "a" &&
-        /(sign up|buy|get|start|try|join|subscribe|demo|learn|add to cart|checkout)/.test(text))
+        /(sign up|buy|get|start|try|join|subscribe|demo|learn|add to cart|checkout)/.test(
+          text
+        ))
     ) {
       truths.push("CTA");
     }
-    if (/[₹$€]\s?\d|(\d+(\.\d+)?\s?%)/.test(text) || /(month|year|mo|annual|monthly)/.test(text)) {
+    if (
+      /[₹$€]\s?\d|(\d+(\.\d+)?\s?%)/.test(text) ||
+      /(month|year|mo|annual|monthly)/.test(text)
+    ) {
       truths.push("Price");
     }
     if (/\b(best|only|#1|fastest|guarantee|unlimited|world)\b/.test(text)) {
@@ -297,6 +311,39 @@ export default function CursorCanvas() {
     return truths;
   }
 
+  // Autopilot helpers
+  function pushAutoLog(role: "you" | "pilot", text: string) {
+    setAutoLog((l) => [...l, { role, text }].slice(-5));
+  }
+
+  function say(text: string) {
+    try {
+      const current = personaRef.current;
+      const u = new SpeechSynthesisUtterance(`[${current}] ${text}`);
+      const voices = (window.speechSynthesis?.getVoices?.() ||
+        []) as SpeechSynthesisVoice[];
+      const pick =
+        (current === "mentor" &&
+          voices.find((v) => v.lang?.toLowerCase().startsWith("en-in"))) ||
+        voices.find((v) => v.lang?.toLowerCase().startsWith("en-")) ||
+        voices[0];
+      if (pick) u.voice = pick;
+      window.speechSynthesis?.speak(u);
+    } catch {}
+  }
+
+  async function askConfirm(plan: string) {
+    return window.confirm(plan + "\n\nProceed?");
+  }
+
+  function undoLast() {
+    if (history.length >= 2) {
+      const node = history[1];
+      setPreview(node.url, node.pageId);
+      setHistory((h) => h.slice(1));
+    }
+  }
+
   // Comment functions
   function addCommentAtCursor() {
     if (!pageId || !cursorPt) return;
@@ -317,7 +364,12 @@ export default function CursorCanvas() {
     saveComments(pageId, next);
   }
 
-  function addCommentAt(x: number, y: number, sel: string | undefined, hint?: string) {
+  function addCommentAt(
+    x: number,
+    y: number,
+    sel: string | undefined,
+    hint?: string
+  ) {
     if (!pageId) return;
     const txt = window.prompt("Add note", hint || "");
     if (!txt || !txt.trim()) return;
@@ -350,7 +402,10 @@ export default function CursorCanvas() {
         c.id === id
           ? {
               ...c,
-              replies: [...(c.replies || []), { id: rid(5), text: text.trim(), ts: Date.now() }],
+              replies: [
+                ...(c.replies || []),
+                { id: rid(5), text: text.trim(), ts: Date.now() },
+              ],
             }
           : c
       );
@@ -362,42 +417,12 @@ export default function CursorCanvas() {
   function toggleResolve(id: string) {
     if (!pageId) return;
     setComments((prev) => {
-      const next = prev.map((c) => (c.id === id ? { ...c, resolved: !c.resolved } : c));
+      const next = prev.map((c) =>
+        c.id === id ? { ...c, resolved: !c.resolved } : c
+      );
       saveComments(pageId, next);
       return next;
     });
-  }
-
-  // Autopilot helpers
-  function pushAutoLog(role: "you" | "pilot", text: string) {
-    setAutoLog((l) => [...l, { role, text }].slice(-5));
-  }
-
-  function say(text: string) {
-    try {
-      const current = personaRef.current;
-      const u = new SpeechSynthesisUtterance(`[${current}] ${text}`);
-      const voices = (window.speechSynthesis?.getVoices?.() || []) as SpeechSynthesisVoice[];
-      const pick =
-        (current === "mentor" &&
-          voices.find((v) => v.lang?.toLowerCase().startsWith("en-in"))) ||
-        voices.find((v) => v.lang?.toLowerCase().startsWith("en-")) ||
-        voices[0];
-      if (pick) u.voice = pick;
-      window.speechSynthesis?.speak(u);
-    } catch {}
-  }
-
-  async function askConfirm(plan: string) {
-    return window.confirm(plan + "\n\nProceed?");
-  }
-
-  function undoLast() {
-    if (history.length >= 2) {
-      const node = history[1];
-      setPreview(node.url, node.pageId);
-      setHistory((h) => h.slice(1));
-    }
   }
 
   // Proof and budgets
@@ -418,8 +443,10 @@ export default function CursorCanvas() {
     if (!p) return false;
     if (GUARD.requireProof && p.proof_ok !== true) return false;
     if (GUARD.requireA11y && p.a11y !== true) return false;
-    if (typeof p.cls_est === "number" && p.cls_est > GUARD.maxCLS) return false;
-    if (typeof p.lcp_est_ms === "number" && p.lcp_est_ms > GUARD.maxLCPms) return false;
+    if (typeof p.cls_est === "number" && p.cls_est > GUARD.maxCLS)
+      return false;
+    if (typeof p.lcp_est_ms === "number" && p.lcp_est_ms > GUARD.maxLCPms)
+      return false;
     return true;
   }
 
@@ -440,7 +467,10 @@ export default function CursorCanvas() {
 
     if (!pass) {
       undoLast();
-      pushAutoLog("pilot", "Change reverted — guardrails failed (CLS/A11y/Proof/LCP).");
+      pushAutoLog(
+        "pilot",
+        "Change reverted — guardrails failed (CLS/A11y/Proof/LCP)."
+      );
       try {
         say("Blocked. Rolled back to last good state.");
       } catch {}
@@ -451,9 +481,9 @@ export default function CursorCanvas() {
     const lcp = p?.lcp_est_ms != null ? `${Math.round(p.lcp_est_ms)} ms` : "—";
     pushAutoLog(
       "pilot",
-      `Done. CLS ${cls} · LCP ${lcp} · A11y ${p?.a11y ? "PASS" : "FAIL"} · Proof ${
-        p?.proof_ok ? "OK" : "BLOCKED"
-      }`
+      `Done. CLS ${cls} · LCP ${lcp} · A11y ${
+        p?.a11y ? "PASS" : "FAIL"
+      } · Proof ${p?.proof_ok ? "OK" : "BLOCKED"}`
     );
     try {
       say(`Done. CLS ${cls}, LCP ${lcp}.`);
@@ -488,10 +518,21 @@ export default function CursorCanvas() {
             pushAutoLog("pilot", 'No Army winners yet. Say "run army" first.');
             return;
           }
-          await guardedExec("Plan: blend sections from top winner", () => blendWinner(top));
+          await guardedExec("Plan: blend sections from top winner", () =>
+            blendWinner(top)
+          );
         },
         startBasicAB: () => {
-          setAb((a) => (a.on ? a : { ...a, on: true, exp: a.exp || `exp_${rid(6)}`, arm: "A" }));
+          setAb((a) =>
+            a.on
+              ? a
+              : {
+                  ...a,
+                  on: true,
+                  exp: a.exp || `exp_${rid(6)}`,
+                  arm: "A",
+                }
+          );
         },
         toggleAB: (on?: boolean) => {
           setAb((a) => (on == null ? { ...a, on: !a.on } : { ...a, on: !!on }));
@@ -518,14 +559,17 @@ export default function CursorCanvas() {
         reportStatus: async () => {
           const p = proofRef.current;
           if (!p) return null;
-          const cls = typeof p.cls_est === "number" ? p.cls_est.toFixed(3) : "—";
-          const lcp = typeof p.lcp_est_ms === "number" ? `${Math.round(p.lcp_est_ms)} ms` : "—";
+          const cls =
+            typeof p.cls_est === "number" ? p.cls_est.toFixed(3) : "—";
+          const lcp =
+            typeof p.lcp_est_ms === "number"
+              ? `${Math.round(p.lcp_est_ms)} ms`
+              : "—";
           const a11y = p.a11y ? "PASS" : "FAIL";
           const proofOk = p.proof_ok ? "OK" : "BLOCKED";
           return `CLS ${cls} · LCP ${lcp} · A11y ${a11y} · Proof ${proofOk}`;
         },
         setGoalAndApply: async (n: number) => {
-          // keep goal between 0 and 100
           const g = Math.max(0, Math.min(100, n));
           setGoal(g);
           await applyGoal(g);
@@ -553,9 +597,12 @@ export default function CursorCanvas() {
   // Re-anchor comments
   function reanchorComments() {
     const doc =
-      frameRef.current?.contentDocument || frameRef.current?.contentWindow?.document || null;
+      frameRef.current?.contentDocument ||
+      frameRef.current?.contentWindow?.document ||
+      null;
     if (!doc || comments.length === 0) return;
-    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+    const clamp = (v: number, lo: number, hi: number) =>
+      Math.max(lo, Math.min(hi, v));
     const next = comments.map((c) => {
       if (!c.path) return c;
       const el = doc.querySelector<HTMLElement>(c.path);
@@ -656,9 +703,28 @@ export default function CursorCanvas() {
   const abs = (p: string) => {
     if (/^https?:\/\//i.test(p)) return p;
     const host = location.host.replace(":5173", ":3000");
-    const base = (window as any).__APP_ORIGIN__ || `${location.protocol}//${host}`;
+    const base =
+      (window as any).__APP_ORIGIN__ || `${location.protocol}//${host}`;
     return `${base}${p}`;
   };
+
+  // Send "view" beacon to backend whenever preview URL changes
+  useEffect(() => {
+    if (!url) return;
+    const previewUrl = abs(url);
+
+    fetch("/api/seen", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        url: previewUrl,
+      }),
+    }).catch((err) => {
+      console.warn("[autopilot] failed to send view beacon", err);
+    });
+  }, [url]);
 
   // Keep local copy of section order
   useEffect(() => {
@@ -706,7 +772,10 @@ export default function CursorCanvas() {
   async function applySectionOrderNow(order: string[]) {
     if (!spec) return;
     setSectionsCrdt(order);
-    const next: Spec = { ...spec, layout: { ...(spec.layout || {}), sections: order } };
+    const next: Spec = {
+      ...spec,
+      layout: { ...(spec.layout || {}), sections: order },
+    };
     setSectionOrder(order.slice());
     setSpec(next);
     await recompose(next);
@@ -735,7 +804,10 @@ export default function CursorCanvas() {
         forceStripJS: forceNoJS,
       },
     };
-    const r = await fetch("/api/ai/act", json({ sessionId, spec: s, action: composeAction }));
+    const r = await fetch(
+      "/api/ai/act",
+      json({ sessionId, spec: s, action: composeAction })
+    );
     const j = await r.json();
 
     trySetCostMeta((j as any)?.meta?.cost || (j as any)?.result?.meta?.cost);
@@ -768,7 +840,10 @@ export default function CursorCanvas() {
     const okBudgets = await passesBudgets(pid);
 
     if (!okBudgets) {
-      pushAutoLog("pilot", "Blocked by Contracts: proof/a11y/perf budgets not met.");
+      pushAutoLog(
+        "pilot",
+        "Blocked by Contracts: proof/a11y/perf budgets not met."
+      );
       try {
         say("Blocked. Budgets not met.");
       } catch {}
@@ -783,7 +858,8 @@ export default function CursorCanvas() {
   }
 
   async function recomposeGuarded(nextSpec: Spec) {
-    const brandPrimary = nextSpec?.brandColor || nextSpec?.brand?.primary || "#6d28d9";
+    const brandPrimary =
+      nextSpec?.brandColor || nextSpec?.brand?.primary || "#6d28d9";
     const action = {
       kind: "compose",
       cost_est: 0,
@@ -818,7 +894,10 @@ export default function CursorCanvas() {
 
     const okBudgets = await passesBudgets(pid);
     if (!okBudgets) {
-      pushAutoLog("pilot", "Blocked by Contracts: change would violate budgets.");
+      pushAutoLog(
+        "pilot",
+        "Blocked by Contracts: change would violate budgets."
+      );
       try {
         say("Blocked. Budgets not met.");
       } catch {}
@@ -827,7 +906,11 @@ export default function CursorCanvas() {
 
     setSpec(nextSpec);
     setPreview(u, pid);
-    pushHistory({ url: u, pageId: pid, spec: j?.spec || nextSpec });
+    pushHistory({
+      url: u,
+      pageId: pid,
+      spec: j?.spec || nextSpec,
+    });
     return true;
   }
 
@@ -862,7 +945,10 @@ export default function CursorCanvas() {
     for (const raw of batch) {
       const chip = raw.startsWith("chip:") ? raw.slice(5) : raw;
       if (recording) recordingRef.current.push(`chip:${chip}`);
-      const r = await fetch("/api/ai/chips/apply", json({ sessionId, spec: next, chip }));
+      const r = await fetch(
+        "/api/ai/chips/apply",
+        json({ sessionId, spec: next, chip })
+      );
       const j = await r.json();
       if (!j.ok) continue;
       next = j.spec;
@@ -884,14 +970,28 @@ export default function CursorCanvas() {
 
   async function swapVector(q = "") {
     if (!spec) return;
-    const clean = (q || hoverMeta?.aria || hoverMeta?.text || hoverMeta?.tag || "illustration")
+    const clean = (
+      q ||
+      hoverMeta?.aria ||
+      hoverMeta?.text ||
+      hoverMeta?.tag ||
+      "illustration"
+    )
       .toLowerCase()
       .slice(0, 48);
-    const r = await fetch(`/api/ai/vectors/search?q=${encodeURIComponent(clean)}&limit=1`);
+    const r = await fetch(
+      `/api/ai/vectors/search?q=${encodeURIComponent(clean)}&limit=1`
+    );
     const j = await r.json();
     const vurl = j?.items?.[0]?.url || j?.items?.[0]?.file || null;
     if (!vurl) return;
-    const next = { ...spec, copy: { ...(spec.copy || {}), ILLUSTRATION_URL: vurl } };
+    const next = {
+      ...spec,
+      copy: {
+        ...(spec.copy || {}),
+        ILLUSTRATION_URL: vurl,
+      },
+    };
     setSpec(next);
     await recompose(next);
   }
@@ -919,7 +1019,10 @@ export default function CursorCanvas() {
 
       const items = Array.isArray(j.winners) ? j.winners : [];
       const clean = items
-        .filter((w: any) => w && (w.url || w.path) && Array.isArray(w.sections))
+        .filter(
+          (w: any) =>
+            w && (w.url || w.path) && Array.isArray(w.sections)
+        )
         .map((w: any) => ({
           ...w,
           url: w.url || w.path || null,
@@ -929,7 +1032,8 @@ export default function CursorCanvas() {
         }));
 
       clean.sort(
-        (a: any, b: any) => Number(b.proof_ok) - Number(a.proof_ok) || b.score - a.score
+        (a: any, b: any) =>
+          Number(b.proof_ok) - Number(a.proof_ok) || b.score - a.score
       );
 
       setArmyTop(clean.slice(0, 20));
@@ -940,12 +1044,17 @@ export default function CursorCanvas() {
 
   function openWinner(w: any) {
     setPreview(w?.url || null, w?.pageId || null);
-    pushHistory({ url: w?.url || null, pageId: w?.pageId || null });
+    pushHistory({
+      url: w?.url || null,
+      pageId: w?.pageId || null,
+    });
   }
 
   async function blendWinner(w: any) {
     if (!spec) return;
-    const wSections = Array.isArray(w?.sections) ? (w.sections as string[]) : [];
+    const wSections = Array.isArray(w?.sections)
+      ? (w.sections as string[])
+      : [];
     if (wSections.length === 0) {
       return openWinner(w);
     }
@@ -999,13 +1108,25 @@ export default function CursorCanvas() {
     yProvRef.current = provider;
 
     const aw = provider.awareness;
-    aw.setLocalState({ id: sessionId, role, layer, x: cursorPt?.x ?? 0, y: cursorPt?.y ?? 0 });
+    aw.setLocalState({
+      id: sessionId,
+      role,
+      layer,
+      x: cursorPt?.x ?? 0,
+      y: cursorPt?.y ?? 0,
+    });
 
     const onAwChange = () => {
       const states = Array.from(aw.getStates().values()) as any[];
       const m: Record<
         string,
-        { x: number; y: number; layer: string; role: Role; ts: number }
+        {
+          x: number;
+          y: number;
+          layer: string;
+          role: Role;
+          ts: number;
+        }
       > = {};
       for (const s of states) {
         if (!s?.id || s.id === sessionId) continue;
@@ -1040,7 +1161,13 @@ export default function CursorCanvas() {
 
       const base = specRef.current;
       if (base) {
-        const next: Spec = { ...base, layout: { ...(base.layout || {}), sections: order } };
+        const next: Spec = {
+          ...base,
+          layout: {
+            ...(base.layout || {}),
+            sections: order,
+          },
+        };
         setSpec(next);
         recompose(next);
       }
@@ -1088,16 +1215,24 @@ export default function CursorCanvas() {
     const prev = prevProofRef.current;
     const lines: string[] = [];
     if (prev) {
-      if (typeof prev.lcp_est_ms === "number" && typeof proof.lcp_est_ms === "number") {
+      if (
+        typeof prev.lcp_est_ms === "number" &&
+        typeof proof.lcp_est_ms === "number"
+      ) {
         const d = Math.round(proof.lcp_est_ms - prev.lcp_est_ms);
         if (d !== 0) lines.push(`LCP ${d > 0 ? "↑" : "↓"} ${Math.abs(d)} ms`);
       }
-      if (typeof prev.cls_est === "number" && typeof proof.cls_est === "number") {
+      if (
+        typeof prev.cls_est === "number" &&
+        typeof proof.cls_est === "number"
+      ) {
         const d = Number((proof.cls_est - prev.cls_est).toFixed(3));
         if (d !== 0) lines.push(`CLS ${d > 0 ? "↑" : "↓"} ${Math.abs(d)}`);
       }
       if (!!prev.proof_ok !== !!proof.proof_ok) {
-        lines.push(`Proof ${proof.proof_ok ? "unblocked" : "blocked"} by evidence gate`);
+        lines.push(
+          `Proof ${proof.proof_ok ? "unblocked" : "blocked"} by evidence gate`
+        );
       }
       if (!!prev.a11y !== !!proof.a11y) {
         lines.push(`A11y ${proof.a11y ? "pass" : "fail"}`);
@@ -1133,7 +1268,10 @@ export default function CursorCanvas() {
     if (!(e.buttons & 1)) return;
     if (!spaceDown) return;
     setPanning(true);
-    panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+    panStart.current = {
+      x: e.clientX - pan.x,
+      y: e.clientY - pan.y,
+    };
   }
 
   function onMouseMove(e: React.MouseEvent) {
@@ -1144,11 +1282,16 @@ export default function CursorCanvas() {
       const { dx, dy } = dragOffRef.current || { dx: 0, dy: 0 };
       const nx = Math.max(0, Math.min(1280, cx - dx));
       const ny = Math.max(0, Math.min(800, cy - dy));
-      setComments((prev) => prev.map((x) => (x.id === dragId ? { ...x, x: nx, y: ny } : x)));
+      setComments((prev) =>
+        prev.map((x) => (x.id === dragId ? { ...x, x: nx, y: ny } : x))
+      );
     }
 
     if (!panning || !panStart.current) return;
-    setPan({ x: e.clientX - panStart.current.x, y: e.clientY - panStart.current.y });
+    setPan({
+      x: e.clientX - panStart.current.x,
+      y: e.clientY - panStart.current.y,
+    });
   }
 
   function onMouseUp() {
@@ -1163,7 +1306,8 @@ export default function CursorCanvas() {
   // Keyboard modifiers
   useEffect(() => {
     const kd = (e: KeyboardEvent) => {
-      if (e.key === " " || e.code === "Space" || e.key === "Spacebar") setSpaceDown(true);
+      if (e.key === " " || e.code === "Space" || e.key === "Spacebar")
+        setSpaceDown(true);
       if (e.altKey) setModProof(true);
       if (e.ctrlKey || e.metaKey) setModPerf(true);
       if (e.shiftKey) setModMeasure(true);
@@ -1190,7 +1334,11 @@ export default function CursorCanvas() {
     const isTyping = (el: Element | null) => {
       if (!el) return false;
       const t = (el as HTMLElement).tagName;
-      return t === "INPUT" || t === "TEXTAREA" || (el as HTMLElement).isContentEditable;
+      return (
+        t === "INPUT" ||
+        t === "TEXTAREA" ||
+        (el as HTMLElement).isContentEditable
+      );
     };
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(document.activeElement)) return;
@@ -1219,7 +1367,14 @@ export default function CursorCanvas() {
         goalRef.current?.focus();
       } else if (k === "a" || k === "A") {
         setAb((a) =>
-          a.on ? { ...a, on: false } : { ...a, on: true, exp: a.exp || `exp_${rid(6)}`, arm: "A" }
+          a.on
+            ? { ...a, on: false }
+            : {
+                ...a,
+                on: true,
+                exp: a.exp || `exp_${rid(6)}`,
+                arm: "A",
+              }
         );
       } else if (k === "c" || k === "C") {
         e.preventDefault();
@@ -1247,7 +1402,9 @@ export default function CursorCanvas() {
 
   // Push-to-talk
   async function promptOnce(): Promise<string | null> {
-    const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    const SR: any =
+      (window as any).webkitSpeechRecognition ||
+      (window as any).SpeechRecognition;
     if (SR) {
       try {
         const rec = new SR();
@@ -1256,7 +1413,8 @@ export default function CursorCanvas() {
         rec.lang = "en-US";
         setListening(true);
         const text: string = await new Promise((resolve, reject) => {
-          rec.onresult = (e: any) => resolve(String(e.results[0][0].transcript || ""));
+          rec.onresult = (e: any) =>
+            resolve(String(e.results[0][0].transcript || ""));
           rec.onerror = (err: any) => reject(err);
           rec.onend = () => {};
           rec.start();
@@ -1276,7 +1434,43 @@ export default function CursorCanvas() {
   // Local fallback handler for voice/text commands
   async function localHandle(raw: string): Promise<boolean> {
     const t = (raw || "").trim().toLowerCase();
-    const onoff = () => (t.includes("off") ? false : t.includes("on") ? true : null);
+    const onoff = () =>
+      t.includes("off") ? false : t.includes("on") ? true : null;
+
+    const autopilotMeta = /\bautopilot\b/.test(t);
+
+    // If Autopilot is paused, only respond to meta commands like "autopilot on"
+    if (!autopilotOn && !autopilotMeta) {
+      pushAutoLog(
+        "pilot",
+        "Autopilot is paused. Say 'autopilot on' to resume."
+      );
+      try {
+        say("Autopilot is paused. Say 'autopilot on' to resume.");
+      } catch {}
+      return true;
+    }
+
+    // Autopilot master toggle: "autopilot on", "pause autopilot", "resume autopilot"
+    if (autopilotMeta) {
+      const val = onoff();
+      if (val === true || /\b(resume|start)\b/.test(t)) {
+        setAutopilotOn(true);
+        pushAutoLog("pilot", "Autopilot on.");
+        try {
+          say("Autopilot on.");
+        } catch {}
+      } else if (val === false || /\b(pause|stop)\b/.test(t)) {
+        setAutopilotOn(false);
+        pushAutoLog("pilot", "Autopilot paused.");
+        try {
+          say("Autopilot paused.");
+        } catch {}
+      } else {
+        setAutopilotOn((prev) => !prev);
+      }
+      return true;
+    }
 
     if (/^(make|compose)\b/.test(t)) {
       await composeInstant();
@@ -1303,7 +1497,16 @@ export default function CursorCanvas() {
 
     // A/B controls
     if (/start( an)? (a\/?b|ab)/.test(t)) {
-      setAb((a) => (a.on ? a : { ...a, on: true, exp: a.exp || `exp_${rid(6)}`, arm: "A" }));
+      setAb((a) =>
+        a.on
+          ? a
+          : {
+              ...a,
+              on: true,
+              exp: a.exp || `exp_${rid(6)}`,
+              arm: "A",
+            }
+      );
       return true;
     }
     if (/stop( the)? (a\/?b|ab)/.test(t)) {
@@ -1357,8 +1560,14 @@ export default function CursorCanvas() {
     }
 
     // Wire email
-    if (/\b(wire|connect|enable)\b.*\b(email)\b/.test(t) || /\bwelcome email\b/.test(t)) {
-      pushAutoLog("pilot", "I need a provider key to wire email. Opening secure input…");
+    if (
+      /\b(wire|connect|enable)\b.*\b(email)\b/.test(t) ||
+      /\bwelcome email\b/.test(t)
+    ) {
+      pushAutoLog(
+        "pilot",
+        "I need a provider key to wire email. Opening secure input…"
+      );
       try {
         say("I need your email API key. I opened a secure drawer.");
       } catch {}
@@ -1375,7 +1584,10 @@ export default function CursorCanvas() {
         return true;
       }
       secretsRef.current.emailApiKey = key;
-      pushAutoLog("pilot", "Key received (ephemeral). I will never store or speak it.");
+      pushAutoLog(
+        "pilot",
+        "Key received (ephemeral). I will never store or speak it."
+      );
       try {
         say("Got it. Key held in memory for this tab only.");
       } catch {}
@@ -1393,8 +1605,12 @@ export default function CursorCanvas() {
     if (/\b(status|report)\b/.test(t)) {
       const p = proofRef.current;
       if (p) {
-        const cls = typeof p.cls_est === "number" ? p.cls_est.toFixed(3) : "—";
-        const lcp = typeof p.lcp_est_ms === "number" ? `${Math.round(p.lcp_est_ms)} ms` : "—";
+        const cls =
+          typeof p.cls_est === "number" ? p.cls_est.toFixed(3) : "—";
+        const lcp =
+          typeof p.lcp_est_ms === "number"
+            ? `${Math.round(p.lcp_est_ms)} ms`
+            : "—";
         const a11y = p.a11y ? "PASS" : "FAIL";
         const proofOk = p.proof_ok ? "OK" : "BLOCKED";
         const msg = `CLS ${cls} · LCP ${lcp} · A11y ${a11y} · Proof ${proofOk}`;
@@ -1410,13 +1626,20 @@ export default function CursorCanvas() {
   }
 
   async function handlePTT() {
-    if (!autopilotOn) return;
     const text = await promptOnce();
     if (!text) return;
     pushAutoLog("you", text);
 
     const didLocal = await localHandle(text);
-    if (!didLocal && autopilotRef.current && typeof (autopilotRef.current as any).handle === "function") {
+
+    // If Autopilot is paused, only local commands (like "autopilot on") should run.
+    if (!autopilotOn) return;
+
+    if (
+      !didLocal &&
+      autopilotRef.current &&
+      typeof (autopilotRef.current as any).handle === "function"
+    ) {
       try {
         await (autopilotRef.current as any).handle(text);
       } catch {}
@@ -1455,10 +1678,16 @@ export default function CursorCanvas() {
       base.unshift({ label: "Swap vector", act: () => swapVector() });
     }
     if (tag === "button" || tag === "a") {
-      base.unshift({ label: "Primary CTA", act: () => applyChip("Use email signup CTA") });
+      base.unshift({
+        label: "Primary CTA",
+        act: () => applyChip("Use email signup CTA"),
+      });
     }
     if (tag === "h1" || tag === "h2") {
-      base.unshift({ label: "Soften claim", act: () => applyChip("More minimal") });
+      base.unshift({
+        label: "Soften claim",
+        act: () => applyChip("More minimal"),
+      });
     }
     return base.slice(0, 5);
   }, [hoverMeta, spec]);
@@ -1470,17 +1699,33 @@ export default function CursorCanvas() {
     if (typeof x !== "number" || typeof y !== "number") return;
 
     const bc = bcRef.current;
-    bc?.postMessage({ type: "presence", id: sessionId, x, y, layer, role, ts: Date.now() });
+    bc?.postMessage({
+      type: "presence",
+      id: sessionId,
+      x,
+      y,
+      layer,
+      role,
+      ts: Date.now(),
+    });
 
     const aw = yProvRef.current?.awareness;
     if (aw) {
       const cur = aw.getLocalState() || {};
-      aw.setLocalState({ ...cur, id: sessionId, x, y, layer, role });
+      aw.setLocalState({
+        ...cur,
+        id: sessionId,
+        x,
+        y,
+        layer,
+        role,
+      });
     }
   }
 
   useEffect(() => {
-    if (typeof window === "undefined" || !(window as any).BroadcastChannel) return;
+    if (typeof window === "undefined" || !(window as any).BroadcastChannel)
+      return;
     const bc = new BroadcastChannel("yb_cursor_presence");
     bcRef.current = bc;
     const onMessage = (ev: MessageEvent) => {
@@ -1488,7 +1733,13 @@ export default function CursorCanvas() {
       if (!d || d.type !== "presence" || d.id === sessionId) return;
       setPeers((p) => ({
         ...p,
-        [d.id]: { x: d.x, y: d.y, layer: String(d.layer), role: d.role, ts: d.ts },
+        [d.id]: {
+          x: d.x,
+          y: d.y,
+          layer: String(d.layer),
+          role: d.role,
+          ts: d.ts,
+        },
       }));
     };
     bc.addEventListener("message", onMessage);
@@ -1577,7 +1828,8 @@ export default function CursorCanvas() {
             let idx = 1,
               sib = cur.previousElementSibling;
             while (sib) {
-              if ((sib as HTMLElement).tagName === (cur as HTMLElement).tagName) idx++;
+              if ((sib as HTMLElement).tagName === (cur as HTMLElement).tagName)
+                idx++;
               sib = sib.previousElementSibling;
             }
             parts.unshift(`${tag}:nth-of-type(${idx})`);
@@ -1594,8 +1846,12 @@ export default function CursorCanvas() {
             tag: (el as HTMLElement).tagName?.toLowerCase() || "",
             sel: cssPath(el),
             role: (el as HTMLElement).getAttribute?.("role") || "",
-            aria: (el as HTMLElement).getAttribute?.("aria-label") || "",
-            text: ((el as HTMLElement).textContent || "").trim().slice(0, 120),
+            aria:
+              (el as HTMLElement).getAttribute?.("aria-label") ||
+              "",
+            text: ((el as HTMLElement).textContent || "")
+              .trim()
+              .slice(0, 120),
             style: {
               color: cs?.color || "",
               backgroundColor: cs?.backgroundColor || "",
@@ -1604,13 +1860,26 @@ export default function CursorCanvas() {
               lineHeight: cs?.lineHeight || "",
               width: `${Math.round(r.width)}px`,
               height: `${Math.round(r.height)}px`,
-              margin: `${cs?.marginTop || "0px"} ${cs?.marginRight || "0px"} ${cs?.marginBottom || "0px"} ${cs?.marginLeft || "0px"}`,
-              padding: `${cs?.paddingTop || "0px"} ${cs?.paddingRight || "0px"} ${cs?.paddingBottom || "0px"} ${cs?.paddingLeft || "0px"}`,
+              margin: `${cs?.marginTop || "0px"} ${
+                cs?.marginRight || "0px"
+              } ${cs?.marginBottom || "0px"} ${
+                cs?.marginLeft || "0px"
+              }`,
+              padding: `${cs?.paddingTop || "0px"} ${
+                cs?.paddingRight || "0px"
+              } ${cs?.paddingBottom || "0px"} ${
+                cs?.paddingLeft || "0px"
+              }`,
             },
           };
           const msg: HoverMsg = {
             type: "yb_hover",
-            rect: { x: r.left, y: r.top, w: r.width, h: r.height },
+            rect: {
+              x: r.left,
+              y: r.top,
+              w: r.width,
+              h: r.height,
+            },
             meta,
           };
           win.parent.postMessage(msg, "*");
@@ -1629,7 +1898,9 @@ export default function CursorCanvas() {
 
           try {
             const pathSel = el ? cssPath(el) : "";
-            const r = el ? (el as HTMLElement).getBoundingClientRect() : null;
+            const r = el
+              ? (el as HTMLElement).getBoundingClientRect()
+              : null;
             win.parent.postMessage(
               {
                 type: "yb_click",
@@ -1637,12 +1908,25 @@ export default function CursorCanvas() {
                 y: e.clientY,
                 sel: pathSel,
                 rect: r
-                  ? { x: r.left, y: r.top, w: r.width, h: r.height }
-                  : { x: e.clientX, y: e.clientY, w: 0, h: 0 },
-                text:
-                  ((el as HTMLElement).innerText ||
-                    (el as HTMLElement).textContent ||
-                    "").trim().slice(0, 200),
+                  ? {
+                      x: r.left,
+                      y: r.top,
+                      w: r.width,
+                      h: r.height,
+                    }
+                  : {
+                      x: e.clientX,
+                      y: e.clientY,
+                      w: 0,
+                      h: 0,
+                    },
+                text: (
+                  (el as HTMLElement).innerText ||
+                  (el as HTMLElement).textContent ||
+                  ""
+                )
+                  .trim()
+                  .slice(0, 200),
               },
               "*"
             );
@@ -1668,17 +1952,32 @@ export default function CursorCanvas() {
               clickableEl.getAttribute?.("href") ||
               "";
 
-            const text =
-              (clickableEl.innerText || clickableEl.textContent || "")
-                .trim()
-                .slice(0, 120);
+            const text = (
+              clickableEl.innerText ||
+              clickableEl.textContent ||
+              ""
+            )
+              .trim()
+              .slice(0, 120);
 
-            win.parent.postMessage({ type: "yb_cta", arm: armParam, href, text }, "*");
+            win.parent.postMessage(
+              {
+                type: "yb_cta",
+                arm: armParam,
+                href,
+                text,
+              },
+              "*"
+            );
           }
         };
 
-        doc.addEventListener("mousemove", mm, { passive: true });
-        doc.addEventListener("click", click, { capture: true });
+        doc.addEventListener("mousemove", mm, {
+          passive: true,
+        });
+        doc.addEventListener("click", click, {
+          capture: true,
+        });
 
         // Data skins
         const textSelectors = "h1,h2,h3,h4,h5,h6,p,li,span,a,button,th,td,small,label";
@@ -1690,7 +1989,9 @@ export default function CursorCanvas() {
           if (b && b.parentElement) b.parentElement.removeChild(b);
         }
         function clearSkeleton() {
-          selectAll(".yb-skel").forEach((el) => el.classList.remove("yb-skel"));
+          selectAll(".yb-skel").forEach((el) =>
+            el.classList.remove("yb-skel")
+          );
         }
         function ensureOrig(el: HTMLElement) {
           if (!(el as any).dataset) return;
@@ -1707,11 +2008,15 @@ export default function CursorCanvas() {
             el.textContent = "";
           });
           Array.from(doc.images || []).forEach(
-            (img) => ((img as HTMLImageElement).style.opacity = "0.25")
+            (img) =>
+              ((img as HTMLImageElement).style.opacity = "0.25")
           );
           selectAll("input,textarea").forEach((el) => {
             const i = el as HTMLInputElement | HTMLTextAreaElement;
-            const ds = (i as any).dataset as DOMStringMap & { ybVal?: string; ybPh?: string };
+            const ds = (i as any).dataset as DOMStringMap & {
+              ybVal?: string;
+              ybPh?: string;
+            };
             if (ds.ybVal == null) ds.ybVal = i.value || "";
             if (ds.ybPh == null) ds.ybPh = i.placeholder || "";
             i.value = "";
@@ -1730,7 +2035,9 @@ export default function CursorCanvas() {
         }
         function applySkeleton() {
           clearSkeleton();
-          selectAll(textSelectors).forEach((el) => el.classList.add("yb-skel"));
+          selectAll(textSelectors).forEach((el) =>
+            el.classList.add("yb-skel")
+          );
         }
         function applyError() {
           clearErrorBanner();
@@ -1741,7 +2048,9 @@ export default function CursorCanvas() {
         }
         function restoreNormal() {
           selectAll(textSelectors).forEach((el) => {
-            const ds = (el as any).dataset as DOMStringMap & { ybOrig?: string };
+            const ds = (el as any).dataset as DOMStringMap & {
+              ybOrig?: string;
+            };
             if (ds && ds.ybOrig != null) {
               el.textContent = ds.ybOrig;
               delete ds.ybOrig;
@@ -1749,11 +2058,15 @@ export default function CursorCanvas() {
             el.classList.remove("yb-skel");
           });
           Array.from(doc.images || []).forEach(
-            (img) => ((img as HTMLImageElement).style.opacity = "")
+            (img) =>
+              ((img as HTMLImageElement).style.opacity = "")
           );
           selectAll("input,textarea").forEach((el) => {
             const i = el as HTMLInputElement | HTMLTextAreaElement;
-            const ds = (i as any).dataset as DOMStringMap & { ybVal?: string; ybPh?: string };
+            const ds = (i as any).dataset as DOMStringMap & {
+              ybVal?: string;
+              ybPh?: string;
+            };
             if (ds && (ds.ybVal != null || ds.ybPh != null)) {
               if (ds.ybVal != null) {
                 i.value = ds.ybVal;
@@ -1778,7 +2091,8 @@ export default function CursorCanvas() {
 
         const onCtl = (ev: MessageEvent) => {
           const d = ev.data as any;
-          if (d && d.type === "yb_comment_mode") commentArmed = !!d.on;
+          if (d && d.type === "yb_comment_mode")
+            commentArmed = !!d.on;
         };
         win.addEventListener("message", onCtl);
 
@@ -1806,13 +2120,17 @@ export default function CursorCanvas() {
             if (navigator.sendBeacon) {
               const ok = navigator.sendBeacon(
                 "/api/kpi/seen",
-                new Blob([payload], { type: "application/json" })
+                new Blob([payload], {
+                  type: "application/json",
+                })
               );
               if (ok) return;
             }
             fetch("/api/kpi/seen", {
               method: "POST",
-              headers: { "content-type": "application/json" },
+              headers: {
+                "content-type": "application/json",
+              },
               body: payload,
               keepalive: true,
             }).catch(() => {});
@@ -1870,14 +2188,20 @@ export default function CursorCanvas() {
       if (d.type === "yb_cta") {
         if (ab.on && ab.exp) {
           const variant = (d.arm === "B" ? "B" : "A") as "A" | "B";
-          const pid = variant === "A" ? ab.A?.pageId || pageId : ab.B?.pageId || pageId;
+          const pid =
+            variant === "A"
+              ? ab.A?.pageId || pageId
+              : ab.B?.pageId || pageId;
           fetch(
             "/api/kpi/convert",
             json({
               experiment: ab.exp,
               variant,
               pageId: pid || null,
-              meta: { href: d.href || null, text: d.text || null },
+              meta: {
+                href: d.href || null,
+                text: d.text || null,
+              },
             })
           ).catch(() => {});
         }
@@ -1897,7 +2221,12 @@ export default function CursorCanvas() {
       if (d.type !== "yb_hover") return;
       if (freezeHover) return;
       const h = d as HoverMsg;
-      setHoverBox({ x: h.rect.x, y: h.rect.y, w: h.rect.w, h: h.rect.h });
+      setHoverBox({
+        x: h.rect.x,
+        y: h.rect.y,
+        w: h.rect.w,
+        h: h.rect.h,
+      });
       setHoverMeta(h.meta || null);
       const cx = h.rect.x + h.rect.w / 2;
       const cy = h.rect.y + h.rect.h / 2;
@@ -1906,14 +2235,24 @@ export default function CursorCanvas() {
       const fgR = parseCssColor(h.meta?.style?.color || "");
       const bgR = parseCssColor(h.meta?.style?.backgroundColor || "");
       const fg = fgR ? flattenOnWhite(fgR) : ([0, 0, 0] as [number, number, number]);
-      const bg = bgR ? flattenOnWhite(bgR) : ([255, 255, 255] as [number, number, number]);
+      const bg = bgR
+        ? flattenOnWhite(bgR)
+        : ([255, 255, 255] as [number, number, number]);
       const ratio = parseFloat(contrastRatio(fg, bg).toFixed(2));
-      setContrastInfo({ ratio, passAA: ratio >= 4.5 });
+      setContrastInfo({
+        ratio,
+        passAA: ratio >= 4.5,
+      });
 
       const truths = classifyFromMeta(h.meta || null);
       setLedger({
         show: true,
-        rect: { x: h.rect.x, y: Math.max(0, h.rect.y - 1), w: h.rect.w, h: h.rect.h },
+        rect: {
+          x: h.rect.x,
+          y: Math.max(0, h.rect.y - 1),
+          w: h.rect.w,
+          h: h.rect.h,
+        },
         truths,
       });
     };
@@ -1924,7 +2263,11 @@ export default function CursorCanvas() {
   // Promote winner function
   async function promoteWinner(
     sid: string,
-    winnerPatch: { sections?: string[]; copy?: any; brand?: any }
+    winnerPatch: {
+      sections?: string[];
+      copy?: any;
+      brand?: any;
+    }
   ) {
     const r = await postJson("/api/ai/ab/promote", {
       sessionId: sid,
@@ -1957,7 +2300,9 @@ export default function CursorCanvas() {
       {/* Cost chip (global HUD) */}
       {costMeta && (
         <div className="fixed top-3 right-3 z-50 rounded-xl px-3 py-1.5 shadow-sm bg-black/70 text-white text-xs backdrop-blur">
-          <span title="Estimated latency">{Math.round(costMeta.latencyMs)}ms</span>
+          <span title="Estimated latency">
+            {Math.round(costMeta.latencyMs)}ms
+          </span>
           <span className="mx-1.5">•</span>
           <span title="Estimated tokens">{costMeta.tokens} tok</span>
           <span className="mx-1.5">•</span>
@@ -1978,7 +2323,7 @@ export default function CursorCanvas() {
         </div>
       )}
 
-      {/* Top bar - truncated for brevity, includes all controls */}
+      {/* Top bar */}
       <div className="flex items-center gap-2 p-3 border-b bg-white">
         <input
           value={pagePrompt}
@@ -1986,10 +2331,13 @@ export default function CursorCanvas() {
           className="flex-1 px-3 py-2 rounded border outline-none"
           placeholder="Describe the page… e.g., dark saas waitlist for founders"
         />
-        <button onClick={() => composeGuarded()} className="px-3 py-2 rounded bg-black text-white">
+        <button
+          onClick={() => composeGuarded()}
+          className="px-3 py-2 rounded bg-black text-white"
+        >
           Compose
         </button>
-        {/* Additional controls would be here - truncated for brevity */}
+        {/* Additional controls would be here */}
       </div>
 
       {/* Workspace area */}
@@ -2010,7 +2358,11 @@ export default function CursorCanvas() {
           }}
         >
           {/* Fixed-size preview surface */}
-          <div className="relative" style={{ width: 1280, height: 800 }} ref={surfaceRef}>
+          <div
+            className="relative"
+            style={{ width: 1280, height: 800 }}
+            ref={surfaceRef}
+          >
             {/* Preview iframe */}
             {url ? (
               <iframe
@@ -2031,14 +2383,14 @@ export default function CursorCanvas() {
             {/* Measurements overlay */}
             <Measurements enabled={measureOn || modMeasure} box={hoverBox} />
 
-            {/* Additional overlays and panels would go here - truncated for brevity */}
+            {/* Additional overlays and panels would go here */}
           </div>
         </div>
 
         {/* Workspace hint */}
         <div className="absolute left-3 bottom-3 text-xs text-gray-500 select-none">
-          Hold <b>Space</b> and drag to pan • <b>Ctrl/⌘ + wheel</b> to zoom • Press <b>C</b> to
-          place a note
+          Hold <b>Space</b> and drag to pan • <b>Ctrl/⌘ + wheel</b> to zoom •
+          Press <b>C</b> to place a note
         </div>
       </div>
     </div>

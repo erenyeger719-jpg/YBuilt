@@ -1,3 +1,4 @@
+// client/src/pages/Settings.tsx
 import { useEffect } from "react";
 import { Route, Switch, useLocation, Redirect } from "wouter";
 import Header from "@/components/Header";

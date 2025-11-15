@@ -221,6 +221,53 @@ try {
   maybeVectorMine();
 } catch {}
 
+// --- Autopilot intents log (backend connector for SUP/RL) ---
+const AUTOPILOT_LOG_FILE = path.join(
+  process.cwd(),
+  ".cache",
+  "autopilot-intents.jsonl"
+);
+
+function logAutopilotIntent(intent: any) {
+  try {
+    fs.mkdirSync(path.dirname(AUTOPILOT_LOG_FILE), { recursive: true });
+    const line = JSON.stringify({
+      ...intent,
+      ts: intent?.ts ?? Date.now(),
+    });
+    fs.appendFile(AUTOPILOT_LOG_FILE, line + "\n", () => {});
+  } catch {
+    // logging should never crash the router
+  }
+}
+
+// --- Contracts commit sink: only write using prepared spec ---
+const CONTRACTS_COMMITS_FILE = path.join(
+  process.cwd(),
+  ".cache",
+  "contracts.commits.jsonl"
+);
+
+function savePreparedSpec(
+  kind: "act" | "chips",
+  prepared: any,
+  req: express.Request
+) {
+  try {
+    fs.mkdirSync(path.dirname(CONTRACTS_COMMITS_FILE), { recursive: true });
+    const line = JSON.stringify({
+      kind,
+      ts: Date.now(),
+      workspaceId: workspaceIdFrom(req),
+      client: clientKey(req),
+      prepared,
+    });
+    fs.appendFile(CONTRACTS_COMMITS_FILE, line + "\n", () => {});
+  } catch {
+    // best-effort; never throw
+  }
+}
+
 // Client key extraction
 function clientKey(req: express.Request) {
   const fwd = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
@@ -288,7 +335,10 @@ function quotaMiddleware(
       const retrySec = Math.max(1, Math.floor((q.reset - now) / 1000));
       res.setHeader("Retry-After", String(retrySec));
       res.setHeader("X-RateLimit-Limit", String(QUOTA_DAILY));
-      res.setHeader("X-RateLimit-Remaining", String(Math.max(0, QUOTA_DAILY - q.count)));
+      res.setHeader(
+        "X-RateLimit-Remaining",
+        String(Math.max(0, QUOTA_DAILY - q.count))
+      );
 
       const fallback = pickFailureFallback({
         kind: "quota_exceeded",
@@ -407,11 +457,9 @@ if (process.env.NODE_ENV !== "test") {
   });
 }
 
-// Apply quotas and contracts
+// Apply quotas
 router.use(quotaMiddleware);
-// Apply contracts guard only on /act in this router.
-// The middleware itself stays generic for tests that mount it elsewhere.
-router.use("/act", contractsHardStop());
+// Contracts guard is attached per-route on /act and /chips/apply below.
 
 // ---- Abuse intake (simple JSONL sink) ----
 router.post("/abuse/report", express.json(), (req, res) => {
@@ -629,6 +677,36 @@ router.post("/kpi/convert", (req, res) => {
   return res.json({ ok: true });
 });
 
+// Autopilot → SUP intent logging sink
+router.post("/autopilot/intent", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const kind = typeof body.kind === "string" ? body.kind : "other";
+    const summary = typeof body.summary === "string" ? body.summary : "";
+    const payload =
+      typeof body.payload === "object" && body.payload !== null
+        ? body.payload
+        : undefined;
+
+    if (!summary) {
+      return res.status(400).json({ ok: false, error: "missing_summary" });
+    }
+
+    logAutopilotIntent({
+      kind,
+      summary,
+      payload,
+      source: body.source || "autopilot",
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "autopilot_intent_failed" });
+  }
+});
+
 router.get("/previews/:file(*)", (req, res) => {
   const p = String(req.params.file || "");
   if (!safeJoin(PREVIEW_DIR, p))
@@ -667,6 +745,55 @@ router.get("/evidence/search", (req, res) => {
 router.post("/evidence/reindex", (_req, res) => {
   // no-op indexer; tests care about envelope + determinism
   return res.json({ ok: true, count: MEMORY.evidence.length });
+});
+
+// === WRITE ROUTES USING PREPARED SPEC ONLY ===
+
+// POST /act — guarded by contractsHardStop, commits using req.__prepared only
+router.post("/act", contractsHardStop(), (req, res) => {
+  const prepared = (req as any).__prepared;
+
+  if (!prepared) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "contracts_not_run" });
+  }
+
+  const t0 = Date.now();
+  // Commit using the prepared spec only (no recompute from raw patch)
+  savePreparedSpec("act", prepared, req);
+  const latency = Date.now() - t0;
+
+  const tokens = estTokens(JSON.stringify(prepared));
+  const pageId =
+    typeof (prepared as any)?.pageId === "string"
+      ? String((prepared as any).pageId)
+      : makePageId("act");
+
+  const receipt = {
+    summary: "contracts_applied",
+    details: {
+      pageId,
+      budgetsOk: true,
+      failures: [],
+    },
+  };
+
+  return res.json({
+    ok: true,
+    pageId,
+    prepared,
+    meta: {
+      cost: {
+        latencyMs: latency,
+        tokens,
+        cents: 0,
+        pending: true,
+      },
+      receipt,
+      intent: "write",
+    },
+  });
 });
 
 // POST /code/patch { files: PatchItem[] }
@@ -720,14 +847,48 @@ router.post("/code/patch", (req, res) => {
   }
 });
 
-router.post("/chips/apply", (req, res) => {
-  const copyKeys = Object.keys(req.body?.patch?.copy || {});
+// POST /chips/apply — contractsHardStop + prepared-only commit
+router.post("/chips/apply", contractsHardStop(), (req, res) => {
+  const prepared = (req as any).__prepared;
+
+  if (!prepared) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "contracts_not_run" });
+  }
+
+  const t0 = Date.now();
+  // Commit using the prepared spec only
+  savePreparedSpec("chips", prepared, req);
+  const latency = Date.now() - t0;
+
+  // Derive copyKeys from prepared if present; fall back to body patch
+  const preparedPatch = (prepared as any)?.patch || {};
+  const preparedCopy =
+    typeof preparedPatch === "object" && preparedPatch !== null
+      ? (preparedPatch as any).copy || {}
+      : {};
+  const bodyCopy = (req.body?.patch && req.body.patch.copy) || {};
+
+  const copyKeys = Object.keys(
+    Object.keys(preparedCopy).length ? preparedCopy : bodyCopy || {}
+  );
+
   return res.json({
     ok: true,
     meta: {
-      cost: { latencyMs: 5, tokens: 0, cents: 0, pending: true },
-      receipt: { summary: "applied patch", details: { copyKeys } },
+      cost: {
+        latencyMs: latency || 5,
+        tokens: 0,
+        cents: 0,
+        pending: true,
+      },
+      receipt: {
+        summary: "applied patch",
+        details: { copyKeys },
+      },
     },
+    prepared,
   });
 });
 

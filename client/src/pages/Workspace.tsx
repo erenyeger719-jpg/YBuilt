@@ -1,8 +1,7 @@
 // client/src/pages/Workspace.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,7 +16,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -29,28 +27,41 @@ import {
   RotateCw,
   FileCode,
   Upload,
+  Share2,
+  Crown,
+  Code,
+  Copy,
+  History,
+  RefreshCw,
+  Settings,
+  Eye,
+  Download,
+  Plus,
+  FolderPlus,
+  Save,
+  MessageSquare,
+  Zap,
 } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import Header from "@/components/Header";
-import ConsolePanel from "@/components/ConsolePanel";
 import CommandPalette from "@/components/CommandPalette";
 import PublishModal from "@/components/PublishModal";
-import PromptBar, { type UploadedFile } from "@/components/PromptBar";
 import AgentButton, { type AgentSettings } from "@/components/AgentButton";
 import FileTree from "@/components/FileTree";
 import FileToolbar from "@/components/FileToolbar";
 import NewChatModal from "@/components/NewChatModal";
 import PromptFileModal from "@/components/PromptFileModal";
-import ResizableSplitter from "@/components/ResizableSplitter";
 import PageToolSheet from "@/components/PageToolSheet";
 import ThemeModal from "@/components/ThemeModal";
-import BuildTraceViewer from "@/components/BuildTraceViewer";
-import WorkspaceDock from "@/components/WorkspaceDock"; // ⬅️ added
-import DeployLogPane from "@/components/deploy/DeployLogPane"; // ⬅️ added
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  path: string;
+}
 
 interface WorkspaceFile {
   path: string;
@@ -61,6 +72,7 @@ interface WorkspaceFile {
 }
 
 interface WorkspaceData {
+  id?: string;
   files: WorkspaceFile[];
   manifest: {
     name: string;
@@ -75,12 +87,15 @@ export default function Workspace() {
   const { toast } = useToast();
   const workspace$ = useWorkspace(jobId || "");
 
-  const [rightTab, setRightTab] = useState<"preview" | "console" | "build">("preview");
-  const [deviceMode, setDeviceMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [deviceMode, setDeviceMode] = useState<"desktop" | "tablet" | "mobile">(
+    "desktop"
+  );
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const [showPromptFileModal, setShowPromptFileModal] = useState(false);
-  const [selectedPromptFile, setSelectedPromptFile] = useState<WorkspaceFile | null>(null);
+  const [showPromptFileModal, setShowPromptFileModal] =
+    useState<boolean>(false);
+  const [selectedPromptFile, setSelectedPromptFile] =
+    useState<WorkspaceFile | null>(null);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState("");
   const [showPageToolSheet, setShowPageToolSheet] = useState(false);
@@ -89,7 +104,16 @@ export default function Workspace() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
   const [promptText, setPromptText] = useState("");
-  
+  const [leftPaneWidth, setLeftPaneWidth] = useState(400);
+  const [isResizing, setIsResizing] = useState(false);
+  const [activeView, setActiveView] = useState<
+    "preview" | "cloud" | "code" | "analytics"
+  >("preview");
+  const [showViewDropdown, setShowViewDropdown] = useState(false);
+
+  // NEW: Autopilot toggle state
+  const [isAutopilotOn, setIsAutopilotOn] = useState(false);
+
   // Agent settings
   const [agentSettings, setAgentSettings] = useState<AgentSettings>({
     autonomyLevel: "medium",
@@ -98,37 +122,134 @@ export default function Workspace() {
     computeTier: "standard",
   });
 
+  const previewIframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  // Force dark mode globally for the workspace
+  useEffect(() => {
+    try {
+      const root = document.documentElement;
+      root.classList.add("dark");
+      root.classList.remove("light");
+      root.style.colorScheme = "dark";
+    } catch {}
+  }, []);
+
+  // Handle horizontal resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const newWidth = e.clientX;
+      if (newWidth >= 300 && newWidth <= 600) {
+        setLeftPaneWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    if (isResizing) {
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (showViewDropdown) {
+        const target = e.target as HTMLElement;
+        if (!target.closest(".view-dropdown-container")) {
+          setShowViewDropdown(false);
+        }
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showViewDropdown]);
+
   // Fetch workspace data with error handling
-  const { data: workspace, isLoading, error } = useQuery<WorkspaceData>({
+  const {
+    data: workspace,
+    isLoading,
+    error,
+  } = useQuery<WorkspaceData>({
     queryKey: ["/api/workspace", jobId, "files"],
-    queryFn: () => apiRequest<WorkspaceData>("GET", `/api/workspace/${jobId}/files`),
+    queryFn: () =>
+      apiRequest<WorkspaceData>("GET", `/api/workspace/${jobId}/files`),
     enabled: !!jobId,
-    retry: 2
+    retry: 2,
   });
 
-  // Fetch and apply theme on workspace load
+  // Fetch and apply theme on workspace load (applies to iframe only)
   const { data: theme } = useQuery<any>({
     queryKey: ["/api/workspace", jobId, "theme"],
     queryFn: () => apiRequest<any>("GET", `/api/workspace/${jobId}/theme`),
-    enabled: !!jobId
+    enabled: !!jobId,
   });
 
-  // Save index.html mutation - moved before early returns to fix hook order
+  // KPI: mark preview as seen when iframe loads
+  const handlePreviewSeen = useCallback(() => {
+    try {
+      if (!jobId || !workspace) return;
+
+      const payload = {
+        jobId,
+        workspaceId: workspace.id,
+        path: workspace.manifest?.entryPoint || "/",
+        source: "preview",
+      };
+
+      if (typeof navigator !== "undefined" && "sendBeacon" in navigator) {
+        const blob = new Blob([JSON.stringify(payload)], {
+          type: "application/json",
+        });
+        navigator.sendBeacon("/api/kpi/seen", blob);
+      } else {
+        fetch("/api/kpi/seen", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          keepalive: true,
+        }).catch(() => {
+          // Never break the UI if this fails
+        });
+      }
+    } catch {
+      // Silent fail – preview should never crash.
+    }
+  }, [jobId, workspace]);
+
+  // Save index.html mutation
   const saveIndexMutation = useMutation({
     mutationFn: async (content: string): Promise<void> => {
-      // Find index.html file at mutation time (not hook definition time)
-      const indexHtmlFile = workspace?.files.find(f => f.path === "index.html" || f.path.endsWith("/index.html"));
+      const indexHtmlFile = workspace?.files.find(
+        (f) => f.path === "index.html" || f.path.endsWith("/index.html")
+      );
       const path = indexHtmlFile?.path || "index.html";
       await apiRequest("PUT", `/api/workspace/${jobId}/files/${path}`, {
         content,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workspace", jobId, "files"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/workspace", jobId, "files"],
+      });
     },
   });
 
-  // Build mutation with agent settings - moved before early returns to fix hook order
+  // Build mutation with agent settings
   const buildMutation = useMutation({
     mutationFn: async (data: { prompt?: string }) => {
       return apiRequest("POST", `/api/jobs/${jobId}/build`, {
@@ -154,97 +275,128 @@ export default function Workspace() {
     },
   });
 
-  // Apply theme CSS variables ONLY to iframe preview (not global site)
+  // Apply theme CSS variables ONLY to iframe preview
   useEffect(() => {
     if (!theme) return;
 
-    // Helper to convert hex to HSL
     const hexToHSL = (hex: string): string => {
-      hex = hex.replace(/^#/, '');
+      hex = hex.replace(/^#/, "");
       const r = parseInt(hex.substr(0, 2), 16) / 255;
       const g = parseInt(hex.substr(2, 2), 16) / 255;
       const b = parseInt(hex.substr(4, 2), 16) / 255;
-      
+
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
-      let h = 0, s = 0, l = (max + min) / 2;
-      
+      let h = 0,
+        s = 0,
+        l = (max + min) / 2;
+
       if (max !== min) {
         const d = max - min;
         s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        
-        switch(max) {
-          case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-          case g: h = ((b - r) / d + 2) / 6; break;
-          case b: h = ((r - g) / d + 4) / 6; break;
+
+        switch (max) {
+          case r:
+            h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+            break;
+          case g:
+            h = ((b - r) / d + 2) / 6;
+            break;
+          case b:
+            h = ((r - g) / d + 4) / 6;
+            break;
         }
       }
-      
+
       h = Math.round(h * 360);
       s = Math.round(s * 100);
       l = Math.round(l * 100);
-      
+
       return `${h} ${s}% ${l}%`;
     };
 
-    // Apply theme to iframe content (NOT to global document)
     const applyThemeToIframe = () => {
-      const iframe = document.querySelector('iframe[data-testid="iframe-preview"]') as HTMLIFrameElement;
+      const iframe = document.querySelector(
+        'iframe[data-testid="iframe-preview"]'
+      ) as HTMLIFrameElement;
       if (!iframe || !iframe.contentWindow) return;
 
       try {
         const iframeDoc = iframe.contentWindow.document.documentElement;
-        
-        // Apply colors (convert to HSL)
-        iframeDoc.style.setProperty("--background", hexToHSL(theme.colors.background));
-        iframeDoc.style.setProperty("--foreground", hexToHSL(theme.colors.text));
-        iframeDoc.style.setProperty("--primary", hexToHSL(theme.colors.primaryBackground));
-        iframeDoc.style.setProperty("--primary-foreground", hexToHSL(theme.colors.primaryText));
-        iframeDoc.style.setProperty("--accent", hexToHSL(theme.colors.accentBackground));
-        iframeDoc.style.setProperty("--accent-foreground", hexToHSL(theme.colors.accentText));
-        iframeDoc.style.setProperty("--destructive", hexToHSL(theme.colors.destructiveBackground));
-        iframeDoc.style.setProperty("--destructive-foreground", hexToHSL(theme.colors.destructiveText));
-        iframeDoc.style.setProperty("--border", hexToHSL(theme.colors.border));
-        iframeDoc.style.setProperty("--card", hexToHSL(theme.colors.cardBackground));
-        iframeDoc.style.setProperty("--card-foreground", hexToHSL(theme.colors.cardText));
-        
-        // Apply fonts
+
+        iframeDoc.style.setProperty(
+          "--background",
+          hexToHSL(theme.colors.background)
+        );
+        iframeDoc.style.setProperty(
+          "--foreground",
+          hexToHSL(theme.colors.text)
+        );
+        iframeDoc.style.setProperty(
+          "--primary",
+          hexToHSL(theme.colors.primaryBackground)
+        );
+        iframeDoc.style.setProperty(
+          "--primary-foreground",
+          hexToHSL(theme.colors.primaryText)
+        );
+        iframeDoc.style.setProperty(
+          "--accent",
+          hexToHSL(theme.colors.accentBackground)
+        );
+        iframeDoc.style.setProperty(
+          "--accent-foreground",
+          hexToHSL(theme.colors.accentText)
+        );
+        iframeDoc.style.setProperty(
+          "--destructive",
+          hexToHSL(theme.colors.destructiveBackground)
+        );
+        iframeDoc.style.setProperty(
+          "--destructive-foreground",
+          hexToHSL(theme.colors.destructiveText)
+        );
+        iframeDoc.style.setProperty(
+          "--border",
+          hexToHSL(theme.colors.border)
+        );
+        iframeDoc.style.setProperty(
+          "--card",
+          hexToHSL(theme.colors.cardBackground)
+        );
+        iframeDoc.style.setProperty(
+          "--card-foreground",
+          hexToHSL(theme.colors.cardText)
+        );
+
         iframeDoc.style.setProperty("--font-sans", theme.fonts.sans);
         iframeDoc.style.setProperty("--font-serif", theme.fonts.serif);
         iframeDoc.style.setProperty("--font-mono", theme.fonts.mono);
-        
-        // Apply border radius
         iframeDoc.style.setProperty("--radius", theme.borderRadius);
       } catch (error) {
         console.error("Failed to apply theme to iframe:", error);
       }
     };
 
-    // Try to apply theme immediately
     applyThemeToIframe();
 
-    // Also apply when iframe loads/reloads
-    const iframe = document.querySelector('iframe[data-testid="iframe-preview"]') as HTMLIFrameElement;
+    const iframe = document.querySelector(
+      'iframe[data-testid="iframe-preview"]'
+    ) as HTMLIFrameElement;
     if (iframe) {
-      iframe.addEventListener('load', applyThemeToIframe);
+      iframe.addEventListener("load", applyThemeToIframe);
       return () => {
-        iframe.removeEventListener('load', applyThemeToIframe);
+        iframe.removeEventListener("load", applyThemeToIframe);
       };
     }
   }, [theme]);
-
-  // Flip to BUILD tab when external event fires
-  useEffect(() => {
-    function onShowBuild() { setRightTab("build"); }
-    window.addEventListener("workspace:show-build", onShowBuild);
-    return () => window.removeEventListener("workspace:show-build", onShowBuild);
-  }, []);
 
   // Auto-select first non-prompt file when workspace loads
   useEffect(() => {
     if (workspace?.files && !selectedFile) {
       const firstNonPromptFile = workspace.files.find(
-        (file) => !file.path.includes("/prompts/") && !file.path.endsWith(".md")
+        (file) =>
+          !file.path.includes("/prompts/") && !file.path.endsWith(".md")
       );
       if (firstNonPromptFile) {
         setSelectedFile(firstNonPromptFile.path);
@@ -263,33 +415,34 @@ export default function Workspace() {
   }, [selectedFile, workspace?.files]);
 
   // Get index.html content for PageToolSheet
-  const indexHtmlFile = workspace?.files.find(f => f.path === "index.html" || f.path.endsWith("/index.html"));
+  const indexHtmlFile = workspace?.files.find(
+    (f) => f.path === "index.html" || f.path.endsWith("/index.html")
+  );
 
   // Handle prompt submission
   const handlePromptSubmit = async (promptText: string) => {
     try {
-      // Create prompt file
       const result = await workspace$.promptToFile({
         promptText,
-        filenameHint: promptText.slice(0, 30).replace(/[^a-z0-9]/gi, '-'),
+        filenameHint: promptText.slice(0, 30).replace(/[^a-z0-9]/gi, "-"),
       });
 
-      // Add to uploaded files pills
-      setUploadedFiles(prev => [...prev, {
-        id: result.file.name,
-        name: result.file.name,
-        path: result.file.path,
-      }]);
+      setUploadedFiles((prev) => [
+        ...prev,
+        {
+          id: result.file.name,
+          name: result.file.name,
+          path: result.file.path,
+        },
+      ]);
 
       toast({
         title: "Prompt Saved",
         description: `Created ${result.file.name}`,
       });
 
-      // Start build with the prompt
       await buildMutation.mutateAsync({ prompt: promptText });
-      
-      // Clear prompt text after successful submission
+
       setPromptText("");
     } catch (error: any) {
       toast({
@@ -303,22 +456,22 @@ export default function Workspace() {
   // Handle file upload from prompt bar
   const handleFileUpload = async (file: File) => {
     try {
-      // Upload file using workspace upload mutation
-      const uploadResult = await workspace$.uploadFile(file);
+      await workspace$.uploadFile(file);
 
-      // Create prompt file for the uploaded asset
       const result = await workspace$.promptToFile({
         promptText: `Uploaded file: ${file.name}`,
         filenameHint: file.name.replace(/\.[^/.]+$/, ""),
       });
 
-      // Add to uploaded files pills
-      setUploadedFiles(prev => [...prev, {
-        id: result.file.name,
-        name: file.name,
-        path: result.file.path,
-      }]);
-      
+      setUploadedFiles((prev) => [
+        ...prev,
+        {
+          id: result.file.name,
+          name: file.name,
+          path: result.file.path,
+        },
+      ]);
+
       toast({
         title: "File Uploaded",
         description: `${file.name} uploaded successfully`,
@@ -332,15 +485,12 @@ export default function Workspace() {
     }
   };
 
-  // Handle remove file from pills
   const handleRemoveFile = (fileId: string) => {
-    setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
 
-  // Handle file chip click to preview
   const handleFileChipClick = (uploadedFile: UploadedFile) => {
-    // Find the file in workspace using the path
-    const file = workspace?.files.find(f => f.path === uploadedFile.path);
+    const file = workspace?.files.find((f) => f.path === uploadedFile.path);
     if (file) {
       setSelectedPromptFile(file);
       setShowPromptFileModal(true);
@@ -357,7 +507,7 @@ export default function Workspace() {
       return;
     }
 
-    const file = workspace.files.find(f => f.path === selectedFile);
+    const file = workspace.files.find((f) => f.path === selectedFile);
     if (!file) {
       toast({
         title: "File Not Found",
@@ -367,41 +517,38 @@ export default function Workspace() {
       return;
     }
 
-    // Get MIME type from file extension
     const getMimeType = (path: string): string => {
-      const ext = path.split('.').pop()?.toLowerCase();
+      const ext = path.split(".").pop()?.toLowerCase();
       const mimeTypes: Record<string, string> = {
-        'html': 'text/html',
-        'css': 'text/css',
-        'js': 'application/javascript',
-        'json': 'application/json',
-        'xml': 'application/xml',
-        'txt': 'text/plain',
-        'md': 'text/markdown',
-        'ts': 'application/typescript',
-        'tsx': 'application/typescript',
-        'jsx': 'application/javascript',
-        'png': 'image/png',
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'gif': 'image/gif',
-        'svg': 'image/svg+xml',
-        'webp': 'image/webp',
-        'ico': 'image/x-icon',
-        'pdf': 'application/pdf',
-        'zip': 'application/zip',
+        html: "text/html",
+        css: "text/css",
+        js: "application/javascript",
+        json: "application/json",
+        xml: "application/xml",
+        txt: "text/plain",
+        md: "text/markdown",
+        ts: "application/typescript",
+        tsx: "application/typescript",
+        jsx: "application/javascript",
+        png: "image/png",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        gif: "image/gif",
+        svg: "image/svg+xml",
+        webp: "image/webp",
+        ico: "image/x-icon",
+        pdf: "application/pdf",
+        zip: "application/zip",
       };
-      return mimeTypes[ext || ''] || 'application/octet-stream';
+      return mimeTypes[ext || ""] || "application/octet-stream";
     };
 
-    // Create blob with correct MIME type
     const mimeType = getMimeType(file.path);
     const blob = new Blob([file.content], { type: mimeType });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    // Use full filename preserving extension
-    a.download = file.path.split('/').pop() || file.path;
+    a.download = file.path.split("/").pop() || file.path;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -440,26 +587,23 @@ export default function Workspace() {
     }
   };
 
-  // Handle prompt file click
   const handlePromptFileClick = (file: WorkspaceFile) => {
     setSelectedPromptFile(file);
     setShowPromptFileModal(true);
   };
 
-  // Handle new chat action - load preset into prompt bar
   const handleNewChatAction = (prompt: string) => {
     setPromptText(prompt);
     setShowNewChatModal(false);
   };
 
-  // Handle download prompt file
   const handleDownloadPromptFile = async () => {
     if (!selectedPromptFile) return;
 
     try {
       await workspace$.downloadFile({
         path: selectedPromptFile.path,
-        suggestedName: selectedPromptFile.path.split('/').pop(),
+        suggestedName: selectedPromptFile.path.split("/").pop(),
       });
       toast({
         title: "Downloaded",
@@ -475,32 +619,33 @@ export default function Workspace() {
   };
 
   // Show error UI if workspace fails to load
-  if (error || (workspace && 'error' in workspace)) {
+  if (error || (workspace && "error" in workspace)) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Card className="max-w-md p-6">
-          <h2 className="text-xl font-semibold mb-2">Workspace Error</h2>
-          <p className="text-muted-foreground mb-4">
-            {(workspace as any)?.error || error?.message || "Failed to load workspace data"}
+      <div className="flex h-screen items-center justify-center bg-[#212121]">
+        <Card className="max-w-md rounded-2xl bg-neutral-900 p-6 text-neutral-200 shadow-xl ring-1 ring-white/10">
+          <h2 className="mb-2 text-xl font-semibold">Workspace Error</h2>
+          <p className="mb-4 text-muted-foreground">
+            {(workspace as any)?.error ||
+              (error as any)?.message ||
+              "Failed to load workspace data"}
           </p>
           <div className="flex gap-2">
-            <Button 
-              onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/workspace", jobId, "files"] })}
+            <Button
+              onClick={() =>
+                queryClient.invalidateQueries({
+                  queryKey: ["/api/workspace", jobId, "files"],
+                })
+              }
               data-testid="button-retry-workspace"
+              className="rounded-xl"
             >
               Retry
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => setRightTab("console")}
-              data-testid="button-view-logs"
-            >
-              View Logs
-            </Button>
-            <Button 
+            <Button
               variant="outline"
               onClick={() => setLocation("/")}
               data-testid="button-back-home"
+              className="rounded-xl"
             >
               Back to Home
             </Button>
@@ -513,9 +658,9 @@ export default function Workspace() {
   // Show loading state
   if (isLoading || !workspace) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+      <div className="flex h-screen items-center justify-center bg-[#212121]">
+        <div className="text-center text-neutral-300">
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-white/40"></div>
           <p className="text-muted-foreground">Loading workspace...</p>
         </div>
       </div>
@@ -528,223 +673,659 @@ export default function Workspace() {
     mobile: "375px",
   };
 
-  // Left Pane Content - Function that receives isCompact from ResizableSplitter
-  const leftPane = (isCompact: boolean) => (
-    <div className="h-full flex flex-col">
-      {/* File Tree Header - Sticky */}
-      <div className="sticky top-0 z-[60] p-3 border-b border-border flex-shrink-0 bg-background overflow-visible" role="toolbar" aria-label="Workspace left controls">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className={`font-semibold text-sm ${isCompact ? 'truncate' : ''}`}>
-            {workspace.manifest.name}
-          </h3>
-          <FileToolbar
-            onNewChat={() => setShowNewChatModal(true)}
-            onUpload={handleFileUpload}
-            onSaveFile={handleSaveFile}
-            onNewFolder={() => setShowNewFolderDialog(true)}
-            isCompact={isCompact}
-            isUploading={workspace$.isUploadLoading}
-          />
+  // Left Pane Content
+  const leftPane = (
+    <div className="flex h-full flex-col bg-[#212121]">
+      {/* Header with title and project info */}
+      <div className="flex-shrink-0 bg-[#212121] px-4 py-3">
+        <div className="flex items-center gap-2 mb-1">
+          {/* Gradient icon like GOOD design */}
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-pink-500 via-purple-500 to-blue-500 p-0.5">
+            <div className="h-full w-full rounded-[6px] bg-[#212121] flex items-center justify-center">
+              <span className="text-xs font-bold bg-gradient-to-br from-pink-500 via-purple-500 to-blue-500 bg-clip-text text-transparent">
+                S
+              </span>
+            </div>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-200">
+              SAS Page Builder
+            </h3>
+            <p className="text-xs text-neutral-500">
+              Previewing last saved version
+            </p>
+          </div>
         </div>
-        {!isCompact && (
-          <p className="text-sm text-muted-foreground">{workspace.manifest.description}</p>
-        )}
+        <p className="text-xs text-neutral-500 mt-2">
+          {new Date().toLocaleDateString("en-US", {
+            day: "numeric",
+            month: "short",
+          })}{" "}
+          at{" "}
+          {new Date().toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          })}
+        </p>
       </div>
-      
-      {/* Prompts & AI Messages Area */}
-      <ScrollArea className="flex-1">
-        <FileTree
-          files={workspace.files}
-          selectedFile={selectedFile}
-          onFileSelect={setSelectedFile}
-          onPromptFileClick={handlePromptFileClick}
-        />
+
+      {/* Project name chip */}
+      <div className="px-4 pb-3">
+        <div className="inline-flex items-center rounded-full bg-white/5 px-3 py-1 text-xs text-neutral-400">
+          {workspace.manifest.name}
+        </div>
+      </div>
+
+      {/* AI Conversation Area */}
+      <ScrollArea className="flex-1 px-4 pb-4">
+        <div className="space-y-4">
+          {/* AI Initial Message */}
+          <div className="flex gap-3">
+            <div className="flex-shrink-0">
+              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                <Zap className="h-4 w-4 text-white" />
+              </div>
+            </div>
+            <div className="flex-1 space-y-3">
+              <p className="text-xs text-neutral-500">Thought for 10s</p>
+              <div className="text-sm text-neutral-300 space-y-3">
+                <p>
+                  I'd love to help you build something amazing! However, I'm
+                  not quite sure what you're looking for.
+                </p>
+                <p>Could you clarify what you'd like to create? For example:</p>
+                <ul className="space-y-2 ml-4">
+                  <li className="flex items-start gap-2">
+                    <span className="text-neutral-500 mt-1">•</span>
+                    <span>
+                      <strong>SaaS landing page</strong> - A marketing site for
+                      a software product?
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-neutral-500 mt-1">•</span>
+                    <span>
+                      <strong>Something else entirely?</strong>
+                    </span>
+                  </li>
+                </ul>
+                <p>
+                  Please describe your project so I can create exactly what you
+                  need!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </ScrollArea>
 
-      {/* Prompt Bar at Bottom */}
-      <PromptBar
-        jobId={jobId || ""}
-        promptText={promptText}
-        onPromptChange={setPromptText}
-        onSubmit={handlePromptSubmit}
-        onFileUpload={handleFileUpload}
-        onRemoveFile={handleRemoveFile}
-        onFileClick={handleFileChipClick}
-        uploadedFiles={uploadedFiles}
-        isLoading={buildMutation.isPending || workspace$.isPromptToFileLoading}
-        agentButton={
-          <AgentButton
-            settings={agentSettings}
-            onChange={setAgentSettings}
-          />
-        }
-      />
+      {/* Quick Action Suggestions */}
+      <div className="px-3 pb-2">
+        <div className="flex flex-wrap gap-2">
+          <button className="rounded-full bg-white/5 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/10 transition-colors">
+            Add Authentication System
+          </button>
+          <button className="rounded-full bg-white/5 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/10 transition-colors">
+            Add Secure Database
+          </button>
+        </div>
+      </div>
+
+      {/* Enhanced Prompt Bar at Bottom */}
+      <div className="px-3 pb-3">
+        <div className="rounded-2xl bg-[#282825] ring-1 ring-white/10 overflow-hidden">
+          {/* Input area */}
+          <div className="relative">
+            <input
+              type="text"
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              placeholder="Ask Lovable..."
+              className="w-full bg-transparent px-4 py-3.5 text-sm text-neutral-200 placeholder-neutral-500 outline-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (promptText.trim()) {
+                    handlePromptSubmit(promptText);
+                  }
+                }
+              }}
+            />
+          </div>
+
+          {/* Bottom toolbar */}
+          <div className="flex items-center justify-between px-3 pb-2 pt-1">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowNewChatModal(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-transparent text-neutral-400 hover:bg-white/5 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                className="flex items-center gap-1.5 rounded-full border border-white/15 bg-transparent px-3 py-1.5 text-xs text-neutral-400 hover:bg-white/5 transition-colors"
+                title="Visual edits"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                <span>Visual edits</span>
+              </button>
+
+              <button
+                type="button"
+                className="flex items-center gap-1.5 rounded-full border border-white/15 bg-transparent px-3 py-1.5 text-xs text-neutral-400 hover:bg-white/5 transition-colors"
+                title="Chat"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                <span>Chat</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-transparent text-neutral-400 hover:bg-white/5 transition-colors"
+                title="Voice input"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                >
+                  <path d="M6 10v4M10 8v8M14 9v6M18 11v2" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (promptText.trim()) {
+                    handlePromptSubmit(promptText);
+                  }
+                }}
+                disabled={!promptText.trim() || buildMutation.isPending}
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
+                  promptText.trim()
+                    ? "bg-neutral-200 text-neutral-900 hover:bg-neutral-100"
+                    : "bg-neutral-700 text-neutral-500 cursor-not-allowed"
+                }`}
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  className="h-4 w-4"
+                  fill="currentColor"
+                >
+                  <path d="M10 3.5a.75.75 0 0 1 .53.22l4.5 4.5a.75.75 0 0 1-1.06 1.06L10.75 6.06V15.5a.75.75 0 0 1-1.5 0V6.06L6.03 9.28a.75.75 0 1 1-1.06-1.06l4.5-4.5A.75.75 0 0 1 10 3.5Z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 
   // Right Pane Content
   const rightPane = (
-    <div className="h-full flex flex-col">
-      <Tabs value={rightTab} onValueChange={(v) => setRightTab(v as "preview" | "console" | "build")} className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border pl-4 pr-3 flex-shrink-0 h-14 bg-background sticky top-0 z-[60] overflow-visible">
-          <div className="flex items-center gap-0 overflow-visible">
-            <TabsList className="h-12 bg-transparent">
-              <TabsTrigger value="preview" className="gap-2" data-testid="tab-preview">
-                <Monitor className="h-4 w-4" />
-                PREVIEW
-              </TabsTrigger>
-              <TabsTrigger value="console" className="gap-2 console-button" data-testid="tab-console">
-                CONSOLE
-              </TabsTrigger>
-              <TabsTrigger value="build" className="gap-2 mr-0" data-testid="tab-build">
-                BUILD
-              </TabsTrigger>
-            </TabsList>
+    <div className="flex h-full flex-col bg-[#212121]">
+      <Tabs defaultValue="preview" className="flex flex-1 flex-col overflow-hidden">
+        {/* Enhanced Top bar */}
+        <div className="sticky top-0 z-[60] flex h-14 flex-shrink-0 items-center justify-between bg-[#212121] px-4">
+          <div className="flex items-center gap-2">
+            {/* Preview button */}
+            <button
+              onClick={() => setActiveView("preview")}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
+                activeView === "preview"
+                  ? "rounded-lg border border-blue-500 bg-blue-600/20 text-neutral-200"
+                  : "rounded-lg border border-white/10 bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-neutral-200"
+              }`}
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+              {activeView === "preview" && <span>Preview</span>}
+            </button>
+
+            {/* Cloud button */}
+            <button
+              onClick={() => setActiveView("cloud")}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
+                activeView === "cloud"
+                  ? "rounded-lg border border-blue-500 bg-blue-600/20 text-neutral-200"
+                  : "rounded-lg border border-white/10 bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-neutral-200"
+              }`}
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+              </svg>
+              {activeView === "cloud" && <span>Cloud</span>}
+            </button>
+
+            {/* Code button */}
+            <button
+              onClick={() => setActiveView("code")}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
+                activeView === "code"
+                  ? "rounded-lg border border-blue-500 bg-blue-600/20 text-neutral-200"
+                  : "rounded-lg border border-white/10 bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-neutral-200"
+              }`}
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+              {activeView === "code" && <span>Code</span>}
+            </button>
+
+            {/* Analytics button */}
+            <button
+              onClick={() => setActiveView("analytics")}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
+                activeView === "analytics"
+                  ? "rounded-lg border border-blue-500 bg-blue-600/20 text-neutral-200"
+                  : "rounded-lg border border-white/10 bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-neutral-200"
+              }`}
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <line x1="12" y1="20" x2="12" y2="10" />
+                <line x1="18" y1="20" x2="18" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="16" />
+              </svg>
+              {activeView === "analytics" && <span>Analytics</span>}
+            </button>
+
+            {/* Add button with dropdown */}
+            <div className="relative view-dropdown-container">
+              <button
+                onClick={() => setShowViewDropdown(!showViewDropdown)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-neutral-200 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+
+              {showViewDropdown && (
+                <div className="absolute left-0 top-full mt-2 w-48 rounded-xl border border-white/10 bg-[#1a1a1a] shadow-xl z-50">
+                  <div className="p-2 space-y-1">
+                    <button
+                      onClick={() => {
+                        setActiveView("analytics");
+                        setShowViewDropdown(false);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 hover:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <svg
+                          className="h-4 w-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <line x1="12" y1="20" x2="12" y2="10" />
+                          <line x1="18" y1="20" x2="18" y2="4" />
+                          <line x1="6" y1="20" x2="6" y2="16" />
+                        </svg>
+                        <span>Analytics</span>
+                      </div>
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M21 10h-4V6h-2v4h-4v2h4v4h2v-4h4v-2z" />
+                      </svg>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setActiveView("cloud");
+                        setShowViewDropdown(false);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 hover:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <svg
+                          className="h-4 w-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                        </svg>
+                        <span>Cloud</span>
+                      </div>
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M21 10h-4V6h-2v4h-4v2h4v4h2v-4h4v-2z" />
+                      </svg>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setActiveView("code");
+                        setShowViewDropdown(false);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 hover:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <svg
+                          className="h-4 w-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <polyline points="16 18 22 12 16 6" />
+                          <polyline points="8 6 2 12 8 18" />
+                        </svg>
+                        <span>Code</span>
+                      </div>
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M21 10h-4V6h-2v4h-4v2h4v4h2v-4h4v-2z" />
+                      </svg>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowViewDropdown(false);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 hover:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <svg
+                          className="h-4 w-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        </svg>
+                        <span>Security</span>
+                      </div>
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M21 10h-4V6h-2v4h-4v2h4v4h2v-4h4v-2z" />
+                      </svg>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowViewDropdown(false);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 hover:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <svg
+                          className="h-4 w-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        <span>Speed</span>
+                      </div>
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M21 10h-4V6h-2v4h-4v2h4v4h2v-4h4v-2z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {rightTab === "preview" && (
-            <div className="flex items-center gap-2 flex-shrink-0 overflow-visible preview-toolbar pr-1 ml-8">
-              <div className="flex items-center gap-1">
-                <Button
-                  variant={deviceMode === "desktop" ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setDeviceMode("desktop")}
-                  data-testid="button-device-desktop"
-                  aria-label="Desktop view"
+          {/* Center rounded pill with icons */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-full border border-white/20 bg-white/5 px-4 py-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    if (deviceMode === "desktop") setDeviceMode("tablet");
+                    else if (deviceMode === "tablet") setDeviceMode("mobile");
+                    else setDeviceMode("desktop");
+                  }}
+                  className="flex h-5 w-5 items-center justify-center text-neutral-400 hover:text-neutral-200 transition-colors"
                 >
-                  <Monitor className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={deviceMode === "tablet" ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setDeviceMode("tablet")}
-                  data-testid="button-device-tablet"
-                  aria-label="Tablet view"
-                >
-                  <Tablet className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={deviceMode === "mobile" ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setDeviceMode("mobile")}
-                  data-testid="button-device-mobile"
-                  aria-label="Mobile view"
-                >
-                  <Smartphone className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <Separator orientation="vertical" className="h-6" />
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => {
-                  const iframe = document.querySelector('iframe[data-testid="iframe-preview"]') as HTMLIFrameElement;
-                  if (iframe) iframe.src = iframe.src;
-                }}
-                data-testid="button-refresh-preview"
-                aria-label="Refresh preview"
-              >
-                <RotateCw className="h-4 w-4" />
-              </Button>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="gap-2 relative z-[80] publish-pill"
-                    onClick={() => setShowPublishModal(true)}
-                    data-testid="button-publish"
-                    aria-label="Publish"
-                    role="button"
-                    tabIndex={0}
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
                   >
-                    <Upload className="h-4 w-4" />
-                    <span className="max-[720px]:hidden">Publish</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Publish your website</p>
-                </TooltipContent>
-              </Tooltip>
+                    {/* Desktop/Laptop monitor */}
+                    <path
+                      d="M2 4h14v10H2V4z"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      fill="none"
+                    />
+                    <path
+                      d="M2 14h14"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    />
+                    <path
+                      d="M7 14v2h4v-2"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      fill="none"
+                    />
+                    <path
+                      d="M5 16h8"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    />
+                    {/* Mobile phone */}
+                    <rect
+                      x="16"
+                      y="8"
+                      width="6"
+                      height="12"
+                      rx="0.5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      fill="none"
+                    />
+                    <path
+                      d="M18 19h2"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    />
+                  </svg>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {deviceMode === "desktop"
+                  ? "Switch to tablet"
+                  : deviceMode === "tablet"
+                  ? "Switch to mobile"
+                  : "Switch to desktop"}
+              </TooltipContent>
+            </Tooltip>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => window.open(`/previews/${jobId}/index.html`, "_blank")}
-                data-testid="button-open-preview-new-tab"
-                aria-label="Open in new tab"
-              >
-                <ExternalLink className="h-4 w-4" />
-              </Button>
+            <span className="text-sm text-neutral-400 font-mono">/</span>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setShowPageToolSheet(true)}
-                data-testid="button-page-tool"
-                aria-label="Edit page HTML"
+            <button className="flex h-5 w-5 items-center justify-center text-neutral-400 hover:text-neutral-200 transition-colors">
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <FileCode className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </button>
+
+            <button
+              onClick={() => {
+                const iframe = document.querySelector(
+                  'iframe[data-testid="iframe-preview"]'
+                ) as HTMLIFrameElement;
+                if (iframe) iframe.src = iframe.src;
+              }}
+              className="flex h-5 w-5 items-center justify-center text-neutral-400 hover:text-neutral-200 transition-colors"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="preview-toolbar flex items-center gap-3">
+            {/* NEW: Autopilot button in the header */}
+            <Button
+              variant={isAutopilotOn ? "default" : "ghost"}
+              size="sm"
+              className={`h-9 gap-1.5 rounded-lg px-3 text-sm ${
+                isAutopilotOn
+                  ? "bg-purple-600 text-neutral-50 hover:bg-purple-700"
+                  : "hover:bg-white/5"
+              }`}
+              onClick={() => {
+                setIsAutopilotOn((prev) => !prev);
+                toast({
+                  title: "Autopilot",
+                  description: !isAutopilotOn
+                    ? "Autopilot is now ON. Your builder co-pilot is awake."
+                    : "Autopilot is now OFF.",
+                });
+              }}
+            >
+              <Zap className="h-4 w-4" />
+              <span>{isAutopilotOn ? "Autopilot On" : "Autopilot"}</span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 gap-1.5 rounded-lg px-3 text-sm hover:bg-white/5"
+            >
+              <Share2 className="h-4 w-4" />
+              <span>Share</span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 gap-1.5 rounded-lg px-3 text-sm hover:bg-white/5"
+            >
+              <Crown className="h-4 w-4" />
+              <span>Upgrade</span>
+            </Button>
+
+            <Button
+              variant="default"
+              size="sm"
+              className="h-9 gap-1.5 rounded-lg bg-blue-600 px-4 text-sm hover:bg-blue-700"
+              onClick={() => setShowPublishModal(true)}
+              data-testid="button-publish"
+            >
+              <span>Publish</span>
+            </Button>
+          </div>
         </div>
 
-        <TabsContent value="preview" className="flex-1 m-0 overflow-hidden">
-          <div className="flex items-center justify-center h-full bg-muted/10">
+        <TabsContent value="preview" className="m-0 flex-1 overflow-hidden">
+          <div className="flex h-full items-center justify-center bg-gradient-to-b from-[#212121] to-[#1a1a1a] p-6">
             <div
               style={{
                 width: deviceWidths[deviceMode],
-                height: "100%",
+                height: "calc(100% - 2rem)",
                 maxWidth: "100%",
-                transition: "width 0.3s ease",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
-              className="bg-white shadow-lg"
+              className="relative rounded-2xl bg-white shadow-2xl shadow-black/50 ring-1 ring-white/10 overflow-hidden"
             >
+              {deviceMode !== "desktop" && (
+                <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-black/10 to-transparent pointer-events-none z-10" />
+              )}
+
               <iframe
+                ref={previewIframeRef}
                 src={`/previews/${jobId}/${workspace.manifest.entryPoint}`}
-                className="w-full h-full border-0"
+                className="h-full w-full border-0"
                 title="Live Preview"
                 data-testid="iframe-preview"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+                onLoad={handlePreviewSeen}
               />
             </div>
           </div>
         </TabsContent>
-
-        <TabsContent value="console" className="flex-1 m-0 overflow-hidden">
-          <ConsolePanel jobId={jobId || ""} />
-        </TabsContent>
-
-        <TabsContent value="build" className="flex-1 m-0 overflow-hidden">
-          <BuildTraceViewer jobId={jobId || ""} enabled={rightTab === "build"} />
-        </TabsContent>
       </Tabs>
-
-      {/* Deploy logs below the editor/right column */}
-      <DeployLogPane jobId={jobId || ""} />
     </div>
   );
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
-      <Header
-        logSummary={{
-          status: "success",
-          lastBuild: "2m ago",
-        }}
-        workspaceName={workspace.manifest.name}
-        onThemeModalOpen={() => setShowThemeModal(true)}
-      />
+    <div
+      className="dark flex h-screen flex-col overflow-hidden bg-[#212121] text-neutral-200"
+      data-theme="dark"
+    >
       <CommandPalette />
+
       <PublishModal
         open={showPublishModal}
         onOpenChange={setShowPublishModal}
@@ -773,10 +1354,12 @@ export default function Workspace() {
         indexHtmlContent={indexHtmlFile?.content || ""}
         onSave={async (content) => await saveIndexMutation.mutateAsync(content)}
       />
-      
-      {/* New Folder Dialog */}
+
       <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>
-        <DialogContent data-testid="dialog-new-folder">
+        <DialogContent
+          data-testid="dialog-new-folder"
+          className="rounded-2xl border-white/10 bg-[#1f1f1f]"
+        >
           <DialogHeader>
             <DialogTitle>Create New Folder</DialogTitle>
             <DialogDescription>
@@ -792,6 +1375,7 @@ export default function Workspace() {
                 onChange={(e) => setNewFolderPath(e.target.value)}
                 placeholder="assets/icons"
                 data-testid="input-folder-path"
+                className="rounded-xl border-white/10 bg-white/5"
               />
             </div>
           </div>
@@ -800,12 +1384,14 @@ export default function Workspace() {
               variant="outline"
               onClick={() => setShowNewFolderDialog(false)}
               data-testid="button-cancel-folder"
+              className="rounded-xl border-white/10"
             >
               Cancel
             </Button>
             <Button
               onClick={handleNewFolder}
               data-testid="button-create-folder"
+              className="rounded-xl bg-blue-600 hover:bg-blue-700"
             >
               Create Folder
             </Button>
@@ -813,19 +1399,28 @@ export default function Workspace() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex-1 overflow-hidden pt-16">
-        <ResizableSplitter
-          leftPane={leftPane}
-          rightPane={rightPane}
-          defaultLeftPercent={33}
-          minLeftWidth={240}
-          minRightWidth={560}
-          storageKey="workspaceSplit"
-        />
-      </div>
+      <div className="flex-1 overflow-hidden">
+        <div className="flex h-full">
+          {/* Left Pane */}
+          <div style={{ width: `${leftPaneWidth}px` }} className="flex-shrink-0">
+            {leftPane}
+          </div>
 
-      {/* dock that keeps chat bottom-right, console bottom-left */}
-      <WorkspaceDock /> {/* ⬅️ mounted near the bottom */}
+          {/* Right Pane with complete border and better rounded corners */}
+          <div className="flex-1 border border-white/10 rounded-3xl m-2 overflow-hidden relative">
+            {/* Invisible resize handle overlay on the left border */}
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsResizing(true);
+              }}
+              className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize z-50"
+              style={{ marginLeft: "-4px" }}
+            />
+            {rightPane}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
