@@ -1,0 +1,5 @@
+{"at":"2025-11-19T04:10:47.036Z","task":"unit-test","provider":"openai","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-19T04:10:47.038Z","task":"unit-test-shadow","provider":"openai","ms":1,"ok":true,"model_hint":null}
+{"at":"2025-11-19T04:10:47.062Z","task":"unit-test-primary","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-19T04:10:47.063Z","task":"unit-test-header","provider":"granite","ms":0,"ok":true,"model_hint":null}
+{"at":"2025-11-19T04:10:47.063Z","task":"unit-test-policy","provider":"openai","ms":0,"ok":true,"model_hint":null}

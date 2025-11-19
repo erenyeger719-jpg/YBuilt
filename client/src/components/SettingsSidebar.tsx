@@ -1,3 +1,5 @@
+// client/components/SettingsSidebar.tsx
+import React from "react";
 import { Link, useLocation } from "wouter";
 import { 
   User, 

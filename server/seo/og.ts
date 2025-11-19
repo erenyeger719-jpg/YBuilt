@@ -122,7 +122,15 @@ export function buildOg(spec: Spec = {}) { return ensureOg(spec); }
 export const buildOG = buildOg;
 
 // NEW: routers sometimes import buildSEO / buildSeo / ensureSEO
-export function buildSEO(spec: Spec = {}) { return ensureOg(spec); }
+// replace the current buildSEO with this exact version
+export function buildSEO(spec: Spec = {}) {
+  const r = ensureOg(spec);
+  return {
+    meta: { title: r.title, description: r.description, image: r.image },
+    copyPatch: r.copyPatch,
+  };
+}
+
 export const buildSeo = buildSEO;
 export const ensureSEO = ensureOg;
 

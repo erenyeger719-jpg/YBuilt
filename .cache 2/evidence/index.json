@@ -1,0 +1,160 @@
+{
+  "paragraphs": [
+    {
+      "id": "67a3442e1c3b910404700ac2091e8e482b967493",
+      "docId": "ev-1761823593738",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "f8d4491db29d7f7f495026089830c33cc11fc2d5",
+      "docId": "ev-1761823950458",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "b0c450b94bbc040dd99b883539b27cb40d68530e",
+      "docId": "ev-1761824271909",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "5812500f62a8b0fa34f8966d20025c6e79a14689",
+      "docId": "ev-1761828289600",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "32b93fc9b323227ec155dfb030dcbee94e62edae",
+      "docId": "ev-1761829034395",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "5fa89a1c22c83a42cd0a87f31e4ddaa635604a14",
+      "docId": "ev-1761829035845",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "ce3b33ba42bff502ba6585969d3e1479854b2876",
+      "docId": "ev-1761829931370",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "f70096244996671b05ac5c8173a324f8a2e13128",
+      "docId": "ev-1761829932782",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "40a7aeb9fb767b00765e4cf0697265efaec22dcc",
+      "docId": "ev-1761830526178",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "faa8c8b9691c17ab8d53742bd1e353a8fa0d134c",
+      "docId": "ev-1761830527542",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "6bdcbde4295ec6448d37c26a7d41caa192d234e1",
+      "docId": "ev-1761833300049",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "9d22dee8ff89d9acb10ad3bbabd3ee425c347fb5",
+      "docId": "ev-1761833301389",
+      "text": "Example domain proves nothing.",
+      "tokens": {
+        "example": 1,
+        "domain": 1,
+        "proves": 1,
+        "nothing.": 1
+      }
+    },
+    {
+      "id": "ff3bbfad03f553b04708a89190574f418bcc7725",
+      "docId": "ex1",
+      "text": "Calm landing pages improve conversions.",
+      "tokens": {
+        "calm": 1,
+        "landing": 1,
+        "pages": 1,
+        "improve": 1,
+        "conversions.": 1
+      }
+    }
+  ],
+  "idf": {
+    "example": 0.11332868530700327,
+    "domain": 0.11332868530700327,
+    "proves": 0.11332868530700327,
+    "nothing.": 0.11332868530700327,
+    "calm": 2.2335922215070942,
+    "landing": 2.2335922215070942,
+    "pages": 2.2335922215070942,
+    "improve": 2.2335922215070942,
+    "conversions.": 2.2335922215070942
+  },
+  "vocabSize": 9
+}

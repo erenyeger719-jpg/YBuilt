@@ -1,4 +1,6 @@
 // client/src/lib/autopilot.ts
+import { sendAutopilotIntent } from "./autopilot-sup";
+
 export type AutopilotLogRole = "you" | "pilot";
 
 export type AutopilotOpts = {
@@ -19,7 +21,14 @@ export type AutopilotOpts = {
     startBasicAB: () => void;
     toggleAB: (on?: boolean) => void;
     setABAuto: (
-      cfg: Partial<{ confidence: number; minViews: number; minConv: number; enabled: boolean }>
+      cfg: Partial<{
+        confidence: number;
+        minViews: number;
+        minConv: number;
+        minConversions: number;
+        enabled: boolean;
+        on: boolean;
+      }>
     ) => void;
     viewArm: (arm: "A" | "B") => void;
 
@@ -31,21 +40,54 @@ export type AutopilotOpts = {
 
     setGoalAndApply: (n: number) => Promise<void> | void;
 
-    setDataSkin: (skin: "normal" | "empty" | "long" | "skeleton" | "error") => Promise<void> | void;
+    setDataSkin: (
+      skin: "normal" | "empty" | "long" | "skeleton" | "error"
+    ) => Promise<void> | void;
 
     toggleComments: (on?: boolean) => void;
+
+    // NEW: let callers hook Autopilot into the Design Store
+    applyDesignPack?: (opts: {
+      slot: "hero" | "pricing" | "footer" | "navbar";
+      styleHint?: string;
+    }) => Promise<void> | void;
   };
 };
 
 export class Autopilot {
   private say?: (t: string) => void;
   private log?: (r: AutopilotLogRole, t: string) => void;
+  private askConfirm?: (plan: string) => Promise<boolean>;
   private A: AutopilotOpts["actions"];
 
   constructor(opts: AutopilotOpts) {
     this.say = opts.say;
     this.log = opts.log;
+    this.askConfirm = opts.askConfirm;
     this.A = opts.actions;
+  }
+
+  private async confirmAndRun(
+    plan: string,
+    work: () => Promise<void> | void
+  ): Promise<void> {
+    // If no confirm handler, just run.
+    if (!this.askConfirm) {
+      await work();
+      return;
+    }
+
+    try {
+      const ok = await this.askConfirm(plan);
+      if (!ok) {
+        this.log?.("pilot", `Cancelled: ${plan}`);
+        return;
+      }
+      await work();
+    } catch {
+      // If confirm UI crashes, fail open rather than breaking Autopilot.
+      await work();
+    }
   }
 
   async handle(raw: string) {
@@ -60,81 +102,278 @@ export class Autopilot {
       this.log?.("pilot", msg);
     };
 
+    // --- Autopilot ON / OFF (voice pause / resume) ---
+    if (
+      /\b(autopilot (?:off|stop|disable)|pause autopilot|turn autopilot off)\b/i.test(
+        low
+      )
+    ) {
+      this.A.setAutopilot(false);
+      sendAutopilotIntent({
+        kind: "other",
+        summary: "Autopilot turned OFF by voice.",
+        payload: { on: false },
+      });
+      told("Autopilot paused.");
+      return;
+    }
+
+    if (
+      /\b(autopilot (?:on|start|enable)|resume autopilot|turn autopilot on)\b/i.test(
+        low
+      )
+    ) {
+      this.A.setAutopilot(true);
+      sendAutopilotIntent({
+        kind: "other",
+        summary: "Autopilot turned ON by voice.",
+        payload: { on: true },
+      });
+      told("Autopilot resumed.");
+      return;
+    }
+
+    // --- Design Store / Design Packs ---
+    if (
+      this.A.applyDesignPack &&
+      (low.includes("design store") ||
+        low.includes("design pack") ||
+        low.includes("design from store"))
+    ) {
+      let slot: "hero" | "pricing" | "footer" | "navbar" | null = null;
+
+      if (low.includes("hero")) {
+        slot = "hero";
+      } else if (low.includes("pricing") || low.includes("price section")) {
+        slot = "pricing";
+      } else if (low.includes("footer")) {
+        slot = "footer";
+      } else if (
+        low.includes("nav") ||
+        low.includes("navbar") ||
+        low.includes("navigation")
+      ) {
+        slot = "navbar";
+      }
+
+      if (slot) {
+        let styleHint: string | undefined;
+        if (
+          low.includes("minimal") ||
+          low.includes("simple") ||
+          low.includes("clean")
+        ) {
+          styleHint = "minimal";
+        } else if (low.includes("dark")) {
+          styleHint = "dark";
+        } else if (low.includes("premium") || low.includes("luxury")) {
+          styleHint = "premium";
+        }
+
+        const plan = `Apply a ${
+          styleHint ? styleHint + " " : ""
+        }${slot} design pack from the store.`;
+
+        await this.confirmAndRun(plan, async () => {
+          await this.A.applyDesignPack!({ slot: slot!, styleHint });
+          sendAutopilotIntent({
+            kind: "other",
+            summary: "Apply design pack from store.",
+            payload: { slot, styleHint },
+          });
+        });
+
+        return;
+      }
+    }
+
     // --- Compose / Recompose / Prompt ---
     if (/^(make|compose)\b/i.test(t)) {
       // If user wrote “make X…”, capture the prompt portion to setPrompt before compose
       const m = t.match(/^(?:make|compose)\s+(.*)$/i);
-      if (m && m[1]) this.A.setPrompt(m[1].trim());
-      await this.A.composeInstant();
+      const prompt = m && m[1] ? m[1].trim() : "";
+
+      if (prompt) this.A.setPrompt(prompt);
+
+      const plan = prompt
+        ? `Compose page for: "${prompt}"`
+        : "Compose with current context.";
+
+      await this.confirmAndRun(plan, async () => {
+        sendAutopilotIntent({
+          kind: "compose",
+          summary: prompt
+            ? `Compose for: "${prompt}"`
+            : "Compose with current context.",
+          payload: prompt ? { prompt } : undefined,
+        });
+
+        await this.A.composeInstant();
+      });
+
       return;
     }
+
     if (/\brecompose\b/i.test(t)) {
-      // Delegate to UI hotkey path (you already wire recompose via actions around spec)
-      await this.A.composeInstant(); // safest fallback
+      const plan = "Recompose current page.";
+
+      await this.confirmAndRun(plan, async () => {
+        sendAutopilotIntent({
+          kind: "compose",
+          summary: "Recompose current page.",
+          payload: { mode: "recompose" },
+        });
+        await this.A.composeInstant(); // safest fallback
+      });
+
       return;
     }
 
     // --- Chips (quick intents) ---
     if (/\bfix (contrast|read(ability|able))\b/i.test(t)) {
-      await this.A.applyChip("More minimal");
+      const chip = "More minimal";
+      sendAutopilotIntent({
+        kind: "chip",
+        summary: `Apply chip: ${chip}`,
+        payload: { chip },
+      });
+      await this.A.applyChip(chip);
       return;
     }
-    if (/\b(email|signup).*(cta|call to action)|\b(sign[-\s]?up)\b/i.test(low)) {
-      await this.A.applyChip("Use email signup CTA");
+    if (
+      /\b(email|signup).*(cta|call to action)|\b(sign[-\s]?up)\b/i.test(low)
+    ) {
+      const chip = "Use email signup CTA";
+      sendAutopilotIntent({
+        kind: "chip",
+        summary: `Apply chip: ${chip}`,
+        payload: { chip },
+      });
+      await this.A.applyChip(chip);
       return;
     }
     if (/\b(use|enable)\s+dark\b/i.test(t)) {
-      await this.A.applyChip("Use dark mode");
+      const chip = "Use dark mode";
+      sendAutopilotIntent({
+        kind: "chip",
+        summary: `Apply chip: ${chip}`,
+        payload: { chip },
+      });
+      await this.A.applyChip(chip);
       return;
     }
 
     // --- Zero-JS toggle ---
     if (/\b(zero[-\s]?js|no js)\b/i.test(low)) {
       const on = low.includes("off") ? false : low.includes("on") ? true : true;
-      await this.A.setZeroJs(on);
-      told(`Zero-JS ${on ? "enabled" : "disabled"}.`);
+      const plan = `Toggle zero-JS ${on ? "ON" : "OFF"}.`;
+
+      await this.confirmAndRun(plan, async () => {
+        sendAutopilotIntent({
+          kind: "other",
+          summary: `Toggle zero-JS ${on ? "on" : "off"}.`,
+          payload: { on },
+        });
+        await this.A.setZeroJs(on);
+        told(`Zero-JS ${on ? "enabled" : "disabled"}.`);
+      });
+
       return;
     }
 
     // --- Army + Blend ---
     if (/\brun army\b/i.test(low)) {
-      await this.A.runArmyTop();
+      const plan = "Run SUP army for more variants.";
+
+      await this.confirmAndRun(plan, async () => {
+        sendAutopilotIntent({
+          kind: "compose",
+          summary: "Run SUP army for more variants.",
+          payload: { mode: "army" },
+        });
+        await this.A.runArmyTop();
+      });
+
       return;
     }
     if (/\bblend( winner)?\b/i.test(low)) {
-      await this.A.blendTopWinner();
+      const plan = "Blend top winning variant from army.";
+
+      await this.confirmAndRun(plan, async () => {
+        sendAutopilotIntent({
+          kind: "compose",
+          summary: "Blend top winning variant from army.",
+          payload: { mode: "blend" },
+        });
+        await this.A.blendTopWinner();
+      });
+
       return;
     }
 
     // --- A/B controls ---
     if (/start( an| the)?\s*(a\/?b|ab)/i.test(low)) {
-      this.A.startBasicAB();
-      told("A/B started.");
+      const plan = "Start A/B test on this page.";
+
+      await this.confirmAndRun(plan, async () => {
+        this.A.startBasicAB();
+        sendAutopilotIntent({
+          kind: "ab_start",
+          summary: "Start A/B test on this page.",
+        });
+        told("A/B started.");
+      });
+
       return;
     }
-    if (/stop( the)?\s*(a\/?b|ab)/i.test(low)) {
-      this.A.toggleAB(false);
-      told("A/B stopped.");
+
+    if (/stop( the)?\s*(a\/b|ab)/i.test(low) || /stop( the)?\s*a\/b/i.test(low)) {
+      const plan = "Stop current A/B test.";
+
+      await this.confirmAndRun(plan, async () => {
+        this.A.toggleAB(false);
+        sendAutopilotIntent({
+          kind: "ab_stop",
+          summary: "Stop current A/B test.",
+        });
+        told("A/B stopped.");
+      });
+
       return;
     }
+
     if (/\btoggle (a\/?b|ab)\b/i.test(low)) {
       this.A.toggleAB();
+      sendAutopilotIntent({
+        kind: "other",
+        summary: "Toggle A/B on/off.",
+      });
       return;
     }
 
     // Arm view
     const mView = low.match(/\bview (a|b)\b/i);
     if (mView) {
-      const arm = (mView[1].toUpperCase() as "A" | "B");
+      const arm = mView[1].toUpperCase() as "A" | "B";
       this.A.viewArm(arm);
+      sendAutopilotIntent({
+        kind: "other",
+        summary: `View variant ${arm}.`,
+        payload: { arm },
+      });
       return;
     }
 
     // Experiment name
     const mExp = t.match(/\bexperiment (?:is|=)\s*([a-z0-9_\-]+)\b/i);
     if (mExp) {
-      // No direct setter in actions: piggyback via toggleAB() to keep UX — handled by UI input normally
-      told(`Experiment set hint: ${mExp[1]}`);
+      const name = mExp[1];
+      sendAutopilotIntent({
+        kind: "other",
+        summary: `Experiment name hint: ${name}`,
+        payload: { name },
+      });
+      told(`Experiment set hint: ${name}`);
       return;
     }
 
@@ -143,28 +382,55 @@ export class Autopilot {
     if (mConf) {
       const n = Math.max(50, Math.min(99, parseInt(mConf[2], 10)));
       this.A.setABAuto({ confidence: n / 100 });
+      sendAutopilotIntent({
+        kind: "ab_config",
+        summary: `Set auto-stop confidence ≈ ${n}%`,
+        payload: { confidence: n / 100 },
+      });
       told(`Auto-stop confidence ≈ ${n}%`);
       return;
     }
     const mMV = low.match(/\bmin\s*views?\s*(\d{1,6})\b/);
     if (mMV) {
-      this.A.setABAuto({ minViews: parseInt(mMV[1], 10) });
+      const minViews = parseInt(mMV[1], 10);
+      this.A.setABAuto({ minViews });
+      sendAutopilotIntent({
+        kind: "ab_config",
+        summary: `Set auto-stop minViews = ${minViews}.`,
+        payload: { minViews },
+      });
       told(`Auto-stop minViews = ${mMV[1]}`);
       return;
     }
     const mMC = low.match(/\bmin\s*(conv|conversions?)\s*(\d{1,6})\b/);
     if (mMC) {
-      this.A.setABAuto({ minConv: parseInt(mMC[2], 10) });
-      told(`Auto-stop minConv = ${mMC[2]}`);
+      const minConv = parseInt(mMC[2], 10);
+      this.A.setABAuto({ minConversions: minConv });
+      sendAutopilotIntent({
+        kind: "ab_config",
+        summary: `Set auto-stop minConversions = ${minConv}.`,
+        payload: { minConversions: minConv },
+      });
+      told(`Auto-stop minConversions = ${mMC[2]}`);
       return;
     }
     if (/\bauto[-\s]?stop\b.*\bon\b/i.test(low)) {
-      this.A.setABAuto({ enabled: true });
+      this.A.setABAuto({ enabled: true, on: true });
+      sendAutopilotIntent({
+        kind: "ab_config",
+        summary: "Enable auto-stop for A/B.",
+        payload: { on: true },
+      });
       told("Auto-stop enabled.");
       return;
     }
     if (/\bauto[-\s]?stop\b.*\boff\b/i.test(low)) {
-      this.A.setABAuto({ enabled: false });
+      this.A.setABAuto({ enabled: false, on: false });
+      sendAutopilotIntent({
+        kind: "ab_config",
+        summary: "Disable auto-stop for A/B.",
+        payload: { on: false },
+      });
       told("Auto-stop disabled.");
       return;
     }
@@ -172,7 +438,18 @@ export class Autopilot {
     // --- Data skins ---
     const mSkin = low.match(/\bdata (normal|empty|long|skeleton|error)\b/);
     if (mSkin) {
-      this.A.setDataSkin(mSkin[1] as any);
+      const skin = mSkin[1] as
+        | "normal"
+        | "empty"
+        | "long"
+        | "skeleton"
+        | "error";
+      sendAutopilotIntent({
+        kind: "other",
+        summary: `Switch data skin to ${skin}.`,
+        payload: { skin },
+      });
+      this.A.setDataSkin(skin);
       return;
     }
 
@@ -181,6 +458,11 @@ export class Autopilot {
     if (mGoal) {
       const n = Math.max(0, Math.min(100, parseInt(mGoal[1], 10)));
       await this.A.setGoalAndApply(n);
+      sendAutopilotIntent({
+        kind: "other",
+        summary: `Set goal slider to ${n}.`,
+        payload: { goal: n },
+      });
       told(`Goal set → ${n}`);
       return;
     }
@@ -188,26 +470,48 @@ export class Autopilot {
     // --- Comments ---
     if (/\bcomment mode\b.*\bon\b/i.test(low)) {
       this.A.toggleComments(true);
+      sendAutopilotIntent({
+        kind: "other",
+        summary: "Comment mode ON.",
+        payload: { on: true },
+      });
       told("Comment mode ON.");
       return;
     }
     if (/\bcomment mode\b.*\boff\b/i.test(low)) {
       this.A.toggleComments(false);
+      sendAutopilotIntent({
+        kind: "other",
+        summary: "Comment mode OFF.",
+        payload: { on: false },
+      });
       told("Comment mode OFF.");
       return;
     }
     if (/\btoggle comments?\b/i.test(low)) {
       this.A.toggleComments();
+      sendAutopilotIntent({
+        kind: "other",
+        summary: "Toggle comment mode.",
+      });
       return;
     }
 
     // --- Undo / Status ---
     if (/\bundo\b/i.test(low)) {
       this.A.undo();
+      sendAutopilotIntent({
+        kind: "undo",
+        summary: "Undo last change.",
+      });
       return;
     }
     if (/\b(status|report)\b/i.test(low)) {
       const s = await this.A.reportStatus();
+      sendAutopilotIntent({
+        kind: "status",
+        summary: "Report status requested.",
+      });
       if (s) told(s);
       return;
     }
@@ -215,7 +519,75 @@ export class Autopilot {
     // Fallback: if the user typed anything else like “make …” without keyword
     if (t.length > 2) {
       this.A.setPrompt(t);
-      await this.A.composeInstant();
+
+      const plan = `Compose from free-form prompt.`;
+
+      await this.confirmAndRun(plan, async () => {
+        sendAutopilotIntent({
+          kind: "compose",
+          summary: `Compose from free-form prompt.`,
+          payload: { prompt: t },
+        });
+
+        await this.A.composeInstant();
+      });
     }
   }
+}
+
+// --- Autopilot planner – simple text → plan helper (used in tests) ---
+
+export type AutopilotPlan = {
+  rawText: string;
+  intent: "waitlist" | "ab_test" | "email_welcome" | "unknown";
+  [key: string]: any;
+};
+
+export function planFromUtterance(text: string): AutopilotPlan {
+  const lower = text.toLowerCase();
+
+  const plan: AutopilotPlan = {
+    rawText: text,
+    intent: "unknown",
+  };
+
+  // 1) "Make a dark waitlist page..."
+  if (lower.includes("waitlist")) {
+    plan.intent = "waitlist";
+    plan.goal = "waitlist";
+    plan.theme = lower.includes("dark") ? "dark" : "default";
+    plan.sections = ["hero", "email_capture"];
+    return plan;
+  }
+
+  // 2) "Test headline and stop at 95%..."
+  if (lower.includes("headline") && lower.includes("test")) {
+    plan.intent = "ab_test";
+    plan.target = "headline";
+
+    const has95 =
+      lower.includes("95%") ||
+      lower.includes(" 95 ") ||
+      lower.includes("0.95");
+
+    plan.ab = {
+      kind: "ab",
+      confidence: has95 ? 0.95 : 0.8,
+      variants: ["A", "B"],
+    };
+
+    return plan;
+  }
+
+  // 3) "Wire email capture and send welcome..."
+  if (lower.includes("email") && lower.includes("welcome")) {
+    plan.intent = "email_welcome";
+    plan.flow = "email_welcome";
+    plan.requiresSecret = true;
+    plan.trigger = "email_welcome_flow";
+    return plan;
+  }
+
+  // 4) Fallback: unclear / messy instructions
+  return plan;
 }

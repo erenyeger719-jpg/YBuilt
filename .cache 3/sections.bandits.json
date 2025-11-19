@@ -1,0 +1,107 @@
+{
+  "all|hero-basic": {
+    "hero-basic": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761906132009
+    },
+    "hero-basic@b": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761906132009
+    }
+  },
+  "all|features-3col": {
+    "features-3col": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761906132043
+    },
+    "features-3col@alt": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761906132043
+    }
+  },
+  "founders|hero-basic": {
+    "hero-basic": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761907931416
+    },
+    "hero-basic@b": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761907931416
+    }
+  },
+  "founders|pricing-simple": {
+    "pricing-simple": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761907931417
+    },
+    "pricing-simple@a": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761907931417
+    }
+  },
+  "general|hero-basic": {
+    "hero-basic": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761907931622
+    },
+    "hero-basic@b": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761907931622
+    }
+  },
+  "general|features-3col": {
+    "features-3col": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761907931623
+    },
+    "features-3col@alt": {
+      "a": 1,
+      "b": 1,
+      "seen": 0,
+      "win": 0,
+      "last": 1761907931623
+    }
+  },
+  "all|cta-simple": {
+    "cta-simple": {
+      "a": 4,
+      "b": 1,
+      "seen": 3,
+      "win": 3,
+      "last": 1761913116181
+    }
+  }
+}

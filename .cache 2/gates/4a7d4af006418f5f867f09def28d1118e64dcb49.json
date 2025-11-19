@@ -1,0 +1,34 @@
+{
+  "pass": true,
+  "worst_cls": 0,
+  "total_clipped": 0,
+  "runs": [
+    {
+      "view": "mobile",
+      "throttle": "fast",
+      "cls": 0,
+      "clippedCount": 0
+    },
+    {
+      "view": "mobile",
+      "throttle": "slow",
+      "cls": 0,
+      "clippedCount": 0
+    },
+    {
+      "view": "desktop",
+      "throttle": "fast",
+      "cls": 0,
+      "clippedCount": 0
+    },
+    {
+      "view": "desktop",
+      "throttle": "slow",
+      "cls": 0,
+      "clippedCount": 0
+    }
+  ],
+  "budgets": {
+    "max_cls": 0.1
+  }
+}

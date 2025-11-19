@@ -21,10 +21,62 @@ import { wireBuildsNamespace } from './builds.ts';
 import logsApiRouter from './routes/logs.ts'; // note the .ts
 import { persistFork } from './previews.storage.ts';
 import aiRouter from './ai/router.ts'; // ← ensure AI router is statically imported
+import { never500 } from './mw/failsafe.ts'; // 👈 failsafe middleware
 
 // NEW: KPI + Execute Sandbox (static) mounts
-import kpiRouter from './routes/kpi';
-import executeSandboxRouter from './routes/execute.sandbox';
+import kpiRouter from './routes/kpi.ts';
+import executeSandboxRouter from './routes/execute.sandbox.ts';
+
+// NEW: Outgoing hash middleware
+import { hashOutgoing } from './mw/hash-outgoing.ts';
+
+// NEW: Shadow guard (block ship when X-Shadow: 1)
+import { shadowGuard } from './mw/shadow-guard.ts';
+
+// NEW: Challenge API router
+import challengeRouter from './routes/challenge.ts';
+
+// NEW: Drain-mode middleware for AI routes
+import { drainMode } from './mw/drain-mode.ts';
+
+// NEW: Admin ops router
+import adminOpsRouter from './routes/admin.ops.ts';
+
+// NEW: UX Snapshot router
+import uxSnapshotRouter from './routes/ux.snapshot.ts';
+
+// NEW: UX Patch router
+import uxPatchRouter from './routes/ux.patch.ts';
+
+// NEW: UX Microcopy router
+import uxMicrocopyRouter from './routes/ux.microcopy.ts';
+
+// NEW: PII scrubber for AI routes
+import piiScrub from './mw/pii-scrub.ts';
+
+// NEW: Code router (repo editing utilities)
+import codeRouter from './routes/code.ts';
+
+// NEW: Email Flow router (welcome / transactional flows)
+import emailFlowRouter from './routes/email.flow.ts';
+
+// NEW: Design Store router
+import designStoreRouter from './routes/design-store.ts';
+
+// NEW: Account router
+import accountRouter from './routes/account.ts';
+
+// NEW: Collab audit logger
+import { logCollabEvent } from './collab/audit.ts';
+
+// NEW: Collab access helper
+import { checkCollabAccess } from './collab/access.ts';
+
+// NEW: Ask-file helper
+import { askFileQuestion } from './ai/ask-file.ts';
+
+// NEW: Auth middleware
+import { authRequired } from './middleware/auth.js';
 
 // Sentry (v7/v8/v10 compatible)
 import * as Sentry from '@sentry/node';
@@ -71,7 +123,6 @@ Sentry.init({
 });
 
 logger.info(`[SENTRY] server DSN present: ${Boolean(process.env.SENTRY_DSN)}`);
-// Basic app setup
 logger.info('[SECURITY] JWT_SECRET is configured and validated');
 
 const RAZORPAY_MODE = process.env.RAZORPAY_MODE || 'mock';
@@ -83,6 +134,24 @@ if (RAZORPAY_MODE === 'live') {
 logger.info(`[RAZORPAY] Mode: ${RAZORPAY_MODE}`);
 
 const app = express();
+
+// --- KPI "seen" ledger (.cache/kpi.seen.jsonl) ---
+const KPI_SEEN_FILE = path.join(process.cwd(), '.cache', 'kpi.seen.jsonl');
+
+function logPreviewSeen(event: any) {
+  try {
+    fs.mkdirSync(path.dirname(KPI_SEEN_FILE), { recursive: true });
+    const line = JSON.stringify({
+      ...event,
+      ts: event?.ts ?? Date.now(),
+      kind: 'seen',
+      source: event?.source ?? 'preview',
+    });
+    fs.appendFile(KPI_SEEN_FILE, line + '\n', () => {});
+  } catch {
+    // Never break the server because of logging.
+  }
+}
 
 // trust proxy so req.ip uses X-Forwarded-For on Render
 app.set('trust proxy', 1);
@@ -132,7 +201,6 @@ app.use(ipGate());
       directives['script-src'].push('https://checkout.razorpay.com');
       directives['connect-src'].push('https://api.razorpay.com');
     }
-    // While in mock mode, Razorpay stays blocked (no additions)
 
     app.use(
       helmet({
@@ -157,6 +225,10 @@ app.use(ipGate());
   app.use(cookieParser()); // cookie support for session/team routes
   app.use('/webhooks/razorpay', express.raw({ type: 'application/json' }));
   app.use(express.json({ limit: '1mb' }));
+  // ensure .cache exists early for routers that write there
+  try {
+    fs.mkdirSync('.cache', { recursive: true });
+  } catch {}
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
   // 🔖 API marker header (place right after CORS/parsers; before routers)
@@ -281,18 +353,48 @@ app.use(ipGate());
       socket.on(
         'collab:join',
         ({ room: r, user }: { room: string; user: { name?: string; color?: string } }) => {
+          const decision = checkCollabAccess(socket, r);
+
+          if (!decision.allowed) {
+            // Do not join the room; notify client and audit the attempt.
+            logCollabEvent({
+              kind: 'join',
+              room: r,
+              peerId,
+              userName: user?.name || 'Guest',
+              reason: decision.reason || 'forbidden',
+            });
+            socket.emit('collab:error', {
+              room: r,
+              error: 'forbidden',
+              reason: decision.reason || 'forbidden',
+            });
+            return;
+          }
+
           room = r;
           socket.join(r);
           const peers = presence.get(r) || new Map<string, Peer>();
-          peers.set(peerId, {
+          const peer: Peer = {
             id: peerId,
             name: user?.name || 'Guest',
             color: user?.color || '#8b5cf6',
             ts: Date.now(),
-          });
+          };
+          peers.set(peerId, peer);
           presence.set(r, peers);
           emitPresence(io, r);
-        }
+
+          // Audit: join event with resolved workspace/project context if available
+          logCollabEvent({
+            kind: 'join',
+            room: r,
+            peerId,
+            userName: peer.name,
+            workspaceId: decision.ctx.workspaceId,
+            projectId: decision.ctx.projectId,
+          });
+        },
       );
 
       socket.on('collab:presence', ({ file }: { file?: string }) => {
@@ -306,28 +408,65 @@ app.use(ipGate());
         peers.set(peerId, p);
         presence.set(room, peers);
         emitPresence(io, room);
+
+        // Audit: presence ping
+        logCollabEvent({
+          kind: 'presence',
+          room,
+          peerId,
+          userName: p.name,
+          file: p.file,
+        });
       });
 
       socket.on('collab:comment:broadcast', (payload: any) => {
-        if (room) socket.to(room).emit('collab:comment:event', payload);
+        if (!room) return;
+        io.to(room).emit('collab:comment:event', payload);
+
+        // Audit: comment event (payload summarized in logger)
+        logCollabEvent({
+          kind: 'comment',
+          room,
+          peerId,
+          payload,
+        });
       });
 
       // --- cursor relay ---
       socket.on('collab:cursor', (payload: any) => {
-        if (room) {
-          io.to(room).emit('collab:cursor:update', {
-            peerId,
-            ...payload,
-            ts: Date.now(),
-          });
-        }
+        if (!room) return;
+
+        const eventPayload = {
+          ...payload,
+          ts: Date.now(),
+        };
+
+        io.to(room).emit('collab:cursor:update', {
+          peerId,
+          ...eventPayload,
+        });
+
+        // Audit: cursor move (we only care that it happened, not every pixel)
+        logCollabEvent({
+          kind: 'cursor',
+          room,
+          peerId,
+          payload: eventPayload,
+        });
       });
 
       // --- mention relay ---
       socket.on('collab:mention', (payload: any) => {
-        if (room) {
-          io.to(room).emit('collab:mention', payload);
-        }
+        if (!room) return;
+        io.to(room).emit('collab:mention', payload);
+
+        // Audit: mention
+        logCollabEvent({
+          kind: 'mention',
+          room,
+          peerId,
+          payload,
+        });
       });
 
       // --- DEPLOY ROOMS ---
@@ -350,6 +489,15 @@ app.use(ipGate());
             emitPresence(io, room);
           }
           socket.leave(room);
+
+          // Audit: explicit leave
+          logCollabEvent({
+            kind: 'leave',
+            room,
+            peerId,
+            reason: 'explicit_leave',
+          });
+
           room = null;
         }
       });
@@ -361,6 +509,14 @@ app.use(ipGate());
         peers.delete(peerId);
         presence.set(room, peers);
         emitPresence(io, room);
+
+        // Audit: disconnect-driven leave
+        logCollabEvent({
+          kind: 'leave',
+          room,
+          peerId,
+          reason: 'disconnect',
+        });
       });
     });
 
@@ -382,6 +538,9 @@ app.use(ipGate());
       }
     }, 60_000);
   }
+
+  // 🔐 Global response hashing (keep this early)
+  app.use(hashOutgoing());
 
   // Health checks (early)
   app.get('/api/status', (_req: Request, res: Response) => {
@@ -409,6 +568,10 @@ app.use(ipGate());
     // mock mode: don't throw, just return a clear payload
     return res.json({ mock: true, key: null });
   });
+
+  // 🛡️ Shadow guard for ship/persist endpoints (must be before those routers)
+  app.use('/api/previews', shadowGuard());
+  app.use('/api/deploy', shadowGuard());
 
   // --- Add: fork a preview template into a unique slug under /previews/forks/<slug> ---
   app.post('/api/previews/fork', async (req: Request, res: Response) => {
@@ -512,9 +675,11 @@ app.use(ipGate());
   const { default: deployRouter } = await import('./routes/deploy.js').catch(() => ({
     default: undefined as any,
   }));
-  const { default: deployDockerRouter } = await import('./routes/deploy.docker.ts').catch(() => ({
-    default: undefined as any,
-  }));
+  const { default: deployDockerRouter } = await import('./routes/deploy.docker.ts').catch(
+    () => ({
+      default: undefined as any,
+    }),
+  );
   const { default: tasksRouter } = await import('./routes/tasks.js').catch(() => ({
     default: undefined as any,
   }));
@@ -524,13 +689,17 @@ app.use(ipGate());
   const { default: importRouter } = await import('./routes/import.js').catch(() => ({
     default: undefined as any,
   }));
-  const { default: previewsManage } = await import('./routes/previews.manage.js').catch(() => ({
-    default: undefined as any,
-  }));
+  const { default: previewsManage } = await import('./routes/previews.manage.js').catch(
+    () => ({
+      default: undefined as any,
+    }),
+  );
   // NEW: AI orchestrator (mounted near other routers)
-  const { default: aiOrchestrator } = await import('./routes/ai.orchestrator.js').catch(() => ({
-    default: undefined as any,
-  }));
+  const { default: aiOrchestrator } = await import('./routes/ai.orchestrator.js').catch(
+    () => ({
+      default: undefined as any,
+    }),
+  );
   // (aiRouter is now statically imported at top)
 
   // NEW: Abuse router (rate-limit/abuse signals)
@@ -587,6 +756,13 @@ app.use(ipGate());
   if (importRouter) app.use('/api/import', express.json({ limit: '2mb' }), importRouter);
   if (previewsManage) app.use('/api/previews', express.json(), previewsManage);
 
+  // 🔻 Drain-mode guard MUST be before any AI routers
+  app.use('/api/ai', drainMode());
+  // Ensure body parsed for AI routes before PII scrub
+  app.use('/api/ai', express.json({ limit: '1mb' }));
+  // Scrub PII before SUP/logging/model calls
+  app.use('/api/ai', piiScrub());
+
   // Mount AI routers UNDER THE SAME PREFIX. Order matters:
   // - Mount aiRouter (with /review) first so it takes precedence over any duplicate paths.
   app.use('/api/ai', aiRouter); // existing
@@ -599,11 +775,141 @@ app.use(ipGate());
   // NEW: Logs API (unconditional, before static)
   app.use('/api/logs', logsApiRouter);
 
+  // NEW: Account API
+  app.use('/api/account', accountRouter);
+
+  // NEW: Design Store API
+  app.use('/api/design-store', designStoreRouter);
+
+  // NEW: Email Flow API (welcome / transactional flows)
+  app.use('/api/flow/email', emailFlowRouter);
+
   // NEW: Palette API
   if (paletteRouter) app.use('/api/palette', paletteRouter);
 
+  // NEW: KPI seen endpoint → append-only ledger .cache/kpi.seen.jsonl
+  app.post('/api/kpi/seen', express.json(), (req, res) => {
+    try {
+      const body = req.body || {};
+
+      // Shape 1: A/B experiment impression from iframe
+      const experiment =
+        typeof body.experiment === 'string' && body.experiment.trim()
+          ? body.experiment.trim()
+          : undefined;
+      const variant =
+        typeof body.variant === 'string' && body.variant.trim()
+          ? body.variant.trim()
+          : undefined;
+
+      // Common path
+      const pathName =
+        typeof body.path === 'string' && body.path.trim()
+          ? body.path.trim()
+          : undefined;
+
+      // Shape 2: Builder / preview job-based view
+      const jobId =
+        typeof body.jobId === 'string' && body.jobId.trim()
+          ? body.jobId.trim()
+          : undefined;
+      const workspaceId =
+        typeof body.workspaceId === 'string' && body.workspaceId.trim()
+          ? body.workspaceId.trim()
+          : undefined;
+
+      // A/B experiment impression
+      if (experiment && variant && pathName) {
+        logPreviewSeen({
+          experiment,
+          variant,
+          path: pathName,
+          ts: body.ts,
+          source: 'ab_preview',
+        });
+        return res.json({ ok: true, kind: 'ab' });
+      }
+
+      // Builder / preview “seen”
+      if (jobId && pathName) {
+        logPreviewSeen({
+          jobId,
+          workspaceId: workspaceId || null,
+          path: pathName,
+          source: 'builder_preview',
+        });
+        return res.json({ ok: true, kind: 'builder' });
+      }
+
+      return res.status(400).json({ ok: false, error: 'missing_fields' });
+    } catch {
+      return res.status(500).json({ ok: false, error: 'kpi_seen_failed' });
+    }
+  });
+
   // NEW: KPI endpoints (seen/convert/metrics)
   app.use('/api', kpiRouter);
+
+  // NEW: Challenge API (with JSON parsing)
+  app.use('/api/challenge', express.json({ limit: '16kb' }), challengeRouter);
+
+  // NEW: Admin Ops API
+  app.use('/api/admin', express.json({ limit: '16kb' }), adminOpsRouter);
+
+  // NEW: UX Snapshot API (higher body limit for small screenshots)
+  app.use('/api/ux', express.json({ limit: '6mb' }), uxSnapshotRouter);
+  // NEW: UX Patch API (smaller body limit for patch payloads)
+  app.use('/api/ux', express.json({ limit: '256kb' }), uxPatchRouter);
+  // NEW: UX Microcopy API
+  app.use('/api/ux', express.json({ limit: '128kb' }), uxMicrocopyRouter);
+
+  // NEW: Code API (repo tree/read/edits/tests/migrate)
+  app.use('/api/code', codeRouter);
+
+  // POST /api/collab/ask-file
+  // Simple "Ask AI about this file" backend. Auth required.
+  app.post(
+    '/api/collab/ask-file',
+    authRequired,
+    async (req: Request, res: Response) => {
+      try {
+        const body = (req as any).body || {};
+        const filePath = typeof body.filePath === 'string' ? body.filePath : '';
+        const fileContent =
+          typeof body.fileContent === 'string' ? body.fileContent : '';
+        const question =
+          typeof body.question === 'string' ? body.question : '';
+
+        if (!filePath || !fileContent) {
+          return res.status(400).json({
+            ok: false,
+            error: 'bad_request',
+          });
+        }
+
+        const result = await askFileQuestion({
+          filePath,
+          fileContent,
+          question,
+          user: (req as any).user,
+        });
+
+        return res.json({
+          ok: true,
+          answer: result.answer,
+          source: result.source,
+        });
+      } catch (err: any) {
+        console.error('[collab.ask-file] error', {
+          error: err?.message || String(err),
+        });
+        return res.status(500).json({
+          ok: false,
+          error: 'ai_failed',
+        });
+      }
+    },
+  );
 
   // Comments API
   if (commentsMod?.list) app.get('/api/comments/list', commentsMod.list);
@@ -624,9 +930,12 @@ app.use(ipGate());
   // NEW: mount extra team handlers
   if (teamsMod?.detail) app.get('/api/teams/:id', teamsMod.detail);
   if (teamsMod?.updateRole) app.post('/api/teams/role', express.json(), teamsMod.updateRole);
-  if (teamsMod?.removeMember) app.post('/api/teams/removeMember', express.json(), teamsMod.removeMember);
-  if (teamsMod?.revokeInvite) app.post('/api/teams/invites/revoke', express.json(), teamsMod.revokeInvite);
-  if (teamsMod?.resendInvite) app.post('/api/teams/invites/resend', express.json(), teamsMod.resendInvite);
+  if (teamsMod?.removeMember)
+    app.post('/api/teams/removeMember', express.json(), teamsMod.removeMember);
+  if (teamsMod?.revokeInvite)
+    app.post('/api/teams/invites/revoke', express.json(), teamsMod.revokeInvite);
+  if (teamsMod?.resendInvite)
+    app.post('/api/teams/invites/resend', express.json(), teamsMod.resendInvite);
 
   app.use('/api', jobsRouter);
   app.use('/api', workspaceRouter);
@@ -666,6 +975,9 @@ app.use(ipGate());
   // Your centralized error handler (must be last)
   app.use(errorHandler);
 
+  // Final failsafe — never let a 500 leak unshaped
+  app.use(never500());
+
   // Start + retry ports
   async function startServer(attemptPort: number, maxAttempts = 3) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -673,7 +985,7 @@ app.use(ipGate());
       try {
         await new Promise<void>((resolve, reject) => {
           const listener = server.listen({ port: currentPort, host: '0.0.0.0' }, () => {
-            log(`serving on port ${currentPort}`);
+            log(`[express] serving on port ${currentPort}`);
             logger.info(`[SERVER] Successfully started on port ${currentPort}`);
             resolve();
           });
@@ -688,6 +1000,6 @@ app.use(ipGate());
     }
   }
 
-  const port = parseInt(process.env.PORT || '5050', 10);
-  await startServer(port);
+  const PORT = process.env.PORT ? Number(process.env.PORT) : 5050;
+  await startServer(PORT);
 })();

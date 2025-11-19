@@ -1,0 +1,79 @@
+{
+  "paths": {
+    "rules": {
+      "n": 99,
+      "ships": 80,
+      "conversions": 11,
+      "ema_ttu_ms": 404.04727421391743,
+      "ema_ship_rate": 0.9999899741386142,
+      "ema_conv_rate": 1
+    },
+    "local": {
+      "n": 0,
+      "ships": 0,
+      "conversions": 0,
+      "ema_ttu_ms": null,
+      "ema_ship_rate": null,
+      "ema_conv_rate": null
+    },
+    "cloud": {
+      "n": 22,
+      "ships": 22,
+      "conversions": 3,
+      "ema_ttu_ms": 228.9678626867164,
+      "ema_ship_rate": 1,
+      "ema_conv_rate": 1
+    }
+  },
+  "experts": {},
+  "pageLabel": {
+    "ae3e8ea40d950e30c821410ca3e1157bb8ea432a": "rules",
+    "9ddc778279d2c9d28978036fbc534e6fb4d3935f": "rules",
+    "686ba206af852b3e38f72fe8acbfb2cd7b712c93": "rules",
+    "735bae9624ad9632c150bf0d923bde6891269c37": "rules",
+    "35c6b213649607870ae8b0c0496b9b6e5b4f7808": "rules",
+    "ce4695a1af3a55501fed8e1bad6228550d94b256": "rules",
+    "f2339434fc5f8e14366c36145dfd4cb881fff729": "rules",
+    "1611bdd92096da98d8890f1969a2316926464d79": "rules",
+    "82a80f83651c8a47922c96e235fc55ff52e1da32": "rules",
+    "a3d4216d88a28083bf1ca26f5628151df00d9b39": "rules",
+    "1bf190e9dfc36d14fbe577a61dccf678f8190023": "rules",
+    "fd550dc617e7ad0c65ed27ec356d342c7e224700": "cloud",
+    "84600bed6b5941b8de4dba604ca79db9bae092d8": "rules",
+    "9765ec3487d53a58991ff3384b2476763c5dd956": "cloud",
+    "a549997bc56f450f06ab8910e09286d32dfc6b2f": "cloud",
+    "95e3a17d57bfb3c02222e68cfc6056fc876f1fa2": "rules",
+    "98fa339e75e104dd4ad85958913c75e92f51dad1": "rules",
+    "b0f2bd86a5f402b38cd6ef6f329b7d2bc3352620": "rules",
+    "3180c1266b67826b06596d815730abe5a1459c55": "cloud",
+    "6777db57a4dc42eb248cce3731d27c3e34327201": "cloud",
+    "5963c4318a59fdb70f605bb03875e927669b7246": "rules",
+    "3f489cbe786c1dc5d1a6dd44a614eb53b44b1d01": "cloud",
+    "0df1150a540df291f1f1d75b6dcbcc774f6b8977": "rules",
+    "770ad58fa32562c0edfed8b9f498ad5c18f09204": "rules",
+    "4e3b3e1d652ddfb06310d359e685196fffba4a82": "rules",
+    "040f2e991068d1d8729459bd659d3356886cd265": "rules",
+    "ea435b106f9521c2e6ac1c27dc1201a00658d082": "rules",
+    "3b39e9e8586f83ac14cbf1887d4ad4d4f583e9c2": "rules",
+    "0c2051006263b7571abaf5de9e534c9826175d37": "cloud",
+    "f1eaa9ca624e444456f8e29906adf0a458693503": "cloud",
+    "cc287403816e228e3adaddf13c3fb27121985479": "rules",
+    "36782825c358f355ceddfc509d844dfcfb5578f5": "rules",
+    "a7402d1ee22bb156d5a2e544a11b314b7859ded2": "cloud",
+    "6f56c40a38b2a79f8a0dd32e1475db96ba40b1cd": "rules",
+    "6780753b958b3038285f0486b2add2ac0813a4e5": "cloud",
+    "67a1a45967f0dc6c27911ffb4c1a6a88d3e9111a": "cloud",
+    "95db085c3e469587140888ccef2743332a73df36": "rules",
+    "2d4464ff6c335b86f7daf20aa3d8c83e748c1f3f": "cloud",
+    "a44cf569d6804f5af4469fe3d1429f450529ec72": "rules",
+    "1aa20b30b839587644bcb3d41de59da43eee1162": "cloud",
+    "f21c204e0960f7f6785aad5aa1e647b536594e8a": "rules"
+  },
+  "budget": {
+    "cloud_n": 22,
+    "total_n": 120
+  },
+  "_meta": {
+    "lastDecayTs": 1761884663408
+  }
+}

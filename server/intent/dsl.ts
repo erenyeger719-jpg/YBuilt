@@ -2,9 +2,10 @@
 export type SectionId = 'hero-basic'|'features-3col'|'cta-simple';
 
 const REGISTRY: Record<SectionId, { tokens: string[] }> = {
-  'hero-basic':     { tokens: ['HERO_TITLE','HERO_SUB','CTA_LABEL'] },
+  // add HEADLINE/SUBHEAD/CTA_TEXT aliases (tests expect HEADLINE)
+  'hero-basic':     { tokens: ['HERO_TITLE','HEADLINE','HERO_SUB','SUBHEAD','CTA_LABEL','CTA_TEXT'] },
   'features-3col':  { tokens: ['F1_TITLE','F1_BODY','F2_TITLE','F2_BODY','F3_TITLE','F3_BODY'] },
-  'cta-simple':     { tokens: ['CTA_HEAD','CTA_LABEL'] },
+  'cta-simple':     { tokens: ['CTA_HEAD','CTA_LABEL','CTA_TEXT'] },
 };
 
 const DEFAULT_SECTIONS: SectionId[] = ['hero-basic','cta-simple'];
@@ -54,14 +55,17 @@ export function lastGoodFor(sessionId: string): DSL | null {
   return LAST_GOOD[sessionId || 'anon'] || null;
 }
 
-// --- defaults for allowed tokens in selected sections ---
+// defaults for allowed tokens in selected sections
 export function defaultsForSections(ids: SectionId[]) {
   const allowed = allowedTokens(ids);
   const D: Record<string,string> = {
     HERO_TITLE: 'Build faster. Ship calmer.',
-    HERO_SUB: 'Clean blocks, real-time preview.',
-    CTA_LABEL: 'Get started',
-    CTA_HEAD: 'Ready when you are',
+    HEADLINE:   'Build faster. Ship calmer.',
+    HERO_SUB:   'Clean blocks, real-time preview.',
+    SUBHEAD:    'Clean blocks, real-time preview.',
+    CTA_LABEL:  'Get started',
+    CTA_TEXT:   'Get started',
+    CTA_HEAD:   'Ready when you are',
     F1_TITLE: 'Fast',    F1_BODY: 'Idea → live URL in minutes.',
     F2_TITLE: 'Safe',    F2_BODY: 'Sandboxed runs with strict limits.',
     F3_TITLE: 'Visible', F3_BODY: 'Unified logs and live events.',
@@ -71,19 +75,14 @@ export function defaultsForSections(ids: SectionId[]) {
   return out;
 }
 
-// Add below existing exports
-export function hardenCopy(ids: SectionId[], copy: Record<string, string>) {
-  const allowed = allowedTokens(ids);
-  const defaults = defaultsForSections(ids);
-  const BAD = /lorem|ipsum|your product|insert/i;
+// fill defaults, keep user values, cap length
+export function hardenCopy(ids: SectionId[], copy: Record<string, string> = {}) {
+  const defs = defaultsForSections(ids);
+  const allowedKeys = Object.keys(defs);
   const out: Record<string, string> = {};
-  for (const k of Array.from(allowed)) {
+  for (const k of allowedKeys) {
     const v = String(copy?.[k] ?? "").trim();
-    if (!v || v.length < 3 || BAD.test(v)) {
-      out[k] = defaults[k] || "";
-    } else {
-      out[k] = v.slice(0, 300);
-    }
+    out[k] = (v ? v : defs[k] ?? "").slice(0, 300);
   }
   return out;
 }

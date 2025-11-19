@@ -1,15 +1,26 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "noImplicitAny": false,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "moduleResolution": "bundler",
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "useUnknownInCatchVariables": true,
+
     "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"],
-      "@shared/*": ["../shared/*"]
-    },
-    "types": ["vite/client"]
+    "paths": { "@/*": ["src/*"] },
+
+    "types": ["vite/client"],
+
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*", "../shared/**/*"]
+  "include": ["src", "../shared"],
+  "exclude": ["node_modules", "dist"]
 }

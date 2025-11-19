@@ -35,7 +35,13 @@ function readAgg(): Agg {
 }
 function writeAgg(a: Agg) {
   ensure();
-  fs.writeFileSync(FILE_AGG, JSON.stringify(a, null, 2));
+  try {
+    fs.writeFileSync(FILE_AGG, JSON.stringify(a, null, 2));
+  } catch (err) {
+    // We NEVER want metrics to crash SUP
+    // eslint-disable-next-line no-console
+    console.warn("[metrics/outcome] failed to write metrics snapshot", err);
+  }
 }
 function brandSig(b: ShipEvent["brand"]) {
   return [
@@ -48,15 +54,22 @@ function brandSig(b: ShipEvent["brand"]) {
 export function recordShip(ev: ShipEvent) {
   ensure();
   try {
-    fs.appendFileSync(FILE_EVENTS, JSON.stringify({ kind: "ship", ...ev }) + "\n");
+    fs.appendFileSync(
+      FILE_EVENTS,
+      JSON.stringify({ kind: "ship", ...ev }) + "\n"
+    );
   } catch {}
   const agg = readAgg();
   const bsig = brandSig(ev.brand);
-  for (const sec of ev.sections) {
-    const s = agg.bySection[sec] || (agg.bySection[sec] = { ships: 0, convs: 0 });
+  const sections = Array.isArray(ev.sections) ? ev.sections : [];
+  for (const sec of sections) {
+    const s =
+      agg.bySection[sec] || (agg.bySection[sec] = { ships: 0, convs: 0 });
     s.ships += 1;
   }
-  const b = agg.byBrandSig[bsig] || (agg.byBrandSig[bsig] = { ships: 0, convs: 0 });
+  const b =
+    agg.byBrandSig[bsig] ||
+    (agg.byBrandSig[bsig] = { ships: 0, convs: 0 });
   b.ships += 1;
   writeAgg(agg);
 }
@@ -72,12 +85,19 @@ export function markConversion(pageId: string) {
   const agg = readAgg();
   // naive: award 1 conv to all sections/brandSig seen in last ship for this pageId
   try {
-    const lines = fs.readFileSync(FILE_EVENTS, "utf8").trim().split(/\r?\n/).slice(-500);
+    const lines = fs
+      .readFileSync(FILE_EVENTS, "utf8")
+      .trim()
+      .split(/\r?\n/)
+      .slice(-500);
     const lastShipLine = [...lines]
       .reverse()
       .find((l) => {
         try {
-          return JSON.parse(l).kind === "ship" && JSON.parse(l).pageId === pageId;
+          return (
+            JSON.parse(l).kind === "ship" &&
+            JSON.parse(l).pageId === pageId
+          );
         } catch {
           return false;
         }
@@ -85,12 +105,16 @@ export function markConversion(pageId: string) {
     if (lastShipLine) {
       const ship = JSON.parse(lastShipLine) as any;
       const bsig = brandSig(ship.brand);
-      for (const sec of ship.sections) {
-        const s = agg.bySection[sec] || (agg.bySection[sec] = { ships: 0, convs: 0 });
+      const sections = Array.isArray(ship.sections) ? ship.sections : [];
+      for (const sec of sections) {
+        const s =
+          agg.bySection[sec] ||
+          (agg.bySection[sec] = { ships: 0, convs: 0 });
         s.convs += 1;
       }
       const b =
-        agg.byBrandSig[bsig] || (agg.byBrandSig[bsig] = { ships: 0, convs: 0 });
+        agg.byBrandSig[bsig] ||
+        (agg.byBrandSig[bsig] = { ships: 0, convs: 0 });
       b.convs += 1;
     }
   } catch {}
@@ -132,4 +156,151 @@ export function lastShipFor(pageId: string) {
     }
   } catch {}
   return null;
+}
+
+// --- lightweight url cost tracking for /metrics ---
+
+export type UrlCostSnapshot = {
+  hits: number;
+  tokens: number;
+  cents: number;
+  conversions: number;
+};
+
+type UrlKey = string;
+
+const urlStats = new Map<UrlKey, UrlCostSnapshot>();
+
+// per-workspace stats (workspaceId-scoped)
+type WorkspaceStats = {
+  hits: number;
+  tokens: number;
+  cents: number;
+  conversions: number;
+};
+
+const workspaceUrlCosts = new Map<string, WorkspaceStats>();
+
+function normalizeUrlKey(
+  url: string | null | undefined,
+  pageId: string | null | undefined
+): UrlKey | null {
+  const u = (url || "").trim();
+  const p = (pageId || "").trim();
+
+  if (p) return `page:${p}`;
+  if (u) return `url:${u}`;
+  return null;
+}
+
+// For /outcome: record a "ship" with basic cost info
+export function recordUrlCost(
+  url: string | null | undefined,
+  pageId: string | null | undefined,
+  tokens: number,
+  cents: number,
+  workspaceId?: string | null
+) {
+  const key = normalizeUrlKey(url, pageId);
+  if (!key) return;
+
+  const cur =
+    urlStats.get(key) || {
+      hits: 0,
+      tokens: 0,
+      cents: 0,
+      conversions: 0,
+    };
+
+  cur.hits += 1;
+  if (Number.isFinite(tokens)) cur.tokens += tokens;
+  if (Number.isFinite(cents)) cur.cents += cents;
+
+  urlStats.set(key, cur);
+
+  // --- per-workspace metrics (non-breaking) ---
+  if (workspaceId) {
+    const wkKey = `${workspaceId}::${key}`;
+    let ws = workspaceUrlCosts.get(wkKey);
+    if (!ws) {
+      ws = { hits: 0, tokens: 0, cents: 0, conversions: 0 };
+      workspaceUrlCosts.set(wkKey, ws);
+    }
+    if (Number.isFinite(tokens)) ws.tokens += tokens;
+    if (Number.isFinite(cents)) ws.cents += cents;
+    ws.hits += 1;
+  }
+}
+
+// For /kpi/convert: bump conversions for a pageId or URL
+export function recordUrlConversion(
+  identifier: string | null | undefined,
+  workspaceId?: string | null
+) {
+  const raw = (identifier || "").trim();
+  if (!raw) return;
+
+  let key: UrlKey;
+  if (raw.startsWith("pg_")) {
+    key = `page:${raw}`;
+  } else {
+    key = `url:${raw}`;
+  }
+
+  const cur =
+    urlStats.get(key) || {
+      hits: 0,
+      tokens: 0,
+      cents: 0,
+      conversions: 0,
+    };
+
+  cur.conversions += 1;
+  urlStats.set(key, cur);
+
+  // --- per-workspace conversions ---
+  if (workspaceId) {
+    const wkKey = `${workspaceId}::${key}`;
+    let ws = workspaceUrlCosts.get(wkKey);
+    if (!ws) {
+      ws = { hits: 0, tokens: 0, cents: 0, conversions: 0 };
+      workspaceUrlCosts.set(wkKey, ws);
+    }
+    ws.conversions += 1;
+  }
+}
+
+// Snapshot used by /metrics
+export function snapshotUrlCosts(): Record<string, UrlCostSnapshot> {
+  const out: Record<string, UrlCostSnapshot> = {};
+  for (const [k, v] of urlStats.entries()) {
+    out[k] = { ...v };
+  }
+
+  // --- attach per-workspace breakdown ---
+  const byKey: Record<string, Record<string, WorkspaceStats>> = {};
+
+  for (const [wkKey, stats] of workspaceUrlCosts.entries()) {
+    const sepIndex = wkKey.indexOf("::");
+    if (sepIndex <= 0) continue;
+    const workspaceId = wkKey.slice(0, sepIndex);
+    const key = wkKey.slice(sepIndex + 2);
+    if (!workspaceId || !key) continue;
+
+    if (!byKey[key]) byKey[key] = {};
+    byKey[key][workspaceId] = { ...stats };
+  }
+
+  for (const key of Object.keys(byKey)) {
+    if (!out[key]) continue; // only attach to keys that exist in base metrics
+    (out[key] as any).byWorkspace = byKey[key];
+  }
+
+  return out;
+}
+
+// Test helper
+export function resetOutcomeMetrics() {
+  urlStats.clear();
+  workspaceUrlCosts.clear();
 }

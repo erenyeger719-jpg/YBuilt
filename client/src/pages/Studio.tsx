@@ -1,36 +1,100 @@
 // client/src/pages/Studio.tsx
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "wouter";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
+import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
-import Hero from "@/components/Hero";
+import LogoButton from "@/components/LogoButton";
 import Showcase from "@/components/Showcase";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetTrigger
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+  SheetTrigger,
 } from "@/components/ui/sheet";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, Upload, Palette, Server, ShieldCheck } from "lucide-react";
+import {
+  Sparkles,
+  Upload,
+  Palette,
+  Server,
+  ShieldCheck,
+  Check,
+  ChevronRight,
+  Edit2,
+  Info,
+} from "lucide-react";
 import { aiScaffold } from "@/lib/aiActions";
 
 type Job = { id: string; status?: string; title?: string; prompt?: string };
 type DeployPreset = "beginner" | "pro" | "business" | "custom";
 type ThemeDef = { id: string; name: string; colors: [string, string, string] };
 
+// --- Brand-aligned Studio themes (match hero & prompt bar) ---
 const PRESET_THEMES: ThemeDef[] = [
-  { id: "mono", name: "Monochrome", colors: ["#000000", "#7A7A7A", "#FFFFFF"] },
-  { id: "sunset", name: "Sunset Glow", colors: ["#0a0a0a", "#ff4da6", "#ffffff"] },
-  { id: "royal", name: "Royal", colors: ["#0b0b0b", "#7A1FF3", "#E8DDFF"] },
-  { id: "slate", name: "Slate Sky", colors: ["#0b0b0b", "#3B82F6", "#DBEAFE"] },
+  {
+    id: "hero-horizon",
+    name: "Hero Horizon",
+    colors: ["#171717", "#587CC9", "#F16D0B"], // charcoal → steel blue → sunset orange
+  },
+  {
+    id: "prompt-neon",
+    name: "Prompt Neon",
+    colors: ["#0B0B0B", "#C26BFF", "#F28AC1"], // deep black → violet → soft pink
+  },
+  {
+    id: "midnight-lilac",
+    name: "Midnight Lilac",
+    colors: ["#050814", "#283854", "#C89EE1"], // near-black → midnight blue → lilac
+  },
+  {
+    id: "slate-ember",
+    name: "Slate Ember",
+    colors: ["#0B0B0B", "#4262A3", "#F27166"], // black → slate blue → warm coral
+  },
+  {
+    id: "cinematic-mono",
+    name: "Cinematic Mono",
+    colors: ["#000000", "#4B5563", "#F9FAFB"], // black → slate gray → soft white
+  },
+  {
+    id: "rose-glass",
+    name: "Rose Glass",
+    colors: ["#090909", "#F273BF", "#FFEAF7"], // black → rose → light rose
+  },
 ];
+
+const DEPLOY_DESCRIPTIONS = {
+  beginner: "Single click deploy, lowest cost. Good for first launches.",
+  pro: "Git + CI + monitoring. For serious projects.",
+  business: "Teams, SSO, and audits.",
+  custom: "We'll ask for your provider details inside the Workspace.",
+} as const;
 
 /** Studio-only FX with event delegation: scroll stops, magnetic, tilt, reveal */
 function useStudioFX() {
@@ -44,7 +108,8 @@ function useStudioFX() {
       if (scrollRAF) return;
       scrollRAF = requestAnimationFrame(() => {
         scrollRAF = 0;
-        const max = document.documentElement.scrollHeight - window.innerHeight || 1;
+        const max =
+          document.documentElement.scrollHeight - window.innerHeight || 1;
         const p = Math.min(1, Math.max(0, window.scrollY / max));
         root.style.setProperty("--scroll", p.toFixed(3));
       });
@@ -58,7 +123,9 @@ function useStudioFX() {
 
     const onPointerMoveDelegated = (e: PointerEvent) => {
       // Magnetic button under cursor?
-      const mag = (e.target as HTMLElement)?.closest<HTMLElement>(".btn-magnetic");
+      const mag = (e.target as HTMLElement)?.closest<HTMLElement>(
+        ".btn-magnetic",
+      );
       if (mag) {
         lastMag = mag;
         const b = mag.getBoundingClientRect();
@@ -81,8 +148,8 @@ function useStudioFX() {
         const r = tilt.getBoundingClientRect();
         const px = (e.clientX - r.left) / Math.max(1, r.width) - 0.5;
         const py = (e.clientY - r.top) / Math.max(1, r.height) - 0.5;
-        tilt.style.setProperty("--ry", (px * 7) + "deg");
-        tilt.style.setProperty("--rx", (-py * 7) + "deg");
+        tilt.style.setProperty("--ry", px * 7 + "deg");
+        tilt.style.setProperty("--rx", -py * 7 + "deg");
       } else if (lastTilt) {
         lastTilt.style.removeProperty("--rx");
         lastTilt.style.removeProperty("--ry");
@@ -103,15 +170,22 @@ function useStudioFX() {
       }
     };
 
-    root.addEventListener("pointermove", onPointerMoveDelegated, { passive: true });
-    root.addEventListener("pointerleave", onPointerLeaveRoot, { passive: true });
+    root.addEventListener("pointermove", onPointerMoveDelegated, {
+      passive: true,
+    });
+    root.addEventListener("pointerleave", onPointerLeaveRoot, {
+      passive: true,
+    });
 
-    // --- Diagonal text reveal (fire early so things don’t look “missing”)
+    // --- Diagonal text reveal (fire early so things don't look "missing")
     const io = new IntersectionObserver(
-      (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add("in")),
-      { threshold: 0.01 }
+      (entries) =>
+        entries.forEach((e) => e.isIntersecting && e.target.classList.add("in")),
+      { threshold: 0.01 },
     );
-    const reveals = Array.from(root.querySelectorAll<HTMLElement>(".reveal-diag"));
+    const reveals = Array.from(
+      root.querySelectorAll<HTMLElement>(".reveal-diag"),
+    );
     reveals.forEach((n) => io.observe(n));
 
     return () => {
@@ -124,30 +198,69 @@ function useStudioFX() {
   }, []);
 }
 
-/** Mount/unmount: toggle the Studio forced theme on <body> */
-function useForceStudioTheme(enable: boolean) {
-  useEffect(() => {
-    if (enable) {
-      document.body.dataset.forceTheme = "studio";
-    } else {
-      delete document.body.dataset.forceTheme;
-    }
-    return () => {
-      delete document.body.dataset.forceTheme;
-    };
-  }, [enable]);
-}
-
 export default function StudioPage() {
   const { jobId } = useParams<{ jobId?: string }>();
+  const [location] = useLocation();
   const { toast } = useToast();
+
+  // --- THEME + LOW-GLOSS + LOGOUT LOGIC FOR LOGOBUTTON ---
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [lowGloss, setLowGloss] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+    const savedLowGloss = localStorage.getItem("lowGloss") === "true";
+
+    if (savedTheme) {
+      setTheme(savedTheme);
+      if (savedTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    } else {
+      setTheme("dark");
+      document.documentElement.classList.add("dark");
+    }
+
+    if (savedLowGloss) {
+      setLowGloss(true);
+      document.documentElement.classList.add("low-gloss");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    if (newTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    localStorage.setItem("theme", newTheme);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    window.location.href = "/";
+  };
+
+  // Studio is its own page, so all these are false
+  const isWorkspace = false;
+  const isHome = false;
+  const isLibrary = false;
+  const isSettings = false;
+
+  const currentProjectName = undefined;
+  const currentProjectPath = jobId ? `/workspace/${jobId}` : undefined;
 
   // Autorun AI build (from Templates → Studio)
   const [busy, setBusy] = useState(false);
   const [resultPath, setResultPath] = useState<string | null>(null);
   const [autoRan, setAutoRan] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const tierDefault = (localStorage.getItem("ybuilt.aiTier") as any) || "balanced";
+  const tierDefault =
+    (localStorage.getItem("ybuilt.aiTier") as any) || "balanced";
 
   useEffect(() => {
     if (autoRan) return;
@@ -158,7 +271,9 @@ export default function StudioPage() {
     localStorage.removeItem("ybuilt.studio.autorun");
 
     let payload: any = null;
-    try { payload = JSON.parse(raw); } catch {}
+    try {
+      payload = JSON.parse(raw);
+    } catch {}
     if (!payload?.prompt) return;
 
     (async () => {
@@ -189,23 +304,70 @@ export default function StudioPage() {
 
   // Marketing view (no :jobId)
   if (!jobId) {
-    useForceStudioTheme(true);
     useStudioFX();
     return (
-      <section className="studio-root min-h-screen">
-        <div className="relative z-10">
-          <Header />
+      <section
+        className="studio-root min-h-screen text-white relative overflow-hidden"
+        style={{
+          background: `
+            linear-gradient(
+              180deg,
+              #171717 0%,
+              #171717 33%,
+              #191919 38%,
+              #1A1D22 43%,
+              #242F40 48%,
+              #283854 53%,
+              #4262A3 58%,
+              #587CC9 63%,
+              #698AD5 68%,
+              #8B97DE 73%,
+              #C89EE1 78%,
+              #D499D9 83%,
+              #F27166 88%,
+              #F27361 92%,
+              #F16E3C 96%,
+              #F16D0B 100%
+            )
+          `,
+        }}
+      >
+        {/* Logo Button overlay - absolute positioning so it doesn't affect layout */}
+        <div style={{ position: 'absolute', left: '16px', top: '16px', zIndex: 60 }}>
+          <LogoButton
+            currentProjectName={currentProjectName}
+            currentProjectPath={currentProjectPath}
+            onThemeToggle={toggleTheme}
+            onLogout={handleLogout}
+            isWorkspace={isWorkspace}
+            onThemeModalOpen={undefined}
+            isHome={isHome}
+            isLibrary={isLibrary}
+            isSettings={isSettings}
+          />
         </div>
+
+        {/* Remove Header - we only want logo */}
 
         <header className="relative z-10 max-w-6xl mx-auto pt-20 px-6 text-center">
           <p className="h-tagline reveal-diag">BUILD FASTER</p>
-          <h1 className="h-display reveal-diag mt-2" style={{ letterSpacing: "-0.02em" }}>
+          <h1
+            className="h-display reveal-diag mt-2"
+            style={{ letterSpacing: "-0.02em" }}
+          >
             Inside a living canvas
           </h1>
 
           <div className="mt-8 flex justify-center gap-3">
-            <Button className="btn btn-magnetic card-glass px-6 py-3 rounded-xl">Start building</Button>
-            <Button variant="secondary" className="btn btn-magnetic px-6 py-3 rounded-xl border">Watch demo</Button>
+            <Button className="btn btn-magnetic px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20">
+              Start building
+            </Button>
+            <Button
+              variant="secondary"
+              className="btn btn-magnetic px-6 py-3 rounded-xl border"
+            >
+              Watch demo
+            </Button>
           </div>
 
           {/* Autorun status/CTAs */}
@@ -224,7 +386,12 @@ export default function StudioPage() {
           {!busy && resultPath && (
             <div className="mt-6 mx-auto max-w-2xl rounded-lg border border-white/20 bg-black/50 p-4 text-white">
               <div className="text-sm mb-2">Preview ready:</div>
-              <a className="text-xs underline break-all text-blue-300" href={resultPath} target="_blank" rel="noreferrer">
+              <a
+                className="text-xs underline break-all text-blue-300"
+                href={resultPath}
+                target="_blank"
+                rel="noreferrer"
+              >
                 {resultPath}
               </a>
               <div className="mt-3 flex flex-wrap gap-2 justify-center">
@@ -237,8 +404,11 @@ export default function StudioPage() {
                 <button
                   className="px-3 py-1.5 text-sm rounded border border-white/20 hover:bg-white/10"
                   onClick={() => {
-                    localStorage.setItem("ybuilt.quickedit.autoOpen", JSON.stringify({ path: resultPath, file: "index.html" }));
-                    window.location.assign("/library?open=1"); // “Open in workspace”
+                    localStorage.setItem(
+                      "ybuilt.quickedit.autoOpen",
+                      JSON.stringify({ path: resultPath, file: "index.html" }),
+                    );
+                    window.location.assign("/library?open=1"); // "Open in workspace"
                   }}
                 >
                   Open in workspace
@@ -254,32 +424,57 @@ export default function StudioPage() {
           )}
         </header>
 
-        <div className="relative z-10">
-          <Hero />
-          <div className="max-w-7xl mx-auto px-6 content-auto">
-            <Showcase />
-          </div>
+        {/* Only Showcase, no Hero (so no second background) */}
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-24">
+          <Showcase />
         </div>
       </section>
     );
   }
 
   // Finalize view (with :jobId)
-  return <FinalizeStudio jobId={jobId} />;
+  return <FinalizeStudio 
+    jobId={jobId} 
+    currentProjectPath={currentProjectPath}
+    toggleTheme={toggleTheme}
+    handleLogout={handleLogout}
+    isWorkspace={isWorkspace}
+    isHome={isHome}
+    isLibrary={isLibrary}
+    isSettings={isSettings}
+  />;
 }
 
-function FinalizeStudio({ jobId }: { jobId: string }) {
-  useForceStudioTheme(true);
+function FinalizeStudio({ 
+  jobId,
+  currentProjectPath,
+  toggleTheme,
+  handleLogout,
+  isWorkspace,
+  isHome,
+  isLibrary,
+  isSettings
+}: { 
+  jobId: string;
+  currentProjectPath?: string;
+  toggleTheme: () => void;
+  handleLogout: () => void;
+  isWorkspace: boolean;
+  isHome: boolean;
+  isLibrary: boolean;
+  isSettings: boolean;
+}) {
   useStudioFX();
 
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Job + initial prompt
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Left panel state
-  const [file, setFile] = useState<File | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
 
   // Deployment (defaults to beginner / low cost)
@@ -290,34 +485,40 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
 
   // Themes
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState<ThemeDef>(PRESET_THEMES[1]); // sunset default
+  const [selectedTheme, setSelectedTheme] = useState<ThemeDef>(
+    PRESET_THEMES[0], // Hero Horizon default
+  );
   const [customA, setCustomA] = useState("#0a0a0a");
   const [customB, setCustomB] = useState("#ff4da6");
   const [customC, setCustomC] = useState("#ffffff");
 
-  // Middle “plan” text
-  const lastPrompt = useMemo(() => localStorage.getItem("lastPrompt") || "", []);
-  const plan = useMemo(() => {
-    const base = job?.prompt || lastPrompt || "New project";
-    const tier =
-      deployPreset === "beginner" ? "Starter stack (cheap hosting, simple CI)"
-        : deployPreset === "pro" ? "Pro stack (Git + CI, observability, CDN)"
-          : deployPreset === "business" ? "Business-ready (teams, SSO, tracing)"
-            : "Custom deployment";
+  // Middle "plan" - now editable
+  const lastPrompt = useMemo(
+    () => localStorage.getItem("lastPrompt") || "",
+    [],
+  );
+  const [projectName, setProjectName] = useState("");
+  const [projectSummary, setProjectSummary] = useState("");
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [editablePrompt, setEditablePrompt] = useState("");
+  const [showTechInfo, setShowTechInfo] = useState(false);
 
-    return {
-      name: (base || "Project").slice(0, 60),
-      summary: `Plan based on your idea: “${base}”.`,
-      stack: tier,
-    };
-  }, [job?.prompt, lastPrompt, deployPreset]);
+  // Initialize editable fields
+  useEffect(() => {
+    const initialPrompt = job?.prompt || lastPrompt || "New project";
+    setProjectName((initialPrompt || "Project").slice(0, 60));
+    setProjectSummary(`Plan based on your idea: "${initialPrompt}".`);
+    setEditablePrompt(initialPrompt);
+  }, [job?.prompt, lastPrompt]);
 
   // Load job (for title/prompt)
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const r = await fetch(`/api/jobs/${jobId}`, { credentials: "include" });
+        const r = await fetch(`/api/jobs/${jobId}`, {
+          credentials: "include",
+        });
         const data = r.ok ? await r.json() : null;
         if (alive) setJob(data || null);
       } catch {
@@ -326,11 +527,18 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [jobId]);
 
-  async function uploadInspiration() {
+  // Auto-upload on file selection
+  async function handleFileChange(
+    e: React.ChangeEvent<HTMLInputElement>,
+  ): Promise<void> {
+    const file = e.target.files?.[0];
     if (!file) return;
+
     setUploading(true);
     try {
       const fd = new FormData();
@@ -341,10 +549,21 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         body: fd,
       });
       if (!r.ok) throw new Error((await r.text()) || r.statusText);
-      toast({ title: "Uploaded", description: `${file.name} added to workspace` });
-      setFile(null);
+
+      setUploadedFiles((prev) => [...prev, file.name]);
+      toast({
+        title: "Uploaded",
+        description: `${file.name} added to workspace`,
+      });
+
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err: any) {
-      toast({ title: "Upload failed", description: err?.message || "Request failed", variant: "destructive" });
+      toast({
+        title: "Upload failed",
+        description: err?.message || "Request failed",
+        variant: "destructive",
+      });
     } finally {
       setUploading(false);
     }
@@ -359,7 +578,11 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
         body: JSON.stringify({
           jobId,
           userId: "demo",
-          plan,
+          plan: {
+            name: projectName,
+            summary: projectSummary,
+            prompt: editablePrompt,
+          },
           theme: selectedTheme,
           deployPreset,
         }),
@@ -367,11 +590,18 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
       toast({ title: "Saved", description: "Draft saved to your library." });
       window.location.assign("/library");
     } catch (err: any) {
-      toast({ title: "Couldn’t save", description: err?.message || "Request failed", variant: "destructive" });
+      toast({
+        title: "Couldn't save",
+        description: err?.message || "Request failed",
+        variant: "destructive",
+      });
     }
   }
 
   async function openWorkspace() {
+    // Save editable fields before opening
+    localStorage.setItem("lastPrompt", editablePrompt);
+
     try {
       await fetch(`/api/jobs/${jobId}/select`, {
         method: "POST",
@@ -381,6 +611,8 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
           from: "studio",
           theme: selectedTheme,
           deployPreset,
+          projectName,
+          prompt: editablePrompt,
         }),
       }).catch(() => {});
     } finally {
@@ -390,9 +622,37 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
     }
   }
 
+  // Check if ready to launch
+  const isReady = !!(deployPreset && selectedTheme && editablePrompt);
+
   if (loading) {
     return (
-      <div className="studio-root min-h-screen grid place-items-center">
+      <div
+        className="studio-root dark min-h-screen grid place-items-center text-white relative overflow-hidden"
+        style={{
+          background: `
+            linear-gradient(
+              180deg,
+              #171717 0%,
+              #171717 33%,
+              #191919 38%,
+              #1A1D22 43%,
+              #242F40 48%,
+              #283854 53%,
+              #4262A3 58%,
+              #587CC9 63%,
+              #698AD5 68%,
+              #8B97DE 73%,
+              #C89EE1 78%,
+              #D499D9 83%,
+              #F27166 88%,
+              #F27361 92%,
+              #F16E3C 96%,
+              #F16D0B 100%
+            )
+          `,
+        }}
+      >
         <div className="relative z-10 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Preparing studio…</p>
@@ -402,34 +662,111 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   }
 
   return (
-    <div className="studio-root min-h-screen">
-      {/* Keep your header on top of the glass */}
-      <div className="relative z-10">
-        <Header />
+    <div
+      className="studio-root dark min-h-screen text-white relative overflow-hidden bg-[#171717]"
+    >
+      {/* Logo Button overlay - absolute positioning so it doesn't affect layout */}
+      <div style={{ position: 'absolute', left: '16px', top: '16px', zIndex: 60 }}>
+        <LogoButton
+          currentProjectName={projectName || undefined}
+          currentProjectPath={currentProjectPath}
+          onThemeToggle={toggleTheme}
+          onLogout={handleLogout}
+          isWorkspace={isWorkspace}
+          onThemeModalOpen={undefined}
+          isHome={isHome}
+          isLibrary={isLibrary}
+          isSettings={isSettings}
+        />
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16">
-        {/* 3-column premium layout */}
+      {/* Gradient overlay shifted slightly upward – only background moves */}
+      <div
+        className="pointer-events-none absolute inset-x-0 h-[900px]"
+        style={{
+          top: "-2.5rem", // ≈ two text "enter" lines upward
+          background: `
+          linear-gradient(
+            180deg,
+            #171717 0%,
+            #171717 33%,
+            #191919 38%,
+            #1A1D22 43%,
+            #242F40 48%,
+            #283854 53%,
+            #4262A3 58%,
+            #587CC9 63%,
+            #698AD5 68%,
+            #8B97DE 73%,
+            #C89EE1 78%,
+            #D499D9 83%,
+            #F27166 88%,
+            #F27361 92%,
+            #F16E3C 96%,
+            #F16D0B 100%
+          )
+        `,
+        }}
+      />
+
+      {/* Content stays exactly where it was */}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-16">
+        {/* Step indicator */}
+        <div className="mb-6 text-center">
+          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground mb-2">
+            <span className="px-2 py-1 rounded-full bg-primary/10 text-primary">
+              1. Describe
+            </span>
+            <ChevronRight className="h-4 w-4" />
+            <span className="px-3 py-1.5 rounded-full bg-primary text-primary-foreground font-medium">
+              2. Review
+            </span>
+            <ChevronRight className="h-4 w-4" />
+            <span className="px-2 py-1 rounded-full bg-muted">3. Build</span>
+          </div>
+          <h1 className="text-3xl font-bold mt-3">
+            Step 2 · Review your build plan
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            We'll open the Workspace next. Just check these details once.
+          </p>
+        </div>
+
+        {/* 3-column premium layout with aligned heights */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT — inputs & choices */}
-          <Card className="lg:col-span-4 p-6 card-glass card-tilt">
-            <div className="gloss-sheen" />
+          <Card
+            className="lg:col-span-3 p-6 h-full card-tilt"
+            style={{
+              backgroundColor: "#212121",
+              borderColor: "rgba(255, 255, 255, 0.1)",
+              backdropFilter: "none",
+            }}
+          >
             <div className="relative z-10 space-y-6">
-              <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5" /> Finalize inputs
+              <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5" /> Configuration
               </h2>
 
-              {/* Deployment method */}
+              {/* Deployment method - friendlier label */}
               <div className="space-y-2">
-                <Label>Send to Internet</Label>
-                <Dialog open={deployDialogOpen} onOpenChange={setDeployDialogOpen}>
+                <Label>How advanced should this setup be?</Label>
+                <Dialog
+                  open={deployDialogOpen}
+                  onOpenChange={setDeployDialogOpen}
+                >
                   <DialogTrigger asChild>
-                    <Button variant="secondary" className="w-full justify-between">
-                      {deployPreset === "beginner" && "Beginner (low cost) — default"}
-                      {deployPreset === "pro" && "Professional (medium)"}
-                      {deployPreset === "business" && "Business"}
-                      {deployPreset === "custom" && `Custom: ${customPlatform}`}
-                      <Server className="h-4 w-4 opacity-75" />
+                    <Button
+                      variant="secondary"
+                      className="w-full justify-between text-left"
+                    >
+                      <span className="truncate">
+                        {deployPreset === "beginner" && "Beginner"}
+                        {deployPreset === "pro" && "Professional"}
+                        {deployPreset === "business" && "Business"}
+                        {deployPreset === "custom" && "Custom"}
+                      </span>
+                      <Server className="h-4 w-4 opacity-75 flex-shrink-0" />
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-xl">
@@ -468,8 +805,13 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                         <div>
                           <Label>Platform</Label>
-                          <Select value={customPlatform} onValueChange={setCustomPlatform}>
-                            <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                          <Select
+                            value={customPlatform}
+                            onValueChange={setCustomPlatform}
+                          >
+                            <SelectTrigger className="mt-1.5">
+                              <SelectValue />
+                            </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Render">Render</SelectItem>
                               <SelectItem value="Vercel">Vercel</SelectItem>
@@ -480,38 +822,63 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                         </div>
                         <div>
                           <Label>Host (notes)</Label>
-                          <Input className="mt-1.5" value={customHost} onChange={(e) => setCustomHost(e.target.value)} />
+                          <Input
+                            className="mt-1.5"
+                            value={customHost}
+                            onChange={(e) => setCustomHost(e.target.value)}
+                          />
                         </div>
                       </div>
                     )}
 
                     <DialogFooter className="mt-4">
-                      <Button onClick={() => setDeployDialogOpen(false)}>Done</Button>
+                      <Button onClick={() => setDeployDialogOpen(false)}>
+                        Done
+                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-                <p className="text-sm text-muted-foreground">
-                  API keys and URLs will be collected inside the Workspace.
+                <p className="text-xs text-muted-foreground italic">
+                  {DEPLOY_DESCRIPTIONS[deployPreset]}
                 </p>
               </div>
 
-              {/* Upload inspirations */}
+              {/* Upload inspirations - instant upload */}
               <div className="space-y-2">
                 <Label>Upload inspiration</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="file"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    disabled={uploading}
-                  />
-                  <Button onClick={uploadInspiration} disabled={!file || uploading} className="gap-1">
-                    <Upload className="h-4 w-4" />
-                    {uploading ? "Uploading…" : "Upload"}
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  JPEG/PNG/SVG or text docs. You can add more later.
-                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileChange}
+                  disabled={uploading}
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  variant="secondary"
+                  className="w-full justify-start gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  {uploading
+                    ? "Uploading…"
+                    : uploadedFiles.length > 0
+                    ? `${uploadedFiles.length} file(s) uploaded`
+                    : "Choose files"}
+                </Button>
+                {uploadedFiles.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Check className="h-3 w-3 text-green-500" />
+                      Last added: {uploadedFiles[uploadedFiles.length - 1]}
+                    </div>
+                    {uploadedFiles.length > 1 && (
+                      <div className="text-muted-foreground/70">
+                        +{uploadedFiles.length - 1} more…
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Themes */}
@@ -519,12 +886,18 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                 <Label>Theme</Label>
                 <Sheet open={themeSheetOpen} onOpenChange={setThemeSheetOpen}>
                   <SheetTrigger asChild>
-                    <Button variant="secondary" className="w-full justify-between">
+                    <Button
+                      variant="secondary"
+                      className="w-full justify-between"
+                    >
                       {selectedTheme.name}
                       <Palette className="h-4 w-4 opacity-75" />
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="bottom" className="max-h-[70vh] overflow-y-auto">
+                  <SheetContent
+                    side="bottom"
+                    className="max-h-[70vh] overflow-y-auto"
+                  >
                     <SheetHeader>
                       <SheetTitle>Select a theme</SheetTitle>
                     </SheetHeader>
@@ -533,11 +906,22 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                       {PRESET_THEMES.map((t) => (
                         <button
                           key={t.id}
-                          onClick={() => { setSelectedTheme(t); }}
-                          className={`p-3 rounded-lg border text-left hover-elevate ${selectedTheme.id === t.id ? "ring-2 ring-primary" : ""}`}
+                          onClick={() => {
+                            setSelectedTheme(t);
+                          }}
+                          className={`p-3 rounded-lg border text-left hover-elevate ${
+                            selectedTheme.id === t.id
+                              ? "ring-2 ring-primary"
+                              : ""
+                          }`}
                         >
                           <div className="font-medium mb-2">{t.name}</div>
                           <ThemeBar colors={t.colors} />
+                          {t.id === "hero-horizon" && (
+                            <div className="mt-1 text-[11px] text-primary">
+                              Recommended · matches home screen
+                            </div>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -545,15 +929,34 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                     <div className="mt-6 border-t pt-4 space-y-3">
                       <div className="font-medium">Add your own</div>
                       <div className="grid grid-cols-3 gap-3">
-                        <input type="color" value={customA} onChange={(e) => setCustomA(e.target.value)} className="h-10 w-full rounded" />
-                        <input type="color" value={customB} onChange={(e) => setCustomB(e.target.value)} className="h-10 w-full rounded" />
-                        <input type="color" value={customC} onChange={(e) => setCustomC(e.target.value)} className="h-10 w-full rounded" />
+                        <input
+                          type="color"
+                          value={customA}
+                          onChange={(e) => setCustomA(e.target.value)}
+                          className="h-10 w-full rounded"
+                        />
+                        <input
+                          type="color"
+                          value={customB}
+                          onChange={(e) => setCustomB(e.target.value)}
+                          className="h-10 w-full rounded"
+                        />
+                        <input
+                          type="color"
+                          value={customC}
+                          onChange={(e) => setCustomC(e.target.value)}
+                          className="h-10 w-full rounded"
+                        />
                       </div>
                       <div className="flex items-center justify-between">
                         <ThemeBar colors={[customA, customB, customC]} />
                         <Button
                           onClick={() => {
-                            setSelectedTheme({ id: "custom", name: "Custom", colors: [customA, customB, customC] });
+                            setSelectedTheme({
+                              id: "custom",
+                              name: "Custom",
+                              colors: [customA, customB, customC],
+                            });
                             setThemeSheetOpen(false);
                           }}
                           className="ml-3"
@@ -564,71 +967,157 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
                     </div>
 
                     <SheetFooter className="mt-4">
-                      <Button variant="outline" onClick={() => setThemeSheetOpen(false)}>Close</Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setThemeSheetOpen(false)}
+                      >
+                        Close
+                      </Button>
                     </SheetFooter>
                   </SheetContent>
                 </Sheet>
 
                 {/* Live preview chip under the button */}
-                <ThemeBar colors={selectedTheme.colors} className="mt-2" />
+                <ThemeBar
+                  colors={selectedTheme.colors}
+                  className="mt-2 hover:scale-105 transition-transform"
+                />
               </div>
             </div>
           </Card>
 
-          {/* MIDDLE — plan + prompt */}
-          <Card className="lg:col-span-5 p-6 card-glass card-tilt">
-            <div className="gloss-sheen" />
+          {/* MIDDLE — plan + prompt (HERO CARD) */}
+          <Card
+            className="lg:col-span-6 p-6 h-full card-tilt"
+            style={{
+              backgroundColor: "#212121",
+              borderColor: "rgba(255, 255, 255, 0.1)",
+              backdropFilter: "none",
+            }}
+          >
             <div className="relative z-10 space-y-5">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5" />
-                <h2 className="text-xl font-semibold">AI plan</h2>
+                <Sparkles className="h-5 w-5 text-primary" />
+                <h2 className="text-2xl font-bold">Your Build Plan</h2>
               </div>
 
+              {/* Editable project name */}
               <div className="space-y-3">
-                <div className="text-sm text-muted-foreground">Project name</div>
-                <div className="text-2xl font-semibold metal-text reveal-diag">{plan.name || "Your project"}</div>
+                <div className="text-sm text-muted-foreground">
+                  Project name
+                </div>
+                <Input
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  className="text-2xl font-semibold metal-text h-auto py-2 bg-background/30"
+                  placeholder="Your project name"
+                />
 
+                {/* Editable summary */}
                 <div className="mt-4 text-sm reveal-diag">
-                  <div className="text-muted-foreground mb-1">Summary</div>
-                  <p>{plan.summary}</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-muted-foreground">Summary</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingSummary(!editingSummary)}
+                      className="h-6 px-2"
+                    >
+                      <Edit2 className="h-3 w-3 mr-1" />
+                      {editingSummary ? "Done" : "Edit"}
+                    </Button>
+                  </div>
+                  {editingSummary ? (
+                    <Textarea
+                      value={projectSummary}
+                      onChange={(e) => setProjectSummary(e.target.value)}
+                      className="min-h-[60px] bg-background/30"
+                    />
+                  ) : (
+                    <p className="text-base">{projectSummary}</p>
+                  )}
                 </div>
 
                 <div className="mt-4 text-sm reveal-diag">
                   <div className="text-muted-foreground mb-1">Stack</div>
-                  <p>{plan.stack}</p>
+                  <p className="text-base">
+                    {deployPreset === "beginner"
+                      ? "Starter stack (cheap hosting, simple CI)"
+                      : deployPreset === "pro"
+                      ? "Pro stack (Git + CI, observability, CDN)"
+                      : deployPreset === "business"
+                      ? "Business-ready (teams, SSO, tracing)"
+                      : "Custom deployment"}
+                  </p>
                 </div>
               </div>
 
-              {/* Prompt (read-only carryover) */}
+              {/* Editable prompt */}
               <div className="mt-6">
                 <Label className="text-sm">Prompt</Label>
-                <Input
-                  value={job?.prompt || lastPrompt}
-                  readOnly
-                  className="mt-1.5 bg-background/50"
+                <Textarea
+                  value={editablePrompt}
+                  onChange={(e) => setEditablePrompt(e.target.value)}
+                  className="mt-1.5 bg-background/30 min-h-[80px]"
+                  placeholder="Describe what you want to build..."
                 />
-                <p className="text-sm text-muted-foreground mt-1">
-                  This came from the Home prompt. You can refine inside the Workspace.
+                <p className="text-xs text-muted-foreground mt-1">
+                  We'll use this prompt in the Workspace. You can refine it
+                  anytime.
                 </p>
               </div>
             </div>
           </Card>
 
           {/* RIGHT — actions */}
-          <Card className="lg:col-span-3 p-6 card-glass card-tilt">
-            <div className="gloss-sheen" />
+          <Card
+            className={`lg:col-span-3 p-6 h-full card-tilt ${
+              isReady ? "ring-2 ring-primary/30" : ""
+            }`}
+            style={{
+              backgroundColor: "#212121",
+              borderColor: "rgba(255, 255, 255, 0.1)",
+              backdropFilter: "none",
+            }}
+          >
             <div className="relative z-10 space-y-4">
-              <h2 className="text-xl font-semibold">Actions</h2>
-              <Button onClick={openWorkspace} className="w-full btn btn-magnetic">
-                Finalize & Open Workspace
+              <h2 className="text-lg font-semibold">Actions</h2>
+
+              <Button
+                onClick={openWorkspace}
+                className="w-full btn btn-magnetic h-12 text-base font-semibold"
+                disabled={!isReady}
+              >
+                Open Workspace & Start Building
               </Button>
-              <Button onClick={saveToLibrary} variant="secondary" className="w-full btn btn-magnetic">
+
+              <p className="text-xs text-muted-foreground text-center">
+                We'll create a workspace with your theme, deployment preset, and
+                prompt.
+              </p>
+
+              <Button
+                onClick={saveToLibrary}
+                variant="secondary"
+                className="w-full btn btn-magnetic"
+              >
                 Save to Library
               </Button>
 
-              <div className="mt-3 text-sm text-muted-foreground">
-                Job <span className="font-mono">{jobId}</span>
-              </div>
+              {/* Technical info - collapsed by default */}
+              <button
+                onClick={() => setShowTechInfo(!showTechInfo)}
+                className="text-xs text-muted-foreground flex items-center gap-1 mx-auto hover:text-foreground transition-colors"
+              >
+                <Info className="h-3 w-3" />
+                {showTechInfo ? "Hide" : "Show"} technical info
+              </button>
+
+              {showTechInfo && (
+                <div className="text-xs text-muted-foreground bg-muted/20 rounded px-2 py-1.5 font-mono">
+                  Job ID: {jobId}
+                </div>
+              )}
             </div>
           </Card>
         </div>
@@ -637,21 +1126,42 @@ function FinalizeStudio({ jobId }: { jobId: string }) {
   );
 }
 
-function ThemeBar({ colors, className = "" }: { colors: [string, string, string] | string[]; className?: string }) {
+function ThemeBar({
+  colors,
+  className = "",
+}: {
+  colors: [string, string, string] | string[];
+  className?: string;
+}) {
   const [c1, c2, c3] = colors as string[];
   return (
     <div
       className={`rounded-md overflow-hidden border ${className}`}
-      style={{ background: `linear-gradient(90deg, ${c1} 0 33%, ${c2} 33% 66%, ${c3} 66% 100%)`, height: 28 }}
+      style={{
+        background: `linear-gradient(90deg, ${c1} 0 33%, ${c2} 33% 66%, ${c3} 66% 100%)`,
+        height: 28,
+      }}
     />
   );
 }
 
-function PresetCard({ title, desc, active, onClick }: { title: string; desc: string; active?: boolean; onClick: () => void }) {
+function PresetCard({
+  title,
+  desc,
+  active,
+  onClick,
+}: {
+  title: string;
+  desc: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`p-3 rounded-lg border text-left hover-elevate ${active ? "ring-2 ring-primary" : ""}`}
+      className={`p-3 rounded-lg border text-left hover-elevate transition-all ${
+        active ? "ring-2 ring-primary bg-primary/5" : ""
+      }`}
     >
       <div className="font-medium">{title}</div>
       <div className="text-sm text-muted-foreground">{desc}</div>

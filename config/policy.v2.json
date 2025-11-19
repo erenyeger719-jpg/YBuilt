@@ -1,0 +1,8 @@
+{
+  "version": "v2.0",
+  "byEndpoint": {
+    "instant": { "prompt_risk": "on", "abuse_signals": "on", "pii": "on", "a11y": "off", "device_perf": "off", "copy_claims": "off" },
+    "compose": { "prompt_risk": "on", "abuse_signals": "on", "pii": "on", "copy_claims": "on", "a11y": "on", "device_perf": "on" },
+    "review":  { "copy_claims": "on", "a11y": "on", "pii": "on" }
+  }
+}

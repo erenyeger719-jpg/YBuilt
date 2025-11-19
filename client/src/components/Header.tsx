@@ -1,15 +1,14 @@
-//client/src/components/previews/Header.tsx
-import { Moon, Sun, Sparkles, Library } from "lucide-react";
+// client/src/components/Header.tsx
+import { Library, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
 import LogoButton from "./LogoButton";
-import PaymentButton from "./PaymentButton";
-import CurrencyToggle from "./CurrencyToggle";
 import ProfileIcon from "./ProfileIcon";
 import { useState, useEffect } from "react";
 import { getSession, switchTeam } from "@/lib/session";
 import InviteDialog from "@/components/teams/InviteDialog";
+import SettingsModal from "@/components/SettingsModal";
 
 interface HeaderProps {
   logSummary?: {
@@ -91,9 +90,9 @@ export default function Header({
   onThemeModalOpen,
 }: HeaderProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
-  const [lowGloss, setLowGloss] = useState(false);
-  const [currency, setCurrency] = useState<"INR" | "USD">("INR");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [location] = useLocation();
+  const [atTop, setAtTop] = useState(true);
 
   const isWorkspace = location.startsWith("/workspace/");
   const isHome = location === "/";
@@ -101,7 +100,10 @@ export default function Header({
   const isSettings = location.startsWith("/settings");
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+    const savedTheme = localStorage.getItem("theme") as
+      | "light"
+      | "dark"
+      | null;
     const savedLowGloss = localStorage.getItem("lowGloss") === "true";
 
     if (savedTheme) {
@@ -116,10 +118,20 @@ export default function Header({
       document.documentElement.classList.add("dark");
     }
 
+    // still honour previously saved low-gloss mode if it exists
     if (savedLowGloss) {
-      setLowGloss(true);
       document.documentElement.classList.add("low-gloss");
     }
+  }, []);
+
+  // track whether header is at the very top (hero start) or scrolled
+  useEffect(() => {
+    const onScroll = () => {
+      setAtTop(window.scrollY < 8);
+    };
+    onScroll(); // initialise
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const toggleTheme = () => {
@@ -133,19 +145,6 @@ export default function Header({
     localStorage.setItem("theme", newTheme);
   };
 
-  const toggleLowGloss = () => {
-    const newLowGloss = !lowGloss;
-    setLowGloss(newLowGloss);
-    if (newLowGloss) {
-      document.documentElement.classList.add("low-gloss");
-    } else {
-      document.documentElement.classList.remove("low-gloss");
-    }
-    localStorage.setItem("lowGloss", String(newLowGloss));
-  };
-
-  const amount = currency === "INR" ? 799 : 10;
-
   const handleLogout = () => {
     localStorage.removeItem("user");
     window.location.href = "/";
@@ -154,10 +153,23 @@ export default function Header({
   const workspaceId = isWorkspace ? location.split("/")[2] : undefined;
   const currentProjectPath = workspaceId ? `/workspace/${workspaceId}` : undefined;
 
+  // solid at top, glass once scrolled
+  const baseHeaderClasses =
+    "sticky top-0 z-[50] border-b transition-colors duration-300";
+  const solidClasses =
+    theme === "dark"
+      ? "bg-[#1B1B1B] text-white border-white/10"
+      : "bg-white text-black border-neutral-200";
+  const glassClasses =
+    "bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60";
+
+  // 🟣 NEW: in dark mode, force header/nav text to stay white everywhere
+  const navTextClass = theme === "dark" ? "text-white" : "";
+
   return (
     <header
       data-header
-      className="sticky top-0 z-[50] border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+      className={`${baseHeaderClasses} ${atTop ? solidClasses : glassClasses}`}
     >
       {/* Full-width container with tighter side padding */}
       <div className="w-full px-2 sm:px-4 lg:px-6">
@@ -189,7 +201,7 @@ export default function Header({
                     ? "destructive"
                     : "secondary"
                 }
-                className="gap-1.5"
+                className={`gap-1.5 ${navTextClass}`}
                 data-testid="badge-log-summary"
               >
                 <span className="text-xs">
@@ -201,7 +213,7 @@ export default function Header({
             <Button
               variant="ghost"
               size="sm"
-              className="gap-2 whitespace-nowrap"
+              className={`gap-2 whitespace-nowrap ${navTextClass}`}
               data-testid="button-library"
               aria-label="Library"
               asChild
@@ -212,93 +224,97 @@ export default function Header({
               </Link>
             </Button>
 
-            {/* NEW: Team nav next to Library */}
-            <Button variant="ghost" size="sm" asChild>
+            {/* Team nav next to Library */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={navTextClass}
+              asChild
+            >
               <Link href="/team">Team</Link>
             </Button>
 
             {/* Team switcher (minimal) */}
-            <TeamSwitcher />
-            <InviteDialog />
-
-            {/* Keep payment visible on desktop only to avoid crowding on mobile */}
-            <div className="hidden md:inline-flex">
-              <PaymentButton amount={amount} currency={currency} />
+            <div className={navTextClass}>
+              <TeamSwitcher />
+            </div>
+            <div className={navTextClass}>
+              <InviteDialog />
             </div>
 
-            <CurrencyToggle onCurrencyChange={setCurrency} />
-
+            {/* Settings (opens modal) */}
             <Button
-              size="icon"
               variant="ghost"
-              onClick={toggleLowGloss}
-              data-testid="button-toggle-gloss"
-              aria-label="Toggle low gloss mode"
-              title="Toggle low gloss / high contrast mode"
+              size="sm"
+              className={`gap-2 ${navTextClass}`}
+              onClick={() => setSettingsOpen(true)}
+              data-testid="button-settings"
+              aria-label="Open settings"
+              title="Settings"
             >
-              <Sparkles className="h-5 w-5" />
+              <SettingsIcon className="h-4 w-4" />
+              <span>Settings</span>
             </Button>
 
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={toggleTheme}
-              data-testid="button-toggle-theme"
-              aria-label="Toggle theme"
-            >
-              {theme === "dark" ? (
-                <Sun className="h-5 w-5" />
-              ) : (
-                <Moon className="h-5 w-5" />
-              )}
-            </Button>
-
-            <ProfileIcon />
+            {/* Clean, simple end cap */}
+            <div className={navTextClass}>
+              <ProfileIcon />
+            </div>
           </nav>
 
           {/* RIGHT (mobile) — compact so nothing overflows */}
           <div className="md:hidden flex items-center gap-1 -mr-2 sm:-mr-3">
-            <Button variant="ghost" size="icon" asChild aria-label="Library">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={navTextClass}
+              asChild
+              aria-label="Library"
+            >
               <Link href="/library">
                 <Library className="h-4 w-4" />
               </Link>
             </Button>
 
-            {/* Optional: add Team text button on mobile too */}
-            <Button variant="ghost" size="sm" asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={navTextClass}
+              asChild
+            >
               <Link href="/team">Team</Link>
             </Button>
 
-            {/* Optional: include team switcher on mobile too */}
-            <TeamSwitcher />
-            <InviteDialog />
+            <div className={navTextClass}>
+              <TeamSwitcher />
+            </div>
+            <div className={navTextClass}>
+              <InviteDialog />
+            </div>
 
-            <CurrencyToggle onCurrencyChange={setCurrency} />
             <Button
-              size="icon"
               variant="ghost"
-              onClick={toggleLowGloss}
-              aria-label="Toggle low gloss mode"
-              title="Toggle low gloss / high contrast mode"
-            >
-              <Sparkles className="h-5 w-5" />
-            </Button>
-            <Button
               size="icon"
-              variant="ghost"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
+              className={navTextClass}
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Open settings"
+              title="Settings"
             >
-              {theme === "dark" ? (
-                <Sun className="h-5 w-5" />
-              ) : (
-                <Moon className="h-5 w-5" />
-              )}
+              <SettingsIcon className="h-5 w-5" />
             </Button>
-            <ProfileIcon />
+
+            <div className={navTextClass}>
+              <ProfileIcon />
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Settings Modal mount point */}
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </header>
   );
 }

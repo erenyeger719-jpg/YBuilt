@@ -1,3 +1,4 @@
+// server/router.ts
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -17,6 +18,7 @@ import authRoutes from "./routes/auth.js";
 import chatRouter from "./routes/chat.js";
 import executeRouter from "./routes/execute.js";
 import projectsRouter from "./routes/projects.js";
+import flowEmailRouter from "./routes/flow.email";
 import { initializeSocket } from "./socket.js";
 
 // Workspace readiness check helper
@@ -24,7 +26,7 @@ async function checkWorkspaceReady(jobId: string): Promise<{ ready: boolean; ret
   const indexPath = path.join(process.cwd(), "public", "previews", jobId, "index.html");
   
   try {
-    await fs.access(indexPath, fs.constants.R_OK);
+    await (fs as any).access(indexPath, (fs as any).constants.R_OK);
     const stats = await fs.stat(indexPath);
     
     if (stats.size === 0) {
@@ -131,6 +133,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Register project collaboration routes
   app.use("/api/projects", projectsRouter);
+
+  // Register flow email routes
+  app.use("/api/flow/email", flowEmailRouter);
+
   
   // Job generation endpoint
   app.post("/api/generate", async (req, res) => {
@@ -1205,7 +1211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process uploaded attachments
       const attachments = [];
       if (req.files && Array.isArray(req.files)) {
-        for (const file of req.files) {
+        for (const file of req.files as Express.Multer.File[]) {
           const attachmentDir = path.join(process.cwd(), "data", "support", "attachments");
           await fs.mkdir(attachmentDir, { recursive: true });
           
@@ -1343,7 +1349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Validate the section data against the schema
       const { settingsSchema } = await import("@shared/schema");
-      const sectionSchema = settingsSchema.shape[section as keyof typeof settingsSchema.shape];
+      const sectionSchema = (settingsSchema as any).shape[section as keyof typeof (settingsSchema as any).shape];
       
       // Parse and validate the incoming section data
       const validatedSectionData = sectionSchema.parse(req.body);
@@ -1353,9 +1359,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedSettings = await storage.updateSettings(userId, updates);
       
       res.json(updatedSettings);
-    } catch (error) {
+    } catch (error: any) {
       logger.error({ error }, "Error updating settings");
-      if (error instanceof Error && error.name === "ZodError") {
+      if (error.name === "ZodError") {
         return res.status(400).json({ error: "Invalid settings data", details: error });
       }
       res.status(500).json({ error: "Failed to update settings" });
@@ -2257,16 +2263,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const output = await fs.open(zipPath, "w");
       const archive = archiver("zip", { zlib: { level: 9 } });
 
-      archive.pipe(output.createWriteStream());
+      archive.pipe((output as any).createWriteStream());
 
       // Add project files
       const previewDir = path.join(process.cwd(), "public", "previews", projectId);
       try {
         await fs.access(previewDir);
-        archive.directory(previewDir, false);
+        (archive as any).directory(previewDir, false);
       } catch (error) {
         // No preview files, just add a README
-        archive.append("This project has no files yet.", { name: "README.txt" });
+        (archive as any).append("This project has no files yet.", { name: "README.txt" });
       }
 
       await archive.finalize();
@@ -2403,7 +2409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const output = await fs.open(zipPath, "w");
       const archive = archiver("zip", { zlib: { level: 9 } });
 
-      archive.pipe(output.createWriteStream());
+      archive.pipe((output as any).createWriteStream());
 
       const jobs = await storage.getUserJobs(userId);
       
@@ -2411,7 +2417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const previewDir = path.join(process.cwd(), "public", "previews", job.id);
         try {
           await fs.access(previewDir);
-          archive.directory(previewDir, `project-${job.id}`);
+          (archive as any).directory(previewDir, `project-${job.id}`);
         } catch (error) {
           // Skip if no preview files
         }

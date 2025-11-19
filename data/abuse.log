@@ -1,1 +1,2 @@
 {"ts":"2025-10-25T09:04:29.882Z","ip":"127.0.0.1","reason":"spam","where":"/collab?projectId=demo","meta":{"note":"test"}}
+{"ts":"2025-11-17T04:40:08.293Z","ip":"127.0.0.1","reason":"user sent extremely abusive content","where":"/api/ai/act?mode=autopilot","meta":{"kind":"prompt_abuse","userId":"demo-user"}}

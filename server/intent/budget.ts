@@ -1,23 +1,22 @@
-// super light: session budget in memory
-const SESS: Record<string,{spent:number,limit:number}> = {};
+// server/intent/budget.ts
+export type BudgetSession = { spentTokens?: number };
 
-function sessFor(id: string) {
-  if (!SESS[id]) SESS[id] = { spent: 0, limit: 100 }; // points
-  return SESS[id];
-}
+/**
+ * Short-circuits when (spent + pending) >= cap.
+ * Returns a test-friendly envelope on block; otherwise runs `fn`.
+ */
+export async function runWithBudget(
+  session: { id?: string; budget_cap?: number; budget_used?: number } = {},
+  action: { kind: string; cost_est?: number } = { kind: "noop" },
+  runner: () => Promise<any>
+) {
+  const cap = Number(session.budget_cap ?? 1000);
+  const used = Number(session.budget_used ?? 0);
+  const remaining = Math.max(0, cap - used);
+  const est = Math.max(0, Number(action.cost_est ?? 0));
 
-function routeTier(action: any) {
-  // 0: rules, 1: small model, 2: mid, 3: large (placeholder for now)
-  if (action.kind === 'retrieve' || action.kind === 'ask') return 0;
-  return 1;
-}
-
-export async function runWithBudget(sessionId: string, action: any, fn: (tier:number)=>Promise<any>) {
-  const s = sessFor(sessionId);
-  const tier = routeTier(action);
-  const est = (action.cost_est || 5) * (tier + 1);
-  if (s.spent + est > s.limit) return { skipped: true, reason: 'budget' };
-  const res = await fn(tier);
-  s.spent += est;
-  return res;
+  if (est > remaining) {
+    return { ok: false, error: "over_budget", remaining, est };
+  }
+  return runner();
 }

@@ -1,0 +1,5 @@
+{"ts":1763525446711,"path":"tmp-test-code/existing.txt","before":"old","after":"new"}
+{"ts":1763525446715,"path":"tmp-test-code/new-file.txt","before":"","after":"hello"}
+{"ts":1763525446860,"path":"tmp-test-code/route-existing.txt","before":"old","after":"route content"}
+{"ts":1763525446867,"path":"tmp-test-code/route-new.txt","before":"","after":"hello from route"}
+{"ts":1763525446871,"path":"tmp-test-code/sample.test.ts","before":"","after":"test('x', () => {});"}

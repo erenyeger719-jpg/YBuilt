@@ -1,0 +1,114 @@
+{
+  "bySection": {
+    "hero-basic": {
+      "ships": 34,
+      "convs": 0
+    },
+    "cta-simple": {
+      "ships": 51,
+      "convs": 3
+    },
+    "features-3col": {
+      "ships": 5,
+      "convs": 0
+    }
+  },
+  "byBrandSig": {
+    "minimal|dark|#5921b2": {
+      "ships": 6,
+      "convs": 1
+    },
+    "minimal|dark|#491b92": {
+      "ships": 4,
+      "convs": 1
+    },
+    "minimal|light|#5921b2": {
+      "ships": 14,
+      "convs": 0
+    },
+    "minimal|light|#491b92": {
+      "ships": 2,
+      "convs": 0
+    },
+    "minimal|light|#3c1678": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|light|#1e51c1": {
+      "ships": 2,
+      "convs": 0
+    },
+    "minimal|light|#19429e": {
+      "ships": 1,
+      "convs": 0
+    },
+    "serious|light|#491b92": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#3c1678": {
+      "ships": 3,
+      "convs": 1
+    },
+    "minimal|dark|#311262": {
+      "ships": 3,
+      "convs": 0
+    },
+    "minimal|dark|#280f50": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#153682": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#112c6b": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#0e2458": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|light|#0b1e48": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#210c42": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#09193b": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#071530": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#061127": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#050e20": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#040b1a": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|light|#030915": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#1b0a36": {
+      "ships": 1,
+      "convs": 0
+    },
+    "minimal|dark|#16082c": {
+      "ships": 1,
+      "convs": 0
+    }
+  }
+}
