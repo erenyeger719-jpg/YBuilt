@@ -1,1 +1,0 @@
-../../tests/sup.claim.report.spec.ts

@@ -1,1 +1,0 @@
-../../tests/device.sanity.spec.ts

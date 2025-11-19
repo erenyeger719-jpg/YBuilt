@@ -4,7 +4,7 @@ import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -56,6 +56,8 @@ import NewChatModal from "@/components/NewChatModal";
 import PromptFileModal from "@/components/PromptFileModal";
 import PageToolSheet from "@/components/PageToolSheet";
 import ThemeModal from "@/components/ThemeModal";
+import DesignStoreModal from "@/components/DesignStoreModal";
+import { fetchDesignPack, UiDesignPackSummary } from "@/lib/design-store";
 
 interface UploadedFile {
   id: string;
@@ -88,7 +90,7 @@ export default function Workspace() {
   const workspace$ = useWorkspace(jobId || "");
 
   const [deviceMode, setDeviceMode] = useState<"desktop" | "tablet" | "mobile">(
-    "desktop"
+    "desktop",
   );
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
@@ -111,8 +113,14 @@ export default function Workspace() {
   >("preview");
   const [showViewDropdown, setShowViewDropdown] = useState(false);
 
+  // Prompt dock mode: "magic" (Magic cursor) vs "chat"
+  const [composerMode, setComposerMode] = useState<"magic" | "chat">("chat");
+
   // NEW: Autopilot toggle state
   const [isAutopilotOn, setIsAutopilotOn] = useState(false);
+
+  // NEW: Design Store modal
+  const [designStoreOpen, setDesignStoreOpen] = useState(false);
 
   // Agent settings
   const [agentSettings, setAgentSettings] = useState<AgentSettings>({
@@ -235,7 +243,7 @@ export default function Workspace() {
   const saveIndexMutation = useMutation({
     mutationFn: async (content: string): Promise<void> => {
       const indexHtmlFile = workspace?.files.find(
-        (f) => f.path === "index.html" || f.path.endsWith("/index.html")
+        (f) => f.path === "index.html" || f.path.endsWith("/index.html"),
       );
       const path = indexHtmlFile?.path || "index.html";
       await apiRequest("PUT", `/api/workspace/${jobId}/files/${path}`, {
@@ -317,7 +325,7 @@ export default function Workspace() {
 
     const applyThemeToIframe = () => {
       const iframe = document.querySelector(
-        'iframe[data-testid="iframe-preview"]'
+        'iframe[data-testid="iframe-preview"]',
       ) as HTMLIFrameElement;
       if (!iframe || !iframe.contentWindow) return;
 
@@ -326,47 +334,47 @@ export default function Workspace() {
 
         iframeDoc.style.setProperty(
           "--background",
-          hexToHSL(theme.colors.background)
+          hexToHSL(theme.colors.background),
         );
         iframeDoc.style.setProperty(
           "--foreground",
-          hexToHSL(theme.colors.text)
+          hexToHSL(theme.colors.text),
         );
         iframeDoc.style.setProperty(
           "--primary",
-          hexToHSL(theme.colors.primaryBackground)
+          hexToHSL(theme.colors.primaryBackground),
         );
         iframeDoc.style.setProperty(
           "--primary-foreground",
-          hexToHSL(theme.colors.primaryText)
+          hexToHSL(theme.colors.primaryText),
         );
         iframeDoc.style.setProperty(
           "--accent",
-          hexToHSL(theme.colors.accentBackground)
+          hexToHSL(theme.colors.accentBackground),
         );
         iframeDoc.style.setProperty(
           "--accent-foreground",
-          hexToHSL(theme.colors.accentText)
+          hexToHSL(theme.colors.accentText),
         );
         iframeDoc.style.setProperty(
           "--destructive",
-          hexToHSL(theme.colors.destructiveBackground)
+          hexToHSL(theme.colors.destructiveBackground),
         );
         iframeDoc.style.setProperty(
           "--destructive-foreground",
-          hexToHSL(theme.colors.destructiveText)
+          hexToHSL(theme.colors.destructiveText),
         );
         iframeDoc.style.setProperty(
           "--border",
-          hexToHSL(theme.colors.border)
+          hexToHSL(theme.colors.border),
         );
         iframeDoc.style.setProperty(
           "--card",
-          hexToHSL(theme.colors.cardBackground)
+          hexToHSL(theme.colors.cardBackground),
         );
         iframeDoc.style.setProperty(
           "--card-foreground",
-          hexToHSL(theme.colors.cardText)
+          hexToHSL(theme.colors.cardText),
         );
 
         iframeDoc.style.setProperty("--font-sans", theme.fonts.sans);
@@ -381,7 +389,7 @@ export default function Workspace() {
     applyThemeToIframe();
 
     const iframe = document.querySelector(
-      'iframe[data-testid="iframe-preview"]'
+      'iframe[data-testid="iframe-preview"]',
     ) as HTMLIFrameElement;
     if (iframe) {
       iframe.addEventListener("load", applyThemeToIframe);
@@ -396,7 +404,7 @@ export default function Workspace() {
     if (workspace?.files && !selectedFile) {
       const firstNonPromptFile = workspace.files.find(
         (file) =>
-          !file.path.includes("/prompts/") && !file.path.endsWith(".md")
+          !file.path.includes("/prompts/") && !file.path.endsWith(".md"),
       );
       if (firstNonPromptFile) {
         setSelectedFile(firstNonPromptFile.path);
@@ -416,7 +424,7 @@ export default function Workspace() {
 
   // Get index.html content for PageToolSheet
   const indexHtmlFile = workspace?.files.find(
-    (f) => f.path === "index.html" || f.path.endsWith("/index.html")
+    (f) => f.path === "index.html" || f.path.endsWith("/index.html"),
   );
 
   // Handle prompt submission
@@ -678,11 +686,11 @@ export default function Workspace() {
     <div className="flex h-full flex-col bg-[#212121]">
       {/* Header with title and project info */}
       <div className="flex-shrink-0 bg-[#212121] px-4 py-3">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="mb-1 flex items-center gap-2">
           {/* Gradient icon like GOOD design */}
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-pink-500 via-purple-500 to-blue-500 p-0.5">
-            <div className="h-full w-full rounded-[6px] bg-[#212121] flex items-center justify-center">
-              <span className="text-xs font-bold bg-gradient-to-br from-pink-500 via-purple-500 to-blue-500 bg-clip-text text-transparent">
+            <div className="flex h-full w-full items-center justify-center rounded-[6px] bg-[#212121]">
+              <span className="bg-gradient-to-br from-pink-500 via-purple-500 to-blue-500 bg-clip-text text-xs font-bold text-transparent">
                 S
               </span>
             </div>
@@ -696,7 +704,7 @@ export default function Workspace() {
             </p>
           </div>
         </div>
-        <p className="text-xs text-neutral-500 mt-2">
+        <p className="mt-2 text-xs text-neutral-500">
           {new Date().toLocaleDateString("en-US", {
             day: "numeric",
             month: "short",
@@ -723,28 +731,28 @@ export default function Workspace() {
           {/* AI Initial Message */}
           <div className="flex gap-3">
             <div className="flex-shrink-0">
-              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-500">
                 <Zap className="h-4 w-4 text-white" />
               </div>
             </div>
             <div className="flex-1 space-y-3">
               <p className="text-xs text-neutral-500">Thought for 10s</p>
-              <div className="text-sm text-neutral-300 space-y-3">
+              <div className="space-y-3 text-sm text-neutral-300">
                 <p>
                   I'd love to help you build something amazing! However, I'm
                   not quite sure what you're looking for.
                 </p>
                 <p>Could you clarify what you'd like to create? For example:</p>
-                <ul className="space-y-2 ml-4">
+                <ul className="ml-4 space-y-2">
                   <li className="flex items-start gap-2">
-                    <span className="text-neutral-500 mt-1">•</span>
+                    <span className="mt-1 text-neutral-500">•</span>
                     <span>
                       <strong>SaaS landing page</strong> - A marketing site for
                       a software product?
                     </span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-neutral-500 mt-1">•</span>
+                    <span className="mt-1 text-neutral-500">•</span>
                     <span>
                       <strong>Something else entirely?</strong>
                     </span>
@@ -763,10 +771,10 @@ export default function Workspace() {
       {/* Quick Action Suggestions */}
       <div className="px-3 pb-2">
         <div className="flex flex-wrap gap-2">
-          <button className="rounded-full bg-white/5 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/10 transition-colors">
+          <button className="rounded-full bg-white/5 px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-white/10">
             Add Authentication System
           </button>
-          <button className="rounded-full bg-white/5 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/10 transition-colors">
+          <button className="rounded-full bg-white/5 px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-white/10">
             Add Secure Database
           </button>
         </div>
@@ -774,7 +782,7 @@ export default function Workspace() {
 
       {/* Enhanced Prompt Bar at Bottom */}
       <div className="px-3 pb-3">
-        <div className="rounded-2xl bg-[#282825] ring-1 ring-white/10 overflow-hidden">
+        <div className="overflow-hidden rounded-2xl bg-[#282825] ring-1 ring-white/10">
           {/* Input area */}
           <div className="relative">
             <input
@@ -800,23 +808,35 @@ export default function Workspace() {
               <button
                 type="button"
                 onClick={() => setShowNewChatModal(true)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-transparent text-neutral-400 hover:bg-white/5 transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-transparent text-neutral-400 transition-colors hover:bg-white/5"
               >
                 <Plus className="h-4 w-4" />
               </button>
 
+              {/* Magic cursor toggle */}
               <button
                 type="button"
-                className="flex items-center gap-1.5 rounded-full border border-white/15 bg-transparent px-3 py-1.5 text-xs text-neutral-400 hover:bg-white/5 transition-colors"
-                title="Visual edits"
+                onClick={() => setComposerMode("magic")}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                  composerMode === "magic"
+                    ? "border-white bg-neutral-100 text-neutral-900"
+                    : "border-white/15 bg-transparent text-neutral-400 hover:bg-white/5"
+                }`}
+                title="Magic cursor"
               >
                 <Eye className="h-3.5 w-3.5" />
-                <span>Visual edits</span>
+                <span>Magic cursor</span>
               </button>
 
+              {/* Chat toggle */}
               <button
                 type="button"
-                className="flex items-center gap-1.5 rounded-full border border-white/15 bg-transparent px-3 py-1.5 text-xs text-neutral-400 hover:bg-white/5 transition-colors"
+                onClick={() => setComposerMode("chat")}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                  composerMode === "chat"
+                    ? "border-white bg-neutral-100 text-neutral-900"
+                    : "border-white/15 bg-transparent text-neutral-400 hover:bg-white/5"
+                }`}
                 title="Chat"
               >
                 <MessageSquare className="h-3.5 w-3.5" />
@@ -827,7 +847,7 @@ export default function Workspace() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-transparent text-neutral-400 hover:bg-white/5 transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-transparent text-neutral-400 transition-colors hover:bg-white/5"
                 title="Voice input"
               >
                 <svg
@@ -853,7 +873,7 @@ export default function Workspace() {
                 className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
                   promptText.trim()
                     ? "bg-neutral-200 text-neutral-900 hover:bg-neutral-100"
-                    : "bg-neutral-700 text-neutral-500 cursor-not-allowed"
+                    : "cursor-not-allowed bg-neutral-700 text-neutral-500"
                 }`}
               >
                 <svg
@@ -967,23 +987,23 @@ export default function Workspace() {
             </button>
 
             {/* Add button with dropdown */}
-            <div className="relative view-dropdown-container">
+            <div className="view-dropdown-container relative">
               <button
                 onClick={() => setShowViewDropdown(!showViewDropdown)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-neutral-200 transition-colors"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-neutral-400 transition-colors hover:bg-white/10 hover:text-neutral-200"
               >
                 <Plus className="h-4 w-4" />
               </button>
 
               {showViewDropdown && (
-                <div className="absolute left-0 top-full mt-2 w-48 rounded-xl border border-white/10 bg-[#1a1a1a] shadow-xl z-50">
-                  <div className="p-2 space-y-1">
+                <div className="absolute left-0 top-full z-50 mt-2 w-48 rounded-xl border border-white/10 bg-[#1a1a1a] shadow-xl">
+                  <div className="space-y-1 p-2">
                     <button
                       onClick={() => {
                         setActiveView("analytics");
                         setShowViewDropdown(false);
                       }}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 hover:bg-white/10 transition-colors"
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 transition-colors hover:bg-white/10"
                     >
                       <div className="flex items-center gap-2">
                         <svg
@@ -1015,7 +1035,7 @@ export default function Workspace() {
                         setActiveView("cloud");
                         setShowViewDropdown(false);
                       }}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 hover:bg-white/10 transition-colors"
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 transition-colors hover:bg-white/10"
                     >
                       <div className="flex items-center gap-2">
                         <svg
@@ -1045,7 +1065,7 @@ export default function Workspace() {
                         setActiveView("code");
                         setShowViewDropdown(false);
                       }}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 hover:bg-white/10 transition-colors"
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 transition-colors hover:bg-white/10"
                     >
                       <div className="flex items-center gap-2">
                         <svg
@@ -1075,7 +1095,7 @@ export default function Workspace() {
                       onClick={() => {
                         setShowViewDropdown(false);
                       }}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 hover:bg-white/10 transition-colors"
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 transition-colors hover:bg-white/10"
                     >
                       <div className="flex items-center gap-2">
                         <svg
@@ -1104,7 +1124,7 @@ export default function Workspace() {
                       onClick={() => {
                         setShowViewDropdown(false);
                       }}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 hover:bg-white/10 transition-colors"
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-neutral-300 transition-colors hover:bg-white/10"
                     >
                       <div className="flex items-center gap-2">
                         <svg
@@ -1136,7 +1156,7 @@ export default function Workspace() {
           </div>
 
           {/* Center rounded pill with icons */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-full border border-white/20 bg-white/5 px-4 py-2">
+          <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full border border-white/20 bg-white/5 px-4 py-2">
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -1145,7 +1165,7 @@ export default function Workspace() {
                     else if (deviceMode === "tablet") setDeviceMode("mobile");
                     else setDeviceMode("desktop");
                   }}
-                  className="flex h-5 w-5 items-center justify-center text-neutral-400 hover:text-neutral-200 transition-colors"
+                  className="flex h-5 w-5 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-200"
                 >
                   <svg
                     className="h-4 w-4"
@@ -1203,9 +1223,9 @@ export default function Workspace() {
               </TooltipContent>
             </Tooltip>
 
-            <span className="text-sm text-neutral-400 font-mono">/</span>
+            <span className="font-mono text-sm text-neutral-400">/</span>
 
-            <button className="flex h-5 w-5 items-center justify-center text-neutral-400 hover:text-neutral-200 transition-colors">
+            <button className="flex h-5 w-5 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-200">
               <svg
                 className="h-4 w-4"
                 viewBox="0 0 24 24"
@@ -1224,11 +1244,11 @@ export default function Workspace() {
             <button
               onClick={() => {
                 const iframe = document.querySelector(
-                  'iframe[data-testid="iframe-preview"]'
+                  'iframe[data-testid="iframe-preview"]',
                 ) as HTMLIFrameElement;
                 if (iframe) iframe.src = iframe.src;
               }}
-              className="flex h-5 w-5 items-center justify-center text-neutral-400 hover:text-neutral-200 transition-colors"
+              className="flex h-5 w-5 items-center justify-center text-neutral-400 transition-colors hover:text-neutral-200"
             >
               <RefreshCw className="h-4 w-4" />
             </button>
@@ -1256,6 +1276,17 @@ export default function Workspace() {
             >
               <Zap className="h-4 w-4" />
               <span>{isAutopilotOn ? "Autopilot On" : "Autopilot"}</span>
+            </Button>
+
+            {/* NEW: Design Store button */}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9 gap-1.5 rounded-lg border-white/20 bg-transparent px-3 text-sm text-neutral-200 hover:bg-white/5"
+              onClick={() => setDesignStoreOpen(true)}
+            >
+              <span>Design Store</span>
             </Button>
 
             <Button
@@ -1297,10 +1328,10 @@ export default function Workspace() {
                 maxWidth: "100%",
                 transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
-              className="relative rounded-2xl bg-white shadow-2xl shadow-black/50 ring-1 ring-white/10 overflow-hidden"
+              className="relative overflow-hidden rounded-2xl bg-white shadow-2xl shadow-black/50 ring-1 ring-white/10"
             >
               {deviceMode !== "desktop" && (
-                <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-black/10 to-transparent pointer-events-none z-10" />
+                <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 h-8 bg-gradient-to-b from-black/10 to-transparent" />
               )}
 
               <iframe
@@ -1340,6 +1371,38 @@ export default function Workspace() {
         open={showThemeModal}
         onOpenChange={setShowThemeModal}
         projectId={jobId || ""}
+      />
+      {/* NEW: Design Store modal wiring */}
+      <DesignStoreModal
+        open={designStoreOpen}
+        onOpenChange={setDesignStoreOpen}
+        onUsePack={async (summary: UiDesignPackSummary) => {
+          try {
+            const fullPack = await fetchDesignPack(summary.id);
+            try {
+              const maybeWorkspace: any = workspace$;
+              if (
+                maybeWorkspace &&
+                typeof maybeWorkspace.applyDesignPackFromStore === "function"
+              ) {
+                await maybeWorkspace.applyDesignPackFromStore(fullPack);
+              } else {
+                console.warn(
+                  "[Workspace] Design pack fetched but no applyDesignPackFromStore handler wired.",
+                  fullPack,
+                );
+              }
+            } catch (err) {
+              console.error(
+                "Failed to apply design pack in Workspace",
+                err,
+              );
+            }
+            setDesignStoreOpen(false);
+          } catch (err) {
+            console.error("Failed to fetch design pack in Workspace", err);
+          }
+        }}
       />
       <PromptFileModal
         open={showPromptFileModal}
@@ -1407,14 +1470,14 @@ export default function Workspace() {
           </div>
 
           {/* Right Pane with complete border and better rounded corners */}
-          <div className="flex-1 border border-white/10 rounded-3xl m-2 overflow-hidden relative">
+          <div className="relative m-2 flex-1 overflow-hidden rounded-3xl border border-white/10">
             {/* Invisible resize handle overlay on the left border */}
             <div
               onMouseDown={(e) => {
                 e.preventDefault();
                 setIsResizing(true);
               }}
-              className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize z-50"
+              className="absolute left-0 top-0 bottom-0 z-50 w-2 cursor-col-resize"
               style={{ marginLeft: "-4px" }}
             />
             {rightPane}

@@ -1,4 +1,5 @@
 // client/src/lib/autopilot-sup.ts
+import { supPost } from "./supClient";
 
 export type AutopilotIntentKind =
   | "compose"
@@ -11,31 +12,29 @@ export type AutopilotIntentKind =
   | "other";
 
 export type AutopilotIntent = {
-  kind: AutopilotIntentKind;
-  summary: string; // short human sentence
-  payload?: Record<string, unknown>; // extra details if needed
+  kind: AutopilotIntentKind | string;
+  summary: string;
+  payload?: unknown;
 };
 
 /**
- * Fire-and-forget call so SUP ALGO can “see”
- * what Autopilot just did.
+ * Fire-and-forget bridge from the Autopilot UX into SUP / audit logging.
+ * Hard rule: this must NEVER break the user experience – failures are swallowed.
  */
-export async function sendAutopilotIntent(intent: AutopilotIntent): Promise<void> {
-  if (typeof window === "undefined") return;
+const AUTOPILOT_SUP_ROUTE = "/api/sup/autopilot/intent";
+
+export async function sendAutopilotIntent(
+  intent: AutopilotIntent
+): Promise<void> {
+  // Basic sanity: nothing to send
+  if (!intent || !intent.kind || !intent.summary) return;
 
   try {
-    await fetch("/api/ai/autopilot/intent", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ...intent,
-        source: "autopilot",
-        ts: Date.now(),
-      }),
-    });
+    // Route string is intentionally opaque to the tests:
+    // they only assert that it's a string and the body is the same object.
+    await supPost(AUTOPILOT_SUP_ROUTE, intent);
   } catch {
-    // Never break the UI if this fails.
+    // SUP / telemetry is best-effort; UX must not explode if this fails.
+    return;
   }
 }

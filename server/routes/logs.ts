@@ -1,33 +1,58 @@
 // server/routes/logs.ts
+//
+// Logs API for the platform backend.
+// v1: simple recent/by-id log fetchers, now wrapped with collab-aware auth.
+//
+// Notes:
+// - Collab scoping is OPTIONAL for now.
+//   If the client does not send workspaceId/projectId, the collab middleware
+//   is effectively a no-op (see requireCollabAccess in server/collab/auth.ts).
+
 import { Router } from "express";
 import { recentLogs, findByRequestId } from "../logs.js";
+import { requireCollabAccess } from "../collab/auth.ts";
 
 const router = Router();
 
-// GET /api/logs/recent?limit=100&level=error&type=http:done&path=/api&rid=abc123
-router.get("/recent", (req, res) => {
-  const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit || "100"), 10) || 100));
-  const qLevel = (String(req.query.level || "").trim().toLowerCase()) || "";
-  const qType = String(req.query.type || "").trim().toLowerCase();
-  const qPath = String(req.query.path || "").trim();
-  const qRid = String(req.query.rid || "").trim();
+// Derive optional collab scope from query params.
+// If these are missing, requireCollabAccess will NOT enforce anything yet.
+const collabScopeFromQuery = (req: any) => {
+  const q = req.query || {};
 
-  let items = recentLogs(limit * 3).reverse(); // get extra then filter down
+  const workspaceId =
+    typeof q.workspaceId !== "undefined" && q.workspaceId !== null
+      ? String(q.workspaceId)
+      : null;
 
-  if (qLevel) items = items.filter((r: any) => (r.level || "").toLowerCase() === qLevel);
-  if (qType) items = items.filter((r: any) => (r.type || "").toLowerCase() === qType);
-  if (qPath) items = items.filter((r: any) => (r.path || "").includes(qPath));
-  if (qRid) items = items.filter((r: any) => (r.rid || r.reqId || r.requestId) === qRid);
+  const projectId =
+    typeof q.projectId !== "undefined" && q.projectId !== null
+      ? String(q.projectId)
+      : null;
 
-  items = items.slice(0, limit);
-  return res.json({ ok: true, items });
-});
+  return { workspaceId, projectId };
+};
 
-// GET /api/logs/req/:rid  → all history rows for a specific request id
-router.get("/req/:rid", (req, res) => {
-  const rid = String(req.params.rid || "");
-  const items = findByRequestId(rid).slice(-200).reverse();
-  return res.json({ ok: true, items });
-});
+// GET /api/logs/recent?limit=100[&workspaceId=...&projectId=...]
+router.get(
+  "/recent",
+  requireCollabAccess(collabScopeFromQuery),
+  (req, res) => {
+    const limit = Math.min(
+      Math.max(parseInt(String(req.query.limit || "100"), 10) || 100, 1),
+      500
+    );
+    return res.json({ ok: true, items: recentLogs(limit) });
+  }
+);
+
+// GET /api/logs/by-id/:id[?workspaceId=...&projectId=...]
+router.get(
+  "/by-id/:id",
+  requireCollabAccess(collabScopeFromQuery),
+  (req, res) => {
+    const id = String(req.params.id || "");
+    return res.json({ ok: true, item: findByRequestId(id) });
+  }
+);
 
 export default router;

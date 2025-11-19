@@ -1,1 +1,0 @@
-../../server/qa/readability.guard.ts

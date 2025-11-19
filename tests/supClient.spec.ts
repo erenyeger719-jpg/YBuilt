@@ -57,6 +57,7 @@ describe("supPost", () => {
     expect(res.status).toBe(422);
     expect(res.supMode).toBe("block");
     expect(res.supReasons).toContain("proof_gate_fail");
+    expect(res.supReasons).toContain("perf_bad");
   });
 
   it("returns a network_error shape when fetch throws", async () => {

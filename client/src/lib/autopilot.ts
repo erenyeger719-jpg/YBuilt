@@ -21,7 +21,14 @@ export type AutopilotOpts = {
     startBasicAB: () => void;
     toggleAB: (on?: boolean) => void;
     setABAuto: (
-      cfg: Partial<{ confidence: number; minViews: number; minConv: number; enabled: boolean }>
+      cfg: Partial<{
+        confidence: number;
+        minViews: number;
+        minConv: number;
+        minConversions: number;
+        enabled: boolean;
+        on: boolean;
+      }>
     ) => void;
     viewArm: (arm: "A" | "B") => void;
 
@@ -33,9 +40,17 @@ export type AutopilotOpts = {
 
     setGoalAndApply: (n: number) => Promise<void> | void;
 
-    setDataSkin: (skin: "normal" | "empty" | "long" | "skeleton" | "error") => Promise<void> | void;
+    setDataSkin: (
+      skin: "normal" | "empty" | "long" | "skeleton" | "error"
+    ) => Promise<void> | void;
 
     toggleComments: (on?: boolean) => void;
+
+    // NEW: let callers hook Autopilot into the Design Store
+    applyDesignPack?: (opts: {
+      slot: "hero" | "pricing" | "footer" | "navbar";
+      styleHint?: string;
+    }) => Promise<void> | void;
   };
 };
 
@@ -89,7 +104,9 @@ export class Autopilot {
 
     // --- Autopilot ON / OFF (voice pause / resume) ---
     if (
-      /\b(autopilot (?:off|stop|disable)|pause autopilot|turn autopilot off)\b/i.test(low)
+      /\b(autopilot (?:off|stop|disable)|pause autopilot|turn autopilot off)\b/i.test(
+        low
+      )
     ) {
       this.A.setAutopilot(false);
       sendAutopilotIntent({
@@ -102,7 +119,9 @@ export class Autopilot {
     }
 
     if (
-      /\b(autopilot (?:on|start|enable)|resume autopilot|turn autopilot on)\b/i.test(low)
+      /\b(autopilot (?:on|start|enable)|resume autopilot|turn autopilot on)\b/i.test(
+        low
+      )
     ) {
       this.A.setAutopilot(true);
       sendAutopilotIntent({
@@ -112,6 +131,60 @@ export class Autopilot {
       });
       told("Autopilot resumed.");
       return;
+    }
+
+    // --- Design Store / Design Packs ---
+    if (
+      this.A.applyDesignPack &&
+      (low.includes("design store") ||
+        low.includes("design pack") ||
+        low.includes("design from store"))
+    ) {
+      let slot: "hero" | "pricing" | "footer" | "navbar" | null = null;
+
+      if (low.includes("hero")) {
+        slot = "hero";
+      } else if (low.includes("pricing") || low.includes("price section")) {
+        slot = "pricing";
+      } else if (low.includes("footer")) {
+        slot = "footer";
+      } else if (
+        low.includes("nav") ||
+        low.includes("navbar") ||
+        low.includes("navigation")
+      ) {
+        slot = "navbar";
+      }
+
+      if (slot) {
+        let styleHint: string | undefined;
+        if (
+          low.includes("minimal") ||
+          low.includes("simple") ||
+          low.includes("clean")
+        ) {
+          styleHint = "minimal";
+        } else if (low.includes("dark")) {
+          styleHint = "dark";
+        } else if (low.includes("premium") || low.includes("luxury")) {
+          styleHint = "premium";
+        }
+
+        const plan = `Apply a ${
+          styleHint ? styleHint + " " : ""
+        }${slot} design pack from the store.`;
+
+        await this.confirmAndRun(plan, async () => {
+          await this.A.applyDesignPack!({ slot: slot!, styleHint });
+          sendAutopilotIntent({
+            kind: "other",
+            summary: "Apply design pack from store.",
+            payload: { slot, styleHint },
+          });
+        });
+
+        return;
+      }
     }
 
     // --- Compose / Recompose / Prompt ---
@@ -167,7 +240,9 @@ export class Autopilot {
       await this.A.applyChip(chip);
       return;
     }
-    if (/\b(email|signup).*(cta|call to action)|\b(sign[-\s]?up)\b/i.test(low)) {
+    if (
+      /\b(email|signup).*(cta|call to action)|\b(sign[-\s]?up)\b/i.test(low)
+    ) {
       const chip = "Use email signup CTA";
       sendAutopilotIntent({
         kind: "chip",
@@ -252,7 +327,7 @@ export class Autopilot {
       return;
     }
 
-    if (/stop( the)?\s*(a\/?b|ab)/i.test(low)) {
+    if (/stop( the)?\s*(a\/b|ab)/i.test(low) || /stop( the)?\s*a\/b/i.test(low)) {
       const plan = "Stop current A/B test.";
 
       await this.confirmAndRun(plan, async () => {
@@ -330,31 +405,31 @@ export class Autopilot {
     const mMC = low.match(/\bmin\s*(conv|conversions?)\s*(\d{1,6})\b/);
     if (mMC) {
       const minConv = parseInt(mMC[2], 10);
-      this.A.setABAuto({ minConv });
+      this.A.setABAuto({ minConversions: minConv });
       sendAutopilotIntent({
         kind: "ab_config",
-        summary: `Set auto-stop minConv = ${minConv}.`,
-        payload: { minConv },
+        summary: `Set auto-stop minConversions = ${minConv}.`,
+        payload: { minConversions: minConv },
       });
-      told(`Auto-stop minConv = ${mMC[2]}`);
+      told(`Auto-stop minConversions = ${mMC[2]}`);
       return;
     }
     if (/\bauto[-\s]?stop\b.*\bon\b/i.test(low)) {
-      this.A.setABAuto({ enabled: true });
+      this.A.setABAuto({ enabled: true, on: true });
       sendAutopilotIntent({
         kind: "ab_config",
         summary: "Enable auto-stop for A/B.",
-        payload: { enabled: true },
+        payload: { on: true },
       });
       told("Auto-stop enabled.");
       return;
     }
     if (/\bauto[-\s]?stop\b.*\boff\b/i.test(low)) {
-      this.A.setABAuto({ enabled: false });
+      this.A.setABAuto({ enabled: false, on: false });
       sendAutopilotIntent({
         kind: "ab_config",
         summary: "Disable auto-stop for A/B.",
-        payload: { enabled: false },
+        payload: { on: false },
       });
       told("Auto-stop disabled.");
       return;
@@ -363,7 +438,12 @@ export class Autopilot {
     // --- Data skins ---
     const mSkin = low.match(/\bdata (normal|empty|long|skeleton|error)\b/);
     if (mSkin) {
-      const skin = mSkin[1] as "normal" | "empty" | "long" | "skeleton" | "error";
+      const skin = mSkin[1] as
+        | "normal"
+        | "empty"
+        | "long"
+        | "skeleton"
+        | "error";
       sendAutopilotIntent({
         kind: "other",
         summary: `Switch data skin to ${skin}.`,
@@ -453,4 +533,61 @@ export class Autopilot {
       });
     }
   }
+}
+
+// --- Autopilot planner – simple text → plan helper (used in tests) ---
+
+export type AutopilotPlan = {
+  rawText: string;
+  intent: "waitlist" | "ab_test" | "email_welcome" | "unknown";
+  [key: string]: any;
+};
+
+export function planFromUtterance(text: string): AutopilotPlan {
+  const lower = text.toLowerCase();
+
+  const plan: AutopilotPlan = {
+    rawText: text,
+    intent: "unknown",
+  };
+
+  // 1) "Make a dark waitlist page..."
+  if (lower.includes("waitlist")) {
+    plan.intent = "waitlist";
+    plan.goal = "waitlist";
+    plan.theme = lower.includes("dark") ? "dark" : "default";
+    plan.sections = ["hero", "email_capture"];
+    return plan;
+  }
+
+  // 2) "Test headline and stop at 95%..."
+  if (lower.includes("headline") && lower.includes("test")) {
+    plan.intent = "ab_test";
+    plan.target = "headline";
+
+    const has95 =
+      lower.includes("95%") ||
+      lower.includes(" 95 ") ||
+      lower.includes("0.95");
+
+    plan.ab = {
+      kind: "ab",
+      confidence: has95 ? 0.95 : 0.8,
+      variants: ["A", "B"],
+    };
+
+    return plan;
+  }
+
+  // 3) "Wire email capture and send welcome..."
+  if (lower.includes("email") && lower.includes("welcome")) {
+    plan.intent = "email_welcome";
+    plan.flow = "email_welcome";
+    plan.requiresSecret = true;
+    plan.trigger = "email_welcome_flow";
+    return plan;
+  }
+
+  // 4) Fallback: unclear / messy instructions
+  return plan;
 }

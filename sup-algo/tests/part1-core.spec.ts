@@ -1,1 +1,0 @@
-../../tests/part1-core.spec.ts

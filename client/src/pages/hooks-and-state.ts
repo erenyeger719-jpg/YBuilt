@@ -1,4 +1,4 @@
-// client/src/hooks-and-state.ts
+// client/src/pages/hooks-and-state.ts
 import { useEffect, useRef, useState } from "react";
 // @ts-ignore
 import * as Y from "yjs";
@@ -6,6 +6,8 @@ import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { Autopilot } from "@/lib/autopilot";
 import { securePrompt } from "@/components/SecureDrawer";
+import { applyDesignPackToSpec } from "@/lib/design-apply";
+import type { UiDesignPack } from "@/lib/design-store";
 import {
   Spec,
   CanvasComment,
@@ -37,7 +39,9 @@ import {
 export function useCanvasState() {
   // Session & prompt
   const [sessionId] = useState(() => `cursor_${rid(8)}`);
-  const [pagePrompt, setPagePrompt] = useState("dark saas waitlist for founders");
+  const [pagePrompt, setPagePrompt] = useState(
+    "dark saas waitlist for founders"
+  );
 
   // Compose state
   const [spec, setSpec] = useState<Spec | null>(null);
@@ -73,7 +77,10 @@ export function useCanvasState() {
 
   // A/B Testing
   const [ab, setAb] = useState<ABState>({ on: false, exp: "", arm: "A" });
-  const [abKpi, setAbKpi] = useState<null | { A: { views: number; conv: number }; B: { views: number; conv: number } }>(null);
+  const [abKpi, setAbKpi] = useState<null | {
+    A: { views: number; conv: number };
+    B: { views: number; conv: number };
+  }>(null);
   const [abAuto, setAbAuto] = useState<ABAutoConfig>({
     enabled: true,
     confidence: 0.95,
@@ -111,23 +118,43 @@ export function useCanvasState() {
 
   // Presence & role
   const [role, setRole] = useState<Role>("Edit");
-  const [peers, setPeers] = useState<Record<string, { x: number; y: number; layer: string; role: Role; ts: number }>>({});
-  const [layer, setLayer] = useState<"Layout" | "Copy" | "Brand" | "Proof" | "Perf" | "Variants">("Layout");
+  const [peers, setPeers] = useState<
+    Record<string, { x: number; y: number; layer: string; role: Role; ts: number }>
+  >({});
+  const [layer, setLayer] = useState<
+    "Layout" | "Copy" | "Brand" | "Proof" | "Perf" | "Variants"
+  >("Layout");
 
   // Autopilot
   const [autopilotOn, setAutopilotOn] = useState(false);
   const [persona, setPersona] = useState<PersonaKey>(() => {
-    const v = localStorage.getItem("yb_persona_v1") as PersonaKey | null;
-    return v || "builder";
+    try {
+      const v = localStorage.getItem("yb_persona_v1") as PersonaKey | null;
+      return v || "builder";
+    } catch {
+      return "builder";
+    }
   });
   const [listening, setListening] = useState(false);
-  const [autoLog, setAutoLog] = useState<Array<{ role: "you" | "pilot"; text: string }>>([]);
+  const [autoLog, setAutoLog] = useState<
+    Array<{ role: "you" | "pilot"; text: string }>
+  >([]);
 
   // Hover & cursor
-  const [hoverBox, setHoverBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [hoverBox, setHoverBox] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
   const [hoverMeta, setHoverMeta] = useState<any>(null);
-  const [cursorPt, setCursorPt] = useState<{ x: number; y: number } | null>(null);
-  const [contrastInfo, setContrastInfo] = useState<{ ratio: number; passAA: boolean } | null>(null);
+  const [cursorPt, setCursorPt] = useState<{ x: number; y: number } | null>(
+    null
+  );
+  const [contrastInfo, setContrastInfo] = useState<{
+    ratio: number;
+    passAA: boolean;
+  } | null>(null);
 
   // Ledger
   const [ledger, setLedger] = useState<{
@@ -149,6 +176,13 @@ export function useCanvasState() {
   const [modProof, setModProof] = useState(false);
   const [modPerf, setModPerf] = useState(false);
 
+  // --- Actions bundle (for Workspace / Autopilot consumers) ---
+  const actions = {
+    applyDesignPackFromStore: (pack: UiDesignPack) => {
+      setSpec((prev: any) => applyDesignPackToSpec(prev, pack));
+    },
+  };
+
   return {
     // Session & core
     sessionId,
@@ -166,7 +200,7 @@ export function useCanvasState() {
     setBreadth,
     forceNoJS,
     setForceNoJS,
-    
+
     // Overlays
     showProof,
     setShowProof,
@@ -174,7 +208,7 @@ export function useCanvasState() {
     setShowPerf,
     proof,
     setProof,
-    
+
     // Measurement
     measureOn,
     setMeasureOn,
@@ -182,7 +216,7 @@ export function useCanvasState() {
     setModMeasure,
     freezeHover,
     setFreezeHover,
-    
+
     // Army
     armyBusy,
     setArmyBusy,
@@ -190,7 +224,7 @@ export function useCanvasState() {
     setArmyTop,
     showUnsafe,
     setShowUnsafe,
-    
+
     // Canvas
     zoom,
     setZoom,
@@ -200,11 +234,11 @@ export function useCanvasState() {
     setPanning,
     spaceDown,
     setSpaceDown,
-    
+
     // Data
     dataSkin,
     setDataSkin,
-    
+
     // A/B
     ab,
     setAb,
@@ -214,7 +248,7 @@ export function useCanvasState() {
     setAbAuto,
     abWinner,
     setAbWinner,
-    
+
     // History
     history,
     setHistory,
@@ -224,7 +258,7 @@ export function useCanvasState() {
     setShowNarrative,
     narrative,
     setNarrative,
-    
+
     // Comments
     comments,
     setComments,
@@ -234,17 +268,17 @@ export function useCanvasState() {
     setNoteArm,
     commentMode,
     setCommentMode,
-    
+
     // Sections
     sectionOrder,
     setSectionOrder,
-    
+
     // Cost
     costMeta,
     setCostMeta,
     receipt,
     setReceipt,
-    
+
     // Macros
     macros,
     setMacros,
@@ -254,7 +288,7 @@ export function useCanvasState() {
     setRecording,
     macroName,
     setMacroName,
-    
+
     // Presence
     role,
     setRole,
@@ -262,7 +296,7 @@ export function useCanvasState() {
     setPeers,
     layer,
     setLayer,
-    
+
     // Autopilot
     autopilotOn,
     setAutopilotOn,
@@ -272,7 +306,7 @@ export function useCanvasState() {
     setListening,
     autoLog,
     setAutoLog,
-    
+
     // Hover
     hoverBox,
     setHoverBox,
@@ -282,28 +316,31 @@ export function useCanvasState() {
     setCursorPt,
     contrastInfo,
     setContrastInfo,
-    
+
     // Ledger
     ledger,
     setLedger,
-    
+
     // Drag
     dragId,
     setDragId,
-    
+
     // Goal
     goal,
     setGoal,
-    
+
     // Time travel
     scrubIdx,
     setScrubIdx,
-    
+
     // Modifiers
     modProof,
     setModProof,
     modPerf,
     setModPerf,
+
+    // Actions
+    actions,
   };
 }
 
@@ -369,6 +406,76 @@ export function useABTesting(
   pushAutoLog: any,
   say: any
 ) {
+  // Autopilot-driven auto-stop config (HUD-only; thresholds still live in abAuto)
+  const [autoConfig, setAutoConfig] = useState({
+    enabled: false,
+    confidence: 0.95, // 95%
+    minViews: 150,
+    minConversions: 10,
+  });
+  const [autoWinner, setAutoWinner] = useState<"A" | "B" | null>(null);
+  const [autoStopped, setAutoStopped] = useState(false);
+
+  function setABAuto(cfg: {
+    confidence?: number;
+    minViews?: number;
+    minConversions?: number;
+    enabled?: boolean;
+    on?: boolean;
+  }) {
+    setAutoConfig((prev) => ({
+      ...prev,
+      ...(cfg.confidence != null ? { confidence: cfg.confidence } : {}),
+      ...(cfg.minViews != null ? { minViews: cfg.minViews } : {}),
+      ...(cfg.minConversions != null
+        ? { minConversions: cfg.minConversions }
+        : {}),
+      ...(cfg.enabled != null ? { enabled: !!cfg.enabled } : {}),
+      ...(cfg.on != null ? { enabled: !!cfg.on } : {}),
+    }));
+  }
+
+  // Simple helpers consumed by CursorCanvas
+  function startAB() {
+    setAb((a: ABState) =>
+      a.on
+        ? a
+        : {
+            ...a,
+            on: true,
+            exp: a.exp || `exp_${rid(6)}`,
+            arm: "A",
+          }
+    );
+  }
+
+  function toggleAB(on?: boolean) {
+    setAb((a: ABState) =>
+      typeof on === "boolean" ? { ...a, on } : { ...a, on: !a.on }
+    );
+  }
+
+  function viewArm(arm: "A" | "B") {
+    setAb((a: ABState) => {
+      const target = arm === "A" ? (a as any).A : (a as any).B;
+      if (target?.url) setPreview(target.url, target.pageId || null);
+      return { ...a, arm };
+    });
+  }
+
+  // reset auto-stop state whenever experiment changes / restarts
+  useEffect(() => {
+    if (!ab.exp) {
+      setAutoWinner(null);
+      setAutoStopped(false);
+      return;
+    }
+    if (ab.on) {
+      setAutoWinner(null);
+      setAutoStopped(false);
+    }
+  }, [ab.exp, ab.on]);
+
   useEffect(() => {
     if (!ab.on || !ab.exp) {
       setAbKpi(null);
@@ -379,8 +486,11 @@ export function useABTesting(
 
     async function tick() {
       try {
-        const r = await fetch(`/api/metrics?experiment=${encodeURIComponent(ab.exp)}`);
-        const j = await r.json().catch(() => ({} as any));
+        const r = await fetch(
+          `/api/metrics?experiment=${encodeURIComponent(ab.exp)}`
+        );
+        const j = (await r.json().catch(() => ({} as any))) as any;
+
         const s =
           (j?.experiments && j.experiments[ab.exp]) ||
           (j?.exp && j.exp[ab.exp]) ||
@@ -402,14 +512,33 @@ export function useABTesting(
         };
         if (!stop) setAbKpi(out);
 
-        if (!abAuto.enabled || !ab.on) return;
+        // Effective auto config = existing abAuto thresholds overridden by HUD config
+        const enabled =
+          (typeof autoConfig.enabled === "boolean"
+            ? autoConfig.enabled
+            : abAuto.enabled) ?? false;
 
-        // gates
-        const viewsOK = out.A.views >= abAuto.minViews && out.B.views >= abAuto.minViews;
-        const convOK = out.A.conv >= abAuto.minConv || out.B.conv >= abAuto.minConv;
+        if (!enabled || !ab.on) return;
+
+        const minViews =
+          (typeof autoConfig.minViews === "number"
+            ? autoConfig.minViews
+            : abAuto.minViews) ?? 0;
+
+        const minConv =
+          (typeof autoConfig.minConversions === "number"
+            ? autoConfig.minConversions
+            : abAuto.minConv) ?? 0;
+
+        const confidenceThresh =
+          (typeof autoConfig.confidence === "number"
+            ? autoConfig.confidence
+            : abAuto.confidence) ?? 0.95;
+
+        const viewsOK = out.A.views >= minViews && out.B.views >= minViews;
+        const convOK = out.A.conv >= minConv || out.B.conv >= minConv;
         if (!viewsOK || !convOK) return;
 
-        // Decide via mode
         let winner: "A" | "B" | null = null;
         let note = "";
 
@@ -424,33 +553,43 @@ export function useABTesting(
           );
           if (decided) {
             winner = w;
-            note = `SPRT llr=${llr.toFixed(3)} [${A_th.toFixed(3)}…${B_th.toFixed(3)}], p0~${(
-              p0 * 100
-            ).toFixed(2)}%, p1~${(p1 * 100).toFixed(2)}%`;
+            note = `SPRT llr=${llr.toFixed(
+              3
+            )} [${A_th.toFixed(3)}…${B_th.toFixed(
+              3
+            )}], p0~${(p0 * 100).toFixed(2)}%, p1~${(p1 * 100).toFixed(
+              2
+            )}%`;
           }
         } else {
           const { conf, pA, pB, lift, winner: w } = zTest(out.A, out.B);
-          if (conf >= abAuto.confidence) {
+          if (conf >= confidenceThresh) {
             winner = w;
-            note = `z≈ one-sided, conf≈${Math.round(conf * 100)}%, lift ${lift.toFixed(
-              1
-            )}%, CTR A ${(pA * 100).toFixed(2)}% vs B ${(pB * 100).toFixed(2)}%`;
+            note = `z≈ one-sided, conf≈${Math.round(
+              conf * 100
+            )}%, lift ${lift.toFixed(1)}%, CTR A ${(pA * 100).toFixed(
+              2
+            )}% vs B ${(pB * 100).toFixed(2)}%`;
           }
         }
 
         if (winner) {
-          // stop experiment, promote winner
-          setAb((a: ABState) => ({ ...a, on: false, arm: winner }));
+          setAb((a: ABState) => ({ ...a, on: false, arm: winner! }));
           setAbWinner(winner);
+          setAutoWinner(winner);
+          setAutoStopped(true);
 
-          const target = winner === "A" ? ab.A || {} : ab.B || {};
+          const target =
+            winner === "A" ? (ab as any).A || {} : (ab as any).B || {};
           if (target?.url) setPreview(target.url, target.pageId || null);
 
           const msg = `A/B auto-stop → ${winner} wins. ${note}`;
           pushAutoLog("pilot", msg);
           try {
             say(msg);
-          } catch {}
+          } catch {
+            // ignore TTS failure
+          }
 
           stop = true;
         }
@@ -476,6 +615,10 @@ export function useABTesting(
     abAuto.minConv,
     abAuto.seq,
     abAuto.power,
+    autoConfig.enabled,
+    autoConfig.confidence,
+    autoConfig.minViews,
+    autoConfig.minConversions,
     setAbKpi,
     setAb,
     setAbWinner,
@@ -483,10 +626,24 @@ export function useABTesting(
     pushAutoLog,
     say,
   ]);
+
+  return {
+    startAB,
+    toggleAB,
+    viewArm,
+    setABAuto,
+    autoConfig,
+    autoWinner,
+    autoStopped,
+  };
 }
 
 /** -------------------- Cost Tracking Hook -------------------- **/
-export function useCostTracking(sessionId: string, setCostMeta: any, setReceipt: any) {
+export function useCostTracking(
+  sessionId: string,
+  setCostMeta: any,
+  setReceipt: any
+) {
   useEffect(() => {
     let es: EventSource | null = null;
     try {
@@ -504,13 +661,19 @@ export function useCostTracking(sessionId: string, setCostMeta: any, setReceipt:
             const r = data?.meta?.receipt;
             if (r?.summary) setReceipt({ summary: String(r.summary) });
           }
-        } catch {}
+        } catch {
+          // ignore parse issues
+        }
       };
-    } catch {}
+    } catch {
+      // ignore SSE failures
+    }
     return () => {
       try {
         es?.close();
-      } catch {}
+      } catch {
+        // ignore
+      }
     };
   }, [sessionId, setCostMeta, setReceipt]);
 }
@@ -520,6 +683,8 @@ export function usePersonaPersistence(persona: PersonaKey) {
   useEffect(() => {
     try {
       localStorage.setItem("yb_persona_v1", persona);
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, [persona]);
 }

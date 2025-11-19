@@ -1,5 +1,5 @@
 // client/src/pages/CursorCanvas.tsx
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 // @ts-ignore
 import * as Y from "yjs";
 // @ts-ignore
@@ -44,6 +44,14 @@ import {
   blendSections,
 } from "./types-and-helpers";
 import { chipsForGoal } from "./magicCursorLogic";
+import { CursorCanvasDesignStore } from "./CursorCanvasDesignStore";
+import {
+  applyDesignPackByIdExternal,
+  getDesignPackEditorFields,
+  applyDesignPackFieldUpdate,
+  applyDesignPackFromAutopilot,
+  type DesignPackEditorField,
+} from "./design-store-logic";
 
 export default function CursorCanvas() {
   // Use custom hooks for state management
@@ -166,6 +174,7 @@ export default function CursorCanvas() {
     setModProof,
     modPerf,
     setModPerf,
+    actions,
   } = state;
 
   const {
@@ -218,10 +227,41 @@ export default function CursorCanvas() {
     setComments(pageId ? loadComments(pageId) : []);
   }, [pageId]);
 
-  // Use custom hooks
+  // Persona persistence & HUD cost tracking
   usePersonaPersistence(persona);
   useCostTracking(sessionId, setCostMeta, setReceipt);
-  useABTesting(
+
+  // Helper functions (declared before useABTesting usage)
+  function pushAutoLog(role: "you" | "pilot", text: string) {
+    setAutoLog((l) => [...l, { role, text }].slice(-5));
+  }
+
+  function say(text: string) {
+    try {
+      const current = personaRef.current;
+      const u = new SpeechSynthesisUtterance(`[${current}] ${text}`);
+      const voices = (window.speechSynthesis?.getVoices?.() ||
+        []) as SpeechSynthesisVoice[];
+      const pick =
+        (current === "mentor" &&
+          voices.find((v) => v.lang?.toLowerCase().startsWith("en-in"))) ||
+        voices.find((v) => v.lang?.toLowerCase().startsWith("en-")) ||
+        voices[0];
+      if (pick) u.voice = pick;
+      window.speechSynthesis?.speak(u);
+    } catch {}
+  }
+
+  // A/B testing hook
+  const {
+    startAB,
+    toggleAB: toggleABFromHook,
+    viewArm: viewArmFromHook,
+    setABAuto: setABAutoFromHook,
+    autoConfig,
+    autoWinner,
+    autoStopped,
+  } = useABTesting(
     ab,
     abAuto,
     setAbKpi,
@@ -309,27 +349,6 @@ export default function CursorCanvas() {
         truths.push(`CLS ~${Number(p.cls_est).toFixed(3)}`);
     }
     return truths;
-  }
-
-  // Autopilot helpers
-  function pushAutoLog(role: "you" | "pilot", text: string) {
-    setAutoLog((l) => [...l, { role, text }].slice(-5));
-  }
-
-  function say(text: string) {
-    try {
-      const current = personaRef.current;
-      const u = new SpeechSynthesisUtterance(`[${current}] ${text}`);
-      const voices = (window.speechSynthesis?.getVoices?.() ||
-        []) as SpeechSynthesisVoice[];
-      const pick =
-        (current === "mentor" &&
-          voices.find((v) => v.lang?.toLowerCase().startsWith("en-in"))) ||
-        voices.find((v) => v.lang?.toLowerCase().startsWith("en-")) ||
-        voices[0];
-      if (pick) u.voice = pick;
-      window.speechSynthesis?.speak(u);
-    } catch {}
   }
 
   async function askConfirm(plan: string) {
@@ -463,7 +482,7 @@ export default function CursorCanvas() {
       p.proof_ok === true &&
       p.a11y === true &&
       (typeof p.cls_est !== "number" || p.cls_est <= 0.1) &&
-      (typeof p.lcp_est_ms !== "number" || p.lcp_est_ms <= 2500);
+      (typeof p.lcp_est_ms === "number" || p.lcp_est_ms <= 2500);
 
     if (!pass) {
       undoLast();
@@ -523,29 +542,47 @@ export default function CursorCanvas() {
           );
         },
         startBasicAB: () => {
-          setAb((a) =>
-            a.on
-              ? a
-              : {
-                  ...a,
-                  on: true,
-                  exp: a.exp || `exp_${rid(6)}`,
-                  arm: "A",
-                }
-          );
+          if (typeof startAB === "function") {
+            startAB();
+          } else {
+            setAb((a) =>
+              a.on
+                ? a
+                : {
+                    ...a,
+                    on: true,
+                    exp: a.exp || `exp_${rid(6)}`,
+                    arm: "A",
+                  }
+            );
+          }
         },
         toggleAB: (on?: boolean) => {
-          setAb((a) => (on == null ? { ...a, on: !a.on } : { ...a, on: !!on }));
+          if (typeof toggleABFromHook === "function") {
+            toggleABFromHook(on);
+          } else {
+            setAb((a) =>
+              on == null ? { ...a, on: !a.on } : { ...a, on: !!on }
+            );
+          }
         },
         setABAuto: (cfg: Partial<typeof abAuto>) => {
-          setAbAuto((x) => ({ ...x, ...cfg }));
+          if (typeof setABAutoFromHook === "function") {
+            setABAutoFromHook(cfg);
+          } else {
+            setAbAuto((x) => ({ ...x, ...cfg }));
+          }
         },
         viewArm: (arm: "A" | "B") => {
-          setAb((a) => {
-            const target = arm === "A" ? a.A : a.B;
-            if (target?.url) setPreview(target.url, target.pageId || null);
-            return { ...a, arm };
-          });
+          if (typeof viewArmFromHook === "function") {
+            viewArmFromHook(arm);
+          } else {
+            setAb((a) => {
+              const target = arm === "A" ? a.A : a.B;
+              if (target?.url) setPreview(target.url, target.pageId || null);
+              return { ...a, arm };
+            });
+          }
         },
         setAutopilot: (on: boolean) => setAutopilotOn(!!on),
         undo: () => {
@@ -589,6 +626,20 @@ export default function CursorCanvas() {
             setShowComments((v) => !v);
           }
         },
+
+        // NEW: Autopilot → Design Store bridge
+        applyDesignPack: ({
+          slot,
+          styleHint,
+        }: {
+          slot: "hero" | "pricing" | "footer" | "navbar";
+          styleHint?: string;
+        }) =>
+          applyDesignPackFromAutopilot({
+            slot,
+            styleHint,
+            actions,
+          }),
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -685,7 +736,11 @@ export default function CursorCanvas() {
     setPageId(pid);
   }
 
-  function pushHistory(entry: { url: string | null; pageId: string | null; spec?: Spec }) {
+  function pushHistory(entry: {
+    url: string | null;
+    pageId: string | null;
+    spec?: Spec;
+  }) {
     setHistory((h) =>
       [
         {
@@ -711,20 +766,46 @@ export default function CursorCanvas() {
   // Send "view" beacon to backend whenever preview URL changes
   useEffect(() => {
     if (!url) return;
-    const previewUrl = abs(url);
 
-    fetch("/api/seen", {
+    const previewUrl = abs(url);
+    let previewPath = "/";
+
+    try {
+      previewPath = new URL(previewUrl).pathname || "/";
+    } catch {
+      // if URL parsing
+      // fails, keep previewPath = "/"
+    }
+
+    const wsId =
+      (spec && (spec as any).workspaceId) ||
+      (window as any).__workspaceId ||
+      null;
+
+    if (!previewPath) return;
+
+    const controller = new AbortController();
+
+    const body = {
+      jobId: "builder",
+      workspaceId: wsId,
+      path: previewPath,
+    };
+
+    fetch("/api/kpi/seen", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "content-type": "application/json",
       },
-      body: JSON.stringify({
-        url: previewUrl,
-      }),
-    }).catch((err) => {
-      console.warn("[autopilot] failed to send view beacon", err);
+      body: JSON.stringify(body),
+      credentials: "include",
+      signal: controller.signal,
+    }).catch(() => {
+      // never block UI on metrics failures
     });
-  }, [url]);
+
+    return () => controller.abort();
+  }, [url, spec]);
 
   // Keep local copy of section order
   useEffect(() => {
@@ -1209,6 +1290,18 @@ export default function CursorCanvas() {
     }
   }
 
+  // Design Store bridge: tiny wrapper → external logic file
+  async function onApplyPackByIdFromStore(
+    packId: string
+  ): Promise<boolean> {
+    return applyDesignPackByIdExternal(packId, {
+      getBaseSpec: () => specRef.current || spec,
+      recomposeGuarded,
+      pushAutoLog,
+      say,
+    });
+  }
+
   // Narrative mode
   useEffect(() => {
     if (!proof) return;
@@ -1524,6 +1617,49 @@ export default function CursorCanvas() {
       return true;
     }
 
+    // A/B auto-stop config by voice, e.g.
+    // "stop test when confident at 95% after 200 views and 20 signups"
+    if (/\b(stop when|stop at|until)\b/.test(t) && /\b(a\/?b|ab|test)\b/.test(t)) {
+      const mConf = t.match(/(\d{1,3})\s*%/); // e.g. 80%, 95%
+      const mViews = t.match(/(\d{2,6})\s+(views?|impressions?)/);
+      const mConv = t.match(/(\d{1,5})\s+(conversions?|signups?|leads?)/);
+
+      setAbAuto((cur) => {
+        const next: any = { ...cur };
+
+        if (mConf) {
+          const pct = Math.max(50, Math.min(99, parseInt(mConf[1], 10)));
+          next.confidence = pct / 100; // 0.5–0.99
+        }
+
+        if (mViews) {
+          const views = Math.max(10, parseInt(mViews[1], 10));
+          next.minViews = views;
+        }
+
+        if (mConv) {
+          const conv = Math.max(1, parseInt(mConv[1], 10));
+          next.minConversions = conv;
+        }
+
+        // Turn auto-mode on when user sets thresholds
+        next.on = true;
+        return next;
+      });
+
+      const confText = mConf ? `${mConf[1]}%` : "current";
+      const viewsText = mViews ? mViews[1] : "current";
+      const convText = mConv ? mConv[1] : "current";
+
+      const msg = `A/B auto-stop updated · confidence ${confText} · min views ${viewsText} · min conversions ${convText}`;
+      pushAutoLog("pilot", msg);
+      try {
+        say(msg);
+      } catch {}
+
+      return true;
+    }
+
     // Goal & chips
     const mGoal = t.match(/\bgoal\s+(\d{1,3})\b/);
     if (mGoal) {
@@ -1591,6 +1727,59 @@ export default function CursorCanvas() {
       try {
         say("Got it. Key held in memory for this tab only.");
       } catch {}
+      return true;
+    }
+
+    // Send a welcome email via the backend flow
+    const mWelcomeSend = t.match(
+      /\b(send|trigger)\b.*\bwelcome\b.*\b(?:to|for)\b\s+([^\s@]+@[^\s@]+\.[^\s@]+)/
+    );
+    if (mWelcomeSend) {
+      const email = mWelcomeSend[2];
+      const key = secretsRef.current.emailApiKey;
+
+      if (!key) {
+        const msg =
+          "I need your email API key first. Say 'wire email' so I can open the secure drawer.";
+        pushAutoLog("pilot", msg);
+        try {
+          say(msg);
+        } catch {}
+        return true;
+      }
+
+      try {
+        await fetch("/api/flow/email/welcome", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-email-api-key": key,
+          },
+          body: JSON.stringify({
+            email,
+            pageId: pageId || null,
+            meta: {
+              source: "autopilot_voice",
+            },
+          }),
+        });
+
+        const msg = `Welcome email triggered for ${email}`;
+        pushAutoLog("pilot", msg);
+        try {
+          say(msg);
+        } catch {}
+      } catch {
+        const msg =
+          "Tried to send the welcome email but something went wrong (network or provider).";
+        pushAutoLog("pilot", msg);
+        try {
+          say(
+            "I tried to send the welcome email, but something went wrong."
+          );
+        } catch {}
+      }
+
       return true;
     }
 
@@ -1691,6 +1880,63 @@ export default function CursorCanvas() {
     }
     return base.slice(0, 5);
   }, [hoverMeta, spec]);
+
+  // Current design-backed section + fields (Design Store content editor)
+  const [designEditor, setDesignEditor] = useState<{
+    sectionId: string;
+    fields: DesignPackEditorField[];
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEditor() {
+      if (!spec?.layout?.sections || !(spec as any).sections) {
+        if (!cancelled) setDesignEditor(null);
+        return;
+      }
+
+      const sectionIds = spec.layout.sections as string[];
+
+      for (const sectionId of sectionIds) {
+        if (cancelled) return;
+
+        try {
+          const fields = await getDesignPackEditorFields({
+            spec,
+            sectionId,
+          });
+          if (!cancelled && fields && fields.length > 0) {
+            setDesignEditor({ sectionId, fields });
+            return;
+          }
+        } catch {
+          // ignore and try next section
+        }
+      }
+
+      if (!cancelled) setDesignEditor(null);
+    }
+
+    loadEditor();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [spec]);
+
+  function handleDesignFieldChange(fieldKey: string, nextValue: string) {
+    if (!spec || !designEditor?.sectionId) return;
+    const nextSpec = applyDesignPackFieldUpdate({
+      spec,
+      sectionId: designEditor.sectionId,
+      fieldKey,
+      nextValue,
+    });
+    setSpec(nextSpec);
+    // fire-and-forget guarded compose; contracts will block if needed
+    void recomposeGuarded(nextSpec);
+  }
 
   // Presence
   function pingPresence(pt?: { x: number; y: number }) {
@@ -1980,7 +2226,8 @@ export default function CursorCanvas() {
         });
 
         // Data skins
-        const textSelectors = "h1,h2,h3,h4,h5,h6,p,li,span,a,button,th,td,small,label";
+        const textSelectors =
+          "h1,h2,h3,h4,h5,h6,p,li,span,a,button,th,td,small,label";
         function selectAll(sel: string): HTMLElement[] {
           return Array.from(doc.querySelectorAll(sel)) as HTMLElement[];
         }
@@ -2288,6 +2535,67 @@ export default function CursorCanvas() {
     } catch {}
   }
 
+  // Auto-stop A/B when a winner meets thresholds
+  useEffect(() => {
+    if (!autopilotOn) return;
+    if (!abAuto?.on) return;
+    if (!ab?.on) return;
+    if (!abWinner) return;
+
+    const winner: any = abWinner as any;
+
+    const confidence = Number(
+      winner.confidence ?? winner.p ?? winner.prob ?? 0
+    );
+    const views = Number(
+      winner.views ?? winner.impressions ?? winner.samples ?? 0
+    );
+    const conversions = Number(
+      winner.conversions ?? winner.conv ?? winner.signups ?? 0
+    );
+
+    const minConf =
+      typeof abAuto.confidence === "number" ? abAuto.confidence : 0.95;
+    const minViews =
+      typeof abAuto.minViews === "number" ? abAuto.minViews : 0;
+    const minConversions =
+      typeof abAuto.minConversions === "number"
+        ? abAuto.minConversions
+        : 0;
+
+    const ready =
+      confidence >= minConf &&
+      views >= minViews &&
+      conversions >= minConversions;
+
+    if (!ready) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await promoteWinner(sessionId, winner);
+        if (cancelled) return;
+        setAb((a) => ({ ...a, on: false }));
+        setAbAuto((cfg) => ({ ...cfg, on: false }));
+        setAbWinner(null);
+      } catch {
+        if (cancelled) return;
+        pushAutoLog(
+          "pilot",
+          "Tried to promote A/B winner, but promote failed (check logs)."
+        );
+        try {
+          say("I tried to promote the A/B winner, but something went wrong.");
+        } catch {}
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [autopilotOn, ab, abAuto, abWinner, sessionId]);
+
   // First load
   useEffect(() => {
     composeInstant().catch(() => {});
@@ -2337,7 +2645,43 @@ export default function CursorCanvas() {
         >
           Compose
         </button>
-        {/* Additional controls would be here */}
+
+        {/* Autopilot toggle */}
+        <button
+          onClick={() => setAutopilotOn((v) => !v)}
+          className={
+            "px-3 py-2 rounded text-sm border transition " +
+            (autopilotOn
+              ? "bg-emerald-600 text-white border-emerald-700"
+              : "bg-white text-gray-800 border-gray-300")
+          }
+        >
+          Autopilot: {autopilotOn ? "On" : "Off"}
+        </button>
+
+        {/* Push-to-talk */}
+        <button
+          onClick={handlePTT}
+          disabled={!autopilotOn}
+          className={
+            "px-3 py-2 rounded text-sm border flex items-center gap-1 " +
+            (autopilotOn
+              ? listening
+                ? "bg-red-600 text-white border-red-700"
+                : "bg-gray-900 text-white border-gray-900"
+              : "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed")
+          }
+        >
+          <span>{listening ? "Listening…" : "Speak"}</span>
+        </button>
+
+        {/* Design Store entrypoint */}
+        <CursorCanvasDesignStore
+          onApplyPackById={onApplyPackByIdFromStore}
+          getBaseSpec={() => specRef.current || spec}
+          say={say}
+          log={pushAutoLog}
+        />
       </div>
 
       {/* Workspace area */}
@@ -2391,6 +2735,122 @@ export default function CursorCanvas() {
         <div className="absolute left-3 bottom-3 text-xs text-gray-500 select-none">
           Hold <b>Space</b> and drag to pan • <b>Ctrl/⌘ + wheel</b> to zoom •
           Press <b>C</b> to place a note
+        </div>
+      </div>
+
+      {/* Design content editor (Design Store-backed section) */}
+      {designEditor && designEditor.fields?.length > 0 && (
+        <div className="fixed right-3 bottom-24 z-40 w-80 rounded-2xl bg-white shadow-lg border border-gray-200 p-3 text-xs space-y-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-medium text-[11px] text-gray-900">
+              Design content
+            </span>
+            <span className="text-[10px] text-gray-400 truncate max-w-[140px]">
+              {designEditor.sectionId}
+            </span>
+          </div>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {designEditor.fields.map((field) => (
+              <div key={field.key} className="space-y-1">
+                <label className="block text-[11px] text-gray-600">
+                  {field.label || field.key}
+                </label>
+                {field.type === "long" ? (
+                  <textarea
+                    className="w-full rounded-md border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    rows={3}
+                    value={field.value ?? ""}
+                    onChange={(e) =>
+                      handleDesignFieldChange(field.key, e.target.value)
+                    }
+                  />
+                ) : (
+                  <input
+                    className="w-full rounded-md border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    value={field.value ?? ""}
+                    onChange={(e) =>
+                      handleDesignFieldChange(field.key, e.target.value)
+                    }
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Autopilot mini HUD */}
+      <div className="fixed left-3 top-20 z-40 w-72 rounded-2xl bg-black/75 text-white text-xs backdrop-blur p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="font-medium tracking-wide">Autopilot</span>
+          <span
+            className={
+              "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] " +
+              (autopilotOn ? "bg-emerald-500/20" : "bg-white/10")
+            }
+          >
+            <span
+              className={
+                "inline-block w-1.5 h-1.5 rounded-full " +
+                (autopilotOn ? "bg-emerald-400" : "bg-gray-400")
+              }
+            />
+            {autopilotOn ? "Active" : "Paused"}
+          </span>
+        </div>
+
+        {/* A/B auto-stop status chip */}
+        {autoConfig?.enabled && (
+          <div className="text-[11px] text-emerald-300/80">
+            AB auto-stop: on (
+            {Math.round((autoConfig.confidence ?? 0.95) * 100)}% · ≥
+            {autoConfig.minViews ?? 0} views
+            {typeof autoConfig.minConversions === "number" &&
+              autoConfig.minConversions > 0 && (
+                <> · ≥{autoConfig.minConversions} conv</>
+              )}
+            {autoStopped && autoWinner && (
+              <> — winner: {String(autoWinner)}</>
+            )}
+          </div>
+        )}
+
+        <div className="max-h-32 overflow-y-auto space-y-1">
+          {autoLog.length === 0 ? (
+            <div className="text-[11px] text-gray-300">
+              Press <b>Speak</b> and say something like{" "}
+              <i>“make a dark waitlist page”</i>.
+            </div>
+          ) : (
+            autoLog.map((entry, idx) => (
+              <div
+                key={idx}
+                className="flex gap-1 text-[11px] leading-snug text-gray-100"
+              >
+                <span className="uppercase opacity-60">
+                  {entry.role === "you" ? "You" : "Pilot"}
+                </span>
+                <span className="flex-1 truncate">{entry.text}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="flex items-center justify-between">
+          <button
+            onClick={undoLast}
+            className="px-2 py-1 rounded border border-white/15 text-[11px] hover:bg-white/10 transition"
+          >
+            Undo last
+          </button>
+          <button
+            onClick={() => {
+              setAutoLog([]);
+            }}
+            className="px-2 py-1 rounded text-[11px] text-gray-300 hover:text-white hover:bg-white/5 transition"
+          >
+            Clear log
+          </button>
         </div>
       </div>
     </div>

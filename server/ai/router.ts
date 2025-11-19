@@ -747,6 +747,69 @@ router.post("/evidence/reindex", (_req, res) => {
   return res.json({ ok: true, count: MEMORY.evidence.length });
 });
 
+// Helper to derive budget status from prepared spec for guard mode
+function getBudgetStatusFromPrepared(prepared: any): {
+  budgetsOk: boolean;
+  details: any;
+} {
+  try {
+    if (!prepared || typeof prepared !== "object") {
+      return { budgetsOk: true, details: {} };
+    }
+
+    // Direct budgetsOk flag
+    if (typeof (prepared as any).budgetsOk === "boolean") {
+      const failures =
+        (prepared as any).failures ||
+        (prepared as any).budgetFailures ||
+        (prepared as any).budgets?.failures ||
+        [];
+      const ok =
+        Boolean((prepared as any).budgetsOk) &&
+        (!Array.isArray(failures) || failures.length === 0);
+      return {
+        budgetsOk: ok,
+        details: {
+          budgetsOk: (prepared as any).budgetsOk,
+          failures,
+        },
+      };
+    }
+
+    // Nested budgets object
+    if ((prepared as any).budgets && typeof (prepared as any).budgets === "object") {
+      const b = (prepared as any).budgets;
+      const failures = b.failures || [];
+      const ok =
+        typeof b.ok === "boolean"
+          ? Boolean(b.ok)
+          : !Array.isArray(failures) || failures.length === 0;
+      return { budgetsOk: ok, details: b };
+    }
+
+    // Proof-style contract
+    if (typeof (prepared as any).proof_ok === "boolean") {
+      const failures =
+        (prepared as any).failures || (prepared as any).proof_failures || [];
+      const ok =
+        Boolean((prepared as any).proof_ok) &&
+        (!Array.isArray(failures) || failures.length === 0);
+      return {
+        budgetsOk: ok,
+        details: {
+          proof_ok: (prepared as any).proof_ok,
+          failures,
+        },
+      };
+    }
+
+    // Default: assume ok if no explicit signal
+    return { budgetsOk: true, details: {} };
+  } catch {
+    return { budgetsOk: true, details: {} };
+  }
+}
+
 // === WRITE ROUTES USING PREPARED SPEC ONLY ===
 
 // POST /act — guarded by contractsHardStop, commits using req.__prepared only
@@ -757,6 +820,19 @@ router.post("/act", contractsHardStop(), (req, res) => {
     return res
       .status(500)
       .json({ ok: false, error: "contracts_not_run" });
+  }
+
+  const guardMode = String((req.query as any).guard ?? "") === "1";
+  const { budgetsOk, details: budgetDetails } =
+    getBudgetStatusFromPrepared(prepared);
+
+  if (guardMode && !budgetsOk) {
+    return res.status(422).json({
+      ok: false,
+      error: "guard_failed",
+      reason: "perf_or_a11y_or_proof",
+      details: budgetDetails,
+    });
   }
 
   const t0 = Date.now();
@@ -855,6 +931,19 @@ router.post("/chips/apply", contractsHardStop(), (req, res) => {
     return res
       .status(500)
       .json({ ok: false, error: "contracts_not_run" });
+  }
+
+  const guardMode = String((req.query as any).guard ?? "") === "1";
+  const { budgetsOk, details: budgetDetails } =
+    getBudgetStatusFromPrepared(prepared);
+
+  if (guardMode && !budgetsOk) {
+    return res.status(422).json({
+      ok: false,
+      error: "guard_failed",
+      reason: "perf_or_a11y_or_proof",
+      details: budgetDetails,
+    });
   }
 
   const t0 = Date.now();

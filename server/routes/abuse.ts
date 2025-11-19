@@ -4,7 +4,9 @@ import fs from "fs";
 import path from "path";
 
 const router = Router();
-const LOG = path.resolve("./data/abuse.log");
+
+// Allow overriding log file via env (tests/ops can use this)
+const LOG = path.resolve(process.env.ABUSE_LOG_FILE || "./data/abuse.log");
 
 // Burst guard (per-IP, 1-minute window)
 const burst = new Map<string, { c: number; t: number }>();
@@ -23,7 +25,9 @@ router.post("/report", (req, res) => {
     const { reason, where, meta } = req.body || {};
     const clean = {
       ts: new Date().toISOString(),
-      ip: (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip,
+      ip:
+        (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+        req.ip,
       reason: String(reason || "").slice(0, 500),
       where: String(where || "").slice(0, 200),
       meta: typeof meta === "object" ? meta : undefined,
@@ -43,7 +47,8 @@ router.post("/intake", (req, res) => {
       (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
       req.ip ||
       "anon";
-    if (tooNoisy(ip)) return res.status(429).json({ ok: false, error: "rate_limited" });
+    if (tooNoisy(ip))
+      return res.status(429).json({ ok: false, error: "rate_limited" });
 
     const ua = String(req.headers["user-agent"] || "");
     const { type = "generic", note = "", meta = {} } = req.body || {};

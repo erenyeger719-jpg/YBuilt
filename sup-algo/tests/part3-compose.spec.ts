@@ -1,1 +1,0 @@
-../../tests/part3-compose.spec.ts

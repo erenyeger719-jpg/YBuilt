@@ -1,1 +1,0 @@
-../../server/qa/device.sanity.ts
