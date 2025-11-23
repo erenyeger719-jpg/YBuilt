@@ -27,6 +27,9 @@ import { never500 } from './mw/failsafe.ts'; // 👈 failsafe middleware
 import kpiRouter from './routes/kpi.ts';
 import executeSandboxRouter from './routes/execute.sandbox.ts';
 
+// NEW: SUP Metrics router
+import supMetricsRouter from './routes/sup.metrics.ts';
+
 // NEW: Outgoing hash middleware
 import { hashOutgoing } from './mw/hash-outgoing.ts';
 
@@ -849,6 +852,9 @@ app.use(ipGate());
 
   // NEW: KPI endpoints (seen/convert/metrics)
   app.use('/api', kpiRouter);
+
+  // NEW: SUP metrics / observability API
+  app.use('/api/sup', supMetricsRouter);
 
   // NEW: Challenge API (with JSON parsing)
   app.use('/api/challenge', express.json({ limit: '16kb' }), challengeRouter);

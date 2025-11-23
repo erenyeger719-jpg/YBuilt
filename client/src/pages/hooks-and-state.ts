@@ -34,6 +34,7 @@ import {
   sprt,
   cdfStdNorm,
 } from "./types-and-helpers";
+import { mcStep } from "./magicInspector";
 
 /** -------------------- Custom Hook for Canvas State Management -------------------- **/
 export function useCanvasState() {
@@ -44,7 +45,7 @@ export function useCanvasState() {
   );
 
   // Compose state
-  const [spec, setSpec] = useState<Spec | null>(null);
+  const [spec, setSpecRaw] = useState<Spec | null>(null);
   const [chips, setChips] = useState<string[]>([]);
   const [url, setUrl] = useState<string | null>(null);
   const [pageId, setPageId] = useState<string | null>(null);
@@ -92,7 +93,7 @@ export function useCanvasState() {
   const [abWinner, setAbWinner] = useState<"A" | "B" | null>(null);
 
   // History & lineage
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [history, setHistoryRaw] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showNarrative, setShowNarrative] = useState(false);
   const [narrative, setNarrative] = useState<string[]>([]);
@@ -175,6 +176,51 @@ export function useCanvasState() {
   // Keyboard modifiers
   const [modProof, setModProof] = useState(false);
   const [modPerf, setModPerf] = useState(false);
+
+  // --- Instrumented setters for Magic Cursor Inspector ---
+  const setSpec: typeof setSpecRaw = (value) => {
+    setSpecRaw((prev) => {
+      const next = typeof value === "function" ? (value as any)(prev) : value;
+      try {
+        if (next !== prev) {
+          const prevSections = (prev as any)?.sections;
+          const nextSections = (next as any)?.sections;
+          mcStep("spec_applied", {
+            hasPrev: !!prev,
+            hasNext: !!next,
+            sectionsBefore: Array.isArray(prevSections)
+              ? prevSections.length
+              : undefined,
+            sectionsAfter: Array.isArray(nextSections)
+              ? nextSections.length
+              : undefined,
+          });
+        }
+      } catch {
+        // inspector failures should never break UX
+      }
+      return next;
+    });
+  };
+
+  const setHistory: typeof setHistoryRaw = (value) => {
+    setHistoryRaw((prev) => {
+      const next = typeof value === "function" ? (value as any)(prev) : value;
+      try {
+        if (next !== prev) {
+          const before = Array.isArray(prev) ? prev.length : undefined;
+          const after = Array.isArray(next) ? next.length : undefined;
+          mcStep("history_pushed", {
+            before,
+            after,
+          });
+        }
+      } catch {
+        // inspector failures should never break UX
+      }
+      return next;
+    });
+  };
 
   // --- Actions bundle (for Workspace / Autopilot consumers) ---
   const actions = {
@@ -367,6 +413,7 @@ export function useCanvasRefs() {
   const commentsRef = useRef<CanvasComment[]>([]);
   const personaRef = useRef<PersonaKey>("builder");
   const prevProofRef = useRef<any>(null);
+  // Ephemeral secrets for this canvas session (e.g. email API keys). Must never be logged or persisted.
   const secretsRef = useRef<{ emailApiKey?: string }>({});
 
   return {
@@ -655,11 +702,30 @@ export function useCostTracking(
           const type = data?.type || data?.kind;
           if (type === "compose_success") {
             const c = data?.meta?.cost;
+            let hudCostMeta: any = null;
             if (c && typeof c.tokens === "number") {
-              setCostMeta(pickCostMeta(c));
+              hudCostMeta = pickCostMeta(c);
+              setCostMeta(hudCostMeta);
             }
             const r = data?.meta?.receipt;
-            if (r?.summary) setReceipt({ summary: String(r.summary) });
+            let receiptSummary: string | null = null;
+            if (r?.summary) {
+              receiptSummary = String(r.summary);
+              setReceipt({ summary: receiptSummary });
+            }
+
+            // Trace HUD updates for Magic Cursor Inspector
+            try {
+              mcStep("hud_updated", {
+                sessionId,
+                type,
+                rawCost: c ?? null,
+                costMeta: hudCostMeta,
+                receiptSummary,
+              });
+            } catch {
+              // inspector should never break SSE handling
+            }
           }
         } catch {
           // ignore parse issues
