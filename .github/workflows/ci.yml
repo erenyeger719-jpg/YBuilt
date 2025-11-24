@@ -13,7 +13,7 @@ jobs:
       matrix:
         node-version: [18, 20]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -57,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -84,7 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -150,7 +150,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -192,7 +192,7 @@ jobs:
     needs: [build, unit-tests, integration-tests, e2e-tests, security-scan]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Login to GHCR
         uses: docker/login-action@v3

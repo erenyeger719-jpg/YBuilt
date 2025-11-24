@@ -31,7 +31,7 @@ jobs:
     steps:
       # Step 1: Checkout repository code
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
       
       # Step 2: Setup Node.js with version from matrix
       - name: Setup Node.js ${{ matrix.node-version }}
